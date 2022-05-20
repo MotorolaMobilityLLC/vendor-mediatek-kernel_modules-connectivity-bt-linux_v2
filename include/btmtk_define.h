@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "8.0.2022042702"
+#define VERSION "8.0.2022042801"
 #define SUBVER ":connac3_dev"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -150,7 +150,7 @@ extern uint8_t btmtk_log_lvl;
 			const unsigned char *ptr = p;	\
 			for (cnt_ = 0; cnt_ < len_; ++cnt_)	\
 				(void)snprintf(raw_buf+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
-			raw_buf[5*cnt_] = '\0';	\
+			raw_buf[3*cnt_] = '\0';	\
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
 				pr_cont("[btmtk_info] "fmt"%s\n", ##__VA_ARGS__, raw_buf);	\
 			} else {	\
