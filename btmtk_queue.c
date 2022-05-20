@@ -52,7 +52,6 @@ static u8 is_rx_queue_empty(void)
 {
 	struct bt_ring_buffer_mgmt *p_ring = &g_rx_buffer;
 
-	BTMTK_DBG("%s: start", __func__);
 	spin_lock(&p_ring->lock);
 	if (p_ring->read_idx == p_ring->write_idx) {
 		spin_unlock(&p_ring->lock);
@@ -67,8 +66,6 @@ static u8 is_rx_queue_res_available(u32 length)
 {
 	u32 room_left = 0;
 	struct bt_ring_buffer_mgmt *p_ring = &g_rx_buffer;
-
-	BTMTK_DBG("%s: start", __func__);
 
 	/*
 	 * Get available space of RX Queue
@@ -92,7 +89,6 @@ static s32 rx_pkt_enqueue(u8 *buffer, u32 length)
 	s32 tail_len = 0;
 	struct bt_ring_buffer_mgmt *p_ring = &g_rx_buffer;
 
-	BTMTK_DBG("%s: start", __func__);
 	if (length > HCI_MAX_FRAME_SIZE) {
 		BTMTK_ERR("Abnormal packet length %u, not enqueue!", length);
 		return -EINVAL;
@@ -270,7 +266,6 @@ int32_t btmtk_send_data(struct hci_dev *hdev, u8 *buf, u32 count)
 	memcpy(skb->data, buf + 1, count - 1);
 	skb->len = count - 1;
 
-	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
 	hdev->send(hdev, skb);
 	return count;
 }

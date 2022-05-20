@@ -128,6 +128,7 @@ ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
   ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility
   ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/include
   ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/connsyslog
+  ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/coredump
   ccflags-y += -I$(CONN_FEM_SRC)/include
 endif
 

@@ -22,7 +22,9 @@
 #include "btmtk_main.h"
 #include "btmtk_fw_log.h"
 #include "btmtk_chip_if.h"
+
 #if (USE_DEVICE_NODE == 1)
+#include "connv3_debug_utility.h"
 #include "btmtk_queue.h"
 #include "connv3.h"
 #include "btmtk_proj_sp.h"
@@ -51,7 +53,6 @@ static int btmtk_intf_num = BT_MCU_MINIMUM_INTERFACE_NUM;
 /* To allow g_bdev being sized from btmtk_intf_num setting */
 static struct btmtk_dev **g_bdev;
 struct btmtk_dev *g_sbdev;
-//int g_rstflag = 0; for bt subsys reset test
 
 /*btmtk main information*/
 static struct btmtk_main_info main_info;
@@ -71,10 +72,17 @@ static const struct btmtk_cif_state g_cif_state[] = {
 	{BTMTK_STATE_RESUME, BTMTK_STATE_WORKING, BTMTK_STATE_FW_DUMP},
 	/* HIF_EVENT_STANDBY */
 	{BTMTK_STATE_STANDBY, BTMTK_STATE_STANDBY, BTMTK_STATE_FW_DUMP},
+#if (USE_DEVICE_NODE == 0)
 	/* HIF_EVENT_SUBSYS_RESET */
 	{BTMTK_STATE_SUBSYS_RESET, BTMTK_STATE_WORKING, BTMTK_STATE_FW_DUMP},
 	/* HIF_EVENT_WHOLE_CHIP_RESET */
 	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_DISCONNECT, BTMTK_STATE_FW_DUMP},
+#else
+	/* HIF_EVENT_SUBSYS_RESET */
+	{BTMTK_STATE_SUBSYS_RESET, BTMTK_STATE_WORKING, BTMTK_STATE_DISCONNECT},
+	/* HIF_EVENT_WHOLE_CHIP_RESET */
+	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_DISCONNECT, BTMTK_STATE_DISCONNECT},
+#endif
 	/* HIF_EVENT_FW_DUMP */
 	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_FW_DUMP, BTMTK_STATE_FW_DUMP},
 };
@@ -100,7 +108,6 @@ __weak int btmtk_cif_send_calibration(struct btmtk_dev *bdev)
 #if (USE_DEVICE_NODE == 1)
 int btmtk_cif_rx_packet_handler(struct hci_dev *hdev, struct sk_buff *skb)
 {
-	BTMTK_DBG("%s start", __func__);
 	return rx_skb_enqueue(skb);
 }
 #else
@@ -398,8 +405,10 @@ static void btmtk_fops_set_state(struct btmtk_dev *bdev, u8 new_state)
 	FOPS_MUTEX_LOCK();
 	bdev->fops_state = new_state;
 	FOPS_MUTEX_UNLOCK();
+#if (USE_DEVICE_NODE == 1)
 	if (main_info.hif_hook.fw_log_state)
 		main_info.hif_hook.fw_log_state(new_state);
+#endif
 }
 
 void *btmtk_kallsyms_lookup_name(const char *name)
@@ -962,8 +971,9 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				hci_skb_expect(skb) += dlen;
 
 				if (skb_tailroom(skb) < dlen) {
-					BTMTK_ERR("%s, skb_tailroom is not enough, dlen:%d!",
-						__func__, dlen);
+					BTMTK_ERR("%s, skb_tailroom[%d] is not enough, dlen:%d!",
+						__func__, skb_tailroom(skb), dlen);
+					BTMTK_INFO_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
 					if (is_mt66xx(bdev->chip_id))
 						btmtk_set_sleep(hdev, FALSE);
 					else {
@@ -2463,7 +2473,7 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag)
 			}
 #if (USE_DEVICE_NODE == 1)
 			/* Send efem command before bt cal */
-			if(bt_bin_type[i] == 0x00000003) {
+			if (bt_bin_type[i] == 0x00000003) {
 				ret = btmtk_send_connfem_cmd(bdev);
 				if (ret < 0) {
 					BTMTK_ERR("%s send connfem fail", __func__);
@@ -2493,7 +2503,7 @@ __weak int32_t bgfsys_bt_patch_dl(void)
 /* need to remove after modify to using function pointer*/
 __weak int32_t btmtk_set_sleep(struct hci_dev *hdev, u_int8_t need_wait)
 {
-	BTMTK_ERR("No btmtk_set_sleep function");
+	//BTMTK_ERR("No btmtk_set_sleep function");
 	return -1;
 }
 
@@ -3299,6 +3309,7 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 
+	BTMTK_DBG("%s start", __func__);
 	if (!bdev) {
 		BTMTK_ERR("%s, bdev is NULL!", __func__);
 		ret = -1;
@@ -4070,12 +4081,11 @@ static int bt_close(struct hci_dev *hdev)
 		goto exit;
 	}
 
-	BTMTK_INFO("%s, enter", __func__);
-
 	if (main_info.hif_hook.cif_mutex_lock)
 		main_info.hif_hook.cif_mutex_lock(bdev);
 
 	state = btmtk_get_chip_state(bdev);
+	BTMTK_INFO("%s, enter, state[%d]", __func__, state);
 	if (state != BTMTK_STATE_WORKING && state != BTMTK_STATE_STANDBY) {
 		/* It's for the case that
 		 * bt_close and hif_disconnect occur at the same time
@@ -4091,13 +4101,14 @@ static int bt_close(struct hci_dev *hdev)
 	bdev->power_state = BTMTK_DONGLE_STATE_POWER_OFF;
 	BTMTK_INFO("%s, SKIP btmtk_send_deinit_cmds", __func__);
 #else
-	if (state != BTMTK_STATE_STANDBY) {
+	if (state != BTMTK_STATE_STANDBY && main_info.reset_stack_flag == HW_ERR_CODE_CORE_DUMP) {
 		ret = btmtk_send_deinit_cmds(bdev);
 		if (ret < 0) {
 			BTMTK_ERR("%s, btmtk_send_deinit_cmds failed", __func__);
 			goto unlock;
 		}
-	}
+	} else
+		BTMTK_WARN("%s, SKIP by state[%d], reset_stack_flag[%d]", __func__, state, main_info.reset_stack_flag);
 #endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
 	/* Flush RX works */
@@ -4114,6 +4125,7 @@ unlock:
 		main_info.hif_hook.cif_mutex_unlock(bdev);
 exit:
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
+	state = btmtk_get_chip_state(bdev);
 
 err:
 	main_info.reset_stack_flag = HW_ERR_NONE;
@@ -4121,14 +4133,16 @@ err:
 
 #if (USE_DEVICE_NODE == 1)
 	btmtk_reset_pin_off();
-	if (connv3_pwr_off(CONNV3_DRV_TYPE_BT)) {
+	if (connv3_pwr_off(CONNV3_DRV_TYPE_BT))
 		BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
-		return -1;
-	}
-	BTMTK_INFO("%s: ConnInfra power off success", __func__);
 #endif
 
 	BTMTK_INFO("%s: end, reset_stack_flag = %d", __func__, main_info.reset_stack_flag);
+	if (state != BTMTK_STATE_WORKING) {
+		BTMTK_WARN("%s unknow flow state[%d], reset_stack_flag[%d]", __func__, state, main_info.reset_stack_flag);
+		btmtk_set_chip_state(bdev, BTMTK_STATE_DISCONNECT);
+	}
+
 	return 0;
 }
 
@@ -4156,9 +4170,26 @@ int bt_open(struct hci_dev *hdev)
 		return -EFAULT;
 	}
 
+	fstate = btmtk_fops_get_state(bdev);
+	if (fstate == BTMTK_FOPS_STATE_OPENED) {
+		BTMTK_WARN("%s: fops opened!", __func__);
+		ret = -EIO;
+		goto failed;
+	}
+
+	if ((fstate == BTMTK_FOPS_STATE_CLOSING) ||
+		(fstate == BTMTK_FOPS_STATE_OPENING)) {
+		BTMTK_WARN("%s: fops open/close is on-going !", __func__);
+		ret = -EAGAIN;
+		goto failed;
+	}
+
+	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENING);
+
 #if (USE_DEVICE_NODE == 1)
 	if (connv3_pwr_on(CONNV3_DRV_TYPE_BT)) {
 		BTMTK_ERR("ConnInfra power on failed!");
+		btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
 		return -EFAULT;
 	}
 
@@ -4181,22 +4212,8 @@ int bt_open(struct hci_dev *hdev)
 		goto failed;
 	}
 
-	fstate = btmtk_fops_get_state(bdev);
-	if (fstate == BTMTK_FOPS_STATE_OPENED) {
-		BTMTK_WARN("%s: fops opened!", __func__);
-		ret = -EIO;
-		goto failed;
-	}
+	BTMTK_INFO("%s state[%d], fstate[%d]", __func__, state, fstate);
 
-	if ((fstate == BTMTK_FOPS_STATE_CLOSING) ||
-		(fstate == BTMTK_FOPS_STATE_OPENING)) {
-		BTMTK_WARN("%s: fops open/close is on-going !", __func__);
-		ret = -EAGAIN;
-		goto failed;
-	}
-
-	BTMTK_INFO("%s", __func__);
-	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENING);
 	ret = main_info.hif_hook.open(hdev);
 	if (ret < 0) {
 		BTMTK_ERR("%s, cif_open failed", __func__);
@@ -4255,16 +4272,6 @@ int bt_open(struct hci_dev *hdev)
 			btmtk_load_country_table(bdev);
 	}
 
-#if 0  // for phone subsys reset test
-	BTMTK_INFO("%s :g_rstflag[%d]", __func__, g_rstflag);
-	if (!g_rstflag) {
-		g_rstflag = 1;
-		BTMTK_ERR("reset start");
-		btmtk_reset_trigger(bdev);
-	}
-	BTMTK_INFO("%s:end", __func__);
-#endif
-
 	DUMP_TIME_STAMP("open_end");
 	return 0;
 
@@ -4315,8 +4322,6 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		return -ENODEV;
 	}
 
-	BTMTK_DBG_RAW(skb->data, skb->len, "%s (1), send, len = %d ", __func__, skb->len);
-
 	bdev = hci_get_drvdata(hdev);
 	if (bdev == NULL) {
 		BTMTK_ERR("%s, bdev is invalid!", __func__);
@@ -4336,7 +4341,7 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 
 	state = btmtk_get_chip_state(bdev);
 	if (state != BTMTK_STATE_WORKING) {
-		BTMTK_WARN_LIMITTED("%s: chip state is %d.", __func__, state);
+		BTMTK_WARN_LIMITTED("%s: chip state is not working state[%d]", __func__, state);
 		if (state == BTMTK_STATE_DISCONNECT)
 			ret = -ENODEV;
 		else
@@ -4451,19 +4456,15 @@ static void btmtk_rx_work(struct work_struct *work)
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	int state = 0;
 
-	BTMTK_DBG("%s enter", __func__);
-
 	while ((skb = skb_dequeue(&bdev->rx_q))) {
-		if (!is_mt66xx(bdev->chip_id)) {
-			/* BTMTK_DBG_RAW(skb->data, skb->len, "%s, recv evt", __func__); */
-			skip_pkt = btmtk_dispatch_fwlog(bdev, skb);
-			if (skip_pkt != 0) {
-				/* kfree_skb should be moved to btmtk_dispach_pkt */
-				kfree_skb(skb);
-				continue;
-			}
+		/* BTMTK_DBG_RAW(skb->data, skb->len, "%s, recv evt", __func__); */
+		skip_pkt = btmtk_dispatch_fwlog(bdev, skb);
+		if (skip_pkt != 0) {
+			/* kfree_skb should be moved to btmtk_dispach_pkt */
+			kfree_skb(skb);
+			continue;
 		}
-
+		BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
 		if (hci_skb_pkt_type(skb) == HCI_EVENT_PKT) {
 			/* save hci evt pkt for debug */
 			if (skb->data[0] == 0x3E)
@@ -4492,7 +4493,7 @@ static void btmtk_rx_work(struct work_struct *work)
 			}
 
 			if (main_info.hif_hook.event_filter(bdev, skb)) {
-				BTMTK_INFO("%s Drop by driver, don't send to stack", __func__); //pinhao
+				BTMTK_DBG("%s Drop by driver, don't send to stack", __func__);
 				/* Drop by driver, don't send to stack */
 				kfree_skb(skb);
 				continue;
@@ -4501,15 +4502,7 @@ static void btmtk_rx_work(struct work_struct *work)
 			/* save hci acl pkt for debug, not include picus log and coredump*/
 			if (!(skb->data[0] == 0xFF && skb->data[1] == 0xF0))
 				btmtk_hci_snoop_save(HCI_SNOOP_TYPE_RX_ACL_STACK, skb->data, skb->len);
-			/* fw log for sp */
-			if ((skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
-				skb->data[1] == 0x05 && main_info.hif_hook.log_handler) {
-				/* remove acl header (FF 05 LL LL)*/
-				skb_pull(skb, 4);
-				main_info.hif_hook.log_handler(skb->data, skb->len);
-				kfree_skb(skb);
-				continue;
-			}
+
 		} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
 			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_RX_ISO_STACK, skb->data, skb->len);
 		}
@@ -4863,6 +4856,13 @@ int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus)
 #endif
 	btmtk_main_cif_uninitialize(bdev, hci_bus);
 
+#if (USE_DEVICE_NODE == 1)
+	if (main_info.hif_hook.coredump_handler) {
+		BTMTK_INFO("%s: deinit coredump handle", __func__);
+		connv3_coredump_deinit(main_info.hif_hook.coredump_handler);
+	}
+#endif
+
 	bdev->power_state = BTMTK_DONGLE_STATE_POWER_OFF;
 	/* btmtk_release_dev(bdev); */
 
@@ -5038,10 +5038,6 @@ int __init main_driver_init(void)
 	/* Mediatek Driver Version */
 	BTMTK_INFO("%s: MTK BT Driver Version : %s", __func__, VERSION);
 
-#if 0  // for phone subsys reset test
-	g_rstflag = 0;
-	BTMTK_INFO("%s :g_rstflag[%d]", __func__, g_rstflag);
-#endif
 	ret = main_init();
 	if (ret < 0)
 		return ret;
