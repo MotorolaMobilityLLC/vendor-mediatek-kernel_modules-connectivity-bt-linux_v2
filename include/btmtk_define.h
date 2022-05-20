@@ -39,11 +39,11 @@
 
 #include <linux/kthread.h>
 #include <linux/freezer.h>
+#include <linux/vmalloc.h>
 
 /** Driver version */
 #define VERSION "7.0.2020122301"
 #define SUBVER ":turnkey"
-
 
 #define ENABLESTP FALSE
 #define BTMTKUART_TX_STATE_ACTIVE	1
