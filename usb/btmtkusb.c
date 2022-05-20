@@ -72,6 +72,7 @@ MODULE_DEVICE_TABLE(usb, btusb_table);
 #define BTUSB_SUSPENDING	3
 #define BTUSB_DID_ISO_RESUME	4
 #define BTUSB_BLE_ISOC_RUNNING	5
+#define BTUSB_WMT_RUNNING	6
 
 #define DEVICE_VENDOR_REQUEST_IN	0xc0
 #define DEVICE_CLASS_REQUEST_OUT	0x20
@@ -511,6 +512,7 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	struct btmtk_usb_dev *cif_dev = NULL;
 	struct sk_buff *skb;
+	int err;
 
 	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 
@@ -541,8 +543,37 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 		BTMTK_DBG_RAW(skb->data, skb->len, "%s, skb recv evt", __func__);
 
 		hci_recv_frame(hdev, skb);
+		return;
 	} else if (urb->status == -ENOENT) {
+		/* it's error case, don't re-submit urb. */
 		BTMTK_INFO("%s: urb->status is ENOENT!", __func__);
+		return;
+	}
+
+	usb_mark_last_busy(cif_dev->udev);
+	/* The URB complete handler is still called with urb->actual_length = 0
+	 * when the event is not available, so we should keep re-submitting
+	 * URB until WMT event returns, Also, It's necessary to wait some time
+	 * between the two consecutive control URBs to relax the target device
+	 * to generate the event. Otherwise, the WMT event cannot return from
+	 * the device successfully.
+	 */
+	udelay(100);
+
+	if (!test_bit(BTUSB_WMT_RUNNING, &bdev->flags)) {
+		BTMTK_INFO("%s test flag failed", __func__);
+		goto exit;
+	}
+
+	usb_anchor_urb(urb, &cif_dev->ctrl_anchor);
+	err = usb_submit_urb(urb, GFP_ATOMIC);
+	if (err < 0) {
+		kfree(urb->setup_packet);
+		/* -EPERM: urb is being killed;
+		 * -ENODEV: device got disconnected
+		 */
+		if (err != -EPERM && err != -ENODEV)
+			usb_unanchor_urb(urb);
 	}
 
 exit:
@@ -1293,6 +1324,7 @@ static int btmtk_usb_close(struct hci_dev *hdev)
 	clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
+	clear_bit(BTUSB_WMT_RUNNING, &bdev->flags);
 
 	btusb_stop_traffic(cif_dev);
 	btusb_free_frags(bdev);
@@ -1670,6 +1702,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			skb->data[0] = MTK_HCI_COMMAND_PKT;
 			BTMTK_DBG_RAW(skb->data, skb->len, "%s, 6ffc send_frame", __func__);
 			btmtk_usb_send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			set_bit(BTUSB_WMT_RUNNING, &bdev->flags);
 			btusb_submit_wmt_urb(hdev, GFP_KERNEL);
 			return 0;
 		}
@@ -1841,19 +1874,23 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			break;
 	}
 
-	do {
-		btmtk_cif_write_uhw_register(bdev, BT_GDMA_DONE_ADDR_W, BT_GDMA_DONE_VALUE_W);
-		btmtk_cif_read_uhw_register(bdev, BT_GDMA_DONE_ADDR_R, &value);
-		if ((value & BT_GDMA_DONE_VALUE_R) == value)
-			break;
-		msleep(DELAY_TIMES);
-	} while(retry-- > 0);
+	/* Need find solution for 7922, it's workaround for LPDVT */
+	if(is_mt7961(bdev->chip_id)) {
+		do {
+			btmtk_cif_write_uhw_register(bdev, BT_GDMA_DONE_ADDR_W, BT_GDMA_DONE_VALUE_W);
+			btmtk_cif_read_uhw_register(bdev, BT_GDMA_DONE_ADDR_R, &value);
+			if ((value & BT_GDMA_DONE_VALUE_R) == value)
+				break;
+			msleep(DELAY_TIMES);
+		} while(retry-- > 0);
 
-	if ((value & BT_GDMA_DONE_VALUE_R) != value) {
-		BTMTK_INFO("%s: DL Failed cr=%08X", __func__, value);
-		ret = -1;
-		goto exit;
-	}
+		if ((value & BT_GDMA_DONE_VALUE_R) != value) {
+			BTMTK_INFO("%s: DL Failed cr=%08X", __func__, value);
+			ret = -1;
+			goto exit;
+		}
+	} else
+		mdelay(100);
 
 	BTMTK_INFO_RAW(dl_done_cmd, LD_PATCH_CMD_LEN, "%s: send dl cmd - ", __func__);
 	ret = btmtk_main_send_cmd(bdev, dl_done_cmd, LD_PATCH_CMD_LEN,
@@ -2129,6 +2166,7 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
+	clear_bit(BTUSB_WMT_RUNNING, &bdev->flags);
 	bdev->sco_num = 0;
 
 	btusb_stop_traffic((struct btmtk_usb_dev *)bdev->cif_dev);
@@ -2728,6 +2766,7 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 	clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags);
+	clear_bit(BTUSB_WMT_RUNNING, &bdev->flags);
 
 	btusb_stop_traffic(cif_dev);
 
