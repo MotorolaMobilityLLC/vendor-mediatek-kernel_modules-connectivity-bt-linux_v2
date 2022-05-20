@@ -3518,13 +3518,13 @@ static int bt_open(struct hci_dev *hdev)
 			BTMTK_ERR("%s, btmtk_send_init_cmds failed", __func__);
 			goto failed;
 		}
-#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
 		ret = btmtk_send_apcf_reserved(bdev);
 		if (ret < 0) {
 			BTMTK_ERR("%s, btmtk_send_apcf_reserved failed", __func__);
 			goto failed;
 		}
+#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
 		if (main_info.hif_hook.open_done)
 			main_info.hif_hook.open_done(bdev);
