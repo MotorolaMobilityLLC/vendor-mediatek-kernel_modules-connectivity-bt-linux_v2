@@ -332,7 +332,23 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 				(val == 0) ? "SLEEP" :
 				((val == 1) ? "WAKEUP" :
 				((val == 2) ? "NO_RESPONSE" : "ERROR")));
+			if (fstate != BTMTK_FOPS_STATE_OPENED) {
+				ret = bmain_info->hif_hook.open(pp_bdev[hci_idx]->hdev);
+				if (ret < 0) {
+					BTMTK_ERR("%s, cif_open failed", __func__);
+					ret = count;
+					goto exit;
+				}
+			}
 			bmain_info->hif_hook.dump_debug_sop(pp_bdev[hci_idx], val);
+			if (fstate != BTMTK_FOPS_STATE_OPENED) {
+				ret = bmain_info->hif_hook.close(pp_bdev[hci_idx]->hdev);
+				if (ret < 0) {
+					BTMTK_ERR("%s, cif_close failed", __func__);
+					ret = count;
+					goto exit;
+				}
+			}
 		} else {
 			BTMTK_INFO("%s: not support", __func__);
 		}

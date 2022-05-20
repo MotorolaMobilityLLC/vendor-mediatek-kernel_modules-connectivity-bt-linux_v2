@@ -358,9 +358,11 @@ enum {
 	DEBUG_SOP_SLEEP,
 	DEBUG_SOP_WAKEUP,
 	DEBUG_SOP_NO_RESPONSE,
+
+	DEBUG_SOP_NONE
 };
 
-struct dump_debug_sop {
+struct dump_debug_cr {
 	u32 addr_w;
 	u32 value_w;
 	u32 addr_r;
@@ -507,6 +509,7 @@ struct btmtk_dev {
 	/* single sku */
 	unsigned char		*country_file_name;
 	u8 opcode_usr[2];
+	u8 debug_type;
 };
 
 typedef int (*cif_bt_init_ptr)(void);
@@ -593,7 +596,6 @@ struct btmtk_main_info {
 	u16 hci_adv_event_actual_len[HCI_SNOOP_ENTRY_NUM];
 	unsigned int hci_adv_event_timestamp[HCI_SNOOP_ENTRY_NUM];
 	u8 hci_adv_event_index;
-
 
 	u8 hci_acl_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
 	u8 hci_acl_len[HCI_SNOOP_ENTRY_NUM];

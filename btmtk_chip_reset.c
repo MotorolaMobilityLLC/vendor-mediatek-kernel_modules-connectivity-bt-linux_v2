@@ -31,8 +31,9 @@ static void btmtk_reset_timer(struct timer_list *timer)
 }
 #endif
 
-static void btmtk_reset_timer_add(struct btmtk_dev *bdev)
+void btmtk_reset_timer_add(struct btmtk_dev *bdev)
 {
+	BTMTK_INFO("%s: create chip_reset timer", __func__);
 #if (KERNEL_VERSION(4, 15, 0) > LINUX_VERSION_CODE)
 	init_timer(&bdev->chip_reset_timer);
 	bdev->chip_reset_timer.function = btmtk_reset_timer;
@@ -58,12 +59,16 @@ void btmtk_reset_waker(struct work_struct *work)
 
 	btmtk_reset_timer_del(bdev);
 
+	if (bdev->debug_type != DEBUG_SOP_NONE && bmain_info->hif_hook.dump_debug_sop)
+		bmain_info->hif_hook.dump_debug_sop(bdev, bdev->debug_type);
+	bdev->debug_type = DEBUG_SOP_NONE;
+
 	DUMP_TIME_STAMP("chip_reset_start");
 	cif_event = HIF_EVENT_SUBSYS_RESET;
 	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
 		/* Error */
 		BTMTK_WARN("%s priv setting is NULL", __func__);
-		goto Finish;
+		return;
 	}
 
 	while (!bdev->bt_cfg.support_dongle_reset) {
@@ -79,16 +84,36 @@ void btmtk_reset_waker(struct work_struct *work)
 	BTMTK_INFO("%s: Receive a byte (0xFF)", __func__);
 	/* read interrupt EP15 CR */
 
-	bdev->subsys_reset = 1;
 	bdev->sco_num = 0;
 
 	if (bmain_info->chip_reset_flag == 0) {
 		if (bmain_info->hif_hook.subsys_reset) {
+			bdev->subsys_reset = 1;
+
 			DUMP_TIME_STAMP("subsys_chip_reset_start");
 			err = bmain_info->hif_hook.subsys_reset(bdev);
 			atomic_inc(&bmain_info->subsys_reset_count);
 			DUMP_TIME_STAMP("subsys_chip_reset_end");
+
+			bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
+			bdev->subsys_reset = 0;
+
+			err = btmtk_cap_init(bdev);
+			if (err < 0) {
+				BTMTK_ERR("btmtk init failed!");
+			} else {
+				err = btmtk_load_rom_patch(bdev);
+				if (err < 0) {
+					BTMTK_INFO("btmtk load rom patch failed!");
+				} else {
+					btmtk_send_hw_err_to_host(bdev);
+					btmtk_woble_wake_unlock(bdev);
+					if (bmain_info->hif_hook.chip_reset_notify)
+						bmain_info->hif_hook.chip_reset_notify(bdev);
+				}
+			}
 		} else {
+			err = -1;
 			BTMTK_INFO("%s: Not support subsys chip reset", __func__);
 		}
 	} else {
@@ -96,10 +121,8 @@ void btmtk_reset_waker(struct work_struct *work)
 		BTMTK_INFO("%s: chip_reset_flag is %d", __func__, bmain_info->chip_reset_flag);
 	}
 
-	if (err) {
-		/* L0.5 reset failed, do whole chip reset */
-		/* We will add support dongle reset flag, reading from bt.cfg */
-		bdev->subsys_reset = 0;
+	if (err < 0) {
+		/* L0.5 reset failed or not support, do whole chip reset */
 		/* TODO: need to confirm with usb host when suspend fail, to do chip reset,
 		 * because usb3.0 need to toggle reset pin after hub_event unfreeze,
 		 * otherwise, it will not occur disconnect on Capy Platform. When Mstar
@@ -115,56 +138,9 @@ void btmtk_reset_waker(struct work_struct *work)
 		} else {
 			BTMTK_INFO("%s: Not support whole chip reset", __func__);
 		}
-		goto Finish;
 	}
 
-	/* It's a test code for stress test (whole chip reset & L0.5 reset) */
-#if 0
-	if (bdev->bt_cfg.support_dongle_reset == 0) {
-		err = btmtk_cif_subsys_reset(bdev);
-		if (err) {
-			/* L0.5 reset failed, do whole chip reset */
-			if (main_info.hif_hook->whole_reset)
-				main_info.hif_hook.whole_reset(bdev);
-			goto Finish;
-		}
-	} else {
-		/* L0.5 reset failed, do whole chip reset */
-		/* TODO: need to confirm with usb host when suspend fail, to do chip reset,
-		 * because usb3.0 need to toggle reset pin after hub_event unfreeze,
-		 * otherwise, it will not occur disconnect on Capy Platform. When Mstar
-		 * chip has usb3.0 port, we will use Mstar platform to do comparison
-		 * test, then found the final solution.
-		 */
-		/* msleep(2000); */
-		if (main_info.hif_hook->whole_reset)
-			main_info.hif_hook.whole_reset(bdev);
-		/* btmtk_send_hw_err_to_host(bdev); */
-		goto Finish;
-	}
-#endif
-
-	bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
-	bdev->subsys_reset = 0;
-
-	err = btmtk_cap_init(bdev);
-	if (err < 0) {
-		BTMTK_ERR("btmtk init failed!");
-		goto Finish;
-	}
-
-	err = btmtk_load_rom_patch(bdev);
-	if (err < 0) {
-		BTMTK_ERR("btmtk load rom patch failed!");
-		goto Finish;
-	}
-	btmtk_send_hw_err_to_host(bdev);
-	btmtk_woble_wake_unlock(bdev);
-
-Finish:
-	bmain_info->hif_hook.chip_reset_notify(bdev);
 	DUMP_TIME_STAMP("chip_reset_end");
-
 	/* Set End/Error state */
 	if (err < 0)
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
@@ -174,7 +150,6 @@ Finish:
 
 void btmtk_reset_trigger(struct btmtk_dev *bdev)
 {
-	btmtk_reset_timer_add(bdev);
 	schedule_work(&bdev->reset_waker);
 }
 

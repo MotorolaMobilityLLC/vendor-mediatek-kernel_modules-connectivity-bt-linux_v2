@@ -338,7 +338,9 @@ static void btmtk_fops_set_state(struct btmtk_dev *bdev, unsigned char new_state
 void *btmtk_kallsyms_lookup_name(const char *name)
 {
 	void *addr = __symbol_get(name);
-	__symbol_put(name);
+
+	if (addr)
+		__symbol_put(name);
 	return addr;
 }
 
@@ -3385,6 +3387,7 @@ exit:
 
 err:
 	main_info.reset_stack_flag = HW_ERR_NONE;
+	bdev->debug_type = DEBUG_SOP_NONE;
 
 	BTMTK_INFO("%s: end, reset_stack_flag = %d", __func__, main_info.reset_stack_flag);
 	return 0;
@@ -3594,8 +3597,8 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			if (skb->len == FW_COREDUMP_CMD_LEN &&
 				!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
 				BTMTK_INFO("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
-				if (main_info.hif_hook.dump_debug_sop)
-					main_info.hif_hook.dump_debug_sop(bdev, DEBUG_SOP_NO_RESPONSE);
+				bdev->debug_type = DEBUG_SOP_NO_RESPONSE;
+				btmtk_reset_timer_add(bdev);
 				btmtk_hci_snoop_print_to_log();
 			} else if (skb->len == HCI_RESET_CMD_LEN &&
 					!memcmp(skb->data, reset_cmd, HCI_RESET_CMD_LEN))

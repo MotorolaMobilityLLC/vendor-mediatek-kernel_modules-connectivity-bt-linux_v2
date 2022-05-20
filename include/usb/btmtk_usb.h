@@ -131,6 +131,8 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define WOBLE_DEBUG_EVT_TYPE 0xE8
 #define BLE_EVT_TYPE 0x3E
 
+#define WMT_TRIGGER_ASSERT_LEN 9
+
 struct btmtk_cif_chip_reset {
 	/* For Whole chip reset */
 	pdwnc_func pf_pdwndFunc;

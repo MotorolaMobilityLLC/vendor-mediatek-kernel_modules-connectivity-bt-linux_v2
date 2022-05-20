@@ -180,7 +180,7 @@ static void btmtk_sdio_dump_bgfsys_sleep_status(struct btmtk_dev *bdev)
 
 static void btmtk_sdio_dump_bgf_bt_debug_log(struct btmtk_dev *bdev)
 {
-	struct dump_debug_sop dump_cr[BT_DUMP_BGF_BT_DEBUG_LOG_NUM] = {
+	struct dump_debug_cr dump_cr[BT_DUMP_BGF_BT_DEBUG_LOG_NUM] = {
 		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_1, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
 		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_2, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
 		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_3, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
@@ -1811,6 +1811,7 @@ static int btmtk_sdio_main_thread(void *data)
 		ret = btmtk_sdio_set_own_back(cif_dev, DRIVER_OWN, RETRY_TIMES);
 		if (ret) {
 			BTMTK_ERR("set driver own return fail");
+			bdev->debug_type = DEBUG_SOP_WAKEUP;
 			btmtk_reset_trigger(bdev);
 			continue;
 		}
@@ -1851,6 +1852,7 @@ static int btmtk_sdio_main_thread(void *data)
 			ret = btmtk_sdio_set_own_back(cif_dev, FW_OWN, RETRY_TIMES);
 			if (ret) {
 				BTMTK_ERR("set fw own return fail");
+				bdev->debug_type = DEBUG_SOP_SLEEP;
 				btmtk_reset_trigger(bdev);
 			}
 		}

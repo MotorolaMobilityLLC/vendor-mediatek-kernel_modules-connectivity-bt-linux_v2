@@ -49,6 +49,9 @@ static const struct usb_device_id btusb_table[] = {
 	{ }	/* Terminating entry */
 };
 
+static u8 wmt_trigger_assert[WMT_TRIGGER_ASSERT_LEN] =
+	{0x01, 0x6f, 0xfc, 0x05, 0x01, 0x02, 0x01, 0x00, 0x08};
+
 static char event_need_compare[EVENT_COMPARE_SIZE] = {0};
 static char event_need_compare_len;
 static char event_compare_status;
@@ -132,7 +135,7 @@ static void btmtk_usb_dump_bgfsys_sleep_status(struct btmtk_dev *bdev)
 
 static void btmtk_usb_dump_bgf_bt_debug_log(struct btmtk_dev *bdev)
 {
-	struct dump_debug_sop dump_cr[BT_DUMP_BGF_BT_DEBUG_LOG_NUM] = {
+	struct dump_debug_cr dump_cr[BT_DUMP_BGF_BT_DEBUG_LOG_NUM] = {
 		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_1,BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
 		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2,BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
 		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_3,BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
@@ -1699,9 +1702,15 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			skb_push(skb, 1);
 			skb->data[0] = MTK_HCI_COMMAND_PKT;
 			BTMTK_DBG_RAW(skb->data, skb->len, "%s, 6ffc send_frame", __func__);
-			btmtk_usb_send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
-			set_bit(BTUSB_WMT_RUNNING, &bdev->flags);
-			btusb_submit_wmt_urb(hdev, GFP_KERNEL);
+			/* No event for wmt trigger assert command */
+			if (memcmp(skb->data, wmt_trigger_assert, WMT_TRIGGER_ASSERT_LEN)) {
+				btmtk_usb_send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+				set_bit(BTUSB_WMT_RUNNING, &bdev->flags);
+				btusb_submit_wmt_urb(hdev, GFP_KERNEL);
+			} else {
+				BTMTK_INFO("%s: Trigger FW assert by WMT command", __func__);
+				btmtk_usb_send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			}
 			return 0;
 		}
 
