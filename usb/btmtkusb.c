@@ -1926,7 +1926,7 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	int ret = 0;
 	u32 value = 0;
 	s32 sent_len;
-	int retry = RETRY_TIMES;
+	int retry = WMT_DELAY_TIMES;
 	u8 dl_done_cmd[LD_PATCH_CMD_LEN] = {0x01, 0x6F, 0xFC, 0x05, 0x01, 0x01, 0x01, 0x00, PATCH_PHASE3};
 	u8 event[LD_PATCH_EVT_LEN] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
 
