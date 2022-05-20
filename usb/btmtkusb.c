@@ -55,6 +55,10 @@ static char event_need_compare_len;
 static char event_compare_status;
 const u8 READ_ADDRESS_EVENT[] = { 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00 };
 
+static DEFINE_MUTEX(btmtk_usb_ops_mutex);
+#define USB_OPS_MUTEX_LOCK()	mutex_lock(&btmtk_usb_ops_mutex)
+#define USB_OPS_MUTEX_UNLOCK()	mutex_unlock(&btmtk_usb_ops_mutex)
+
 MODULE_DEVICE_TABLE(usb, btusb_table);
 
 /* remove #define BTUSB_MAX_ISOC_FRAMES	10
@@ -67,6 +71,7 @@ MODULE_DEVICE_TABLE(usb, btusb_table);
 #define BTUSB_ISOC_RUNNING	2
 #define BTUSB_SUSPENDING	3
 #define BTUSB_DID_ISO_RESUME	4
+#define BTUSB_BLE_ISOC_RUNNING	5
 
 #define DEVICE_VENDOR_REQUEST_IN	0xc0
 #define DEVICE_CLASS_REQUEST_OUT	0x20
@@ -251,12 +256,14 @@ static void btusb_intr_complete(struct urb *urb)
 			hdev->stat.err_rx++;
 		}
 	} else if (urb->status == -ENOENT) {
-		/* Avoid suspend failed when usb_kill_urb */
+		BTMTK_INFO("%s: urb->status is ENOENT!", __func__);
 		return;
 	}
 
-	if (!test_bit(BTUSB_INTR_RUNNING, &bdev->flags))
+	if (!test_bit(BTUSB_INTR_RUNNING, &bdev->flags)) {
+		BTMTK_INFO("%s: test_bit is not running!", __func__);
 		return;
+	}
 
 intr_resub:
 	usb_mark_last_busy(cif_dev->udev);
@@ -602,13 +609,13 @@ static void btusb_bulk_complete(struct urb *urb)
 		}
 	} else if (urb->status == -ENOENT) {
 		/* Avoid suspend failed when usb_kill_urb */
-		BTMTK_DBG("%s urb %p status %d count %d", hdev->name, urb, urb->status,
+		BTMTK_INFO("%s urb %p status %d count %d", hdev->name, urb, urb->status,
 			urb->actual_length);
 		return;
 	}
 
 	if (!test_bit(BTUSB_BULK_RUNNING, &bdev->flags)) {
-		BTMTK_DBG("%s test flag failed", __func__);
+		BTMTK_INFO("%s test flag failed", __func__);
 		return;
 	}
 
@@ -751,7 +758,12 @@ static void btusb_ble_isoc_complete(struct urb *urb)
 			hdev->stat.err_rx++;
 		}
 	} else if (urb->status == -ENOENT) {
-		/* Avoid suspend failed when usb_kill_urb */
+		BTMTK_INFO("%s: urb->status is ENOENT!", __func__);
+		return;
+	}
+
+	if (!test_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags)) {
+		BTMTK_INFO("%s: bdev->flags is RUNNING!", __func__);
 		return;
 	}
 
@@ -864,12 +876,14 @@ static void btusb_isoc_complete(struct urb *urb)
 			}
 		}
 	} else if (urb->status == -ENOENT) {
-		/* Avoid suspend failed when usb_kill_urb */
+		BTMTK_INFO("%s: urb->status is ENOENT!", __func__);
 		return;
 	}
 
-	if (!test_bit(BTUSB_ISOC_RUNNING, &bdev->flags))
+	if (!test_bit(BTUSB_ISOC_RUNNING, &bdev->flags)) {
+		BTMTK_INFO("%s: bdev->flags is RUNNING!", __func__);
 		return;
+	}
 
 	usb_anchor_urb(urb, &cif_dev->isoc_anchor);
 
@@ -1097,10 +1111,12 @@ static int btmtk_usb_close(struct hci_dev *hdev)
 
 	BT_DBG("%s", hdev->name);
 
+	USB_OPS_MUTEX_LOCK();
 	cancel_work_sync(&bdev->work);
 	cancel_work_sync(&bdev->waker);
 	cancel_work_sync(&bdev->reset_waker);
 
+	clear_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
@@ -1116,6 +1132,7 @@ static int btmtk_usb_close(struct hci_dev *hdev)
 	usb_autopm_put_interface(cif_dev->intf);
 
 failed:
+	USB_OPS_MUTEX_UNLOCK();
 	return 0;
 }
 
@@ -1397,6 +1414,8 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 						cif_dev->new_isoc_altsetting, cif_dev->new_isoc_altsetting_interface);
 				schedule_work(&bdev->work);
 				msleep(20);
+				kfree_skb(skb);
+				skb = NULL;
 				return 0;
 			} else if (skb->data[0] == 0x6f && skb->data[1] == 0xfc &&
 					skb->data[2] == 0x07 && skb->data[3] == 0x01 &&
@@ -1417,6 +1436,8 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				schedule_work(&bdev->work);
 				/* If we don't sleep 50ms, it will failed to set alternate setting to zero */
 				msleep(50);
+				kfree_skb(skb);
+				skb = NULL;
 				return 0;
 			} else if (skb->data[0] == 0x6f && skb->data[1] == 0xfc &&
 					skb->data[2] == 0x09 && skb->data[3] == 0x01 &&
@@ -1433,6 +1454,8 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 						bdev->io_buf, 4, USB_CTRL_IO_TIMO);
 				BTMTK_INFO("read CR buf = %02x %02x %02x %02x\n", bdev->io_buf[0],
 					bdev->io_buf[1], bdev->io_buf[2], bdev->io_buf[3]);
+				kfree_skb(skb);
+				skb = NULL;
 				return 0;
 			} else if (skb->data[0] == 0x6f && skb->data[1] == 0xfc &&
 					skb->data[2] == 0x0D && skb->data[3] == 0x01 &&
@@ -1452,6 +1475,8 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				BTMTK_INFO("write CR buf = %02x %02x %02x %02x\n",
 					cif_dev->o_usb_buf[0], cif_dev->o_usb_buf[1], cif_dev->o_usb_buf[2],
 					cif_dev->o_usb_buf[3]);
+				kfree_skb(skb);
+				skb = NULL;
 				return 0;
 			}
 		}
@@ -1461,9 +1486,9 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		if (!memcmp(skb->data, &wmt_over_hci_header[1], WMT_OVER_HCI_HEADER_SIZE - 1)) {
 			skb_push(skb, 1);
 			skb->data[0] = 0x01;
+			BTMTK_DBG_RAW(skb->data, skb->len, "%s, 6ffc send_frame", __func__);
 			btmtk_usb_send_cmd(bdev, skb, 100, 20, BTMTK_TX_CMD_FROM_DRV);
 			btusb_submit_wmt_urb(hdev, GFP_KERNEL);
-			BTMTK_DBG_RAW(skb->data, skb->len, "%s, 6ffc send_frame", __func__);
 			return 0;
 		}
 
@@ -1483,8 +1508,11 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			} else if (is_mt7663(bdev->chip_id))
 				urb = alloc_ctrl_urb(hdev, skb);
 		}
-		if (IS_ERR(urb))
+		if (IS_ERR(urb)) {
+			kfree_skb(skb);
+			skb = NULL;
 			return PTR_ERR(urb);
+		}
 
 		hdev->stat.cmd_tx++;
 		return submit_or_queue_tx_urb(hdev, urb);
@@ -1504,6 +1532,8 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					iso_skb = alloc_skb(HCI_MAX_ISO_SIZE + BT_SKB_RESERVE, GFP_ATOMIC);
 					if (!iso_skb) {
 						BTMTK_ERR("%s allocate skb failed!!", __func__);
+						kfree_skb(skb);
+						skb = NULL;
 						return -ENOMEM;
 					}
 					/* copy skb data into iso_skb */
@@ -1514,26 +1544,40 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					urb = alloc_intr_iso_urb(hdev, iso_skb);
 					BTMTK_DBG_RAW(iso_skb->data, iso_skb->len, "%s, it's ble iso packet",
 						__func__);
-
 					/* It's alloc by hci drver, bt driver must be free it. */
 					kfree_skb(skb);
+					skb = NULL;
+					if (IS_ERR(urb)) {
+						kfree_skb(iso_skb);
+						iso_skb = NULL;
+						return PTR_ERR(urb);
+					}
 				} else {
 					memset(skb_put(skb, isoc_pkt_padding), 0, isoc_pkt_padding);
 					urb = alloc_intr_iso_urb(hdev, skb);
-					BTMTK_DBG_RAW(iso_skb->data, iso_skb->len, "%s, it's ble iso packet",
+					BTMTK_DBG_RAW(skb->data, skb->len, "%s, it's ble iso packet",
 						__func__);
+					if (IS_ERR(urb)) {
+						kfree_skb(skb);
+						skb = NULL;
+						return PTR_ERR(urb);
+					}
 				}
 			} else {
 				BTMTK_WARN("btusb_send_frame send iso data, but iso channel not exit");
 				/* if iso channel not exist, we need to drop iso data then free the skb */
 				kfree_skb(skb);
+				skb = NULL;
 				return 0;
 			}
-		} else
+		} else {
 			urb = alloc_bulk_urb(hdev, skb);
-		if (IS_ERR(urb))
-			return PTR_ERR(urb);
-
+			if (IS_ERR(urb)) {
+				kfree_skb(skb);
+				skb = NULL;
+				return PTR_ERR(urb);
+			}
+		}
 		hdev->stat.acl_tx++;
 		return submit_or_queue_tx_urb(hdev, urb);
 
@@ -1542,18 +1586,25 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			BTMTK_INFO("btusb_send_frame hci_conn sco link = %d", hci_conn_num(hdev, SCO_LINK));
 			/* We need to study how to solve this in hw_dvt case.*/
 #ifndef CFG_SUPPORT_HW_DVT
+			kfree_skb(skb);
+			skb = NULL;
 			return -ENODEV;
 #endif
 		}
 
 		urb = alloc_isoc_urb(hdev, skb);
-		if (IS_ERR(urb))
+		if (IS_ERR(urb)) {
+			kfree_skb(skb);
+			skb = NULL;
 			return PTR_ERR(urb);
+		}
 
 		hdev->stat.sco_tx++;
 		return submit_tx_urb(hdev, urb);
 	}
 
+	kfree_skb(skb);
+	skb = NULL;
 	return -EILSEQ;
 }
 
@@ -1814,6 +1865,7 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	cancel_work_sync(&bdev->work);
 	cancel_work_sync(&bdev->waker);
 
+	clear_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
@@ -2226,6 +2278,13 @@ static int btusb_resume(struct usb_interface *intf)
 			btusb_submit_isoc_urb(hdev, GFP_NOIO);
 	}
 
+	if (test_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags)) {
+		if (btusb_submit_intr_ble_isoc_urb(hdev, GFP_NOIO) < 0)
+			clear_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags);
+		else
+			btusb_submit_intr_ble_isoc_urb(hdev, GFP_NOIO);
+	}
+
 	spin_lock_irq(&bdev->txlock);
 	clear_bit(BTUSB_SUSPENDING, &bdev->flags);
 	spin_unlock_irq(&bdev->txlock);
@@ -2326,6 +2385,7 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 
 	cif_state = &bdev->cif_state[cif_event];
 
+	USB_OPS_MUTEX_LOCK();
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
@@ -2334,6 +2394,7 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 
 	/* Set End/Error state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	USB_OPS_MUTEX_UNLOCK();
 }
 
 #ifdef CONFIG_PM
@@ -2706,8 +2767,9 @@ int btmtk_cif_send_control_out(struct btmtk_dev *bdev, struct sk_buff *skb, int 
 		BTMTK_ERR("%s: command send failed(%d)", __func__, ret);
 		goto exit;
 	}
-	kfree_skb(skb);
 exit:
+	kfree_skb(skb);
+	skb = NULL;
 	return ret;
 }
 
@@ -2760,12 +2822,13 @@ int btmtk_cif_send_bulk_out(struct btmtk_dev *bdev, struct sk_buff *skb)
 		ret = -ETIME;
 		goto error;
 	}
-	kfree_skb(skb);
 
 error:
 	usb_free_coherent(cif_dev->udev, UPLOAD_PATCH_UNIT, buf, urb->transfer_dma);
 exit:
 	usb_free_urb(urb);
+	kfree_skb(skb);
+	skb = NULL;
 	return ret;
 }
 

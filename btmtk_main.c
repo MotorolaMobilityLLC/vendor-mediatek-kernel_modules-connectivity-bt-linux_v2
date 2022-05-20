@@ -1584,11 +1584,8 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 			event, event_len,
 			delay, retry, pkt_type);
 
-	if (ret < 0) {
-		BTMTK_ERR("%s free skb, ret=%d!!", __func__, ret);
-		kfree_skb(skb);
-		skb = NULL;
-	}
+	if (ret < 0)
+		BTMTK_ERR("%s send_and_recv failed!!", __func__);
 
 exit:
 	BTMTK_DBG("%s end!!", __func__);
@@ -2035,15 +2032,31 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 
 		/*FW Download finished */
 		if (loop_count == section_num - 1) {
-			if (dma_flag == PATCH_DOWNLOAD_USING_DMA) {
-				ret = btmtk_send_wmt_download_cmd(bdev, pos, 0, event,
+/* need to remove check wifi dl patch success or not according to Jyun-ji's
+ * comment, because bt driver do nothing when wifi dl patch failed */
+#if 1
+			if (patch_flag) {
+				mdelay(500);
+				patch_status = btmtk_send_wmt_download_cmd(bdev, pos, 0, event,
+					sizeof(event) - 1, sectionMap, 0, dma_flag, patch_flag);
+				if (patch_status == PATCH_READY)
+					BTMTK_INFO("%s: Wifi patch already download %d", __func__, patch_status);
+				else
+				BTMTK_ERR("%s: Wifi patch download failed!", __func__);
+			} else {
+#endif
+				if (dma_flag == PATCH_DOWNLOAD_USING_DMA) {
+					ret = btmtk_send_wmt_download_cmd(bdev, pos, 0, event,
 					sizeof(event) - 1, sectionMap, 3, dma_flag, patch_flag);
-				if (ret < 0) {
-					BTMTK_ERR("%s: send wmd dl cmd state 3 failed, terminate!", __func__);
-					goto err;
+					if (ret < 0) {
+						BTMTK_ERR("%s: send wmd dl cmd state 3 failed, terminate!", __func__);
+						goto err;
+					}
 				}
+				BTMTK_INFO("%s: loading rom patch... Done", __func__);
+#if 1
 			}
-			BTMTK_INFO("%s: loading rom patch... Done", __func__);
+#endif
 		}
 next_section:
 		continue;
