@@ -1954,6 +1954,9 @@ static int btmtk_sdio_interrupt_process(struct btmtk_dev *bdev)
 		btmtk_sdio_set_no_fwn_own(cif_dev, 1);
 
 	if (u32ReadCRValue & FIRMWARE_INT_BIT31) {
+		/* clean tx queue */
+		skb_queue_purge(&cif_dev->tx_queue);
+
 		/* It's read-only bit (WDT interrupt)
 		 * Host can't modify it.
 		 */
