@@ -703,7 +703,7 @@ int btmtk_cif_recv_evt(struct btmtk_dev *bdev, int delay, int retry)
 				memcpy(bdev->io_buf + 5, bdev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE + 1, hci_pkt_len);
 				memset(bdev->transfer_buf, 0, URB_MAX_BUFFER_SIZE);
 				hci_pkt_len += 5;
-				memcpy(bdev->transfer_buf, bdev->io_buf, hci_pkt_len);
+				memcpy(bdev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE, bdev->io_buf, hci_pkt_len);
 				BTMTK_DBG_RAW(bdev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
 				break;
 			}
