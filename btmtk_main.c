@@ -2963,7 +2963,8 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 			if (!memcmp(block_name, "APCF", sizeof("APCF")) ||
 				!memcmp(block_name, "RADIOOFF", sizeof("RADIOOFF")) ||
 				!memcmp(block_name, "RADIOON", sizeof("RADIOON")) ||
-				!memcmp(block_name, "APCF_RESUME", sizeof("APCF_RESUME"))) {
+				!memcmp(block_name, "APCF_RESUME", sizeof("APCF_RESUME")) ||
+				!memcmp(block_name, "VENDOR_CMD", sizeof("VENDOR_CMD"))) {
 				temp[0] = 0x01;
 				temp_len++;
 			} else if (!memcmp(block_name, "RADIOOFF_STATUS_EVENT", sizeof("RADIOOFF_STATUS_EVENT")) ||
@@ -3778,13 +3779,42 @@ static int btmtk_send_hci_tci_set_sleep_cmd_766x(struct btmtk_dev *bdev)
 	return ret;
 }
 
+static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
+{
+	int ret = 0;
+	int index = 0;
+
+	BTMTK_INFO("%s enter", __func__);
+
+	for (index = 0; index < VENDOR_CMD_COUNT; index++) {
+		if (bdev->bt_cfg.vendor_cmd[index].content &&
+			bdev->bt_cfg.vendor_cmd[index].length) {
+			ret = btmtk_main_send_cmd(bdev, bdev->bt_cfg.vendor_cmd[index].content,
+				bdev->bt_cfg.vendor_cmd[index].length,
+				NULL, 0, 0, 0, BTMTK_EP_TYPE_OUT_OTHER);
+			if (ret < 0) {
+				BTMTK_ERR("%s: Send vendor cmd failed(%d)! Index: %d",
+					__func__, ret, index);
+				goto exit;
+			}
+
+			BTMTK_INFO_RAW(bdev->bt_cfg.vendor_cmd[index].content,
+				bdev->bt_cfg.vendor_cmd[index].length, "send vendor cmd");
+		}
+	}
+
+exit:
+	BTMTK_INFO("%s exit", __func__);
+	return ret;
+}
+
 int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 {
 	int ret = -1;
 
 	if (!bdev) {
 		BTMTK_ERR("%s: bdev is NULL !", __func__);
-		return ret;
+		goto exit;
 	}
 
 	BTMTK_INFO("%s", __func__);
@@ -3796,7 +3826,7 @@ int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 	ret = btmtk_calibration_flow(bdev);
 	if (ret < 0) {
 		BTMTK_ERR("%s, btmtk_calibration_flow failed!", __func__);
-		return ret;
+		goto exit;
 	}
 	ret = btmtk_send_wmt_power_on_cmd(bdev);
 	if (ret < 0) {
@@ -3807,20 +3837,29 @@ int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 			/* TODO */
 			/* btmtk_usb_toggle_rst_pin(); */
 		}
-		return ret;
+		goto exit;
 	}
 
 	if (bdev->bt_cfg.support_auto_picus == true) {
 		if (btmtk_picus_enable(bdev) < 0) {
 			BTMTK_ERR("send picus filter param failed");
 			btmtk_send_assert_cmd(bdev);
-			return -1;
+			ret = -1;
+			goto exit;
 		}
+	}
+
+	ret = btmtk_send_vendor_cfg(bdev);
+	if (ret < 0) {
+		BTMTK_ERR("btmtk_send_vendor_cfg failed");
+		btmtk_send_assert_cmd(bdev);
+		goto exit;
 	}
 
 	if (is_mt7663(bdev->chip_id))
 		ret = btmtk_send_hci_tci_set_sleep_cmd_766x(bdev);
 
+exit:
 	return ret;
 }
 
