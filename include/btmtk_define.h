@@ -43,8 +43,8 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2022022101"
-#define SUBVER ":turnkey"
+#define VERSION "7.0.2022022301"
+#define SUBVER ":connac3_dev"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
 #define WAKEUP_BT_IRQ 1

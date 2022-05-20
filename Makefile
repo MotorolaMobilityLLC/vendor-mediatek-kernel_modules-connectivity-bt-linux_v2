@@ -86,6 +86,14 @@ else
     ccflags-y += -I$(src)/include/btif
 endif
 
+MTK_PROJ_TYPE := ce
+
+ifeq ($(MTK_PROJ_TYPE), sp)
+    CFILES += proj/btmtk_proj_sp.c
+else ifeq ($(MTK_PROJ_TYPE), ce)
+    CFILES += proj/btmtk_proj_ce.c
+endif
+
 CFILES += btmtk_main.c btmtk_fw_log.c
 
 ccflags-y += -I$(src)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth
@@ -132,6 +140,8 @@ ccs:
 	./util/checkpatch.pl -f ./uart/btmtk_uart_main.c
 	./util/checkpatch.pl -f ./include/usb/btmtk_usb.h
 	./util/checkpatch.pl -f ./usb/btmtkusb.c
+	./util/checkpatch.pl -f ./proj/btmtk_proj_ce.c
+	./util/checkpatch.pl -f ./proj/btmtk_proj_sp.c
 	./util/checkpatch.pl -f btmtk_fw_log.c
 	./util/checkpatch.pl -f btmtk_main.c
 	./util/checkpatch.pl -f btmtk_buffer_mode.c
