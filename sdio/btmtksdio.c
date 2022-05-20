@@ -1141,8 +1141,8 @@ static int btmtk_sdio_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			}
 		}
 
-		sent_len = (section_dl_size - cur_len) >= UPLOAD_PATCH_UNIT ?
-			UPLOAD_PATCH_UNIT : (section_dl_size - cur_len);
+		sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT - MTK_SDIO_PACKET_HEADER_SIZE) ?
+			(UPLOAD_PATCH_UNIT - MTK_SDIO_PACKET_HEADER_SIZE) : (section_dl_size - cur_len);
 
 		BTMTK_DBG("%s: sent_len = %d, cur_len = %d, delay_count = %d",
 		           __func__, sent_len, cur_len, delay_count);
@@ -1305,6 +1305,7 @@ static int btmtk_sdio_unregister_dev(struct btmtk_sdio_dev *cif_dev)
 		sdio_disable_func(cif_dev->func);
 		sdio_release_host(cif_dev->func);
 		sdio_set_drvdata(cif_dev->func, NULL);
+		cif_dev->func = NULL;
 	}
 	return 0;
 }

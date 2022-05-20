@@ -2111,7 +2111,15 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 	struct _Section_Map *sectionMap;
 	struct _Global_Descr *globalDescr;
 	u8 event[] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
+#if LD_PATCH_TIME
+	struct timeval tv_start, tv_bgf, tv_ilm;
+	long sub_dma = 0, sub_all = 0;
 
+	memset(&tv_start, 0, sizeof(tv_start));
+	memset(&tv_bgf, 0, sizeof(tv_bgf));
+	memset(&tv_ilm, 0, sizeof(tv_ilm));
+	do_gettimeofday(&tv_start);
+#endif
 	if (fwbuf == NULL) {
 		BTMTK_WARN("%s, fwbuf is NULL!", __func__);
 		ret = -1;
@@ -2204,14 +2212,51 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 			}
 		}
 		/* FW Download finished */
-		if (loop_count == section_num - 1) {
+		if (patch_flag) {
+			if (loop_count == section_num - 1) {
 			/* need to remove delay according to
 			 * Jyun-ji's comment later
 			 */
-			if (patch_flag) {
 				mdelay(500);
 			}
 		}
+#if LD_PATCH_TIME
+		else {
+			if (loop_count == 0) {
+				do_gettimeofday(&tv_bgf);
+			} else if (loop_count == 1) {
+				do_gettimeofday(&tv_ilm);
+				if (tv_bgf.tv_sec != 0 || tv_bgf.tv_usec != 0) {
+					if (tv_ilm.tv_sec >= tv_bgf.tv_sec)
+						sub_dma = (tv_ilm.tv_sec - tv_bgf.tv_sec) * 1000;
+					else
+						sub_dma = (~(tv_bgf.tv_sec - tv_ilm.tv_sec) + 1) * 1000;
+
+					sub_dma += (tv_ilm.tv_usec - tv_bgf.tv_usec) / 1000;
+				}
+				if (tv_ilm.tv_sec >= tv_start.tv_sec)
+					sub_all = (tv_ilm.tv_sec - tv_start.tv_sec) * 1000;
+				else
+					sub_all = (~(tv_start.tv_sec - tv_ilm.tv_sec) + 1) * 1000;
+
+				sub_all += (tv_ilm.tv_usec - tv_start.tv_usec) / 1000;
+
+				BTMTK_INFO("LD PATCH 1 tv_start: tv_sec:%d, tv_usec:%d.",
+					tv_start.tv_sec, tv_start.tv_usec);
+				BTMTK_INFO("LD PATCH 2 tv_bgf: tv_sec:%d, tv_usec:%d.",
+					tv_bgf.tv_sec, tv_bgf.tv_usec);
+				BTMTK_INFO("LD PATCH 3 tv_ilm: tv_sec:%d, tv_usec:%d.",
+					tv_ilm.tv_sec, tv_ilm.tv_usec);
+
+				if (sub_dma != 0)
+					BTMTK_INFO("LD PATCH time: ILM_DMA:%dms, ALL:%dms.",
+						sub_dma, sub_all);
+				else
+					BTMTK_INFO("LD PATCH time: ALL:%dms.",
+						sub_all);
+			}
+		}
+#endif
 next_section:
 		continue;
 	} while (++loop_count < section_num);
