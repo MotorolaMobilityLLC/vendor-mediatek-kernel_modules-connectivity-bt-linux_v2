@@ -28,8 +28,8 @@
 #include "btmtk_main.h"
 #include "btmtk_buffer_mode.h"
 
-#ifndef SDIO_DEBUG
-#define SDIO_DEBUG 0
+#ifndef BTMTK_SDIO_DEBUG
+#define BTMTK_SDIO_DEBUG 0
 #endif
 
 /**

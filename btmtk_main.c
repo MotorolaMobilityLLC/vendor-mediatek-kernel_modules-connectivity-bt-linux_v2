@@ -130,7 +130,7 @@ __weak int btmtk_cif_send_calibration(struct btmtk_dev *bdev)
 	return -1;
 }
 
-#if (KERNEL_VERSION(4, 19, 84) > LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(4, 19, 84) < LINUX_VERSION_CODE)
 __weak void do_gettimeofday(struct timeval *tv)
 {
 	struct timespec64 ts;
@@ -3575,7 +3575,7 @@ int btmtk_woble_suspend(struct btmtk_dev *bdev)
 
 	if (!is_support_unify_woble(bdev) && (fstate != BTMTK_FOPS_STATE_OPENED)) {
 		BTMTK_WARN("%s: when not support woble, in bt off state, do nothing!", __func__);
-		goto exit;
+		return 0;
 	}
 
 	ret = btmtk_handle_entering_WoBLE_state(bdev);
@@ -3607,7 +3607,7 @@ int btmtk_woble_resume(struct btmtk_dev *bdev)
 
 	if (!is_support_unify_woble(bdev) && (fstate != BTMTK_FOPS_STATE_OPENED)) {
 		BTMTK_WARN("%s: when not support woble, in bt off state, do nothing!", __func__);
-		goto exit;
+		return 0;
 	}
 
 	if (bdev->power_state == BTMTK_DONGLE_STATE_ERROR) {
@@ -4785,6 +4785,12 @@ static int bt_close(struct hci_dev *hdev)
 
 	state = btmtk_get_chip_state(bdev);
 	if (state != BTMTK_STATE_WORKING && state != BTMTK_STATE_STANDBY) {
+		/* If hif disconnect occurs,
+		 * it will call cif_mutex_lock and release hci device.
+		 * Release hci device will call bt_close.
+		 * It must return with this,
+		 * otherwise the below cif_mutex_lock will cause deadlock
+		 */
 		BTMTK_WARN("%s: not in working state and standby state(%d).", __func__, state);
 		goto exit;
 	}
@@ -4793,6 +4799,15 @@ static int bt_close(struct hci_dev *hdev)
 
 	if (main_info.hif_hook.cif_mutex_lock)
 		main_info.hif_hook.cif_mutex_lock(bdev);
+
+	state = btmtk_get_chip_state(bdev);
+	if (state != BTMTK_STATE_WORKING && state != BTMTK_STATE_STANDBY) {
+		/* It's for the case that
+		 * bt_close and hif_disconnect occur at the same time
+		 */
+		BTMTK_WARN("%s: not in working state and standby state(%d).", __func__, state);
+		goto unlock;
+	}
 
 #if CFG_SUPPORT_DVT
 	/* Don't send init cmd for DVT

@@ -84,7 +84,7 @@ static const struct sdio_device_id btmtk_sdio_tabls[] = {
 };
 MODULE_DEVICE_TABLE(sdio, btmtk_sdio_tabls);
 
-#if SDIO_DEBUG
+#if BTMTK_SDIO_DEBUG
 #define RX_DEBUG_ENTRY_NUM 50
 enum {
 	CHISR_r_1 = 0,
@@ -289,7 +289,7 @@ retry_own:
 
 done:
 	if (owntype == DRIVER_OWN) {
-#if SDIO_DEBUG
+#if BTMTK_SDIO_DEBUG
 		driver_own_cnt++;
 #endif
 		if (ret) {
@@ -306,7 +306,7 @@ done:
 		} else
 			BTMTK_DBG("%s set driver own success", __func__);
 	} else if (owntype == FW_OWN) {
-#if SDIO_DEBUG
+#if BTMTK_SDIO_DEBUG
 		fw_own_cnt++;
 #endif
 		if (ret)
@@ -464,7 +464,7 @@ static int btmtk_sdio_open(struct hci_dev *hdev)
 	BTMTK_INFO("%s enter!", __func__);
 	skb_queue_purge(&cif_dev->tx_queue);
 
-#if SDIO_DEBUG
+#if BTMTK_SDIO_DEBUG
 	rx_done_cnt = 0;
 	tx_empty_cnt = 0;
 	intr_cnt = 0;
@@ -806,7 +806,7 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 		|| (skb->len == FW_ASSERT_CMD1_LEN &&
 		!memcmp(skb->data, fw_assert_cmd1, FW_ASSERT_CMD1_LEN))) {
 		BTMTK_INFO_RAW(skb->data, skb->len, "%s: Trigger FW assert, dump CR", __func__);
-#if SDIO_DEBUG
+#if BTMTK_SDIO_DEBUG
 		rx_debug_print();
 #endif
 		btmtk_sdio_set_own_back(cif_dev, DRIVER_OWN, RETRY_TIMES);
@@ -842,12 +842,12 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 	ret = btmtk_sdio_readl(CHISR, &u32ReadCRValue, cif_dev->func);
 	BTMTK_DBG("%s: loop Get CHISR 0x%08X",
 		__func__, u32ReadCRValue);
-#if SDIO_DEBUG
+#if BTMTK_SDIO_DEBUG
 	rx_debug_save(CHISR_r_2, u32ReadCRValue, NULL);
 #endif
 
 	ret = btmtk_sdio_readl(CRPLR, &u32ReadCRLEN, cif_dev->func);
-#if SDIO_DEBUG
+#if BTMTK_SDIO_DEBUG
 	rx_debug_save(CRPLR_r, u32ReadCRLEN, NULL);
 #endif
 
@@ -862,12 +862,12 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 	ret = btmtk_sdio_writel(CHISR, u32ReadCRValue, cif_dev->func);
 	BTMTK_DBG("%s: write = %08X", __func__, u32ReadCRValue);
 	ret = btmtk_sdio_readl(PD2HRM0R, &u32ReadCRValue, cif_dev->func);
-#if SDIO_DEBUG
+#if BTMTK_SDIO_DEBUG
 	rx_debug_save(PD2HRM0R_r, u32ReadCRValue, NULL);
 #endif
 
 	ret = btmtk_sdio_readsb(CRDR, cif_dev->transfer_buf, rx_length, cif_dev->func);
-#if SDIO_DEBUG
+#if BTMTK_SDIO_DEBUG
 	rx_debug_save(RX_BUF, 0, cif_dev->transfer_buf);
 #endif
 	sdio_header_length = (cif_dev->transfer_buf[1] << 8);
@@ -1080,7 +1080,7 @@ static void btmtk_sdio_interrupt(struct sdio_func *func)
 	struct btmtk_dev *bdev;
 	struct btmtk_sdio_dev *cif_dev;
 
-#if SDIO_DEBUG
+#if BTMTK_SDIO_DEBUG
 	rx_debug_save(RX_TIMESTAMP, 0, NULL);
 	intr_cnt++;
 #endif
@@ -1549,7 +1549,7 @@ static int btmtk_sdio_interrupt_process(struct btmtk_dev *bdev)
 	u32 u32ReadCRValue = 0;
 
 	ret = btmtk_sdio_readl(CHISR, &u32ReadCRValue, cif_dev->func);
-#if SDIO_DEBUG
+#if BTMTK_SDIO_DEBUG
 	rx_debug_save(CHISR_r_1, u32ReadCRValue, NULL);
 #endif
 	BTMTK_DBG("%s CHISR 0x%08x", __func__, u32ReadCRValue);
@@ -1573,7 +1573,7 @@ static int btmtk_sdio_interrupt_process(struct btmtk_dev *bdev)
 		ret = btmtk_sdio_writel(CHISR, (TX_EMPTY | TX_COMPLETE_COUNT), cif_dev->func);
 		atomic_set(&cif_dev->tx_rdy, 1);
 		BTMTK_DBG("%s set tx_rdy true", __func__);
-#if SDIO_DEBUG
+#if BTMTK_SDIO_DEBUG
 		tx_empty_cnt++;
 #endif
 	}
