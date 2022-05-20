@@ -107,9 +107,11 @@ $(info [BT_Drv] MTK_PROJ_TYPE = $(MTK_PROJ_TYPE) src = $(src))
 #ifeq ($(MTK_PROJ_TYPE), sp)
 ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
     CFILES += proj/btmtk_proj_sp.c
+    ccflags-y += -DANDROID_OS
 #else ifeq ($(MTK_PROJ_TYPE), ce)
 else
     CFILES += proj/btmtk_proj_ce.c
+    ccflags-y += -DLINUX_OS
 endif
 
 CFILES += btmtk_main.c btmtk_fw_log.c
@@ -127,7 +129,6 @@ ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
   ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/connsyslog
 endif
 
-ccflags-y += -DLINUX_OS
 ccflags-y += -Werror
 
 $(MOD_NAME)-objs := $(CFILES:.c=.o)
