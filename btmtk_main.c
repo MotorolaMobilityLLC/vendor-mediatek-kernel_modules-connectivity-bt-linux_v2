@@ -97,7 +97,7 @@ __weak int btmtk_cif_rx_packet_handler(struct hci_dev *hdev, struct sk_buff *skb
 }
 void btmtk_do_gettimeofday(struct timeval *tv)
 {
-#if (KERNEL_VERSION(5, 0, 0) > LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(4, 19, 85) > LINUX_VERSION_CODE)
 	do_gettimeofday(tv);
 #else
 	struct timespec64 ts;
@@ -338,6 +338,7 @@ static void btmtk_fops_set_state(struct btmtk_dev *bdev, unsigned char new_state
 void *btmtk_kallsyms_lookup_name(const char *name)
 {
 	void *addr = __symbol_get(name);
+	__symbol_put(name);
 	return addr;
 }
 
