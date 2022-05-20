@@ -1622,7 +1622,7 @@ static int btusb_suspend(struct usb_interface *intf, pm_message_t message)
 {
 	struct btmtk_dev *bdev = usb_get_intfdata(intf);
 
-	BT_DBG("intf %p", intf);
+	BTMTK_INFO("%s begin", __func__);
 
 	if (bdev->suspend_count++)
 		return 0;
@@ -1642,6 +1642,7 @@ static int btusb_suspend(struct usb_interface *intf, pm_message_t message)
 	btusb_stop_traffic(bdev);
 	usb_kill_anchored_urbs(&bdev->tx_anchor);
 
+	BTMTK_INFO("%s END", __func__);
 	return 0;
 }
 
@@ -1651,7 +1652,7 @@ static int btusb_resume(struct usb_interface *intf)
 	struct hci_dev *hdev = bdev->hdev;
 	int err = 0;
 
-	BT_DBG("intf %p", intf);
+	BTMTK_INFO("%s begin", __func__);
 
 	if (--bdev->suspend_count)
 		return 0;
@@ -1689,6 +1690,7 @@ static int btusb_resume(struct usb_interface *intf)
 	spin_unlock_irq(&bdev->txlock);
 	schedule_work(&bdev->work);
 
+	BTMTK_INFO("%s end", __func__);
 	return 0;
 
 done:
