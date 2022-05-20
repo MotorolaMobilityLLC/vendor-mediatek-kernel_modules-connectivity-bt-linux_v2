@@ -618,8 +618,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 		len = min_t(uint, hci_skb_expect(skb) - skb->len, count);
 		skb_tmp = skb_put(skb, len);
 		if (!skb_tmp) {
-			BTMTK_ERR("%s, skb_put failed. Len = %d!", __func__,
-				len);
+			BTMTK_ERR("%s, skb_put failed. Len = %d!", __func__, len);
+			kfree_skb(skb);
 			return ERR_PTR(-ENOMEM);
 		}
 		memcpy(skb_tmp, buffer, len);
