@@ -3174,7 +3174,10 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 		/* polling re-init CR */
 		btmtk_cif_read_uhw_register(bdev, BT_MISC, &val);
 		BTMTK_INFO("%s: reg=%x, value=0x%08x", __func__, BT_MISC, val);
-		if ((val & mcu_init_done) == mcu_init_done) {
+		if (val == 0xffffffff) {
+			/* read init CR failed */
+			BTMTK_INFO("%s: read init CR failed, retry = %d", __func__, retry);
+		} else if ((val & mcu_init_done) == mcu_init_done) {
 			/* L0.5 reset done */
 			BTMTK_INFO("%s: Do L0.5 reset sucessfully.", __func__);
 			goto Finish;
