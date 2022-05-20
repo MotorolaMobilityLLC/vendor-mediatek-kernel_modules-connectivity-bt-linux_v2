@@ -743,7 +743,7 @@ exit:
 
 int btmtk_woble_resume(struct btmtk_woble *bt_woble)
 {
-	int ret = -1;
+	int ret = 0;
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	struct btmtk_dev *bdev = bt_woble->bdev;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
