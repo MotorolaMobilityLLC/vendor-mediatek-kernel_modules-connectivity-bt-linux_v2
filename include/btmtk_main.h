@@ -654,7 +654,7 @@ void btmtk_hci_snoop_save_adv_event(u32 len, u8 *buf);
 void btmtk_hci_snoop_save_acl(u32 len, u8 *buf);
 void btmtk_hci_snoop_print(u32 len, const u8 *buf);
 void btmtk_hci_snoop_print_to_log(void);
-unsigned long btmtk_kallsyms_lookup_name(const char *name);
+void *btmtk_kallsyms_lookup_name(const char *name);
 void btmtk_do_gettimeofday(struct timeval *tv);
 void btmtk_reg_hif_hook(struct hif_hook_ptr *hook);
 int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus);

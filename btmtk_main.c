@@ -335,20 +335,10 @@ static void btmtk_fops_set_state(struct btmtk_dev *bdev, unsigned char new_state
 	FOPS_MUTEX_UNLOCK();
 }
 
-unsigned long btmtk_kallsyms_lookup_name(const char *name)
+void *btmtk_kallsyms_lookup_name(const char *name)
 {
-	unsigned long ret = 0;
-
-	ret = kallsyms_lookup_name(name);
-	if (ret) {
-#ifdef CONFIG_ARM
-#ifdef CONFIG_THUMB2_KERNEL
-		/*set bit 0 in address for thumb mode*/
-		ret |= 1;
-#endif
-#endif
-	}
-	return ret;
+	void *addr = __symbol_get(name);
+	return addr;
 }
 
 static void btmtk_main_info_initialize(void)
@@ -3479,7 +3469,7 @@ static int bt_open(struct hci_dev *hdev)
 	main_info.reset_stack_flag = HW_ERR_NONE;
 
 	if (bdev->bt_cfg.support_bt_single_sku) {
-		rlm_get_alpha2 = (void *)kallsyms_lookup_name(wifi_func_name);
+		rlm_get_alpha2 = (void *)btmtk_kallsyms_lookup_name(wifi_func_name);
 
 		if (rlm_get_alpha2) {
 			rlm_get_alpha2(alpha2);
