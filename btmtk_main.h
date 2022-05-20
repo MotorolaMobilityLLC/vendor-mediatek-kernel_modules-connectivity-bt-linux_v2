@@ -72,6 +72,8 @@ void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf);
 void btmtk_hci_snoop_save_event(u32 len, u8 *buf);
 void btmtk_hci_snoop_save_adv_event(u32 len, u8 *buf);
 void btmtk_hci_snoop_save_acl(u32 len, u8 *buf);
+void btmtk_hci_snoop_print(u32 len, const u8 *buf);
+
 
 
 

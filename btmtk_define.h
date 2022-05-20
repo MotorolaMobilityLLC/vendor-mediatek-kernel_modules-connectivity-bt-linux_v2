@@ -42,7 +42,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.200051501"
+#define VERSION "7.0.200051701"
 #define SUBVER ":turnkey"
 
 
@@ -92,6 +92,11 @@
 #define BTMTK_LOG_LVL_MAX	BTMTK_LOG_LVL_DBG
 #define BTMTK_LOG_LVL_DEF	BTMTK_LOG_LVL_INFO	/* default setting */
 
+#define HCI_SNOOP_ENTRY_NUM	60
+#define HCI_SNOOP_BUF_SIZE	32
+#define HCI_SNOOP_MAX_BUF_SIZE	66
+
+
 extern uint8_t btmtk_log_lvl;
 
 #define BTMTK_ERR(fmt, ...)	 \
@@ -103,14 +108,13 @@ extern uint8_t btmtk_log_lvl;
 #define BTMTK_DBG(fmt, ...)	 \
 	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) pr_warn("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__); } while (0)
 
-#define BTMTK_MAX_LOG_LEN	64	/* default length setting */
 #define BTMTK_INFO_RAW(p, l, fmt, ...)						\
 	do {									\
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) {			\
 			int raw_count = 0;					\
 			const unsigned char *ptr = p;				\
 			pr_cont("[btmtk_info] "fmt, ##__VA_ARGS__);		\
-			for (raw_count = 0; raw_count < l; ++raw_count) {	\
+			for (raw_count = 0; raw_count < MIN(l, HCI_SNOOP_MAX_BUF_SIZE); ++raw_count) {	\
 				pr_cont(" %02X", ptr[raw_count]);		\
 			}							\
 			pr_cont("\n");						\
@@ -123,7 +127,7 @@ extern uint8_t btmtk_log_lvl;
 			int raw_count = 0;					\
 			const unsigned char *ptr = p;				\
 			pr_cont("[btmtk_debug] "fmt, ##__VA_ARGS__);		\
-			for (raw_count = 0; raw_count < MIN(l, BTMTK_MAX_LOG_LEN); ++raw_count) {	\
+			for (raw_count = 0; raw_count < MIN(l, HCI_SNOOP_MAX_BUF_SIZE); ++raw_count) {	\
 				pr_cont(" %02X", ptr[raw_count]);		\
 			}							\
 			pr_cont("\n");						\
@@ -181,9 +185,6 @@ extern uint8_t btmtk_log_lvl;
 
 
 #define IO_BUF_SIZE		(HCI_MAX_EVENT_SIZE > 256 ? HCI_MAX_EVENT_SIZE : 256)
-#define HCI_SNOOP_ENTRY_NUM	60
-#define HCI_SNOOP_BUF_SIZE	32
-#define HCI_SNOOP_MAX_BUF_SIZE	66
 #define EVENT_COMPARE_SIZE	64
 
 #define SECTION_SPEC_NUM	13

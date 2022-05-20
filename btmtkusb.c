@@ -189,9 +189,7 @@ static void btusb_intr_complete(struct urb *urb)
 			(urb->actual_length != (buf[1] + 2) && urb->actual_length > 1)) {
 			BT_ERR("%s: urb->actual_length is invalid, buf[1] = %d!",
 				__func__, buf[1]);
-			BTMTK_INFO_RAW(urb->transfer_buffer, urb->actual_length,
-				"urb->actual_length:%d, urb->transfer_buffer:%p",
-				urb->actual_length, urb->transfer_buffer);
+			btmtk_hci_snoop_print(urb->actual_length, urb->transfer_buffer);
 			goto intr_resub;
 		}
 		memset(bdev->urb_transfer_buf, 0, URB_MAX_BUFFER_SIZE);
@@ -221,10 +219,8 @@ static void btusb_intr_complete(struct urb *urb)
 		if (err) {
 			BT_ERR("%s corrupted event packet, urb_transfer_buf = %p, transfer_buffer = %p",
 				hdev->name, bdev->urb_transfer_buf, urb->transfer_buffer);
-			BTMTK_INFO_RAW(bdev->urb_transfer_buf, urb->actual_length + 1,
-				"urb->actual_length:%d", urb->actual_length + 1);
-			BTMTK_INFO_RAW(urb->transfer_buffer, urb->actual_length,
-				"urb->actual_length:%d", urb->actual_length);
+			btmtk_hci_snoop_print(urb->actual_length, urb->transfer_buffer);
+			btmtk_hci_snoop_print(urb->actual_length + 1, bdev->urb_transfer_buf);
 			hdev->stat.err_rx++;
 		}
 
@@ -539,9 +535,7 @@ static void btusb_bulk_complete(struct urb *urb)
 		if (urb->actual_length >= URB_MAX_BUFFER_SIZE ||
 			urb->actual_length != len + 4) {
 			BT_ERR("%s urb->actual_length is invalid, len = %d!", __func__, len);
-			BTMTK_INFO_RAW(urb->transfer_buffer, urb->actual_length,
-				"urb->actual_length:%d, urb->transfer_buffer:%p",
-				urb->actual_length, urb->transfer_buffer);
+			btmtk_hci_snoop_print(urb->actual_length, urb->transfer_buffer);
 			goto bulk_resub;
 		}
 		memset(bdev->urb_transfer_buf, 0, URB_MAX_BUFFER_SIZE);
@@ -554,10 +548,8 @@ static void btusb_bulk_complete(struct urb *urb)
 		if (err) {
 			BT_ERR("%s corrupted ACL packet, urb_transfer_buf = %p, transfer_buffer = %p",
 				hdev->name, bdev->urb_transfer_buf, urb->transfer_buffer);
-			BTMTK_INFO_RAW(bdev->urb_transfer_buf, urb->actual_length + 1,
-				"urb->actual_length:%d", urb->actual_length + 1);
-			BTMTK_INFO_RAW(urb->transfer_buffer, urb->actual_length,
-				"urb->actual_length:%d", urb->actual_length);
+			btmtk_hci_snoop_print(urb->actual_length, urb->transfer_buffer);
+			btmtk_hci_snoop_print(urb->actual_length + 1, bdev->urb_transfer_buf);
 			hdev->stat.err_rx++;
 		}
 
@@ -682,9 +674,7 @@ static void btusb_ble_isoc_complete(struct urb *urb)
 
 		if (urb->actual_length + HCI_ISO_PKT_WITH_ACL_HEADER_SIZE > URB_MAX_BUFFER_SIZE) {
 			BT_ERR("%s urb->actual_length is invalid!", __func__);
-			BTMTK_INFO_RAW(urb->transfer_buffer, urb->actual_length,
-				"urb->actual_length:%d, urb->transfer_buffer:%p",
-				urb->actual_length, urb->transfer_buffer);
+			btmtk_hci_snoop_print(urb->actual_length, urb->transfer_buffer);
 			goto ble_iso_resub;
 		}
 		/* It's mtk specific heade for stack

@@ -650,7 +650,7 @@ void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf)
 	u8 separator_char[] = {0xA5, 0xA5};
 	u8 *copy_tail_buf;
 
-	if (buf) {
+	if (buf && len > 0) {
 		if (len < HCI_SNOOP_BUF_SIZE) {
 			copy_len = len;
 			copy_tail_len = 0;
@@ -688,7 +688,7 @@ void btmtk_hci_snoop_save_adv_event(u32 len, u8 *buf)
 	u8 separator_char[] = {0xA5, 0xA5};
 	u8 *copy_tail_buf;
 
-	if (buf) {
+	if (buf && len > 0) {
 		if (len < HCI_SNOOP_BUF_SIZE) {
 			copy_len = len;
 			copy_tail_len = 0;
@@ -726,7 +726,7 @@ void btmtk_hci_snoop_save_event(u32 len, u8 *buf)
 	u8 separator_char[] = {0xA5, 0xA5};
 	u8 *copy_tail_buf;
 
-	if (buf) {
+	if (buf && len > 0) {
 		if (len < HCI_SNOOP_BUF_SIZE) {
 			copy_len = len;
 			copy_tail_len = 0;
@@ -764,7 +764,7 @@ void btmtk_hci_snoop_save_acl(u32 len, u8 *buf)
 	u8 separator_char[] = {0xA5, 0xA5};
 	u8 *copy_tail_buf;
 
-	if (buf) {
+	if (buf && len > 0) {
 		if (len < HCI_SNOOP_BUF_SIZE) {
 			copy_len = len;
 			copy_tail_len = 0;
@@ -793,6 +793,43 @@ void btmtk_hci_snoop_save_acl(u32 len, u8 *buf)
 			hci_acl_index = HCI_SNOOP_ENTRY_NUM - 1;
 	}
 }
+
+void btmtk_hci_snoop_print(u32 len, const u8 *buf)
+{
+	u32 copy_len = HCI_SNOOP_BUF_SIZE;
+	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
+	u8 separator_char[] = {0xA5, 0xA5};
+	const u8 *copy_tail_buf;
+	u8 hci_snoop_buf[HCI_SNOOP_MAX_BUF_SIZE] = {0};
+	u16 hci_snoop_len = 0;
+
+	if (buf && len > 0) {
+		if (len < HCI_SNOOP_BUF_SIZE) {
+			copy_len = len;
+			copy_tail_len = 0;
+		} else if (len > HCI_SNOOP_BUF_SIZE && len <= HCI_SNOOP_BUF_SIZE * 2)
+			copy_tail_len = len - copy_len;
+
+		memcpy(hci_snoop_buf, buf, copy_len & 0xff);
+		hci_snoop_len = copy_len & 0xff;
+
+		/* save less then 32 bytes data in the buffer tail, using A5 A5 to
+		 * separator the head 32 bytes data and the tail 32 bytes data
+		 */
+		if (copy_tail_len > 0) {
+			copy_tail_buf = buf + len - copy_tail_len;
+			hci_snoop_len += (copy_tail_len + sizeof(separator_char)) & 0xff;
+			memcpy(hci_snoop_buf + copy_len, separator_char, sizeof(separator_char));
+			memcpy(hci_snoop_buf + copy_len + sizeof(separator_char),
+				copy_tail_buf, copy_tail_len);
+		}
+
+		if (hci_snoop_len > 0)
+			BTMTK_INFO_RAW(hci_snoop_buf, hci_snoop_len, "act_len(%d)-len(%d)-buf(%p):",
+				len, hci_snoop_len, buf);
+	}
+}
+
 
 static int main_init(void)
 {
@@ -916,10 +953,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 			if (!skb) {
 				BTMTK_ERR("%s,skb is invalid, buffer[0] = %d!", __func__,
 					buffer[0]);
-				BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
-						count_dbg, buffer_dbg);
-				BTMTK_INFO_RAW(buffer, count, "count:%d, buffer:%p",
-						count, buffer);
+				btmtk_hci_snoop_print(count_dbg, buffer_dbg);
+				btmtk_hci_snoop_print(count, buffer);
 				btmtk_hci_snoop_print_to_log();
 				return ERR_PTR(-EILSEQ);
 			}
@@ -949,9 +984,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 
 		if (i >= pkts_count) {
 			BTMTK_ERR("%s, pkt type is invalid!", __func__);
-			BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
-				count_dbg, buffer_dbg);
-			BTMTK_INFO_RAW(buffer, count, "count:%d, buffer:%p", count, buffer);
+			btmtk_hci_snoop_print(count_dbg, buffer_dbg);
+			btmtk_hci_snoop_print(count, buffer);
 			btmtk_hci_snoop_print_to_log();
 			kfree_skb(skb);
 			return ERR_PTR(-EILSEQ);
@@ -973,11 +1007,11 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				hci_skb_expect(skb) += dlen;
 
 				if (skb_tailroom(skb) < dlen) {
-					BTMTK_ERR("%s, skb_tailroom is not enough!", __func__);
-					BTMTK_INFO_RAW(skb->data, skb->len, "dlen:%d", dlen);
-					BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
-						count_dbg, buffer_dbg);
-					BTMTK_INFO_RAW(buffer, count, "count:%d, buffer:%p", count, buffer);
+					BTMTK_ERR("%s, skb_tailroom is not enough, dlen:%d!",
+						__func__, dlen);
+					btmtk_hci_snoop_print(skb->len, skb->data);
+					btmtk_hci_snoop_print(count_dbg, buffer_dbg);
+					btmtk_hci_snoop_print(count, buffer);
 					btmtk_hci_snoop_print_to_log();
 					kfree_skb(skb);
 					return ERR_PTR(-EMSGSIZE);
@@ -990,11 +1024,11 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				hci_skb_expect(skb) += dlen;
 
 				if (skb_tailroom(skb) < dlen) {
-					BTMTK_ERR("%s, skb_tailroom is not enough in case 2!", __func__);
-					BTMTK_INFO_RAW(skb->data, skb->len, "dlen:%d", dlen);
-					BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
-						count_dbg, buffer_dbg);
-					BTMTK_INFO_RAW(buffer, count, "count:%d, buffer:%p", count, buffer);
+					BTMTK_ERR("%s, skb_tailroom is not enough in case 2, dlen:%d!",
+						__func__, dlen);
+					btmtk_hci_snoop_print(skb->len, skb->data);
+					btmtk_hci_snoop_print(count_dbg, buffer_dbg);
+					btmtk_hci_snoop_print(count, buffer);
 					btmtk_hci_snoop_print_to_log();
 					kfree_skb(skb);
 					return ERR_PTR(-EMSGSIZE);
@@ -1003,9 +1037,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 			default:
 				/* Unsupported variable length */
 				BTMTK_ERR("%s, Unsupported variable length!", __func__);
-				BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
-					count_dbg, buffer_dbg);
-				BTMTK_INFO_RAW(buffer, count, "count:%d, buffer:%p", count, buffer);
+				btmtk_hci_snoop_print(count_dbg, buffer_dbg);
+				btmtk_hci_snoop_print(count, buffer);
 				btmtk_hci_snoop_print_to_log();
 				kfree_skb(skb);
 				return ERR_PTR(-EILSEQ);
@@ -3967,6 +4000,9 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	int ret = -1;
 	int state = BTMTK_STATE_INIT;
 	int fstate = BTMTK_FOPS_STATE_INIT;
+	/* parsing commands */
+	u8 fw_assert_cmd[] = { 0x01, 0x5B, 0xFD, 0x00 };
+	u8 reset_cmd[] = { 0x01, 0x03, 0x0C, 0x00 };
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 
 	if (hdev == NULL || skb == NULL) {
@@ -4013,9 +4049,17 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		BTMTK_INFO("%s: Ble iso pkt size is %d", __func__, bdev->iso_threshold);
 	}
 
-	/* save hci cmd pkt for debug */
-	if (hci_skb_pkt_type(skb) == HCI_COMMAND_PKT)
+	if (hci_skb_pkt_type(skb) == HCI_COMMAND_PKT) {
+		/* save hci cmd pkt for debug */
 		btmtk_hci_snoop_save_cmd(skb->len, skb->data);
+		if (skb->len == sizeof(fw_assert_cmd) &&
+			!memcmp(skb->data, fw_assert_cmd, sizeof(fw_assert_cmd))) {
+			BTMTK_INFO("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
+			btmtk_hci_snoop_print_to_log();
+		} else if (skb->len == sizeof(reset_cmd) &&
+				!memcmp(skb->data, reset_cmd, sizeof(reset_cmd)))
+			BTMTK_INFO("%s: got command: 0x03 0C 00 (HCI_RESET)", __func__);
+	}
 
 	ret = btmtk_cif_send_cmd(bdev, skb, 0, 0, BTMTK_EP_TYPE_OUT_OTHER);
 	if (ret < 0)
@@ -4151,7 +4195,6 @@ void btmtk_reset_waker(struct work_struct *work)
 	cancel_work_sync(&bdev->waker);
 
 	bdev->sco_num = 0;
-	reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 
 	err = btmtk_cif_subsys_reset(bdev);
 	if (err) {
@@ -4173,11 +4216,12 @@ void btmtk_reset_waker(struct work_struct *work)
 	} else {
 		/* L0.5 reset failed, do whole chip reset */
 		btmtk_toggle_rst_pin(bdev);
-		btmtk_send_hw_err_to_host(bdev);
+		//btmtk_send_hw_err_to_host(bdev);
 		goto Finish;
 	}
 #endif
 
+	reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 	btmtk_cap_init(bdev);
 	err = btmtk_load_rom_patch(bdev);
 	if (err < 0) {
