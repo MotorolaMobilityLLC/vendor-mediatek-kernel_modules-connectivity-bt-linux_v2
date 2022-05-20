@@ -56,6 +56,7 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define READ_ADDRESS_EVT_HDR_LEN 7
 #define READ_ADDRESS_EVT_PAYLOAD_OFFSET 7
 #define WOBLE_DEBUG_EVT_TYPE 0xE8
+#define BLE_EVT_TYPE 0x3E
 
 struct btmtk_cif_chip_reset {
 	/* For Whole chip reset */

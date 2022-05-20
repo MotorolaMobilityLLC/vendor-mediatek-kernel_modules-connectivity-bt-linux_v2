@@ -122,6 +122,7 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define READ_ADDRESS_EVT_HDR_LEN 7
 #define READ_ADDRESS_EVT_PAYLOAD_OFFSET 7
 #define WOBLE_DEBUG_EVT_TYPE 0xE8
+#define BLE_EVT_TYPE 0x3E
 
 #define LD_PATCH_CMD_LEN 10
 #define LD_PATCH_EVT_LEN 8
