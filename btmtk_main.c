@@ -1768,14 +1768,13 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 			}
 		}
 		/* FW Download finished */
+		/* remove it, comment from fw dl owner
 		if (patch_flag) {
 			if (loop_count == section_num - 1) {
-			/* need to remove delay according to
-			 * Jyun-ji's comment later
-			 */
 				mdelay(500);
 			}
 		}
+		*/
 #if LD_PATCH_TIME
 		else {
 			if (loop_count == 0) {

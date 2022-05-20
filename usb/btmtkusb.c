@@ -2151,7 +2151,7 @@ static int btusb_probe(struct usb_interface *intf,
 
 	SET_HCIDEV_DEV(bdev->hdev, &cif_dev->intf->dev);
 
-	if (BTMTK_IS_BT_0_INTF(ifnum_base) && !(is_mt7922(bdev->chip_id)))
+	if (BTMTK_IS_BT_0_INTF(ifnum_base))
 		err = btmtk_load_rom_patch(bdev);
 	else
 		BTMTK_INFO("interface = %d, don't download patch", ifnum_base);
