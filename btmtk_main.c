@@ -751,7 +751,7 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 		BTMTK_INFO_RAW(cmd, cmd_len, "%s: CMD:", __func__);
 
 		ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
-				event, sizeof(event) - 1, 20, 0, BTMTK_EP_TYPE_OUT_CMD,
+				event, event_len, 20, 0, BTMTK_EP_TYPE_OUT_CMD,
 				BTMTK_TX_WAIT_VND_EVT, true);
 		if (ret < 0) {
 			BTMTK_ERR("%s: send wmd dl cmd failed, terminate!", __func__);
@@ -769,7 +769,7 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 		cmd[7] = 0x00; /* palyload length */
 		cmd[8] = 0x03; /* which is the FW download state 3: finished */
 		ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
-				event, sizeof(event), 0, 0, BTMTK_EP_TYPE_OUT_CMD,
+				event, event_len, 0, 0, BTMTK_EP_TYPE_OUT_CMD,
 				BTMTK_TX_WAIT_VND_EVT, true);
 		if (ret < 0)
 			BTMTK_ERR("%s: send wmd dl cmd failed, terminate!", __func__);
@@ -1273,9 +1273,9 @@ int btmtk_send_wmt_reset(struct btmtk_dev *bdev)
 	return ret;
 }
 
-int btmtk_send_wmt_power_on_cmd_766x(struct btmtk_dev *bdev)
+int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *bdev)
 {
-	/* Support 7668 and 7663 */
+	/* Support 7668 and 7663 and 7961 */
 	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x06, 0x02, 0x00, 0x00, 0x01 };
 	/* To-Do, for event check */
 	u8 event[] = { 0x04, 0xE4, 0x05, 0x02, 0x06, 0x01, 0x00 };	/* event[6] is key */
@@ -1313,9 +1313,9 @@ int btmtk_send_wmt_power_on_cmd_766x(struct btmtk_dev *bdev)
 	return ret;
 }
 
-int btmtk_send_wmt_power_off_cmd_766x(struct btmtk_dev *bdev)
+int btmtk_send_wmt_power_off_cmd(struct btmtk_dev *bdev)
 {
-	/* Support 7668 and 7663 */
+	/* Support 7668 and 7663 and 7961 */
 	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x06, 0x02, 0x00, 0x00, 0x00 };
 	/* To-Do, for event check */
 	u8 event[] = { 0x04, 0xE4, 0x05, 0x02, 0x06, 0x01, 0x00 };
@@ -1441,10 +1441,10 @@ int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 		BTMTK_ERR("%s, btmtk_calibration_flow failed!", __func__);
 		return ret;
 	}
-	ret = btmtk_send_wmt_power_on_cmd_766x(bdev);
+	ret = btmtk_send_wmt_power_on_cmd(bdev);
 	if (ret < 0) {
 		if (bdev->power_state != BTMTK_DONGLE_STATE_POWER_ON) {
-			BTMTK_ERR("%s, btmtk_send_wmt_power_on_cmd_766x failed!", __func__);
+			BTMTK_ERR("%s, btmtk_send_wmt_power_on_cmd failed!", __func__);
 			if (bdev->subsys_reset == HW_ERR_NONE)
 				bdev->subsys_reset = HW_ERR_CODE_POWER_ON;
 			/* TODO */
@@ -1469,7 +1469,7 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s", __func__);
 
-	return btmtk_send_wmt_power_off_cmd_766x(bdev);
+	return btmtk_send_wmt_power_off_cmd(bdev);
 }
 
 static int btmtk_send_assert_cmd_bulk(struct btmtk_dev *bdev)

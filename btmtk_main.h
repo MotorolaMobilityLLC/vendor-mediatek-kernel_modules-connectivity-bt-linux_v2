@@ -29,8 +29,8 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		const int cmd_len, const uint8_t *event, const int event_len, int delay,
 		int retry, int endpoint, const int tx_state, bool wmt_cmd);
 int btmtk_send_wmt_reset(struct btmtk_dev *hdev);
-int btmtk_send_wmt_power_on_cmd_766x(struct btmtk_dev *hdev);
-int btmtk_send_wmt_power_off_cmd_766x(struct btmtk_dev *hdev);
+int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *hdev);
+int btmtk_send_wmt_power_off_cmd(struct btmtk_dev *hdev);
 int btmtk_load_rom_patch_766x(struct btmtk_dev *hdev);
 int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev);
 int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev);
