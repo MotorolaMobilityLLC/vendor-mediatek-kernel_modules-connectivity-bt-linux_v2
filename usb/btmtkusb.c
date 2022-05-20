@@ -279,12 +279,12 @@ static void btusb_intr_complete(struct urb *urb)
 		return;
 	}
 
+intr_resub:
 	if (!test_bit(BTUSB_INTR_RUNNING, &bdev->flags)) {
 		BTMTK_INFO("%s: test_bit is not running!", __func__);
 		return;
 	}
 
-intr_resub:
 	usb_mark_last_busy(cif_dev->udev);
 	usb_anchor_urb(urb, &cif_dev->intr_anchor);
 
@@ -644,12 +644,12 @@ static void btusb_bulk_complete(struct urb *urb)
 		return;
 	}
 
+bulk_resub:
 	if (!test_bit(BTUSB_BULK_RUNNING, &bdev->flags)) {
 		BTMTK_INFO("%s test flag failed", __func__);
 		return;
 	}
 
-bulk_resub:
 	usb_anchor_urb(urb, &cif_dev->bulk_anchor);
 	usb_mark_last_busy(cif_dev->udev);
 
@@ -803,12 +803,12 @@ static void btusb_ble_isoc_complete(struct urb *urb)
 		return;
 	}
 
+ble_iso_resub:
 	if (!test_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags)) {
 		BTMTK_INFO("%s: bdev->flags is RUNNING!", __func__);
 		return;
 	}
 
-ble_iso_resub:
 	usb_anchor_urb(urb, &cif_dev->ble_isoc_anchor);
 	usb_mark_last_busy(cif_dev->udev);
 
@@ -2505,6 +2505,7 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 	unsigned int ifnum_base;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
+	struct btmtk_usb_dev *cif_dev = NULL;
 
 	BTMTK_CIF_GET_DEV_PRIV(bdev, intf, ifnum_base);
 
@@ -2517,6 +2518,19 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 	}
 
 	cif_state = &bdev->cif_state[cif_event];
+
+	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_WARN("%s: cif_dev is NULL!", __func__);
+		return;
+	}
+
+	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
+	clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
+	clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
+	clear_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags);
+
+	btusb_stop_traffic(cif_dev);
 
 	btmtk_usb_cif_mutex_lock(bdev);
 	/* Set Entering state */
