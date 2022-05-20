@@ -18,6 +18,9 @@
 #include "btmtk_proj_sp.h"
 #include <linux/platform_device.h>
 #include <linux/of_device.h>
+#include "connv3_debug_utility.h"
+#include "connv3_mcu_log.h"
+#include "btmtk_fw_log.h"
 #endif
 
 #define LOG TRUE
@@ -495,6 +498,7 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	new_termios = tty->termios;
 
 	BTMTK_INFO("%s start", __func__);
+
 # if 0
 	BTMTK_INFO("%s tigger reset pin: %d", __func__, bdev->bt_cfg.dongle_reset_gpio_pin);
 	gpio_set_value(bdev->bt_cfg.dongle_reset_gpio_pin, 0);
@@ -527,9 +531,8 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	if (ret < 0) {
 		BTMTK_WARN("%s retry send cmd", __func__);
 		ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
-		if (ret < 0) {
+		if (ret < 0)
 			goto exit;
-		}
 	}
 
 	/* set tty host baud and flowcontrol to config setting */
@@ -563,9 +566,8 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	tty_set_termios(tty, &new_termios);
 
 	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
-	if (ret < 0) {
+	if (ret < 0)
 		goto exit;
-	}
 
 	ret = btmtk_load_rom_patch(bdev);
 	cif_event = HIF_EVENT_PROBE;
@@ -1455,7 +1457,13 @@ int btmtk_cif_register(void)
 #if (USE_DEVICE_NODE == 1)
 	hook.chrdev_init = btmtk_chardev_init;
 	hook.chrdev_pre_on = btmtk_chrdev_pre_on;
+	hook.fw_log_state = fw_log_bt_state_cb;
 	hook.chrdev_post_on = btmtk_chardev_post_on;
+	hook.log_init = btmtk_connsys_log_init;
+	hook.log_read_to_user = btmtk_connsys_log_read_to_user;
+	hook.log_get_buf_size = btmtk_connsys_log_get_buf_size;
+	hook.log_deinit = btmtk_connsys_log_deinit;
+	hook.log_handler = btmtk_connsys_log_handler;
 #endif
 	hook.open = btmtk_uart_open;
 	hook.close = btmtk_uart_close;
@@ -1494,3 +1502,36 @@ int btmtk_cif_deregister(void)
 	BTMTK_INFO("%s: Done", __func__);
 	return 0;
 }
+
+#if (USE_DEVICE_NODE == 1)
+void btmtk_connsys_log_init(void (*log_event_cb)(void))
+{
+	BTMTK_DBG("%s start", __func__);
+	if (connv3_log_init(CONNV3_DEBUG_TYPE_BT, 2048, 2048, log_event_cb))
+		BTMTK_ERR("*** %s fail! ***", __func__);
+}
+
+void btmtk_connsys_log_deinit(void)
+{
+	BTMTK_DBG("%s start", __func__);
+	connv3_log_deinit(CONNV3_DEBUG_TYPE_BT);
+}
+
+int btmtk_connsys_log_handler(u8 *buf, u32 size)
+{
+	BTMTK_DBG("%s start", __func__);
+	return connv3_log_handler(CONNV3_DEBUG_TYPE_BT, CONNV3_LOG_TYPE_PRIMARY, buf, size);
+}
+
+ssize_t btmtk_connsys_log_read_to_user(char __user *buf, size_t count)
+{
+	BTMTK_DBG("%s start", __func__);
+	return connv3_log_read_to_user(CONNV3_DEBUG_TYPE_BT, buf, count);
+}
+
+unsigned int btmtk_connsys_log_get_buf_size(void)
+{
+	BTMTK_DBG("%s start", __func__);
+	return connv3_log_get_buf_size(CONNV3_DEBUG_TYPE_BT);
+}
+#endif

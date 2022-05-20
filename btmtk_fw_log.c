@@ -4,6 +4,11 @@
 
 #include "btmtk_fw_log.h"
 
+#if (USE_DEVICE_NODE == 1)
+#include "connv3_debug_utility.h"
+#include "connv3_mcu_log.h"
+#endif
+
 /*
  * BT Logger Tool will turn on/off Firmware Picus log, and set 3 log levels (Low, SQC and Debug)
  * For extention capability, driver does not check the value range.
@@ -82,7 +87,7 @@ __weak int32_t btmtk_intcmd_set_fw_log(uint8_t flag)
 void fw_log_bt_state_cb(uint8_t state)
 {
 	uint8_t on_off;
-
+	/* sp use BTMTK_FOPS_STATE_OPENED to judge state */
 	on_off = (state == FUNC_ON) ? BT_FWLOG_ON : BT_FWLOG_OFF;
 	BTMTK_INFO("bt_on(0x%x) state(%d) on_off(0x%x)", g_bt_on, state, on_off);
 
@@ -192,7 +197,7 @@ int btmtk_fops_initfwlog(void)
 	int cdevErr = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	BTMTK_INFO("%s: Start", __func__);
+	BTMTK_INFO("%s: Start %s", __func__, BT_FWLOG_DEV_NODE);
 
 	if (g_fwlog == NULL) {
 		g_fwlog = kzalloc(sizeof(*g_fwlog), GFP_KERNEL);
@@ -244,8 +249,8 @@ int btmtk_fops_initfwlog(void)
 
 	//if (is_mt66xx(g_sbdev->chip_id)) {
 	if (bmain_info->hif_hook.log_init) {
-		bmain_info->hif_hook.log_init();
-		bmain_info->hif_hook.log_register_cb(fw_log_bt_event_cb);
+		bmain_info->hif_hook.log_init(fw_log_bt_event_cb);
+		//bmain_info->hif_hook.log_register_cb(fw_log_bt_event_cb);
 		init_waitqueue_head(&BT_log_wq);
 	} else {
 		spin_lock_init(&g_fwlog->fwlog_lock);
@@ -322,7 +327,7 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 	//if (is_mt66xx(g_sbdev->chip_id)) {
 	if (bmain_info->hif_hook.log_read_to_user) {
 		copyLen = bmain_info->hif_hook.log_read_to_user(buf, count);
-		BTMTK_DBG("BT F/W log from Connsys, len %d", copyLen);
+		BTMTK_DBG("%s: BT F/W log from Connsys, len %d", __func__, copyLen);
 		return copyLen;
 	}
 
@@ -743,6 +748,7 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 
 long btmtk_fops_compat_ioctlfwlog(struct file *filp, unsigned int cmd, unsigned long arg)
 {
+	BTMTK_DBG("%s: Start.", __func__);
 	return btmtk_fops_unlocked_ioctlfwlog(filp, cmd, arg);
 }
 
@@ -751,6 +757,7 @@ unsigned int btmtk_fops_pollfwlog(struct file *file, poll_table *wait)
 	unsigned int mask = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
+	BTMTK_DBG("%s: Start.", __func__);
 	//if (is_mt66xx(g_sbdev->chip_id)) {
 	if (bmain_info->hif_hook.log_get_buf_size) {
 		poll_wait(file, &BT_log_wq, wait);
@@ -864,6 +871,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	struct sk_buff *skb_opcode = NULL;
 
+	BTMTK_DBG("%s: Start.", __func__);
 	if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 			skb->data[0] == 0x6f &&
 			skb->data[1] == 0xfc) {

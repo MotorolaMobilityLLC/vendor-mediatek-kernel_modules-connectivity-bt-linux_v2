@@ -529,17 +529,6 @@ static int BT_open(struct inode *inode, struct file *file)
 
 	btmtk_register_rx_event_cb(BT_event_cb);
 
-#if 0 // Simfex
-	{
-		u8 fw_coredump_cmd[4] = { 0x01, 0x5B, 0xFD, 0x00 };
-		btmtk_send_data(g_sbdev->hdev, fw_coredump_cmd, 4);
-	}
-#else
-	{
-		//u8 fw_log_cmd[8] = { 0x01, 0x5D, 0xFC, 0x04, 0x01, 0x00, 0x02, 0x03 };
-		//btmtk_send_data(g_sbdev->hdev, fw_log_cmd, 8);
-	}
-#endif
 	bt_ftrace_flag = 1;
 	__pm_relax(bt_wakelock);
 #if 0 // Simfex

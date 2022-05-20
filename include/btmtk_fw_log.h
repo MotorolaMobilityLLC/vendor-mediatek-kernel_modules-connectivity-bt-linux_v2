@@ -32,10 +32,18 @@
 #endif
 
 /* Device node */
+#if (USE_DEVICE_NODE == 0)
 #if CFG_SUPPORT_MULTI_DEV_NODE
 	#define BT_FWLOG_DEV_NODE	"stpbt_multi_fwlog"
 #else
 	#define BT_FWLOG_DEV_NODE	"stpbtfwlog"
+#endif
+#else
+#if CFG_SUPPORT_MULTI_DEV_NODE
+	#define BT_FWLOG_DEV_NODE	"multi_fw_log_bt"
+#else
+	#define BT_FWLOG_DEV_NODE	"fw_log_bt"
+#endif
 #endif
 
 #define PROC_ROOT_DIR "stpbt"
