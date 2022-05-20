@@ -428,7 +428,23 @@ struct btmtk_dev **btmtk_get_pp_bdev(void)
 void btmtk_hci_snoop_print_to_log(void)
 {
 	u8 counter, index, snoop_index;
-	char *snoop_str[HCI_SNOOP_TYPE_MAX] = {"Command", "Event", "ADV Event", "NOCP Event", "TX ACL", "RX ACL"};
+	char *snoop_str[HCI_SNOOP_TYPE_MAX] = {
+		"Command from stack",
+		"Command to FW",
+		"Event to stack",
+		"Event From FW",
+		"ADV Event to stack",
+		"ADV Event From FW",
+		"NOCP Event to stack",
+		"NOCP Event From FW",
+		"TX ACL from stack",
+		"TX ACL to FW",
+		"RX ACL to stack",
+		"RX ACL From FW",
+		"TX ISO from stack",
+		"TX ISO to FW",
+		"RX ISO to stack",
+		"RX ISO From FW"};
 
 	for (snoop_index = 0; snoop_index < HCI_SNOOP_TYPE_MAX; snoop_index++) {
 		BTMTK_INFO("HCI %s Dump: Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data", snoop_str[snoop_index]);
@@ -448,7 +464,7 @@ void btmtk_hci_snoop_print_to_log(void)
 	}
 }
 
-void btmtk_hci_snoop_save(unsigned int type, u32 len, u8 *buf)
+void btmtk_hci_snoop_save(unsigned int type, u8 *buf, u32 len)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
 	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
@@ -491,7 +507,7 @@ void btmtk_hci_snoop_save(unsigned int type, u32 len, u8 *buf)
 	}
 }
 
-void btmtk_hci_snoop_print(u32 len, const u8 *buf)
+void btmtk_hci_snoop_print(const u8 *buf, u32 len)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
 	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
@@ -583,8 +599,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				if (is_mt66xx(bdev->chip_id))
 					btmtk_set_sleep(hdev, FALSE);
 				else {
-					btmtk_hci_snoop_print(count_dbg, buffer_dbg);
-					btmtk_hci_snoop_print(count, buffer);
+					btmtk_hci_snoop_print(buffer_dbg, count_dbg);
+					btmtk_hci_snoop_print(buffer, count);
 					btmtk_hci_snoop_print_to_log();
 				}
 				return ERR_PTR(-EILSEQ);
@@ -624,8 +640,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 			if (is_mt66xx(bdev->chip_id))
 				btmtk_set_sleep(hdev, FALSE);
 			else {
-				btmtk_hci_snoop_print(count_dbg, buffer_dbg);
-				btmtk_hci_snoop_print(count, buffer);
+				btmtk_hci_snoop_print(buffer_dbg, count_dbg);
+				btmtk_hci_snoop_print(buffer, count);
 				btmtk_hci_snoop_print_to_log();
 			}
 			kfree_skb(skb);
@@ -653,9 +669,9 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 					if (is_mt66xx(bdev->chip_id))
 						btmtk_set_sleep(hdev, FALSE);
 					else {
-						btmtk_hci_snoop_print(skb->len, skb->data);
-						btmtk_hci_snoop_print(count_dbg, buffer_dbg);
-						btmtk_hci_snoop_print(count, buffer);
+						btmtk_hci_snoop_print(skb->data, skb->len);
+						btmtk_hci_snoop_print(buffer_dbg, count_dbg);
+						btmtk_hci_snoop_print(buffer, count);
 						btmtk_hci_snoop_print_to_log();
 					}
 					kfree_skb(skb);
@@ -679,9 +695,9 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 					if (is_mt66xx(bdev->chip_id))
 						btmtk_set_sleep(hdev, FALSE);
 					else {
-						btmtk_hci_snoop_print(skb->len, skb->data);
-						btmtk_hci_snoop_print(count_dbg, buffer_dbg);
-						btmtk_hci_snoop_print(count, buffer);
+						btmtk_hci_snoop_print(skb->data, skb->len);
+						btmtk_hci_snoop_print(buffer_dbg, count_dbg);
+						btmtk_hci_snoop_print(buffer, count);
 						btmtk_hci_snoop_print_to_log();
 					}
 					kfree_skb(skb);
@@ -694,8 +710,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				if (is_mt66xx(bdev->chip_id))
 					btmtk_set_sleep(hdev, FALSE);
 				else {
-					btmtk_hci_snoop_print(count_dbg, buffer_dbg);
-					btmtk_hci_snoop_print(count, buffer);
+					btmtk_hci_snoop_print(buffer_dbg, count_dbg);
+					btmtk_hci_snoop_print(buffer, count);
 					btmtk_hci_snoop_print_to_log();
 				}
 				kfree_skb(skb);
@@ -3528,7 +3544,7 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				}
 			}
 			/* save hci cmd pkt for debug */
-			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD, skb->len, skb->data);
+			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD_STACK, skb->data, skb->len);
 			if (skb->len == FW_COREDUMP_CMD_LEN &&
 				!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
 				BTMTK_INFO("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
@@ -3539,7 +3555,9 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					!memcmp(skb->data, reset_cmd, HCI_RESET_CMD_LEN))
 				BTMTK_INFO("%s: got command: 0x03 0C 00 (HCI_RESET)", __func__);
 		} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
-			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ACL, skb->len, skb->data);
+			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ACL_STACK, skb->data, skb->len);
+		} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
+			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ISO_STACK, skb->data, skb->len);
 		}
 
 		ret = main_info.hif_hook.send_cmd(bdev, skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST);
@@ -3591,11 +3609,11 @@ static void btmtk_rx_work(struct work_struct *work)
 		if (hci_skb_pkt_type(skb) == HCI_EVENT_PKT) {
 			/* save hci evt pkt for debug */
 			if (skb->data[0] == 0x3E)
-				btmtk_hci_snoop_save(HCI_SNOOP_TYPE_ADV_EVT, skb->len, skb->data);
+				btmtk_hci_snoop_save(HCI_SNOOP_TYPE_ADV_EVT_STACK, skb->data, skb->len);
 			else if (skb->data[0] == 0x13)
-				btmtk_hci_snoop_save(HCI_SNOOP_TYPE_NOCP_EVT, skb->len, skb->data);
+				btmtk_hci_snoop_save(HCI_SNOOP_TYPE_NOCP_EVT_STACK, skb->data, skb->len);
 			else
-				btmtk_hci_snoop_save(HCI_SNOOP_TYPE_EVT, skb->len, skb->data);
+				btmtk_hci_snoop_save(HCI_SNOOP_TYPE_EVT_STACK, skb->data, skb->len);
 
 			if (main_info.hif_hook.event_filter(bdev, skb)) {
 				/* Drop by driver, don't send to stack */
@@ -3605,7 +3623,9 @@ static void btmtk_rx_work(struct work_struct *work)
 		} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
 			/* save hci acl pkt for debug, not include picus log and coredump*/
 			if (!(skb->data[0] == 0xFF && skb->data[1] == 0xF0))
-				btmtk_hci_snoop_save(HCI_SNOOP_TYPE_RX_ACL, skb->len, skb->data);
+				btmtk_hci_snoop_save(HCI_SNOOP_TYPE_RX_ACL_STACK, skb->data, skb->len);
+		} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
+			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_RX_ISO_STACK, skb->data, skb->len);
 		}
 
 		fstate = btmtk_fops_get_state(bdev);
