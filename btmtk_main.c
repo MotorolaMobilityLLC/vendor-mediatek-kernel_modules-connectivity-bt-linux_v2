@@ -962,6 +962,10 @@ static int btmtk_load_fw_patch_using_wmt_cmd(struct btmtk_dev *bdev,
 				retry = PATCH_DOWNLOAD_PHASE3_RETRY;
 			}
 
+			cur_len += sent_len;
+			BTMTK_INFO("%s: sent_len = %d, cur_len = %d, phase = %d", __func__,
+					sent_len, cur_len, phase);
+
 			ret = btmtk_main_send_cmd(bdev, image, sent_len + PATCH_HEADER_SIZE,
 					event, event_len, delay, retry, BTMTK_EP_TPYE_OUT_ACL,
 					BTMTK_TX_WAIT_VND_EVT, false);
@@ -969,10 +973,6 @@ static int btmtk_load_fw_patch_using_wmt_cmd(struct btmtk_dev *bdev,
 				BTMTK_INFO("%s: send patch failed, terminate", __func__);
 				goto exit;
 			}
-
-			cur_len += sent_len;
-			BTMTK_INFO("%s: sent_len = %d, cur_len = %d, phase = %d", __func__,
-					sent_len, cur_len, phase);
 		} else
 			break;
 	}
@@ -1153,12 +1153,12 @@ int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, bool patch_flag)
 		if (bdev->flavor) {
 			/* if flavor equals 1, it represent 7920, else it represent 7921*/
 			snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
-					"WIFI_MT%04x_patch_mcu_%xa_%x_hdr.bin",
-					bdev->chip_id & 0xffff, bdev->flavor, (bdev->fw_version & 0xff) + 1);
+					"WIFI_MT%04x_patch_mcu_1a_%x_hdr.bin",
+					bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
 		} else
 			snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
-					"WIFI_MT%04x_patch_mcu_%x_%x_hdr.bin",
-					bdev->chip_id & 0xffff, bdev->flavor, (bdev->fw_version & 0xff) + 1);
+					"WIFI_MT%04x_patch_mcu_1_%x_hdr.bin",
+					bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
 	}
 
 	btmtk_load_code_from_bin(&fw_firmware, bdev->rom_patch_bin_file_name, NULL,
@@ -1306,12 +1306,13 @@ int btmtk_load_rom_patch(struct btmtk_dev *bdev)
 			BTMTK_ERR("%s: btmtk_load_rom_patch_79xx bt patch failed!", __func__);
 			return err;
 		}
-
+#if CFG_SUPPORT_BT_DL_WIFI_PATCH
 		err = btmtk_load_rom_patch_79xx(bdev, WIFI_DOWNLOAD);
 		if (err < 0) {
 			BTMTK_WARN("%s: btmtk_load_rom_patch_79xx wifi patch failed!", __func__);
 			err = 0;
 		}
+#endif
 	} else
 		BTMTK_WARN("%s: unknown chip id (%d)", __func__, bdev->chip_id);
 

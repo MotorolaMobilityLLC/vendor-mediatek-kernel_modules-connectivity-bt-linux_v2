@@ -1,9 +1,15 @@
 export KERNEL_SRC := /lib/modules/$(shell uname -r)/build
 #################### Configurations ####################
 # Compile Options for bt driver configuration.
-CONFIG_SUPPORT_BT_DL_WIFI_PATCH=y
+CONFIG_SUPPORT_BT_DL_WIFI_PATCH=n
 CONFIG_SUPPORT_BLUEZ=n
 CONFIG_SUPPORT_DVT=n
+
+ifeq ($(CONFIG_SUPPORT_BT_DL_WIFI_PATCH), y)
+    ccflags-y += -DCFG_SUPPORT_BT_DL_WIFI_PATCH=1
+else
+    ccflags-y += -DCFG_SUPPORT_BT_DL_WIFI_PATCH=0
+endif
 
 ifeq ($(CONFIG_SUPPORT_BLUEZ), y)
     ccflags-y += -DCFG_SUPPORT_BLUEZ=1
@@ -19,7 +25,7 @@ endif
 
 #################### Configurations ####################
 # For chip interface, driver supports "usb", "sdio", "uart" and "btif"
-MTK_CHIP_IF := uart
+MTK_CHIP_IF := usb
 
 ifeq ($(MTK_CHIP_IF), sdio)
     MOD_NAME = btmtk_sdio

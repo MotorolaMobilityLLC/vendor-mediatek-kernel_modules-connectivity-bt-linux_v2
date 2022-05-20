@@ -533,6 +533,7 @@ static void btusb_intr_complete(struct urb *urb)
 		}
 
 		bdev->urb_transfer_buf[0] = HCI_EVENT_PKT;
+
 		memcpy(bdev->urb_transfer_buf + 1, urb->transfer_buffer, urb->actual_length);
 
 		BT_DBG("%s ,urb->actual_length = %d", __func__, urb->actual_length);
@@ -947,6 +948,8 @@ static void btusb_ble_isoc_complete(struct urb *urb)
 	struct hci_dev *hdev = urb->context;
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	int err;
+	u8 *isoc_buf;
+	int isoc_pkt_len;
 
 	/*
 	 * This flag didn't support in kernel 4.x
@@ -957,22 +960,29 @@ static void btusb_ble_isoc_complete(struct urb *urb)
 
 	if (urb->status == 0) {
 		hdev->stat.byte_rx += urb->actual_length;
+		isoc_buf = urb->transfer_buffer;
 
 		if (!bdev->urb_transfer_buf) {
 			BT_ERR("%s: bdev->urb_transfer_buf is NULL!", __func__);
 			return;
 		}
+		isoc_pkt_len = isoc_buf[2] + (isoc_buf[3] << 8);
 
-		bdev->urb_transfer_buf[0] = HCI_ISO_PKT;
+		/* It's mtk specific heade for stack
+		 * hci layered didn't support 0x05 for ble iso, it will drop the packet type with 0x05
+		 * Driver will replace 0x05 to 0x02
+		 * header format : 0x02 0x00 0x44 xx xx + isoc packet header & payload
+		 */
+		bdev->urb_transfer_buf[0] = HCI_ACLDATA_PKT;
 		bdev->urb_transfer_buf[1] = 0x00;
 		bdev->urb_transfer_buf[2] = 0x44;
-		bdev->urb_transfer_buf[3] = (urb->actual_length & 0x00ff);
-		bdev->urb_transfer_buf[4] = ((urb->actual_length & 0xff00) >> 8);
-		memcpy(bdev->urb_transfer_buf + 5, urb->transfer_buffer, urb->actual_length);
+		bdev->urb_transfer_buf[3] = (isoc_pkt_len & 0x00ff);
+		bdev->urb_transfer_buf[4] = (isoc_pkt_len >> 8);
+		memcpy(bdev->urb_transfer_buf + HCI_ISO_PKT_WITH_ACL_HEADER_SIZE, urb->transfer_buffer, isoc_pkt_len + HCI_ISO_PKT_HEADER_SIZE);
 
-		BTMTK_DBG_RAW(bdev->urb_transfer_buf, urb->actual_length + 5, "%s: raw data is :", __func__);
+		BTMTK_DBG_RAW(bdev->urb_transfer_buf, urb->actual_length + HCI_ISO_PKT_WITH_ACL_HEADER_SIZE, "%s: raw data is :", __func__);
 
-		err = btmtk_recv(hdev, bdev->urb_transfer_buf, urb->actual_length + 5);
+		err = btmtk_recv(hdev, bdev->urb_transfer_buf, urb->actual_length + HCI_ISO_PKT_WITH_ACL_HEADER_SIZE);
 		if (err) {
 			BT_ERR("%s corrupted ACL packet", hdev->name);
 			hdev->stat.err_rx++;

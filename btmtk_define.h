@@ -37,7 +37,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.200031101"
+#define VERSION "7.0.200031201"
 #define SUBVER ":turnkey"
 
 
@@ -133,6 +133,8 @@ extern uint8_t btmtk_log_lvl;
 #define MTK_HCI_SCODATA_PKT		0x03
 #define MTK_HCI_EVENT_PKT		0x04
 #define HCI_ISO_PKT			0x05
+#define HCI_ISO_PKT_HEADER_SIZE	4
+#define HCI_ISO_PKT_WITH_ACL_HEADER_SIZE	5
 
 /**
  * ROM patch related
