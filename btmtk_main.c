@@ -88,6 +88,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 	/* Check for error from previous call */
 	if (IS_ERR(skb))
 		skb = NULL;
+	BTMTK_DBG("%s begin, count = %d", __func__, count);
 
 	while (count) {
 		int i, len;
@@ -126,6 +127,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 		count -= len;
 		buffer += len;
 
+		BTMTK_DBG("%s skb->len = %d, %d", __func__, skb->len, hci_skb_expect(skb));
+
 		/* Check for partial packet */
 		if (skb->len < hci_skb_expect(skb))
 			continue;
@@ -143,6 +146,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 		if (skb->len == (&pkts[i])->hlen) {
 			u16 dlen;
 
+			BTMTK_DBG("%s begin, skb->len = %d, %d, %d", __func__, skb->len, (&pkts[i])->hlen, (&pkts[i])->lsize);
 			switch ((&pkts[i])->lsize) {
 			case 0:
 				/* No variable data length */
@@ -535,7 +539,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		goto err_free_skb;
 	}
 
-	if ((bdev->hdev->bus != HCI_USB || !wmt_cmd) && (endpoint == BTMTK_EP_TYPE_OUT_CMD)) {
+	if ((bdev->hdev->bus != HCI_USB || !wmt_cmd) && (endpoint == BTMTK_EP_TYPE_OUT_CMD) && (endpoint == BTMTK_EP_TPYE_OUT_ACL)) {
 		if (!wait_event_timeout(bdev->p_wait_event_q,
 				bdev->evt_skb != NULL || tx_state == BTMTK_TX_SKIP_VENDOR_EVT,
 				msecs_to_jiffies(2000))) {
@@ -1052,6 +1056,9 @@ int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, bool patch_flag)
 	u8 *rom_patch = NULL;
 	unsigned int rom_patch_len = 0;
 
+	BTMTK_ERR("%s, patch_flag = %d!", __func__, patch_flag);
+
+
 	if (!bdev) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
 		return -EINVAL;
@@ -1071,7 +1078,6 @@ int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, bool patch_flag)
 
 	btmtk_load_code_from_bin(&fw_firmware, bdev->rom_patch_bin_file_name, NULL,
 			&rom_patch, &rom_patch_len);
-	BTMTK_INFO("%s: rom_patch_len %d", __func__, rom_patch_len);
 
 	if (!rom_patch) {
 		BTMTK_ERR("%s: please assign a rom patch(/etc/firmware/%s)or(/lib/firmware/%s)",
@@ -1407,7 +1413,7 @@ static int btmtk_send_hci_tci_set_sleep_cmd_766x(struct btmtk_dev *bdev)
 		return ret;
 	}
 
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 0, 0,
+	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 100, 20,
 			BTMTK_EP_TYPE_OUT_CMD, BTMTK_TX_WAIT_VND_EVT, false);
 
 	BTMTK_INFO("%s done", __func__);
@@ -1448,8 +1454,14 @@ int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 		return ret;
 	}
 
-	if (is_mt7663(bdev->chip_id))
-		ret = btmtk_send_hci_tci_set_sleep_cmd_766x(bdev);
+	/* Todo set sleep
+	ret = btmtk_send_hci_tci_set_sleep_cmd_766x(bdev);
+	if (ret < 0) {
+		BTMTK_ERR("%s, btmtk_send_hci_tci_set_sleep_cmd_766x failed!", __func__);
+		if (bdev->subsys_reset == HW_ERR_NONE)
+			bdev->subsys_reset = HW_ERR_CODE_POWER_ON;
+		return ret;
+	} */
 
 	return ret;
 }
@@ -1727,7 +1739,8 @@ static void btmtk_rx_work(struct work_struct *work)
 	BTMTK_DBG("%s enter!", __func__);
 
 	while ((skb = skb_dequeue(&bdev->rx_q))) {
-		if (skb->len == 1 && bdev->urb_transfer_buf[1] == 0xFF) {
+		BTMTK_DBG_RAW(bdev->urb_transfer_buf, skb->len, "%s, recv evt", __func__);
+		if (skb->len == 2 && bdev->urb_transfer_buf[1] == 0xFF) {
 			/* We can't use usb_control_msg in interrupt.
 			 * If you use usb_control_msg , it will cause crash.
 			 */
@@ -1761,8 +1774,12 @@ void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 	skb_queue_purge(&bdev->rx_q);
 	destroy_workqueue(bdev->workqueue);
 
-	hci_unregister_dev(bdev->hdev);
-	hci_free_dev(bdev->hdev);
+	BTMTK_INFO("%s", __func__);
+
+	if (bdev->hdev) {
+		hci_unregister_dev(bdev->hdev);
+		hci_free_dev(bdev->hdev);
+	}
 
 	FOPS_MUTEX_LOCK();
 	fstate = btmtk_fops_get_state(bdev);
@@ -1873,6 +1890,13 @@ void btmtk_cap_init(struct btmtk_dev *bdev)
 		BTMTK_ERR("%s, bdev is NULL!", __func__);
 		return;
 	}
+	/* Todo read wifi fw version
+	int wifi_fw_ver;
+
+	btmtk_cif_write_register(bdev, 0x7C4001C4, 0x00008800);
+	btmtk_cif_read_register(bdev, 0x7c4f0004, &wifi_fw_ver);
+	BTMTK_ERR("wifi fw_ver = %04X", wifi_fw_ver);
+	*/
 
 	btmtk_cif_read_register(bdev, CHIP_ID, &bdev->chip_id);
 	if (is_mt7961(bdev->chip_id)) {

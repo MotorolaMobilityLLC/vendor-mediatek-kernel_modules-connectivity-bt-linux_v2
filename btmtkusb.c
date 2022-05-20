@@ -142,7 +142,7 @@ static void btusb_intr_complete(struct urb *urb)
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	int err;
 
-	BT_DBG("%s urb %p status %d count %d", hdev->name, urb, urb->status,
+	BTMTK_DBG("%s urb %p status %d count %d", hdev->name, urb, urb->status,
 	       urb->actual_length);
 
 	if (urb->status == 0) {
@@ -159,6 +159,10 @@ static void btusb_intr_complete(struct urb *urb)
 		BT_DBG("%s ,urb->actual_length = %d", __func__, urb->actual_length);
 		BTMTK_DBG_RAW(bdev->urb_transfer_buf, urb->actual_length + 1, "%s, recv evt", __func__);
 		BTMTK_DBG_RAW(urb->transfer_buffer, urb->actual_length, "%s, recv evt", __func__);
+		if(bdev->urb_transfer_buf[1] == 0xFF && urb->actual_length == 1) {
+			schedule_work(&bdev->reset_waker);
+			goto intr_resub;
+		}
 		err = btmtk_recv(hdev, bdev->urb_transfer_buf, urb->actual_length + 1);
 		if (err) {
 			BT_ERR("%s corrupted event packet", hdev->name);
@@ -175,6 +179,7 @@ static void btusb_intr_complete(struct urb *urb)
 	if (!test_bit(BTUSB_INTR_RUNNING, &bdev->flags))
 		return;
 
+intr_resub:
 	usb_mark_last_busy(bdev->udev);
 	usb_anchor_urb(urb, &bdev->intr_anchor);
 
@@ -199,7 +204,7 @@ static int btusb_submit_intr_reset_urb(struct hci_dev *hdev, gfp_t mem_flags)
 	int err, size;
 
 	/* If WDT reset happened, fw will send a bytes (FF) to host */
-	BT_DBG("%s", hdev->name);
+	BTMTK_DBG("%s", hdev->name);
 
 	if (!bdev->reset_intr_ep)
 		return -ENODEV;
@@ -955,14 +960,15 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	/* btmtk_usb_dispatch_data_bluetooth_kpi(skb->data, skb->len, bt_cb(skb)->pkt_type); */
 
 	skb_pull(skb, 1);
+	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send_frame", __func__);
 	switch (hci_skb_pkt_type(skb)) {
 	case HCI_COMMAND_PKT:
 #ifdef SUPPORT_HW_DVT
-		if (skb->len > 8) {
+		if (skb->len > 7) {
 			if (skb->data[0] == 0x6f && skb->data[1] == 0xfc &&
-					skb->data[2] == 0x07 && skb->data[3] == 0x01 &&
+					skb->data[2] == 0x06 && skb->data[3] == 0x01 &&
 					skb->data[4] == 0xff && skb->data[5] == 0x03 &&
-					skb->data[6] == 0x00 && skb->data[7] == 0x00 && skb->data[9] != 0x00) {
+					skb->data[6] == 0x00 && skb->data[7] == 0x00) {
 				/* return evt to upper layered */
 				evt_skb = skb_copy(skb, GFP_KERNEL);
 				bt_cb(evt_skb)->pkt_type = HCI_EVENT_PKT;
@@ -972,8 +978,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				hci_recv_frame(hdev, evt_skb);
 				hdev->conn_hash.sco_num++;
 				bdev->sco_num = hdev->conn_hash.sco_num;
-				bdev->new_isoc_altsetting = skb->data[9];
-				bdev->new_isoc_altsetting_interface = skb->data[8];
+				bdev->new_isoc_altsetting = skb->data[8];
 				BTMTK_INFO("alt_setting = %d, new_isoc_altsetting_interface = %d\n",
 						bdev->new_isoc_altsetting, bdev->new_isoc_altsetting_interface);
 				schedule_work(&bdev->work);
@@ -993,7 +998,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				hdev->conn_hash.sco_num--;
 				bdev->sco_num = hdev->conn_hash.sco_num;
 				bdev->new_isoc_altsetting_interface = skb->data[8];
-				BTMTK_INFO("alt_setting = %d, new_isoc_altsetting_interface = %d\n",
+				BTMTK_INFO("alt_setting to = %d, new_isoc_altsetting_interface = %d\n",
 						bdev->new_isoc_altsetting, bdev->new_isoc_altsetting_interface);
 				schedule_work(&bdev->work);
 				/* If we don't sleep 50ms, it will failed to set alternate setting to zero */
@@ -1121,11 +1126,15 @@ static inline int __set_isoc_interface(struct hci_dev *hdev, int altsetting)
 		return -ENODEV;
 
 #ifdef SUPPORT_HW_DVT
+	if(bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM)
+		bdev->new_isoc_altsetting_interface = 1;
+	else if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT1_MCU_INTERFACE_NUM)
+		bdev->new_isoc_altsetting_interface = 4;
 	err = usb_set_interface(bdev->udev, bdev->new_isoc_altsetting_interface, altsetting);
 #else
 	err = usb_set_interface(bdev->udev, 1, altsetting);
 #endif
-	BTMTK_DBG("setting interface alt = %d", altsetting);
+	BTMTK_DBG("setting interface alt = %d, interface = %d", altsetting, bdev->new_isoc_altsetting_interface);
 	if (err < 0) {
 		BT_ERR("%s setting interface failed (%d)", hdev->name, -err);
 		return err;
@@ -1243,59 +1252,46 @@ static void btusb_waker(struct work_struct *work)
 static void btusb_reset_waker(struct work_struct *work)
 {
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, reset_waker);
-	u8 reset_buf[10];
 	int ret;
-	u16 crBaseAddr = 0, crRegOffset = 0;
+	int val;
 
 	BT_INFO("%s: Receive a byte (0xFF)", __func__);
 
+	ret = btmtk_send_deinit_cmds(bdev);
+	btusb_stop_traffic(bdev);
+
 	/* read interrupt EP15 CR */
-	crBaseAddr = (0x74<<8) + 0x00;
-	crRegOffset = (0x03<<8) + 0xA0;
-	BT_INFO("base + offset = %04x %04x", crBaseAddr, crRegOffset);
-	ret = usb_control_msg(bdev->udev, usb_rcvctrlpipe(bdev->udev, 0),
-			1, 0xDE, crBaseAddr, crRegOffset,
-			reset_buf, 4, USB_CTRL_IO_TIMO);
-	BT_INFO("read CR reset_buf = %02x %02x %02x %02x", reset_buf[0], reset_buf[1],
-			reset_buf[2], reset_buf[3]);
+	btmtk_cif_read_uhw_register(bdev, 0x760003A0, &val);
 
 	/* Write Reset CR to 1 */
-	crBaseAddr = (0x70<<8) + 0x00;
-	crRegOffset = (0x26<<8) + 0x10;
-	BT_INFO("base + offset = %04x %04x", crBaseAddr, crRegOffset);
-	reset_buf[0] = 0x01;
-	reset_buf[1] = 0x00;
-	reset_buf[2] = 0x00;
-	reset_buf[3] = 0x00;
-	ret = usb_control_msg(bdev->udev, usb_sndctrlpipe(bdev->udev, 0),
-			2, 0x5E, crBaseAddr, crRegOffset,
-			reset_buf, 4, USB_CTRL_IO_TIMO);
-	BT_INFO("write CR reset_reset_buf = %02x %02x %02x %02x", reset_buf[0],
-			reset_buf[1], reset_buf[2], reset_buf[3]);
-
+	btmtk_cif_write_uhw_register(bdev, 0x70002610, 1);
 	/* Read reset CR */
-	crBaseAddr = (0x70<<8) + 0x00;
-	crRegOffset = (0x26<<8) + 0x10;
-	BT_INFO("base + offset = %04x %04x", crBaseAddr, crRegOffset);
-	ret = usb_control_msg(bdev->udev, usb_rcvctrlpipe(bdev->udev, 0),
-			1, 0xDE, crBaseAddr, crRegOffset,
-			reset_buf, 4, USB_CTRL_IO_TIMO);
-	BT_INFO("read CR reset_buf = %02x %02x %02x %02x", reset_buf[0], reset_buf[1],
-			reset_buf[2], reset_buf[3]);
+	btmtk_cif_read_uhw_register(bdev, 0x70002610, &val);
+
+	btmtk_cif_write_uhw_register(bdev, 0x74000024, 0x000000FF);
+	btmtk_cif_read_uhw_register(bdev, 0x74000024, &val);
+	btmtk_cif_write_uhw_register(bdev, 0x74000308, 0x000000FF);
+	btmtk_cif_read_uhw_register(bdev, 0x74000308, &val);
 
 	/* Write Reset CR to 0 */
-	crBaseAddr = (0x70<<8) + 0x00;
-	crRegOffset = (0x26<<8) + 0x10;
-	BT_INFO("base + offset = %04x %04x", crBaseAddr, crRegOffset);
-	reset_buf[0] = 0x00;
-	reset_buf[1] = 0x00;
-	reset_buf[2] = 0x00;
-	reset_buf[3] = 0x00;
-	ret = usb_control_msg(bdev->udev, usb_sndctrlpipe(bdev->udev, 0),
-			2, 0x5E, crBaseAddr, crRegOffset,
-			reset_buf, 4, USB_CTRL_IO_TIMO);
-	BT_INFO("write CR reset_reset_buf = %02x %02x %02x %02x", reset_buf[0],
-			reset_buf[1], reset_buf[2], reset_buf[3]);
+	btmtk_cif_write_uhw_register(bdev, 0x70002610, 0);
+
+	/* Read reset CR */
+	btmtk_cif_read_uhw_register(bdev, 0x70002610, &val);
+
+	btmtk_cif_write_uhw_register(bdev, 0x74011890, 0x00010001);
+	bdev->flavor = (bdev->flavor & 0x00000080) >> 7;
+	BTMTK_INFO("%s: flavor1 = 0x%x", __func__, bdev->flavor);
+
+	/* if flavor equals 1, it represent 7920, else it represent 7921 */
+	if (bdev->flavor)
+		snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_1a_%x_hdr.bin",
+				bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
+	else
+		snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_1_%x_hdr.bin",
+				bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
+
+	btmtk_load_rom_patch(bdev);
 }
 
 static int btusb_probe(struct usb_interface *intf,
@@ -1307,7 +1303,7 @@ static int btusb_probe(struct usb_interface *intf,
 	int i, err;
 	struct usb_interface *tmp_intf;
 
-	BT_DBG("intf %p id %p, interfacenum = %d", intf, id, intf->cur_altsetting->desc.bInterfaceNumber);
+	BTMTK_DBG("intf %p id %p, interfacenum = %d", intf, id, intf->cur_altsetting->desc.bInterfaceNumber);
 
 	/* interface numbers are hardcoded in the spec */
 	if (intf->cur_altsetting->desc.bInterfaceNumber != BT0_MCU_INTERFACE_NUM &&
@@ -1398,13 +1394,10 @@ static int btusb_probe(struct usb_interface *intf,
 	BT_INFO("MTK BT Driver Version : %s", VERSION);
 
 	btmtk_cap_init(bdev);
-	err = btmtk_load_rom_patch(bdev);
-	if (err < 0) {
-		btmtk_free_hci_device(bdev, HCI_USB);
-		btmtk_cif_free_memory(bdev);
-		BT_ERR("btmtk load rom patch failed!");
-		return err;
-	}
+	if(bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM)
+		err = btmtk_load_rom_patch(bdev);
+	else
+		BTMTK_INFO("interface = %d, don't download patch", bdev->intf->cur_altsetting->desc.bInterfaceNumber);
 
 	/* Interface numbers are hardcoded in the specification */
 	if (intf->cur_altsetting->desc.bInterfaceNumber == 0) {
@@ -1660,6 +1653,72 @@ static void btmtk_cif_free_memory(struct btmtk_dev *bdev)
 	BT_INFO("%s: Success", __func__);
 }
 
+int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val)
+{
+	int ret = -1;
+	__le16 reg_high;
+	__le16 reg_low;
+	u8 reset_buf[4];
+
+	reg_high = ((reg >> 16) & 0xffff);
+	reg_low = (reg & 0xffff);
+
+	reset_buf[0] = (val & 0x00ff);
+	reset_buf[1] = ((val >> 8) & 0x00ff);
+	reset_buf[2] = ((val >> 16) & 0x00ff);
+	reset_buf[3] = ((val >> 24) & 0x00ff);
+
+	memset(bdev->io_buf, 0, USB_IO_BUF_SIZE);
+	ret = usb_control_msg(bdev->udev, usb_sndctrlpipe(bdev->udev, 0),
+			0x02,						/* bRequest */
+			0x5E,						/* bRequestType */
+			reg_high,					/* wValue */
+			reg_low,					/* wIndex */
+			reset_buf,
+			4, USB_CTRL_IO_TIMO);
+
+	BTMTK_DBG("%s: high=%x, reg_low=%x, val=%x", __func__, reg_high, reg_low, val);
+	BTMTK_DBG("%s: reset_buf = %x %x %x %x", __func__, reset_buf[3], reset_buf[2], reset_buf[1], reset_buf[0]);
+
+	if (ret < 0) {
+		val = 0xffffffff;
+		BT_ERR("%s: error(%d), reg=%x, value=%x", __func__, ret, reg, val);
+		return ret;
+	}
+	return 0;
+}
+
+int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
+{
+	int ret = -1;
+	__le16 reg_high;
+	__le16 reg_low;
+
+	reg_high = ((reg >> 16) & 0xffff);
+	reg_low = (reg & 0xffff);
+
+	memset(bdev->io_buf, 0, USB_IO_BUF_SIZE);
+	ret = usb_control_msg(bdev->udev, usb_rcvctrlpipe(bdev->udev, 0),
+			0x01,						/* bRequest */
+			0xDE,						/* bRequestType */
+			reg_high,					/* wValue */
+			reg_low,					/* wIndex */
+			bdev->io_buf,
+			4, USB_CTRL_IO_TIMO);
+
+	BTMTK_DBG("%s: reg=%x, value=%x", __func__, reg, *bdev->io_buf);
+
+	if (ret < 0) {
+		*val = 0xffffffff;
+		BT_ERR("%s: error(%d), reg=%x, value=%x", __func__, ret, reg, *val);
+		return ret;
+	}
+
+	memmove(val, bdev->io_buf, sizeof(u32));
+	*val = le32_to_cpu(*val);
+
+	return 0;
+}
 
 int btmtk_cif_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 {
@@ -1690,6 +1749,43 @@ int btmtk_cif_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 
 	return 0;
 }
+
+int btmtk_cif_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
+{
+	int ret = -1;
+	__le16 reg_high;
+	__le16 reg_low;
+	u8 buf[4];
+
+	reg_high = ((reg >> 16) & 0xffff);
+	reg_low = (reg & 0xffff);
+
+	memset(bdev->io_buf, 0, USB_IO_BUF_SIZE);
+
+	buf[0] = 0;
+	buf[1] = 0;
+	buf[2] = (val & 0x00ff);
+	buf[3] = ((val >> 8) & 0x00ff);
+
+	ret = usb_control_msg(bdev->udev, usb_sndctrlpipe(bdev->udev, 0),
+			0x66,						/* bRequest */
+			0x40,	/* bRequestType */
+			reg_high,					/* wValue */
+			reg_low,					/* wIndex */
+			buf,
+			4, USB_CTRL_IO_TIMO);
+
+	BTMTK_DBG("%s: buf = %x %x %x %x", __func__, buf[3], buf[2], buf[1], buf[0]);
+
+	if (ret < 0) {
+		val = 0xffffffff;
+		BT_ERR("%s: error(%d), reg=%x, value=%x", __func__, ret, reg, val);
+		return ret;
+	}
+
+	return 0;
+}
+
 
 int btmtk_cif_send_calibration(struct btmtk_dev *bdev)
 {

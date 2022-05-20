@@ -130,7 +130,10 @@ int btmtk_cif_send_calibration(struct btmtk_dev *bdev);
 int btmtk_cif_open(struct hci_dev *hdev);
 int btmtk_cif_close(struct hci_dev *hdev);
 int btmtk_cif_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val);
+int btmtk_cif_write_register(struct btmtk_dev *bdev, u32 reg, u32 val);
 int btmtk_cif_get_rom_patch_result(struct btmtk_dev *bdev);
 int btmtk_cif_recv_evt(struct btmtk_dev *bdev, int delay, int retry);
+int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val);
+int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val);
 
 #endif

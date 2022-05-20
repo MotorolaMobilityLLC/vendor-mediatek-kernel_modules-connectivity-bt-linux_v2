@@ -37,7 +37,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.200012101"
+#define VERSION "7.0.200021301"
 #define SUBVER ":turnkey"
 
 
@@ -85,7 +85,7 @@
 #define BTMTK_LOG_LVL_INFO	3
 #define BTMTK_LOG_LVL_DBG	4
 #define BTMTK_LOG_LVL_MAX	BTMTK_LOG_LVL_DBG
-#define BTMTK_LOG_LVL_DEF	BTMTK_LOG_LVL_INFO	/* default setting */
+#define BTMTK_LOG_LVL_DEF	BTMTK_LOG_LVL_DBG	/* default setting */
 
 extern uint8_t btmtk_log_lvl;
 
@@ -132,6 +132,7 @@ extern uint8_t btmtk_log_lvl;
 #define MTK_HCI_ACLDATA_PKT		0x02
 #define MTK_HCI_SCODATA_PKT		0x03
 #define MTK_HCI_EVENT_PKT		0x04
+#define HCI_ISO_PKT			0x05
 
 /**
  * ROM patch related
@@ -197,8 +198,9 @@ extern uint8_t btmtk_log_lvl;
 #define be2cpu32(x) ((uint32_t)(x))
 #endif
 
-#define FW_VERSION	0x80000004
+#define FW_VERSION	0x80021004
 #define CHIP_ID	0x70010200
 #define FLAVOR	0x70010020
+
 
 #endif /* __BTMTK_DEFINE_H__ */
