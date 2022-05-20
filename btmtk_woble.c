@@ -54,6 +54,17 @@ void btmtk_woble_wake_unlock(struct btmtk_dev *bdev)
 	}
 }
 
+#if WAKEUP_BT_IRQ
+void btmtk_sdio_irq_wake_lock_timeout(struct btmtk_dev *bdev)
+{
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	BTMTK_INFO("%s: enter", __func__);
+	__pm_wakeup_event(bmain_info->irq_ws, WAIT_POWERKEY_TIMEOUT);
+	BTMTK_INFO("%s: exit", __func__);
+}
+#endif
+
 
 int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 {
@@ -540,6 +551,13 @@ static int btmtk_handle_leaving_WoBLE_state(struct btmtk_woble *bt_woble)
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	BTMTK_INFO("%s: begin", __func__);
+
+#if WAKEUP_BT_IRQ
+	/* Can't enter woble mode */
+	BTMTK_INFO("not support woble mode for wakeup bt irq");
+	return 0;
+#endif
+
 	fstate = btmtk_fops_get_state(bdev);
 	if (!bdev->bt_cfg.support_woble_for_bt_disable) {
 		if (fstate != BTMTK_FOPS_STATE_OPENED) {
@@ -613,6 +631,11 @@ static int btmtk_handle_entering_WoBLE_state(struct btmtk_woble *bt_woble)
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	BTMTK_INFO("%s: begin", __func__);
+#if WAKEUP_BT_IRQ
+	/* Can't enter woble mode */
+	BTMTK_INFO("not support woble mode for wakeup bt irq");
+	return 0;
+#endif
 
 	fstate = btmtk_fops_get_state(bdev);
 	if (!bdev->bt_cfg.support_woble_for_bt_disable) {

@@ -25,6 +25,10 @@ else
     ccflags-y += -DCFG_SUPPORT_HW_DVT=0
 endif
 
+ifeq ($(SUPPORT_WAKEUP_IRQ), yes)
+    ccflags-y += -DCFG_SUPPORT_WAKEUP_IRQ
+endif
+
 ifeq ($(CONFIG_SUPPORT_DVT), y)
     ccflags-y += -DCFG_SUPPORT_DVT=1
 else
