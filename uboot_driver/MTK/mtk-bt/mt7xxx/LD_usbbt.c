@@ -17,6 +17,7 @@ usb_vid_pid array_mtk_vid_pid[] = {
 	{0x0E8D, 0x76A1, "MTK7632T"},	// 7632T
 	{0x0E8D, 0x7663, "MTK7663"},	//7663
 	{0x0E8D, 0x7961, "MTK7961"},	//7961
+	{0x0E8D, 0x7902, "MTK7902"},	//7902
 };
 
 int max_mtk_wifi_id = (sizeof(array_mtk_vid_pid) / sizeof(array_mtk_vid_pid[0]));

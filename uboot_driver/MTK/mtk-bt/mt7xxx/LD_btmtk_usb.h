@@ -70,8 +70,12 @@
 #define WOBLE_SETTING_FILE_NAME_7668 "woble_setting_7668.bin"
 #define WOBLE_SETTING_FILE_NAME_7663 "woble_setting_7663.bin"
 #define WOBLE_SETTING_FILE_NAME "woble_setting.bin"
+#define WOBLE_CFG_NAME_PREFIX "woble_setting"
+#define WOBLE_CFG_NAME_SUFFIX "bin"
+
 #define BT_CFG_NAME "bt.cfg"
 #define BT_CFG_NAME_PREFIX "bt_mt"
+#define BT_CFG_NAME_PREFIX_76XX "bt_"
 #define BT_CFG_NAME_SUFFIX "cfg"
 #define BT_UNIFY_WOBLE "SUPPORT_UNIFY_WOBLE"
 #define BT_UNIFY_WOBLE_TYPE "UNIFY_WOBLE_TYPE"
