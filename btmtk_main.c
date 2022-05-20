@@ -2865,7 +2865,7 @@ static int btmtk_send_txpower_cmd(struct btmtk_dev *bdev)
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, TXPOWER_CMD_LEN,
 			event, TXPOWER_EVT_LEN,
-			0, 0, BTMTK_TX_CMD_FROM_DRV);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST);
 
 	if (ret < 0)
 		BTMTK_ERR("%s failed!!", __func__);
