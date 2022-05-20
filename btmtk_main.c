@@ -96,6 +96,13 @@ __weak int btmtk_cif_rx_packet_handler(struct hci_dev *hdev, struct sk_buff *skb
 	BTMTK_WARN("weak function %s not implement", __func__);
 	return -1;
 }
+
+__weak int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
+{
+	BTMTK_WARN("weak function %s not implement", __func__);
+	return -1;
+}
+
 void btmtk_do_gettimeofday(struct timeval *tv)
 {
 #if (KERNEL_VERSION(4, 19, 85) > LINUX_VERSION_CODE)
@@ -274,9 +281,9 @@ static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s end", __func__);
 }
 
-unsigned char btmtk_get_chip_state(struct btmtk_dev *bdev)
+u8 btmtk_get_chip_state(struct btmtk_dev *bdev)
 {
-	unsigned char state = BTMTK_STATE_INIT;
+	u8 state = BTMTK_STATE_INIT;
 
 	CHIP_STATE_MUTEX_LOCK();
 	state = bdev->interface_state;
@@ -285,7 +292,7 @@ unsigned char btmtk_get_chip_state(struct btmtk_dev *bdev)
 	return state;
 }
 
-void btmtk_set_chip_state(struct btmtk_dev *bdev, unsigned char new_state)
+void btmtk_set_chip_state(struct btmtk_dev *bdev, u8 new_state)
 {
 	static const char * const state_msg[BTMTK_STATE_MSG_NUM] = {
 		"UNKNOWN", "INIT", "DISCONNECT", "PROBE", "WORKING", "SUSPEND", "RESUME",
@@ -305,9 +312,9 @@ void btmtk_set_chip_state(struct btmtk_dev *bdev, unsigned char new_state)
 	CHIP_STATE_MUTEX_UNLOCK();
 }
 
-unsigned char btmtk_fops_get_state(struct btmtk_dev *bdev)
+u8 btmtk_fops_get_state(struct btmtk_dev *bdev)
 {
-	unsigned char state = BTMTK_FOPS_STATE_INIT;
+	u8 state = BTMTK_FOPS_STATE_INIT;
 
 	FOPS_MUTEX_LOCK();
 	state = bdev->fops_state;
@@ -316,7 +323,7 @@ unsigned char btmtk_fops_get_state(struct btmtk_dev *bdev)
 	return state;
 }
 
-static void btmtk_fops_set_state(struct btmtk_dev *bdev, unsigned char new_state)
+static void btmtk_fops_set_state(struct btmtk_dev *bdev, u8 new_state)
 {
 	static const char * const fstate_msg[BTMTK_FOPS_STATE_MSG_NUM] = {
 		"UNKNOWN", "INIT", "OPENING", "OPENED", "CLOSING", "CLOSED",
@@ -3644,6 +3651,12 @@ static int bt_open(struct hci_dev *hdev)
 			goto failed;
 		}
 #endif /* CFG_SUPPORT_DVT */
+
+		ret = btmtk_send_apcf_reserved(bdev);
+		if (ret < 0) {
+			BTMTK_ERR("%s, btmtk_send_apcf_reserved failed", __func__);
+			goto failed;
+		}
 
 		if (main_info.hif_hook.open_done)
 			main_info.hif_hook.open_done(bdev);

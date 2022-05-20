@@ -55,25 +55,30 @@ void btmtk_woble_wake_unlock(struct btmtk_dev *bdev)
 }
 
 
-static int btmtk_send_woble_apcf_reserved(struct btmtk_dev *bdev)
+int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 {
 	u8 reserve_apcf_cmd[RES_APCF_CMD_LEN] = { 0x01, 0xC9, 0xFC, 0x05, 0x01, 0x30, 0x02, 0x61, 0x02 };
 	u8 reserve_apcf_event[RES_APCF_EVT_LEN] = { 0x04, 0xE6, 0x02, 0x08, 0x11 };
-	int ret = -1;
+	int ret = 0;
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: Incorrect bdev", __func__);
-		return ret;
+		ret = -1;
+		goto exit;
 	}
 
-	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
-		ret = btmtk_main_send_cmd(bdev, reserve_apcf_cmd, RES_APCF_CMD_LEN,
-			reserve_apcf_event, RES_APCF_EVT_LEN, 0, 0,
-			BTMTK_TX_PKT_FROM_HOST);
-	else
-		BTMTK_WARN("%s: not support for 0x%x", __func__, bdev->chip_id);
+	if (is_support_unify_woble(bdev)) {
+		if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
+			ret = btmtk_main_send_cmd(bdev, reserve_apcf_cmd, RES_APCF_CMD_LEN,
+				reserve_apcf_event, RES_APCF_EVT_LEN, 0, 0,
+				BTMTK_TX_PKT_FROM_HOST);
+		else
+			BTMTK_WARN("%s: not support for 0x%x", __func__, bdev->chip_id);
 
-	BTMTK_INFO("%s: ret %d", __func__, ret);
+		BTMTK_INFO("%s: ret %d", __func__, ret);
+	}
+
+exit:
 	return ret;
 }
 
@@ -665,10 +670,6 @@ static int btmtk_handle_entering_WoBLE_state(struct btmtk_woble *bt_woble)
 				BTMTK_WARN("%s: No Exported Func Found [%s]", __func__, func_name);
 			}
 		} while (0);
-
-		ret = btmtk_send_woble_apcf_reserved(bdev);
-		if (ret < 0)
-			goto STOP_TRAFFIC;
 
 		ret = btmtk_send_woble_read_BDADDR_cmd(bdev);
 		if (ret < 0)

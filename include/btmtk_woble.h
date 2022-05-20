@@ -56,5 +56,6 @@ int btmtk_woble_resume(struct btmtk_woble *bt_woble);
 int btmtk_woble_initialize(struct btmtk_dev *bdev, struct btmtk_woble *bt_woble);
 void btmtk_woble_uninitialize(struct btmtk_woble *bt_woble);
 void btmtk_woble_wake_unlock(struct btmtk_dev *bdev);
+int btmtk_send_apcf_reserved(struct btmtk_dev *bdev);
 
 #endif /* __BTMTK_WOBLE_H__ */
