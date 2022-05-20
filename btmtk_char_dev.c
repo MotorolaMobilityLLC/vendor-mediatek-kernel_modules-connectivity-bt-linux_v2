@@ -638,7 +638,7 @@ cdv_error:
 	unregister_chrdev_region(dev, BT_devs);
 
 alloc_error:
-	main_driver_exit();
+	wakeup_source_unregister(bt_wakelock);
 	return -1;
 }
 
