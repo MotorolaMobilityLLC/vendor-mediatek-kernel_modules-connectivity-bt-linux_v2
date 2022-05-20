@@ -1378,7 +1378,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 #endif
 
 		/* For wmt cmd/evt */
-		if (skb->data[0] == 0x6f && skb->data[1] == 0xfc) {
+		if (!memcmp(skb->data, &wmt_over_hci_header[1], WMT_OVER_HCI_HEADER_SIZE - 1)) {
 			skb_push(skb, 1);
 			skb->data[0] = 0x01;
 			btmtk_cif_send_cmd(bdev, skb, 100, 20, BTMTK_EP_TYPE_OUT_CMD);

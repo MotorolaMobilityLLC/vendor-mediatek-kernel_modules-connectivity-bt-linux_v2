@@ -57,7 +57,9 @@ static char event_need_compare_len;
 static char event_compare_status;
 const u8 READ_ADDRESS_EVENT[] = { 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00 };
 const u8 RESET_EVENT[] = { 0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00 };
-const u8 READ_ISO_PACKET_SIZE_CMD[] = {0x01, 0x98, 0xFD, 0x02 };
+const u8 READ_ISO_PACKET_SIZE_CMD[] = { 0x01, 0x98, 0xFD, 0x02 };
+
+u8 wmt_over_hci_header[] = { 0x01, 0x6F, 0xFC};
 
 /*TODO, maybe need to support multiple dongle to do reset stack*/
 static u8 reset_stack_flag;
@@ -1435,6 +1437,14 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		goto exit;
 	}
 
+	if (memcmp(cmd, wmt_over_hci_header, sizeof(wmt_over_hci_header)) &&
+		endpoint != BTMTK_EP_TPYE_OUT_ACL &&
+		bdev->power_state != BTMTK_DONGLE_STATE_POWER_ON) {
+		BTMTK_WARN("%s: chip power isn't on, ignore this command, state is %d",
+			__func__, bdev->power_state);
+		return ret;
+	}
+
 	skb = alloc_skb(cmd_len + BT_SKB_RESERVE, GFP_ATOMIC);
 	if (skb == NULL) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
@@ -2045,6 +2055,7 @@ int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, bool patch_flag)
 		goto err;
 	}
 
+	bdev->power_state = BTMTK_DONGLE_STATE_POWER_OFF;
 	BTMTK_INFO("btmtk_load_rom_patch_79xx end");
 
 err:

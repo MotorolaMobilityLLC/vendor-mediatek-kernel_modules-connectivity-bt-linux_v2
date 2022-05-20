@@ -42,7 +42,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.200051801"
+#define VERSION "7.0.200051802"
 #define SUBVER ":turnkey"
 
 
@@ -95,9 +95,11 @@
 #define HCI_SNOOP_ENTRY_NUM	60
 #define HCI_SNOOP_BUF_SIZE	32
 #define HCI_SNOOP_MAX_BUF_SIZE	66
+#define WMT_OVER_HCI_HEADER_SIZE	3
 
 
 extern uint8_t btmtk_log_lvl;
+extern u8 wmt_over_hci_header[];
 
 #define BTMTK_ERR(fmt, ...)	 \
 	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR) pr_warn("[btmtk_err] ***"fmt"***\n", ##__VA_ARGS__); } while (0)
