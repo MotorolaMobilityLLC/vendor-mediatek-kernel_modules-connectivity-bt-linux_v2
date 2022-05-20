@@ -109,7 +109,7 @@ static int btmtk_buffer_mode_set_addr(struct btmtk_buffer_mode_struct *buffer_mo
 		cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 1] = buffer_mode->bt0_mac[4];
 		cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET] = buffer_mode->bt0_mac[5];
 
-		BTMTK_INFO_RAW(cmd, SET_ADDRESS_CMD_LEN, "%s: Send", __func__);
+		BTMTK_INFO("%s: SEND BDADDR = "MACSTR, __func__, MAC2STR(buffer_mode->bt0_mac));
 		ret = btmtk_main_send_cmd(buffer_mode->bdev,
 				cmd, SET_ADDRESS_CMD_LEN,
 				event, SET_ADDRESS_EVT_LEN,
