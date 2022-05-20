@@ -38,6 +38,7 @@ const struct file_operations BT_fopsfwlog = {
 };
 
 static int btmtk_send_assert_cmd(struct btmtk_dev *bdev);
+static int btmtk_fops_get_state(struct btmtk_dev *bdev);
 
 /**
  * Global parameters(mtkbt_)
@@ -189,6 +190,34 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 {
 	int i = 0, len = 0, ret = -1;
 	struct sk_buff *skb = NULL;
+	int state = BTMTK_STATE_INIT;
+	int fstate = BTMTK_FOPS_STATE_INIT;
+	struct btmtk_dev *bdev = NULL;
+
+	for (i = 0; i < btmtk_intf_num; i++) {
+		/* Find valid dev for already probe interface. */
+		if (g_bdev[i]->hdev != NULL) {
+			bdev = g_bdev[i];
+
+			state = btmtk_get_chip_state(bdev);
+			if (state != BTMTK_STATE_WORKING) {
+				BTMTK_WARN("%s: current is in suspend/resume/standby/dump/disconnect (%d).",
+					__func__, state);
+				return -EBADFD;
+			}
+
+			fstate = btmtk_fops_get_state(bdev);
+			if (fstate != BTMTK_FOPS_STATE_OPENED) {
+				BTMTK_WARN("%s: fops is not open yet(%d)!", __func__, fstate);
+				return -ENODEV;
+			}
+
+			if (bdev->power_state == BTMTK_DONGLE_STATE_POWER_OFF) {
+				BTMTK_WARN("%s: dongle state already power off, do not write", __func__);
+				return -EFAULT;
+			}
+		}
+	}
 
 	u8 *i_fwlog_buf = kmalloc(HCI_MAX_COMMAND_BUF_SIZE, GFP_KERNEL);
 	u8 *o_fwlog_buf = kmalloc(HCI_MAX_COMMAND_SIZE, GFP_KERNEL);
