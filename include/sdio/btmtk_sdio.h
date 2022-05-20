@@ -25,8 +25,8 @@
 #include <linux/mmc/sdio_func.h>
 
 #include "btmtk_define.h"
-
 #include "btmtk_main.h"
+#include "btmtk_buffer_mode.h"
 
 #ifndef SDIO_DEBUG
 #define SDIO_DEBUG 0
@@ -140,5 +140,7 @@ struct btmtk_sdio_dev {
 
 	struct sk_buff_head tx_queue;
 	struct btmtk_sdio_thread sdio_thread;
+
+	struct btmtk_buffer_mode_struct *buffer_mode;
 };
 #endif

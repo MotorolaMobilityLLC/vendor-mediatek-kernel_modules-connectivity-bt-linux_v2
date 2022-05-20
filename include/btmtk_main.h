@@ -381,7 +381,7 @@ typedef int (*cif_whole_reset_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_chip_reset_notify_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_mutex_lock_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_mutex_unlock_ptr)(struct btmtk_dev *bdev);
-
+typedef void (*cif_open_done_ptr)(struct btmtk_dev *bdev);
 struct hif_hook_ptr {
 	cif_open_ptr			open;
 	cif_close_ptr			close;
@@ -395,6 +395,7 @@ struct hif_hook_ptr {
 	cif_chip_reset_notify_ptr	chip_reset_notify;
 	cif_mutex_lock_ptr		cif_mutex_lock;
 	cif_mutex_unlock_ptr		cif_mutex_unlock;
+	cif_open_done_ptr		open_done;
 };
 
 struct btmtk_main_info {
@@ -462,6 +463,8 @@ int btmtk_woble_suspend(struct btmtk_dev *bdev);
 int btmtk_woble_resume(struct btmtk_dev *bdev);
 int btmtk_handle_leaving_WoBLE_state(struct btmtk_dev *bdev);
 int btmtk_handle_entering_WoBLE_state(struct btmtk_dev *bdev);
+int btmtk_load_code_from_setting_files(char *setting_file_name,
+		struct device *dev, u32 *code_len, struct btmtk_dev *bdev);
 int btmtk_load_woble_setting(char *bin_name,
 		struct device *dev, u32 *code_len, struct btmtk_dev *bdev);
 int btmtk_load_rom_patch_766x(struct btmtk_dev *hdev);
@@ -504,8 +507,8 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus);
 void btmtk_main_cif_uninitialize(struct btmtk_dev *bdev, int hci_bus);
 int btmtk_main_woble_initialize(struct btmtk_dev *bdev);
 int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus);
-
 int btmtk_cif_send_calibration(struct btmtk_dev *bdev);
 int btmtk_send_assert_cmd(struct btmtk_dev *bdev);
+int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value);
 
 #endif /* __BTMTK_MAIN_H__ */

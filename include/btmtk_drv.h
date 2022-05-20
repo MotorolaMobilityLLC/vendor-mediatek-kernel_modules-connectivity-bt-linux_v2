@@ -33,16 +33,6 @@
 /* Time to wait for command response in millisecond */
 #define WAIT_UNTIL_CMD_RESP             msecs_to_jiffies(5000)
 
-#define BTMTK_BIN_FILE_MODE 1
-#if BTMTK_BIN_FILE_MODE
-/** For 7668 please storage cfg/bin file in ${firmware} */
-#define E2P_ACCESS_MODE_SWITCHER	"wifi.cfg"
-#define E2P_BIN_FILE			"EEPROM_MT%X.bin"
-
-#define E2P_MODE	"EfuseBufferModeCal"
-#define BIN_FILE_MODE	'1'
-#endif
-
 enum rdwr_status {
 	RDWR_STATUS_SUCCESS = 0,
 	RDWR_STATUS_FAILURE = 1,

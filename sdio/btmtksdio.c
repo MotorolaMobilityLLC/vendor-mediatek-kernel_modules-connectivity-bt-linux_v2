@@ -423,6 +423,7 @@ static int btmtk_sdio_open(struct hci_dev *hdev)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
+
 	BTMTK_INFO("%s enter!", __func__);
 	skb_queue_purge(&cif_dev->tx_queue);
 
@@ -440,9 +441,18 @@ static int btmtk_sdio_open(struct hci_dev *hdev)
 static int btmtk_sdio_close(struct hci_dev *hdev)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+
 	BTMTK_INFO("%s enter!", __func__);
 	cancel_work_sync(&bdev->reset_waker);
 	return 0;
+}
+
+static void btmtk_sdio_open_done(struct btmtk_dev *bdev)
+{
+	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
+
+	BTMTK_INFO("%s enter!", __func__);
+	(void)btmtk_buffer_mode_send(cif_dev->buffer_mode);
 }
 
 static int btmtk_sdio_writesb(u32 offset, u8 *val, int len, struct sdio_func *func)
@@ -1586,6 +1596,8 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 		goto free_setting;
 	}
 
+	btmtk_buffer_mode_initialize(bdev, &cif_dev->buffer_mode);
+
 	err = btmtk_register_hci_device(bdev);
 	if (err < 0) {
 		BT_ERR("btmtk_register_hci_device failed!");
@@ -1929,6 +1941,7 @@ int btmtk_cif_register(void)
 	hook.chip_reset_notify = btmtk_sdio_chip_reset_notify;
 	hook.cif_mutex_lock = btmtk_sdio_cif_mutex_lock;
 	hook.cif_mutex_unlock = btmtk_sdio_cif_mutex_unlock;
+	hook.open_done = btmtk_sdio_open_done;
 	btmtk_reg_hif_hook(&hook);
 
 	retval = sdio_register();

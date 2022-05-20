@@ -176,6 +176,98 @@ void btmtk_fwdump_wake_unlock(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: exit", __func__);
 }
 
+/*get 1 byte only*/
+int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value)
+{
+	uint8_t efuse_r[] = {0x01, 0x6F, 0xFC, 0x0E,
+				0x01, 0x0D, 0x0A, 0x00, 0x02, 0x04,
+				0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00, 0x00, 0x00};/*4 sub block number(sub block 0~3)*/
+
+	uint8_t efuse_r_event[] = {0x04, 0xE4, 0x1E, 0x02, 0x0D, 0x1A, 0x00, 02, 04};
+	/*check event
+	 *04 E4 LEN(1B) 02 0D LEN(2Byte) 02 04 ADDR(2Byte) VALUE(4B) ADDR(2Byte) VALUE(4Byte)
+	 *ADDR(2Byte) VALUE(4B)  ADDR(2Byte) VALUE(4Byte)
+	 */
+	int ret = 0;
+	uint8_t sub_block_addr_in_event = 0;
+	uint16_t sub_block = (addr / 16) * 4;
+	uint8_t temp = 0;
+
+	efuse_r[10] = sub_block & 0xFF;
+	efuse_r[11] = (sub_block & 0xFF00) >> 8;
+	efuse_r[12] = (sub_block + 1) & 0xFF;
+	efuse_r[13] = ((sub_block + 1) & 0xFF00) >> 8;
+	efuse_r[14] = (sub_block + 2) & 0xFF;
+	efuse_r[15] = ((sub_block + 2) & 0xFF00) >> 8;
+	efuse_r[16] = (sub_block + 3) & 0xFF;
+	efuse_r[17] = ((sub_block + 3) & 0xFF00) >> 8;
+
+	ret = btmtk_main_send_cmd(bdev,
+			efuse_r, sizeof(efuse_r),
+			efuse_r_event, sizeof(efuse_r_event),
+			0, 0, BTMTK_TX_CMD_FROM_DRV);
+	if (ret) {
+		BTMTK_WARN("btmtk_main_send_cmd error");
+		return ret;
+	}
+
+	if (memcmp(bdev->io_buf, efuse_r_event, sizeof(efuse_r_event)) == 0) {
+		/*compare rxbuf format ok, compare addr*/
+		BTMTK_DBG("compare rxbuf format ok");
+		if (efuse_r[10] == bdev->io_buf[9] &&
+			efuse_r[11] == bdev->io_buf[10] &&
+			efuse_r[12] == bdev->io_buf[15] &&
+			efuse_r[13] == bdev->io_buf[16] &&
+			efuse_r[14] == bdev->io_buf[21] &&
+			efuse_r[15] == bdev->io_buf[22] &&
+			efuse_r[16] == bdev->io_buf[27] &&
+			efuse_r[17] == bdev->io_buf[28]) {
+
+			BTMTK_DBG("address compare ok");
+			/*Get value*/
+			sub_block_addr_in_event = ((addr / 16) / 4);/*cal block num*/
+			temp = addr % 16;
+			BTMTK_DBG("address in block %d", temp);
+			switch (temp) {
+			case 0:
+			case 1:
+			case 2:
+			case 3:
+				*value = bdev->io_buf[11 + temp];
+				break;
+			case 4:
+			case 5:
+			case 6:
+			case 7:
+				*value = bdev->io_buf[17 + temp];
+				break;
+			case 8:
+			case 9:
+			case 10:
+			case 11:
+				*value = bdev->io_buf[22 + temp];
+				break;
+
+			case 12:
+			case 13:
+			case 14:
+			case 15:
+				*value = bdev->io_buf[34 + temp];
+				break;
+			}
+		} else {
+			BTMTK_WARN("address compare fail");
+			ret = -1;
+		}
+	} else {
+		BTMTK_WARN("compare rxbuf format fail");
+		ret = -1;
+	}
+
+	return ret;
+}
+
 static int btmtk_skb_enq_fwlog(struct hci_dev *hdev, void *src, u32 len, u8 type, struct sk_buff_head *queue)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
@@ -1108,6 +1200,10 @@ static int main_exit(void)
 		BTMTK_WARN("%s g_data is NULL", __func__);
 		return 0;
 	}
+
+	BTMTK_INFO("%s: Register reboot_notifier callback success.", __func__);
+	/* Is it necessary? bt_close will be called by reboot. */
+	unregister_reboot_notifier(&btmtk_reboot_notifier);
 
 	wakeup_source_unregister(main_info.fwdump_ws);
 	wakeup_source_unregister(main_info.woble_ws);
@@ -4398,6 +4494,9 @@ static int bt_open(struct hci_dev *hdev)
 		goto failed;
 	}
 #endif /* CFG_SUPPORT_DVT */
+
+	if (main_info.hif_hook.open_done)
+		main_info.hif_hook.open_done(bdev);
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENED);
 	main_info.reset_stack_flag = HW_ERR_NONE;

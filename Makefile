@@ -44,7 +44,7 @@ MTK_CHIP_IF := usb
 
 ifeq ($(MTK_CHIP_IF), sdio)
     MOD_NAME = btmtk_sdio_unify
-    CFILES := sdio/btmtksdio.c
+    CFILES := sdio/btmtksdio.c btmtk_buffer_mode.c
     ccflags-y += -DCHIP_IF_SDIO
     ccflags-y += -DSDIO_DEBUG=0
     ccflags-y += -I$(src)/include/sdio
