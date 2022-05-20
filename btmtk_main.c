@@ -2461,6 +2461,16 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag)
 					__func__, bt_bin_type[i]);
 				goto err;
 			}
+#if (USE_DEVICE_NODE == 1)
+			/* Send efem command before bt cal */
+			if(bt_bin_type[i] == 0x00000003) {
+				ret = btmtk_send_connfem_cmd(bdev);
+				if (ret < 0) {
+					BTMTK_ERR("%s send connfem fail", __func__);
+					goto err;
+				}
+			}
+#endif
 		}
 	}
 

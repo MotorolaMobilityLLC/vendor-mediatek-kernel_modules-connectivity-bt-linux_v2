@@ -78,6 +78,7 @@ ifeq ($(MTK_BT_SUPPORT),yes)
 include $(CLEAR_VARS)
 LOCAL_MODULE := btmtk_uart_unify.ko
 LOCAL_REQUIRED_MODULES := conninfra.ko
+LOCAL_REQUIRED_MODULES += connfem.ko
 LOCAL_PROPRIETARY_MODULE := true
 LOCAL_MODULE_OWNER := mtk
 LOCAL_INIT_RC := init.btmtk_uart.rc
