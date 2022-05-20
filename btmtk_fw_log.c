@@ -168,8 +168,13 @@ static void btmtk_proc_delete_entry(void)
 
 int btmtk_fops_initfwlog(void)
 {
+#ifdef STATIC_REGISTER_FWLOG_NODE
+	static int BT_majorfwlog = FIXED_STPBT_MAJOR_DEV_ID + 1;
+	dev_t devIDfwlog = MKDEV(BT_majorfwlog, 1);
+#else
 	static int BT_majorfwlog;
 	dev_t devIDfwlog = MKDEV(BT_majorfwlog, 0);
+#endif
 	int ret = 0;
 	int cdevErr = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
@@ -184,12 +189,19 @@ int btmtk_fops_initfwlog(void)
 		}
 	}
 
-	ret = alloc_chrdev_region(&devIDfwlog, 0, 1, BT_FWLOG_DEV_NODE);
+#ifdef STATIC_REGISTER_FWLOG_NODE
+	ret = register_chrdev_region(devIDfwlog, 1, "BT_chrdevfwlog");
+	if (ret) {
+		BTMTK_ERR("%s: fail to register chrdev(%x)", __func__, devIDfwlog);
+		goto alloc_error;
+	}
+#else
+	ret = alloc_chrdev_region(&devIDfwlog, 0, 1, "BT_chrdevfwlog");
 	if (ret) {
 		BTMTK_ERR("%s: fail to allocate chrdev", __func__);
 		goto alloc_error;
 	}
-
+#endif
 	BT_majorfwlog = MAJOR(devIDfwlog);
 
 	cdev_init(&g_fwlog->BT_cdevfwlog, &BT_fopsfwlog);
@@ -538,8 +550,13 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	} else {
 		memcpy(skb->data, o_fwlog_buf, len);
 		skb->len = len;
-		pp_bdev[hci_idx]->opcode_usr[0] = o_fwlog_buf[1];
-		pp_bdev[hci_idx]->opcode_usr[1] = o_fwlog_buf[2];
+#if defined(DRV_RETURN_SPECIFIC_HCE_ONLY) && (DRV_RETURN_SPECIFIC_HCE_ONLY == 1)
+		// 0xFC26 is get link & profile information command.
+		if (*(uint16_t *)(o_fwlog_buf + 1) != 0xFC26) {
+			pp_bdev[hci_idx]->opcode_usr[0] = o_fwlog_buf[1];
+			pp_bdev[hci_idx]->opcode_usr[1] = o_fwlog_buf[2];
+		}
+#endif
 	}
 
 	/* won't send command if g_bdev not define */
@@ -865,9 +882,6 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			}
 		}
 
-		if (!bdev->bt_cfg.support_picus_to_host)
-			return 1;
-
 		/* change coredump's ACL handle to FF F0 */
 		skb->data[0] = 0xFF;
 		skb->data[1] = 0xF0;
@@ -896,6 +910,14 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		BTMTK_INFO_RAW(skb->data, skb->len, "%s: Discard event from user hci command - ", __func__);
 		bdev->opcode_usr[0] = 0;
 		bdev->opcode_usr[1] = 0;
+
+#if defined(DRV_RETURN_SPECIFIC_HCE_ONLY) && (DRV_RETURN_SPECIFIC_HCE_ONLY == 0)
+		// should return to upper layer tool
+		if (btmtk_skb_enq_fwlog(bdev, skb->data, skb->len, FWLOG_TYPE,
+					&g_fwlog->fwlog_queue) == 0) {
+			wake_up_interruptible(&g_fwlog->fw_log_inq);
+		}
+#endif
 		return 1;
 	} else if (memcmp(skb->data, &hci_reset_event[1], HCI_RESET_EVT_LEN - 1) == 0) {
 		BTMTK_INFO("%s: Get RESET_EVENT", __func__);

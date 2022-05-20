@@ -24,8 +24,12 @@
 #define BT_FWLOG_OFF    0x00
 #define BT_FWLOG_ON     0xFF
 
-/* bluetooth kpi */
-#define KPI_WITHOUT_TYPE	0
+#define DRV_RETURN_SPECIFIC_HCE_ONLY	1	/* Currently only allow 0xFC26 */
+#define KPI_WITHOUT_TYPE		0	/* bluetooth kpi */
+
+#ifdef STATIC_REGISTER_FWLOG_NODE
+#define FIXED_STPBT_MAJOR_DEV_ID 111
+#endif
 
 /* Device node */
 #if CFG_SUPPORT_MULTI_DEV_NODE

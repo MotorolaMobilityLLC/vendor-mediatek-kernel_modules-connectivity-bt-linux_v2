@@ -735,7 +735,7 @@ retry_own:
 					DUMP_FW_PC(cif_dev);
 
 				retry--;
-				mdelay(5);
+				usleep_range(5*1000, 10*1000);
 				goto retry_own;
 			} else {
 				ret = -EINVAL;
@@ -1497,6 +1497,8 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
 	const u8 read_address_event[READ_ADDRESS_EVT_HDR_LEN] = { 0x4, 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00 };
+	u8 *p = NULL, *pend = NULL;
+	u8 attr_len, attr_type;
 
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		skb->len >= event_need_compare_len) {
@@ -1513,8 +1515,35 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			/* if it is wobx debug event, just print in kernel log, drop it
 			 * by driver, don't send to stack
 			 */
-			if (skb->data[0] == WOBLE_DEBUG_EVT_TYPE)
+			if (skb->data[0] == WOBLE_DEBUG_EVT_TYPE) {
 				BTMTK_INFO_RAW(skb->data, skb->len, "%s: wobx debug log:", __func__);
+				/* parse WoBX debug log */
+				p = &skb->data[1];
+				pend = p + skb->data[1];
+				while (p < pend) {
+					attr_len = *(p + 1);
+					attr_type = *(p + 2);
+					BTMTK_INFO("attr_len = 0x%x, attr_type = 0x%x", attr_len, attr_type);
+					switch (attr_type) {
+					case WOBX_TRIGGER_INFO_ADDR_TYPE:
+						break;
+					case WOBX_TRIGGER_INFO_ADV_DATA_TYPE:
+						break;
+					case WOBX_TRIGGER_INFO_TRACE_LOG_TYPE:
+						break;
+					case WOBX_TRIGGER_INFO_SCAN_LOG_TYPE:
+						break;
+					case WOBX_TRIGGER_INFO_TRIGGER_CNT_TYPE:
+						BTMTK_INFO("wakeup times(via BT) = %02X%02X%02X%02X",
+							*(p + 6), *(p + 5), *(p + 4), *(p + 3));
+						break;
+					default:
+						BTMTK_ERR("%s: unexpected attribute type(0x%x)", __func__, attr_type);
+						return;
+					}
+					p += 1 + attr_len;	// 1: len
+				}
+			}
 
 			/* If driver need to check result from skb, it can get from io_buf */
 			/* Such as chip_id, fw_version, etc. */
