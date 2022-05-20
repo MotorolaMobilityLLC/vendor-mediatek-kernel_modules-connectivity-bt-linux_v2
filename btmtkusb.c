@@ -223,9 +223,6 @@ static void btusb_intr_complete(struct urb *urb)
 			btmtk_hci_snoop_print(urb->actual_length + 1, bdev->urb_transfer_buf);
 			hdev->stat.err_rx++;
 		}
-
-		/* TODO */
-		/* btmtk_usb_dispatch_data_bluetooth_kpi(event_buf, urb->actual_length, HCI_EVENT_PKT); */
 	} else if (urb->status == -ENOENT) {
 		/* Avoid suspend failed when usb_kill_urb */
 		return;
@@ -552,11 +549,6 @@ static void btusb_bulk_complete(struct urb *urb)
 			btmtk_hci_snoop_print(urb->actual_length + 1, bdev->urb_transfer_buf);
 			hdev->stat.err_rx++;
 		}
-
-		/* TODO */
-#if 0
-		btmtk_usb_dispatch_data_bluetooth_kpi(buf, urb->actual_length, HCI_ACLDATA_PKT);
-#endif
 	} else if (urb->status == -ENOENT) {
 		/* Avoid suspend failed when usb_kill_urb */
 		BTMTK_DBG("%s urb %p status %d count %d", hdev->name, urb, urb->status,
@@ -1293,10 +1285,6 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	uint8_t notify_alt_evt[] = {0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00};
 	u16 crBaseAddr = 0, crRegOffset = 0;
 #endif
-
-
-	/* TODO */
-	/* btmtk_usb_dispatch_data_bluetooth_kpi(skb->data, skb->len, bt_cb(skb)->pkt_type); */
 
 	if (skb->len <= 0) {
 		ret = -EFAULT;

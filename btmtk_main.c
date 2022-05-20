@@ -62,6 +62,8 @@ const u8 READ_ISO_PACKET_SIZE_CMD[] = {0x01, 0x98, 0xFD, 0x02 };
 /*TODO, maybe need to support multiple dongle to do reset stack*/
 static u8 reset_stack_flag;
 
+/* bluetooth kpi */
+static u8 btmtk_bluetooth_kpi;
 
 /* save Hci Snoop for debug*/
 static u8 hci_cmd_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
@@ -121,7 +123,6 @@ int btmtk_skb_enq_fwlog(struct hci_dev *hdev, void *src, u32 len, u8 type, struc
 	int retry = 10, index = FWLOG_TL_SIZE;
 
 	do {
-		/* If we need hci type, len + 1 */
 		skb_tmp = alloc_skb(len + FWLOG_PRSV_LEN, GFP_ATOMIC);
 		if (skb_tmp != NULL)
 			break;
@@ -132,12 +133,8 @@ int btmtk_skb_enq_fwlog(struct hci_dev *hdev, void *src, u32 len, u8 type, struc
 		pr_err("%s: alloc_skb return 0, error, retry = %d", __func__, retry);
 	} while (retry-- > 0);
 
-	if (type == HCI_COMMAND_PKT) {
-		memcpy(&skb_tmp->data[0], &type, 1);
-		memcpy(&skb_tmp->data[1], src, len);
-		skb_tmp->len = len + 1;
-	} else if (type == FWLOG_TYPE) {
-		skb_tmp->data[0] = type;
+	if (type) {
+		skb_tmp->data[0] = FWLOG_TYPE;
 		/* 01 for dongle index */
 		skb_tmp->data[index] = FWLOG_DONGLE_IDX;
 		skb_tmp->data[index + 1] = sizeof(bdev->dongle_index);
@@ -145,9 +142,16 @@ int btmtk_skb_enq_fwlog(struct hci_dev *hdev, void *src, u32 len, u8 type, struc
 		index += (FWLOG_ATTR_RX_LEN_LEN + FWLOG_ATTR_TYPE_LEN);
 		/* 11 for rx data*/
 		skb_tmp->data[index] = FWLOG_RX;
-		skb_tmp->data[index + 1] = len & 0x00FF;
-		skb_tmp->data[index + 2] = (len & 0xFF00) >> 8;
-		index += (FWLOG_ATTR_RX_LEN_LEN + FWLOG_ATTR_TYPE_LEN);
+		if (type == HCI_ACLDATA_PKT || type == HCI_EVENT_PKT || type == HCI_COMMAND_PKT) {
+			skb_tmp->data[index + 1] = len & 0x00FF;
+			skb_tmp->data[index + 2] = (len & 0xFF00) >> 8;
+			skb_tmp->data[index + 3] = type;
+			index += (HCI_TYPE_SIZE + FWLOG_ATTR_RX_LEN_LEN + FWLOG_ATTR_TYPE_LEN);
+		} else {
+			skb_tmp->data[index + 1] = len & 0x00FF;
+			skb_tmp->data[index + 2] = (len & 0xFF00) >> 8;
+			index += (FWLOG_ATTR_RX_LEN_LEN + FWLOG_ATTR_TYPE_LEN);
+		}
 		memcpy(&skb_tmp->data[index], src, len);
 		skb_tmp->data[1] = (len + index - FWLOG_TL_SIZE) & 0x00FF;
 		skb_tmp->data[2] = ((len + index - FWLOG_TL_SIZE) & 0xFF00) >> 8;
@@ -164,16 +168,16 @@ int btmtk_skb_enq_fwlog(struct hci_dev *hdev, void *src, u32 len, u8 type, struc
 	return 0;
 }
 
-#if 0
-int btmtk_usb_dispatch_data_bluetooth_kpi(u8 *buf, int len, u8 type)
+int btmtk_dispatch_data_bluetooth_kpi(struct hci_dev *hdev, u8 *buf, int len, u8 type)
 {
+	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	static u8 fwlog_blocking_warn;
 	int ret = 0;
 
-	if (g_fwlog->btmtk_bluetooth_kpi &&
+	if (btmtk_bluetooth_kpi &&
 		skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_BLUETOOTH_KPI_QUEUE_COUNT) {
 		/* sent event to queue, picus tool will log it for bluetooth KPI feature */
-		if (btmtk_skb_enq_fwlog(buf, len, type, &g_fwlog->fwlog_queue) == 0) {
+		if (btmtk_skb_enq_fwlog(bdev->hdev, buf, len, type, &g_fwlog->fwlog_queue) == 0) {
 			wake_up_interruptible(&g_fwlog->fw_log_inq);
 			fwlog_blocking_warn = 0;
 		}
@@ -185,7 +189,6 @@ int btmtk_usb_dispatch_data_bluetooth_kpi(u8 *buf, int len, u8 type)
 	}
 	return ret;
 }
-#endif
 
 ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
@@ -276,16 +279,17 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		ret = -ENODATA;
 		goto exit;
 	}
-#if 0
+
 	/* For bperf, EX: echo bperf=1 > /dev/stpbtfwlog */
-	if (strcmp(i_fwlog_buf, "bperf=") >= 0) {
+	if (strncmp(i_fwlog_buf, "bperf=", strlen("bperf=")) == 0) {
 		u8 val = *(i_fwlog_buf + strlen("bperf=")) - 48;
 
 		btmtk_bluetooth_kpi = val;
 		BT_INFO("%s: set bluetooth KPI feature(bperf) to %d", __func__, btmtk_bluetooth_kpi);
-		return count;
+		ret = count;
+		goto exit;
 	}
-#endif
+
 	/* hci input command format : echo 01 be fc 01 05 > /dev/stpbtfwlog */
 	/* We take the data from index three to end. */
 	for (i = 0; i < count; i++) {
@@ -354,7 +358,8 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 				break;
 			default:
 				BTMTK_WARN("Invalid opcode");
-				return count;
+                                ret = -1;
+				goto exit;
 			}
 		}
 	} else {
@@ -362,9 +367,11 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		skb->len = len;
 	}
 
+	/* won't send command if g_bdev not define */
 	if (g_bdev[hci_idx]->hdev == NULL) {
 		BTMTK_DBG("g_bdev[%d] not define", hci_idx);
-		return count;
+		ret = count;
+		goto exit;
 	}
 
 	/* clean fwlog queue before enable picus log */
@@ -4037,6 +4044,7 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		goto exit;
 	}
 
+	btmtk_dispatch_data_bluetooth_kpi(hdev, skb->data, skb->len, hci_skb_pkt_type(skb));
 	memcpy(skb_push(skb, 1), &hci_skb_pkt_type(skb), 1);
 #if ENABLESTP
 	skb = mtk_add_stp(bdev, skb);
@@ -4248,6 +4256,7 @@ static void btmtk_rx_work(struct work_struct *work)
 	/* BTMTK_DBG("%s enter", __func__); */
 
 	while ((skb = skb_dequeue(&bdev->rx_q))) {
+
 		/* BTMTK_DBG_RAW(skb->data, skb->len, "%s, recv evt", __func__); */
 		skip_pkt = btmtk_dispatch_pkt(bdev->hdev, skb);
 		if (skip_pkt != 0) {
@@ -4315,6 +4324,9 @@ EVT_PROCESS:
 			kfree_skb(skb);
 			continue;
 		}
+
+		/* for bluetooth kpi */
+		btmtk_dispatch_data_bluetooth_kpi(bdev->hdev, skb->data, skb->len, hci_skb_pkt_type(skb));
 
 		err = hci_recv_frame(bdev->hdev, skb);
 		if (err < 0) {

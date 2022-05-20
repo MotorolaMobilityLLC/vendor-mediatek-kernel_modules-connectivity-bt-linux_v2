@@ -56,6 +56,7 @@ u8 btmtk_get_reset_stack_flag(void);
 int btmtk_reset_power_on(struct btmtk_dev *bdev);
 void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev);
 void btmtk_free_setting_file(struct btmtk_dev *bdev);
+int btmtk_dispatch_data_bluetooth_kpi(struct hci_dev *hdev, u8 *buf, int len, u8 type);
 /** file_operations: stpbtfwlog */
 int btmtk_fops_openfwlog(struct inode *inode, struct file *file);
 int btmtk_fops_closefwlog(struct inode *inode, struct file *file);
@@ -160,7 +161,7 @@ void btmtk_hci_snoop_print(u32 len, const u8 *buf);
 /* stpbtfwlog setting */
 #define FWLOG_QUEUE_COUNT			(400 * BT_MCU_MINIMUM_INTERFACE_NUM)
 #define FWLOG_ASSERT_QUEUE_COUNT		45000
-#define FWLOG_BLUETOOTH_KPI_QUEUE_COUNT		200
+#define FWLOG_BLUETOOTH_KPI_QUEUE_COUNT		400
 #define HCI_MAX_COMMAND_SIZE			255
 #define HCI_MAX_COMMAND_BUF_SIZE		(HCI_MAX_COMMAND_SIZE * 3)
 #define HCI_MAX_ISO_SIZE	340
