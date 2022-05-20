@@ -16,6 +16,7 @@
 #include "btmtk_chip_if.h"
 
 int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
+int btmtk_register_hci_device(struct btmtk_dev *bdev);
 void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
 int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count);
 int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb);

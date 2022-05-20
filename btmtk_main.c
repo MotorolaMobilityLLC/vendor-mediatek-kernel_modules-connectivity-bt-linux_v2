@@ -89,7 +89,6 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 	if (IS_ERR(skb))
 		skb = NULL;
 
-	spin_lock(&bdev->rxlock);
 	while (count) {
 		int i, len;
 
@@ -188,7 +187,6 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 		}
 	}
 
-	spin_unlock(&bdev->rxlock);
 	return skb;
 }
 
@@ -1808,31 +1806,12 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 
 	bdev->hdev = hdev;
 
-	SET_HCIDEV_DEV(hdev, &bdev->intf->dev);
-
 	/* register hci callback */
 	hdev->open	   = bt_open;
 	hdev->close    = bt_close;
 	hdev->flush    = bt_flush;
 	hdev->send	   = bt_send_frame;
 	hdev->setup    = bt_setup;
-
-	err = hci_register_dev(hdev);
-	/* After hci_register_dev completed
-	 * It will set dev_flags to HCI_SETUP
-	 * That cause vendor_lib create socket failed
-	 */
-	if (err < 0) {
-		BTMTK_INFO("%s can't register", __func__);
-		hci_free_dev(hdev);
-		goto exit;
-	}
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 0))
-		test_and_clear_bit(HCI_SETUP, &hdev->dev_flags);
-#else
-		hci_dev_test_and_clear_flag(hdev, HCI_SETUP);
-#endif
 
 	INIT_WORK(&bdev->rx_work, btmtk_rx_work);
 
@@ -1849,6 +1828,38 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 	}
 
 	BTMTK_INFO("%s done", __func__);
+
+exit:
+	return err;
+}
+
+int btmtk_register_hci_device(struct btmtk_dev *bdev)
+{
+	struct hci_dev *hdev;
+	int err = 0;
+
+	hdev = bdev->hdev;
+
+	err = hci_register_dev(hdev);
+	/* After hci_register_dev completed
+	 * It will set dev_flags to HCI_SETUP
+	 * That cause vendor_lib create socket failed
+	 */
+	if (err < 0) {
+		BTMTK_INFO("%s can't register", __func__);
+		hci_free_dev(hdev);
+		goto exit;
+	}
+
+#if CFG_SUPPORT_BLUEZ
+
+#else
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 0))
+		test_and_clear_bit(HCI_SETUP, &hdev->dev_flags);
+#else
+		hci_dev_test_and_clear_flag(hdev, HCI_SETUP);
+#endif
+#endif /* CFG_SUPPORT_BLUEZ */
 
 exit:
 	return err;

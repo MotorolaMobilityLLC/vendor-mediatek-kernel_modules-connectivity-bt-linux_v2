@@ -309,8 +309,12 @@ static void btusb_bulk_complete(struct urb *urb)
 	BT_DBG("%s urb %p status %d count %d", hdev->name, urb, urb->status,
 	       urb->actual_length);
 
-	if (!test_bit(HCI_RUNNING, &hdev->flags))
-		return;
+	/*
+	 * This flag didn't support in kernel 4.x
+	 * Driver will remove it
+	 * if (!test_bit(HCI_RUNNING, &hdev->flags))
+	 * return;
+	*/
 
 	if (urb->status == 0) {
 		hdev->stat.byte_rx += urb->actual_length;
@@ -1384,6 +1388,8 @@ static int btusb_probe(struct usb_interface *intf,
 
 	btmtk_allocate_hci_device(bdev, HCI_USB);
 
+	SET_HCIDEV_DEV(bdev->hdev, &bdev->intf->dev);
+
 	/* Mediatek load fw rom patch */
 	BT_INFO("MTK BT Driver Version : %s", VERSION);
 
@@ -1437,6 +1443,7 @@ static int btusb_probe(struct usb_interface *intf,
 		}
 	}
 
+	btmtk_register_hci_device(bdev);
 	usb_set_intfdata(intf, bdev);
 
 	return 0;
