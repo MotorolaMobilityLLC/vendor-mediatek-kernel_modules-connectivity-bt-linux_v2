@@ -42,7 +42,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.200041501"
+#define VERSION "7.0.200041502"
 #define SUBVER ":turnkey"
 
 
@@ -103,13 +103,14 @@ extern uint8_t btmtk_log_lvl;
 #define BTMTK_DBG(fmt, ...)	 \
 	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) pr_warn("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__); } while (0)
 
+#define BTMTK_MAX_LOG_LEN	64	/* default length setting */
 #define BTMTK_INFO_RAW(p, l, fmt, ...)						\
 	do {									\
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) {			\
 			int raw_count = 0;					\
 			const unsigned char *ptr = p;				\
 			pr_cont("[btmtk_info] "fmt, ##__VA_ARGS__);		\
-			for (raw_count = 0; raw_count < l; ++raw_count) {	\
+			for (raw_count = 0; raw_count < MIN(l, BTMTK_MAX_LOG_LEN); ++raw_count) {	\
 				pr_cont(" %02X", ptr[raw_count]);		\
 			}							\
 			pr_cont("\n");						\
@@ -122,7 +123,7 @@ extern uint8_t btmtk_log_lvl;
 			int raw_count = 0;					\
 			const unsigned char *ptr = p;				\
 			pr_cont("[btmtk_debug] "fmt, ##__VA_ARGS__);		\
-			for (raw_count = 0; raw_count < l; ++raw_count) {	\
+			for (raw_count = 0; raw_count < MIN(l, BTMTK_MAX_LOG_LEN); ++raw_count) {	\
 				pr_cont(" %02X", ptr[raw_count]);		\
 			}							\
 			pr_cont("\n");						\

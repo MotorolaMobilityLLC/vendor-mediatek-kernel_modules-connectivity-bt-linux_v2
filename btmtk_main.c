@@ -61,6 +61,16 @@ const u8 READ_ISO_PACKET_SIZE_CMD[] = {0x01, 0x98, 0xFD, 0x02 };
 static u8 reset_stack_flag;
 
 
+/* save Hci Snoop for debug*/
+static u8 hci_cmd_snoop_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_BUF_SIZE];
+static u8 hci_cmd_snoop_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
+static unsigned int hci_cmd_snoop_timestamp[HCI_SNOOP_ENTRY_NUM];
+static int hci_cmd_snoop_index = HCI_SNOOP_ENTRY_NUM - 1;
+
+static u8 hci_event_snoop_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_BUF_SIZE];
+static u8 hci_event_snoop_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
+static unsigned int hci_event_snoop_timestamp[HCI_SNOOP_ENTRY_NUM];
+static int hci_event_snoop_index = HCI_SNOOP_ENTRY_NUM - 1;
 
 
 /* State machine table that clarify through each HIF events,
@@ -436,6 +446,86 @@ u8 btmtk_get_reset_stack_flag(void)
 {
 	return reset_stack_flag;
 }
+
+static void btmtk_hci_snoop_print_to_log(void)
+{
+	int counter, index;
+
+	BTMTK_INFO("HCI Command Dump");
+	BTMTK_INFO("index(len)(timestamp:us) :HCI Command");
+	index = hci_cmd_snoop_index + 1;
+	if (index >= HCI_SNOOP_ENTRY_NUM)
+		index = 0;
+	for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
+		if (hci_cmd_snoop_len[index] > 0)
+			BTMTK_INFO_RAW(hci_cmd_snoop_buf[index], hci_cmd_snoop_len[index],
+				"time(%u)--len(%d):", hci_cmd_snoop_timestamp[index],
+				hci_cmd_snoop_len[index]);
+		index++;
+		if (index >= HCI_SNOOP_ENTRY_NUM)
+			index = 0;
+	}
+
+	BTMTK_INFO("HCI Event Dump");
+	BTMTK_INFO("index(len)(timestamp:us) :HCI Event");
+	index = hci_event_snoop_index + 1;
+	if (index >= HCI_SNOOP_ENTRY_NUM)
+		index = 0;
+	for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
+		if (hci_event_snoop_len[index] > 0)
+			BTMTK_INFO_RAW(hci_event_snoop_buf[index], hci_event_snoop_len[index],
+				"time(%u)--len(%d):", hci_event_snoop_timestamp[index],
+				hci_event_snoop_len[index]);
+		index++;
+		if (index >= HCI_SNOOP_ENTRY_NUM)
+			index = 0;
+	}
+}
+
+static unsigned int btmtk_hci_snoop_get_microseconds(void)
+{
+	struct timeval now;
+
+	do_gettimeofday(&now);
+	return now.tv_sec * 1000000 + now.tv_usec;
+}
+
+static void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf)
+{
+	u32 copy_len = HCI_SNOOP_BUF_SIZE;
+
+	if (buf) {
+		if (len < HCI_SNOOP_BUF_SIZE)
+			copy_len = len;
+		hci_cmd_snoop_len[hci_cmd_snoop_index] = copy_len & 0xff;
+		memset(hci_cmd_snoop_buf[hci_cmd_snoop_index], 0, HCI_SNOOP_BUF_SIZE);
+		memcpy(hci_cmd_snoop_buf[hci_cmd_snoop_index], buf, copy_len & 0xff);
+		hci_cmd_snoop_timestamp[hci_cmd_snoop_index] = btmtk_hci_snoop_get_microseconds();
+
+		hci_cmd_snoop_index--;
+		if (hci_cmd_snoop_index < 0)
+			hci_cmd_snoop_index = HCI_SNOOP_ENTRY_NUM - 1;
+	}
+}
+
+static void btmtk_hci_snoop_save_event(u32 len, u8 *buf)
+{
+	u32 copy_len = HCI_SNOOP_BUF_SIZE;
+
+	if (buf) {
+		if (len < HCI_SNOOP_BUF_SIZE)
+			copy_len = len;
+		hci_event_snoop_len[hci_event_snoop_index] = copy_len & 0xff;
+		memset(hci_event_snoop_buf[hci_event_snoop_index], 0, HCI_SNOOP_BUF_SIZE);
+		memcpy(hci_event_snoop_buf[hci_event_snoop_index], buf, copy_len);
+		hci_event_snoop_timestamp[hci_event_snoop_index] = btmtk_hci_snoop_get_microseconds();
+
+		hci_event_snoop_index--;
+		if (hci_event_snoop_index < 0)
+			hci_event_snoop_index = HCI_SNOOP_ENTRY_NUM - 1;
+	}
+}
+
 static int main_init(void)
 {
 	int i = 0;
@@ -541,8 +631,10 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 
 				skb = bt_skb_alloc((&pkts[i])->maxlen,
 						   GFP_ATOMIC);
-				if (!skb)
+				if (!skb) {
+					BTMTK_ERR("%s, alloc skb failed!", __func__);
 					return ERR_PTR(-ENOMEM);
+				}
 
 				hci_skb_pkt_type(skb) = (&pkts[i])->type;
 				hci_skb_expect(skb) = (&pkts[i])->hlen;
@@ -550,8 +642,10 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 			}
 
 			/* Check for invalid packet type */
-			if (!skb)
+			if (!skb) {
+				BTMTK_ERR("%s,skb is invalid!", __func__);
 				return ERR_PTR(-EILSEQ);
+			}
 
 			count -= 1;
 			buffer += 1;
@@ -577,6 +671,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 		}
 
 		if (i >= pkts_count) {
+			BTMTK_ERR("%s, pkt type is invalid!", __func__);
 			kfree_skb(skb);
 			return ERR_PTR(-EILSEQ);
 		}
@@ -597,6 +692,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				hci_skb_expect(skb) += dlen;
 
 				if (skb_tailroom(skb) < dlen) {
+					BTMTK_ERR("%s, skb_tailroom is not enough!", __func__);
+					BTMTK_INFO_RAW(skb->data, skb->len, "dlen:%d", dlen);
 					kfree_skb(skb);
 					return ERR_PTR(-EMSGSIZE);
 				}
@@ -608,12 +705,15 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				hci_skb_expect(skb) += dlen;
 
 				if (skb_tailroom(skb) < dlen) {
+					BTMTK_ERR("%s, skb_tailroom is not enough in case 2!", __func__);
+					BTMTK_INFO_RAW(skb->data, skb->len, "dlen:%d", dlen);
 					kfree_skb(skb);
 					return ERR_PTR(-EMSGSIZE);
 				}
 				break;
 			default:
 				/* Unsupported variable length */
+				BTMTK_ERR("%s, Unsupported variable length!", __func__);
 				kfree_skb(skb);
 				return ERR_PTR(-EILSEQ);
 			}
@@ -3503,7 +3603,7 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		return -EFAULT;
 	}
 
-	memcpy(skb_push(skb, 1), &bt_cb(skb)->pkt_type, 1);
+	memcpy(skb_push(skb, 1), &hci_skb_pkt_type(skb), 1);
 #if ENABLESTP
 	skb = mtk_add_stp(bdev, skb);
 #endif
@@ -3514,6 +3614,10 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 							(skb->data[sizeof(READ_ISO_PACKET_SIZE_CMD) + 1]  << 8);
 		BTMTK_INFO("%s: Ble iso pkt size is %d", __func__, bdev->iso_threshold);
 	}
+
+	/* save hci cmd pkt for debug */
+	if (hci_skb_pkt_type(skb) == HCI_COMMAND_PKT)
+		btmtk_hci_snoop_save_cmd(skb->len, skb->data);
 
 	ret = btmtk_cif_send_cmd(bdev, skb, 0, 0, BTMTK_EP_TYPE_OUT_OTHER);
 	if (ret < 0)
@@ -3641,6 +3745,9 @@ void btmtk_reset_waker(struct work_struct *work)
 		goto Finish;
 	}
 
+	/* print 30 HCI cmds/events before reset*/
+	btmtk_hci_snoop_print_to_log();
+
 	cif_state = &bdev->cif_state[cif_event];
 
 	/* Set Entering state */
@@ -3716,6 +3823,9 @@ static void btmtk_rx_work(struct work_struct *work)
 		}
 
 		if (hci_skb_pkt_type(skb) == HCI_EVENT_PKT) {
+			/* save hci evt pkt for debug */
+			btmtk_hci_snoop_save_event(skb->len, skb->data);
+
 			if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 				skb->len >= event_need_compare_len) {
 				if (memcmp(skb->data, READ_ADDRESS_EVENT,

@@ -1348,13 +1348,17 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	case HCI_ACLDATA_PKT:
 		if (skb->data[0] == 0x00 && skb->data[1] == 0x44) {
 			int isoc_pkt_len = 0;
+
 			skb_pull(skb, 4);
 			isoc_pkt_len = skb->data[2] + (skb->data[3] << 8) + HCI_ISO_PKT_HEADER_SIZE;
 			if (bdev->iso_threshold) {
-				memset(skb_put(skb, bdev->iso_threshold - isoc_pkt_len), 0, bdev->iso_threshold - isoc_pkt_len);
-				BTMTK_INFO("%s: Ble iso pkt size is %d, isoc_pkt_len = %d", __func__, bdev->iso_threshold, isoc_pkt_len);
+				memset(skb_put(skb, bdev->iso_threshold - isoc_pkt_len), 0,
+					bdev->iso_threshold - isoc_pkt_len);
+				BTMTK_INFO("%s: Ble iso pkt size is %d, isoc_pkt_len = %d", __func__,
+					bdev->iso_threshold, isoc_pkt_len);
 			}
-			BTMTK_DBG_RAW(skb->data, skb->len, "%s, add ble iso send 0x02 0x00 0x44, it's ble iso packet", __func__);
+			BTMTK_DBG_RAW(skb->data, skb->len,
+				"%s, add ble iso send 0x02 0x00 0x44, it's ble iso packet", __func__);
 			urb = alloc_intr_iso_urb(hdev, skb);
 		} else
 			urb = alloc_bulk_urb(hdev, skb);
@@ -1528,6 +1532,7 @@ static void btusb_waker(struct work_struct *work)
 int btmtk_cif_subsys_reset(struct btmtk_dev *bdev)
 {
 	int val, retry = 10;
+
 	clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
