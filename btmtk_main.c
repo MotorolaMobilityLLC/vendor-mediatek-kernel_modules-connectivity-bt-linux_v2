@@ -2199,7 +2199,7 @@ retry_again:
 				/* comment from fw, we need to retry a sec until power on sucessfully. */
 				retry--;
 				BTMTK_INFO("%s: need to try again", __func__);
-				mdelay(50);
+				msleep(50);
 				goto retry_again;
 			}
 			break;

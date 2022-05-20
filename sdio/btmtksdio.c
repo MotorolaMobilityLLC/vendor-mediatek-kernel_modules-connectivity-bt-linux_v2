@@ -461,7 +461,7 @@ retry_own:
 					DUMP_FW_PC(cif_dev);
 
 				retry--;
-				mdelay(5);
+				usleep_range(5*1000, 10*1000);
 				goto retry_own;
 			} else {
 				ret = -EINVAL;
@@ -605,7 +605,7 @@ retry_own:
 				DUMP_FW_PC(cif_dev);
 
 			retry--;
-			mdelay(5);
+			usleep_range(5*1000, 10*1000);
 			goto retry_own;
 		} else {
 			ret = -EINVAL;

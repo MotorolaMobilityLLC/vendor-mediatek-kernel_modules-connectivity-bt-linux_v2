@@ -1976,7 +1976,7 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			goto exit;
 		}
 	} else
-		mdelay(100);
+		msleep(100);
 
 	BTMTK_INFO_RAW(dl_done_cmd, LD_PATCH_CMD_LEN, "%s: send dl cmd - ", __func__);
 	ret = btmtk_main_send_cmd(bdev, dl_done_cmd, LD_PATCH_CMD_LEN,
@@ -3394,7 +3394,7 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev, int delay, int retry)
 	ifnum_base = cif_dev->intf->cur_altsetting->desc.bInterfaceNumber;
 get_response_again:
 	/* ms delay */
-	mdelay(delay);
+	msleep(delay);
 
 	/* check WMT event */
 	memset(bdev->io_buf, 0, IO_BUF_SIZE);
