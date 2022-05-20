@@ -42,7 +42,7 @@
 #include <linux/vmalloc.h>
 
 /** Driver version */
-#define VERSION "7.0.2020122301"
+#define VERSION "7.0.2020122401"
 #define SUBVER ":turnkey"
 
 #define ENABLESTP FALSE

@@ -185,39 +185,46 @@ int btmtk_sdio_set_own_back(struct btmtk_sdio_dev *cif_dev, int owntype, int ret
 	int ret = 0;
 	u32 u32LoopCount = 0;
 	u32 u32PollNum = 0;
-	u32 u32ReadCRValue = 0;
+	u32 u32CHLPCRValue = 0;
+	u32 u32PD2HRM0RValue = 0;
 	u32 ownValue = 0;
-	int i = 0;
+	u32 i = 0;
+	u8 chlpcr_driver_own = 0;
+	u8 pd2hrm0r_driver_own = 0;
 
 	BTMTK_DBG("%s owntype %d", __func__, owntype);
 
 	if (owntype == FW_OWN) {
-		if (cif_dev->no_fw_own) {
-#if 0
-			DUMP_FW_PC(cif_dev);
-			ret = btmtk_sdio_readl(SWPCDBGR, &u32ReadCRValue, cif_dev->func);
-			BTMTK_DBG("%s no_fw_own is on, just return, u32ReadCRValue = 0x%08X, ret = %d",
-				__func__, u32ReadCRValue, ret);
-#endif
-			return ret;
-		}
+		if (cif_dev->no_fw_own)
+			return 0;
+	} else if (owntype != DRIVER_OWN) {
+		BTMTK_ERR("%s unknown type %d", __func__, owntype);
+		return -EINVAL;
 	}
-
-	ret = btmtk_sdio_readl(CHLPCR, &u32ReadCRValue, cif_dev->func);
-
-	BTMTK_DBG("%s CHLPCR = 0x%0x", __func__, u32ReadCRValue);
 
 	/* For CHLPCR, bit 8 could help us to check driver own or fw own
 	 * 0: COM driver doesn't have ownership
 	 * 1: COM driver has ownership
 	 */
-	if (owntype == DRIVER_OWN &&
-			(u32ReadCRValue & 0x100) == 0x100) {
-		goto set_own_end;
-	} else if (owntype == FW_OWN &&
-			(u32ReadCRValue & 0x100) == 0) {
-		goto set_own_end;
+	ret = btmtk_sdio_readl(CHLPCR, &u32CHLPCRValue, cif_dev->func);
+	chlpcr_driver_own = ((u32CHLPCRValue & 0x100) == 0x100) ? 1 : 0;
+
+	if (cif_dev->patched == 1) {
+		ret = btmtk_sdio_readl(PD2HRM0R, &u32PD2HRM0RValue, cif_dev->func);
+		pd2hrm0r_driver_own =
+			((u32PD2HRM0RValue & PD2HRM0R_DRIVER_OWN)
+				== PD2HRM0R_DRIVER_OWN) ? 1 : 0;
+	} else {
+		pd2hrm0r_driver_own = (owntype == DRIVER_OWN) ? 1 : 0;
 	}
+
+	BTMTK_DBG("owntype: %d, CHLPCR: 0x%0x, PD2HRM0R: 0x%0x",
+		owntype, u32CHLPCRValue, u32PD2HRM0RValue);
+
+	if (owntype == DRIVER_OWN && chlpcr_driver_own && pd2hrm0r_driver_own)
+		return 0;
+	else if (owntype == FW_OWN && !chlpcr_driver_own && !pd2hrm0r_driver_own)
+		return 0;
 
 	if (owntype == DRIVER_OWN)
 		ownValue = 0x00000200;
@@ -225,66 +232,94 @@ int btmtk_sdio_set_own_back(struct btmtk_sdio_dev *cif_dev, int owntype, int ret
 		ownValue = 0x00000100;
 
 retry_own:
-	/* Write CR for Driver or FW own */
-	ret = btmtk_sdio_writel(CHLPCR, ownValue, cif_dev->func);
-	if (ret) {
-		ret = -EINVAL;
-		goto done;
-	}
-
-	u32LoopCount = SET_OWN_LOOP_COUNT;
-
 	if (owntype == DRIVER_OWN) {
-		do {
-			usleep_range(100, 200);
-			ret = btmtk_sdio_readl(CHLPCR, &u32ReadCRValue, cif_dev->func);
-			u32LoopCount--;
-			u32PollNum++;
-			BTMTK_DBG("%s DRIVER_OWN btmtk_sdio_readl(%d) CHLPCR 0x%x",
-				__func__, u32PollNum, u32ReadCRValue);
-		} while ((u32LoopCount > 0) &&
-			((u32ReadCRValue & 0x100) != 0x100));
-
-		if ((u32LoopCount == 0) && (0x100 != (u32ReadCRValue & 0x100))
-				&& (retry > 0)) {
-			BTMTK_WARN("%s retry set_check driver own(%d), CHLPCR 0x%x",
-				__func__, u32PollNum, u32ReadCRValue);
-			for (i = 0; i < 3; i++) {
-				DUMP_FW_PC(cif_dev);
-#if 0
-				ret = btmtk_sdio_readl(SWPCDBGR, &u32ReadCRValue, cif_dev->func);
-				BTMTK_WARN("%s ret %d,SWPCDBGR 0x%x, and not sleep!",
-					__func__, ret, u32ReadCRValue);
-#endif
-			}
-
-			retry--;
-			mdelay(5);
-			goto retry_own;
-		}
-	} else {
-		/*
-		 * Can't check result for fw_own
-		 * Becuase it will wakeup sdio hw
-		 */
-		goto done;
-	}
-
-	BTMTK_DBG("%s CHLPCR(0x%x), is 0x%x",
-		__func__, CHLPCR, u32ReadCRValue);
-
-	if (owntype == DRIVER_OWN) {
-		if ((u32ReadCRValue&0x100) == 0x100)
-			BTMTK_DBG("%s check %04x, is 0x100 driver own success",
-				__func__, CHLPCR);
-		else {
-			BTMTK_DBG("%s check %04x, is %x shuld be 0x100",
-				__func__, CHLPCR, u32ReadCRValue);
+		/* Write CR for Driver or FW own */
+		ret = btmtk_sdio_writel(CHLPCR, ownValue, cif_dev->func);
+		if (ret) {
 			ret = -EINVAL;
 			goto done;
 		}
-	}
 
+		u32LoopCount = SET_OWN_LOOP_COUNT;
+		do {
+			usleep_range(100, 200);
+			u32LoopCount--;
+			u32PollNum++;
+			ret = btmtk_sdio_readl(CHLPCR, &u32CHLPCRValue, cif_dev->func);
+			BTMTK_DBG("%s set driver own CHLPCR = 0x%0x", __func__, u32CHLPCRValue);
+			chlpcr_driver_own = ((u32CHLPCRValue & 0x100) == 0x100) ? 1 : 0;
+			if (cif_dev->patched == 1) {
+				ret = btmtk_sdio_readl(PD2HRM0R, &u32PD2HRM0RValue, cif_dev->func);
+				BTMTK_DBG("%s set driver own PD2HRM0R = 0x%0x", __func__, u32PD2HRM0RValue);
+				pd2hrm0r_driver_own =
+					((u32PD2HRM0RValue & PD2HRM0R_DRIVER_OWN)
+						== PD2HRM0R_DRIVER_OWN) ? 1 : 0;
+			} else {
+				pd2hrm0r_driver_own = (owntype == DRIVER_OWN) ? 1 : 0;
+			}
+		} while ((u32LoopCount > 0) && (!chlpcr_driver_own || !pd2hrm0r_driver_own));
+
+		if (!chlpcr_driver_own || !pd2hrm0r_driver_own) {
+			if (retry > 0) {
+				BTMTK_WARN("%s retry set_check driver own(%d), CHLPCR:0x%x, PD2HRM0R:0x%x",
+					__func__, u32PollNum, u32CHLPCRValue, u32PD2HRM0RValue);
+				for (i = 0; i < 3; i++)
+					DUMP_FW_PC(cif_dev);
+
+				retry--;
+				mdelay(5);
+				goto retry_own;
+			} else {
+				ret = -EINVAL;
+			}
+		}
+	} else {
+		if (cif_dev->patched == 1) {
+			/* write CSICR to notify FW to set PD2HRM0R to 0 */
+			ret = btmtk_sdio_writel(CSICR, 1, cif_dev->func);
+			if (ret) {
+				ret = -EINVAL;
+				goto done;
+			}
+
+			u32LoopCount = SET_OWN_LOOP_COUNT;
+			pd2hrm0r_driver_own = 0;
+			do {
+				usleep_range(100, 200);
+				u32LoopCount--;
+				u32PollNum++;
+				ret = btmtk_sdio_readl(PD2HRM0R, &u32PD2HRM0RValue, cif_dev->func);
+				BTMTK_DBG("%s set driver own PD2HRM0R = 0x%0x", __func__, u32PD2HRM0RValue);
+				pd2hrm0r_driver_own =
+					((u32PD2HRM0RValue & PD2HRM0R_DRIVER_OWN)
+						== PD2HRM0R_DRIVER_OWN) ? 1 : 0;
+			} while ((u32LoopCount > 0) && pd2hrm0r_driver_own);
+
+			if (pd2hrm0r_driver_own) {
+				if (retry > 0) {
+					BTMTK_WARN("%s retry set_check fw own(%d), PD2HRM0R:0x%x",
+						__func__, u32PollNum, u32PD2HRM0RValue);
+					for (i = 0; i < 3; i++)
+						DUMP_FW_PC(cif_dev);
+
+					retry--;
+					mdelay(5);
+					goto retry_own;
+				} else {
+					ret = -EINVAL;
+				}
+			}
+		}
+
+		/* Write CR for Driver or FW own */
+		if (ret == 0) {
+			ret = btmtk_sdio_writel(CHLPCR, ownValue, cif_dev->func);
+			if (ret) {
+				ret = -EINVAL;
+				goto done;
+			}
+		}
+	}
 done:
 	if (owntype == DRIVER_OWN) {
 #if BTMTK_SDIO_DEBUG
@@ -294,16 +329,11 @@ done:
 			BTMTK_ERR("%s set driver own fail", __func__);
 			for (i = 0; i < 8; i++) {
 				DUMP_FW_PC(cif_dev);
-#if 0
-				retry_ret = btmtk_sdio_readl(SWPCDBGR, &u32ReadCRValue, cif_dev->func);
-				BTMTK_ERR("%s ret %d,SWPCDBGR 0x%x, then sleep 200ms",
-					__func__, retry_ret, u32ReadCRValue);
-#endif
 				msleep(200);
 			}
 		} else
 			BTMTK_DBG("%s set driver own success", __func__);
-	} else if (owntype == FW_OWN) {
+	} else {
 #if BTMTK_SDIO_DEBUG
 		fw_own_cnt++;
 #endif
@@ -311,10 +341,8 @@ done:
 			BTMTK_ERR("%s set FW own fail", __func__);
 		else
 			BTMTK_DBG("%s set FW own success", __func__);
-	} else
-		BTMTK_ERR("%s unknown type %d", __func__, owntype);
+	}
 
-set_own_end:
 	return ret;
 }
 
@@ -1385,6 +1413,7 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 			&& retry > 0);
 
 	BTMTK_INFO("%s read PD2HRM0R 0x%08X", __func__, u32ReadCRValue);
+	cif_dev->patched = 0;
 
 	/* write CHCR[3] 0 */
 	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
@@ -1467,6 +1496,7 @@ static int btmtk_sdio_whole_reset(struct btmtk_dev *bdev)
 		host->rescan_entered = 0;
 		BTMTK_INFO("set mmc_host rescan to 0");
 	}
+	cif_dev->patched = 0;
 
 	BTMTK_INFO("mmc_remove_host");
 	mmc_remove_host(host);
@@ -1685,6 +1715,7 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 
 	cif_dev->func = func;
 	BTMTK_INFO("%s func device %p", __func__, func);
+	cif_dev->patched = 0;
 
 	/* it's for L0/L0.5 reset */
 	INIT_WORK(&bdev->reset_waker, btmtk_reset_waker);
@@ -1763,6 +1794,8 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 		BTMTK_ERR("btmtk load rom patch failed!");
 		goto deinit;
 	}
+
+	cif_dev->patched = 1;
 
 	err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
 	if (err < 0) {
@@ -2099,6 +2132,7 @@ static void btmtk_sdio_chip_reset_notify(struct btmtk_dev *bdev)
 	}
 	btmtk_sdio_set_no_fwn_own(cif_dev, 0);
 	btmtk_sdio_set_own_back(cif_dev, FW_OWN, RETRY_TIMES);
+	cif_dev->patched = 1;
 	atomic_set(&cif_dev->tx_rdy, 1);
 }
 

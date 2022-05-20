@@ -58,6 +58,7 @@
 #define CRDR		0x001C
 #define CTFSR		0x0020
 #define CRPLR		0x0024
+#define CSICR		0x00C0
 #define PD2HRM0R	0x00DC
 #define SWPCDBGR	0x0154
 /* CHLPCR */
@@ -146,6 +147,7 @@ struct btmtk_sdio_thread {
 struct btmtk_sdio_dev {
 	struct sdio_func *func;
 
+	bool patched;
 	bool no_fw_own;
 	atomic_t int_count;
 	atomic_t tx_rdy;
