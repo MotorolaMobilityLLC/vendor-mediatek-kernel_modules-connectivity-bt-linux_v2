@@ -571,10 +571,7 @@ int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus);
 int btmtk_cif_send_calibration(struct btmtk_dev *bdev);
 int btmtk_send_assert_cmd(struct btmtk_dev *bdev);
 int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value);
-void btmtk_requset_country_cb(const struct firmware *pwr_fw, void *context);
+
 void btmtk_set_country_code_from_wifi(char *code);
-void btmtk_send_txpower_cmd_to_all_interface(void);
-void btmtk_set_country_code_from_wifi(char *code);
-void btmtk_init_power_setting_struct(void);
 
 #endif /* __BTMTK_MAIN_H__ */

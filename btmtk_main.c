@@ -43,12 +43,6 @@ const struct file_operations BT_fopsfwlog = {
 
 static int btmtk_fops_get_state(struct btmtk_dev *bdev);
 
-static int btmtk_send_txpower_cmd(struct btmtk_dev *bdev);
-static int btmtk_parse_power_table(char *context);
-static int btmtk_load_country_table(void);
-static int btmtk_set_power_value(char *str, int resolution, int is_edr);
-static int btmtk_check_power_resolution(char *str);
-
 /**
  * Global parameters(mtkbt_)
  */
@@ -1639,7 +1633,7 @@ static int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 			skb->data[0] == 0x0E &&
 			bdev->opcode_usr[0] == skb->data[3] &&
 			bdev->opcode_usr[1] == skb->data[4]) {
-		BTMTK_INFO("Discard event from user hci command");
+		BTMTK_INFO_RAW(skb->data, skb->len, "%s: Discard event from user hci command - ", __func__);
 		bdev->opcode_usr[0] = 0;
 		bdev->opcode_usr[1] = 0;
 		return 1;
@@ -4396,7 +4390,7 @@ static int btmtk_check_power_resolution(char *str)
 	return -1;
 }
 
-void btmtk_init_power_setting_struct()
+static void btmtk_init_power_setting_struct(void)
 {
 	main_info.PWS.BLE_1M = 0;
 	main_info.PWS.EDR_Max = 0;
@@ -4527,7 +4521,7 @@ static int btmtk_parse_power_table(char *context)
 	return step;
 }
 
-void btmtk_send_txpower_cmd_to_all_interface(void)
+static void btmtk_send_txpower_cmd_to_all_interface(void)
 {
 	int i, ret;
 	struct btmtk_dev *bdev = NULL;
@@ -4543,7 +4537,7 @@ void btmtk_send_txpower_cmd_to_all_interface(void)
 	}
 }
 
-void btmtk_requset_country_cb(const struct firmware *fw, void *context)
+static void btmtk_requset_country_cb(const struct firmware *fw, void *context)
 {
 	char *ptr, *data, *p_data = NULL;
 	char *country = NULL;
@@ -4619,7 +4613,7 @@ exit:
 	return;
 }
 
-int btmtk_load_country_table(void)
+static int btmtk_load_country_table(void)
 {
 	int err = 0;
 
@@ -4898,6 +4892,9 @@ static int bt_open(struct hci_dev *hdev)
 		goto failed;
 	}
 #endif /* CFG_SUPPORT_DVT */
+
+	if (main_info.hif_hook.open_done)
+		main_info.hif_hook.open_done(bdev);
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENED);
 	main_info.reset_stack_flag = HW_ERR_NONE;

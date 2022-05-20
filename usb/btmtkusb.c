@@ -1505,8 +1505,13 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				ret = usb_control_msg(cif_dev->udev, usb_rcvctrlpipe(cif_dev->udev, 0),
 						1, 0xDE, crBaseAddr, crRegOffset,
 						bdev->io_buf, 4, USB_CTRL_IO_TIMO);
-				BTMTK_INFO("read CR buf = %02x %02x %02x %02x\n", bdev->io_buf[0],
-					bdev->io_buf[1], bdev->io_buf[2], bdev->io_buf[3]);
+				if (ret < 0)
+					BTMTK_ERR("read CR(%04X[%04X]) FAILED\n", crBaseAddr, crRegOffset);
+				else
+					BTMTK_INFO("read CR(%04X[%04X]) value = 0x%02x%02x%02x%02x\n",
+						crBaseAddr, crRegOffset,
+						bdev->io_buf[3], bdev->io_buf[2],
+						bdev->io_buf[1], bdev->io_buf[0]);
 				kfree_skb(skb);
 				skb = NULL;
 				return 0;
@@ -1525,9 +1530,13 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				ret = usb_control_msg(cif_dev->udev, usb_sndctrlpipe(cif_dev->udev, 0),
 						2, 0x5E, crBaseAddr, crRegOffset,
 						cif_dev->o_usb_buf, 4, USB_CTRL_IO_TIMO);
-				BTMTK_INFO("write CR buf = %02x %02x %02x %02x\n",
-					cif_dev->o_usb_buf[0], cif_dev->o_usb_buf[1], cif_dev->o_usb_buf[2],
-					cif_dev->o_usb_buf[3]);
+				if (ret < 0)
+					BTMTK_ERR("write CR(%04X[%04X]) FAILED\n", crBaseAddr, crRegOffset);
+				else
+					BTMTK_INFO("write CR(%04X[%04X]) value = 0x%02x%02x%02x%02x\n",
+						crBaseAddr, crRegOffset,
+						cif_dev->o_usb_buf[3], cif_dev->o_usb_buf[2],
+						cif_dev->o_usb_buf[1], cif_dev->o_usb_buf[0]);
 				kfree_skb(skb);
 				skb = NULL;
 				return 0;
