@@ -39,6 +39,18 @@
 
 #define HCI_TYPE_SIZE	1
 
+/* this for 7663 need download patch staus
+ * 0:
+ * patch download is not complete/BT get patch semaphore fail (WiFi get semaphore success)
+ * 1:
+ * patch download is complete
+ * 2:
+ * patch download is not complete/BT get patch semaphore success
+ */
+#define MT766X_PATCH_IS_DOWNLOAD_BY_OTHER 0
+#define MT766X_PATCH_READY 1
+#define MT766X_PATCH_NEED_DOWNLOAD 2
+
 /* this for 79XX need download patch staus
  * 0:
  * patch download is not complete, BT driver need to download patch
@@ -488,6 +500,8 @@ struct btmtk_dev {
 
 	wait_queue_head_t	p_wait_event_q;
 
+	unsigned int	subsys_reset;
+	unsigned int	chip_reset;
 	unsigned char	*rom_patch_bin_file_name;
 	unsigned int	chip_id;
 	unsigned int	flavor;

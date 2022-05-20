@@ -21,6 +21,13 @@
 #define WOBLE_EVENT_INTERVAL_TIMO	500
 #define WOBLE_COMP_EVENT_TIMO		5000
 
+/* WOBX attribute type */
+#define WOBX_TRIGGER_INFO_ADDR_TYPE		1
+#define WOBX_TRIGGER_INFO_ADV_DATA_TYPE		2
+#define WOBX_TRIGGER_INFO_TRACE_LOG_TYPE	3
+#define WOBX_TRIGGER_INFO_SCAN_LOG_TYPE		4
+#define WOBX_TRIGGER_INFO_TRIGGER_CNT_TYPE	5
+
 struct btmtk_woble {
 	unsigned char	*woble_setting_file_name;
 	unsigned int	woble_setting_len;
