@@ -1806,7 +1806,7 @@ int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, bool patch_flag)
 		goto err;
 	}
 
-	BTMTK_INFO("btmtk_load_wifi_rom_patch_79xx end");
+	BTMTK_INFO("btmtk_load_rom_patch_79xx end");
 
 err:
 	if (fw_firmware)
@@ -3657,6 +3657,7 @@ static int bt_close(struct hci_dev *hdev)
 	}
 
 	BTMTK_INFO("%s, enter", __func__);
+
 #if CFG_SUPPORT_DVT
 	/* Don't send init cmd for DVT
 	 * Such as Lowpower DVT
@@ -3671,6 +3672,12 @@ static int bt_close(struct hci_dev *hdev)
 		}
 	}
 #endif /* CFG_SUPPORT_DVT */
+
+	/* Flush RX works */
+	flush_work(&bdev->rx_work);
+
+	/* Drop queues */
+	skb_queue_purge(&bdev->rx_q);
 
 	btmtk_cif_close(hdev);
 exit:
@@ -4058,9 +4065,11 @@ EVT_PROCESS:
 			kfree_skb(skb);
 			continue;
 		}
+
 		err = hci_recv_frame(bdev->hdev, skb);
 		if (err < 0) {
-			BTMTK_ERR("%s btmtk_rx_work failed, err = %d", __func__, err);
+			if (err != -ENXIO)
+				BTMTK_ERR("%s btmtk_rx_work failed, err = %d", __func__, err);
 			return;
 		}
 	}

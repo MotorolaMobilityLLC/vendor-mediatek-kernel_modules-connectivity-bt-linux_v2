@@ -2591,7 +2591,7 @@ get_response_again:
 	}
 
 	if (ret > 0) {
-		BTMTK_INFO_RAW(bdev->io_buf, ret + 1, "%s OK: EVT:", __func__);
+		BTMTK_DBG_RAW(bdev->io_buf, ret + 1, "%s OK: EVT:", __func__);
 		return ret; /* return read length */
 	} else if (retry > 0) {
 		BTMTK_WARN("%s: Trying to get response... (%d)", __func__, ret);
