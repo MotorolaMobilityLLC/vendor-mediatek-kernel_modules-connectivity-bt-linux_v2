@@ -31,7 +31,7 @@
 
 #define isdigit(c)    ('0' <= (c) && (c) <= '9')
 //- Local Configuration -----------------------------------------------------
-#define LD_VERSION "3.0.21042601"
+#define LD_VERSION "3.0.21051401"
 
 #define BUFFER_SIZE  (1024 * 4)	/* Size of RX Queue */
 #define BT_SEND_HCI_CMD_BEFORE_SUSPEND 1
@@ -2343,7 +2343,12 @@ int btmtk_usb_load_bt_cfg(char *cfg_name, struct LD_btmtk_usb_data *data)
 	}
 	data->setting_file_len = 0;
 
-	sprintf(bt_cfg_name, "%s_%x.%s", BT_CFG_NAME_PREFIX, data->chip_id, BT_CFG_NAME_SUFFIX);
+	if (data->flavor)
+		(void)sprintf(bt_cfg_name, "%s%x_1a_%x.%s", BT_CFG_NAME_PREFIX,
+			data->chip_id & 0xffff, (data->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
+	else
+		(void)sprintf(bt_cfg_name, "%s%x_1_%x.%s", BT_CFG_NAME_PREFIX,
+			data->chip_id & 0xffff, (data->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
 	LD_load_code_from_bin(&data->setting_file, bt_cfg_name, NULL, data->udev, &data->setting_file_len);
 
 	if (data->setting_file == NULL || data->setting_file_len == 0) {
