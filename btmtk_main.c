@@ -1990,57 +1990,11 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 			return bdev->io_buf[PATCH_STATUS];
 
 		return PATCH_ERR;
-	} else if (fw_state == 3 && dma_flag == PATCH_DOWNLOAD_USING_DMA) {
-		cmd_len = 9;
-		cmd[3] = (cmd_len - 4) & 0xFF; /* length*/
-		cmd[6] = 0x01; /* payload length */
-		cmd[7] = 0x00; /* palyload length */
-		cmd[8] = 0x03; /* which is the FW download state 3: finished */
-		ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
-				event, event_len, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
-		if (ret < 0)
-			BTMTK_ERR("%s: send wmd dl cmd failed, terminate!", __func__);
 	} else
 		BTMTK_ERR("%s: fw state is error!", __func__);
 
 	return ret;
 }
-
-#if 0
-static int btmtk_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
-		u8 *fwbuf, int section_dl_size, int section_offset)
-{
-	int cur_len = 0;
-	int ret = 0;
-	s32 sent_len;
-
-	if (bdev == NULL || image == NULL || fwbuf == NULL) {
-		BTMTK_ERR("%s: invalid parameters!", __func__);
-		ret = -1;
-		goto exit;
-	}
-	/* send fw raw data, need to confirm with fw about format*/
-	while (1) {
-		sent_len = (section_dl_size - cur_len) >= UPLOAD_PATCH_UNIT ?
-				UPLOAD_PATCH_UNIT : (section_dl_size - cur_len);
-
-		if (sent_len > 0) {
-			memcpy(image, fwbuf + section_offset + cur_len, sent_len);
-			ret = btmtk_main_send_cmd(bdev, image, sent_len, NULL, -1, 0, 0,
-					BTMTK_TX_ACL_FROM_DRV);
-			if (ret < 0) {
-				BTMTK_ERR("%s: send patch failed, terminate", __func__);
-				goto exit;
-			}
-			cur_len += sent_len;
-		} else
-			break;
-	}
-
-exit:
-	return ret;
-}
-#endif
 
 static int btmtk_load_fw_patch_using_wmt_cmd(struct btmtk_dev *bdev,
 		u8 *image, u8 *fwbuf, u8 *event, int event_len, u32 patch_len, int offset)
@@ -2103,7 +2057,7 @@ static int btmtk_load_fw_patch_using_wmt_cmd(struct btmtk_dev *bdev,
 			}
 
 			cur_len += sent_len;
-			BTMTK_INFO("%s: sent_len = %d, cur_len = %d, phase = %d", __func__,
+			BTMTK_DBG("%s: sent_len = %d, cur_len = %d, phase = %d", __func__,
 					sent_len, cur_len, phase);
 
 			ret = btmtk_main_send_cmd(bdev, image, sent_len + PATCH_HEADER_SIZE,
@@ -2183,16 +2137,23 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 	do {
 		sectionMap = (struct _Section_Map *)(fwbuf + FW_ROM_PATCH_HEADER_SIZE +
 				FW_ROM_PATCH_GD_SIZE + FW_ROM_PATCH_SEC_MAP_SIZE * loop_count);
-
+		dma_flag = PATCH_DOWNLOAD_USING_WMT;
 		if (patch_flag) {
 			section_offset = be2cpu32(sectionMap->u4SecOffset);
 			dl_size = be2cpu32(sectionMap->bin_info_spec.u4DLSize);
 		} else {
 			section_offset = sectionMap->u4SecOffset;
 			dl_size = sectionMap->bin_info_spec.u4DLSize;
+			/*
+			 * 0: BGF patch
+			 * 1: BT ILM
+			 * only BT ILM support DL DMA
+			 */
+			if (loop_count == 1)
+				dma_flag = sectionMap->bin_info_spec.uDlMode;
 		}
-		BTMTK_INFO("%s: loop_count = %d, section_offset = 0x%08x, download patch_len = 0x%08x\n",
-				__func__, loop_count, section_offset, dl_size);
+		BTMTK_INFO("%s: loop_count = %d, section_offset = 0x%08x, download patch_len = 0x%08x, dl mode = %d\n",
+				__func__, loop_count, section_offset, dl_size, dma_flag);
 		if (dl_size > 0) {
 			retry = 20;
 			do {
@@ -2221,16 +2182,15 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 				goto err;
 			}
 
-			if (dma_flag == PATCH_DOWNLOAD_USING_DMA) {
-#if 0	/* need revert after DMA supported */
+			if (dma_flag == PATCH_DOWNLOAD_USING_DMA && main_info.hif_hook.dl_dma) {
 				/* using DMA to download fw patch*/
-				ret = btmtk_load_fw_patch_using_dma(bdev, pos, fwbuf, dl_size,
-						section_offset);
+				ret = main_info.hif_hook.dl_dma(bdev,
+					pos, fwbuf,
+					dl_size, section_offset);
 				if (ret < 0) {
 					BTMTK_ERR("%s: btmtk_load_fw_patch_using_dma failed!", __func__);
 					goto err;
 				}
-#endif
 			} else {
 				/* using legacy wmt cmd to download fw patch */
 				ret = btmtk_load_fw_patch_using_wmt_cmd(bdev, pos, fwbuf, event,
@@ -2247,31 +2207,17 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 /* need to remove check wifi dl patch success or not according to Jyun-ji's
  * comment, because bt driver do nothing when wifi dl patch failed
  */
-#if 1
 			if (patch_flag) {
 				mdelay(500);
+#if 0
 				patch_status = btmtk_send_wmt_download_cmd(bdev, pos, 0, event,
 					sizeof(event) - 1, sectionMap, 0, dma_flag, patch_flag);
 				if (patch_status == PATCH_READY)
 					BTMTK_INFO("%s: Wifi patch already download %d", __func__, patch_status);
 				else
 				BTMTK_ERR("%s: Wifi patch download failed!", __func__);
-			} else {
 #endif
-#if 0	/* need revert after DMA supported */
-				if (dma_flag == PATCH_DOWNLOAD_USING_DMA) {
-					ret = btmtk_send_wmt_download_cmd(bdev, pos, 0, event,
-					sizeof(event) - 1, sectionMap, 3, dma_flag, patch_flag);
-					if (ret < 0) {
-						BTMTK_ERR("%s: send wmd dl cmd state 3 failed, terminate!", __func__);
-						goto err;
-					}
-				}
-				BTMTK_INFO("%s: loading rom patch... Done", __func__);
-#endif
-#if 1
 			}
-#endif
 		}
 next_section:
 		continue;
@@ -2660,7 +2606,7 @@ int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *bdev)
 	/* Support 7668 and 7663 and 7961 */
 	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x06, 0x02, 0x00, 0x00, 0x01 };
 	/* To-Do, for event check */
-	u8 event[] = { 0x04, 0xE4, 0x05, 0x02, 0x06, 0x01, 0x00 };	/* event[6] is key */
+	u8 event[] = { 0x04, 0xE4, 0x05, 0x02, 0x06, 0x01, 0x00 };	/* event[7] is key */
 	int ret = -1, retry = RETRY_TIMES;
 
 	if (!bdev) {
@@ -2677,7 +2623,7 @@ retry_again:
 		bdev->power_state = BTMTK_DONGLE_STATE_ERROR;
 		ret = -1;
 	} else if (ret == 0 && bdev->recv_evt_len > 0) {
-		switch (bdev->io_buf[6]) {
+		switch (bdev->io_buf[7]) {
 		case 0:			 /* successful */
 			BTMTK_INFO("%s: OK", __func__);
 			bdev->power_state = BTMTK_DONGLE_STATE_POWER_ON;

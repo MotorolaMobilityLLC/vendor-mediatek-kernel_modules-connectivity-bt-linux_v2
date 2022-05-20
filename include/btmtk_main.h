@@ -308,7 +308,12 @@ struct _Section_Map {
 			u32 u4DLSize;
 			u32 u4SecKeyIdx;
 			u32 u4AlignLen;
-			u32 reserved[9];
+			u32 u4SecType;
+			u8  uDlMode;
+			u8  uCrcType;
+			u8  res[2];
+			u32 u4Crc;
+			u32 reserved[6];
 		} bin_info_spec;
 	};
 };
@@ -442,6 +447,9 @@ typedef void (*cif_chip_reset_notify_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_mutex_lock_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_mutex_unlock_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_open_done_ptr)(struct btmtk_dev *bdev);
+typedef int (*cif_dl_dma_ptr)(struct btmtk_dev *bdev, u8 *image,
+		u8 *fwbuf, int section_dl_size, int section_offset);
+
 struct hif_hook_ptr {
 	cif_open_ptr			open;
 	cif_close_ptr			close;
@@ -456,6 +464,7 @@ struct hif_hook_ptr {
 	cif_mutex_lock_ptr		cif_mutex_lock;
 	cif_mutex_unlock_ptr		cif_mutex_unlock;
 	cif_open_done_ptr		open_done;
+	cif_dl_dma_ptr			dl_dma;
 };
 
 struct btmtk_main_info {

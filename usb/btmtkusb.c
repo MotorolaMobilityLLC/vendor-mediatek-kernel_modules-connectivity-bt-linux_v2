@@ -1678,6 +1678,60 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	return -EILSEQ;
 }
 
+static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
+		u8 *fwbuf, int section_dl_size, int section_offset)
+{
+	int cur_len = 0;
+	int ret = 0;
+	s32 sent_len;
+	u8 dl_done_cmd[] = {0x01, 0x6F, 0xFC, 0x05, 0x01, 0x01, 0x01, 0x00, PATCH_PHASE3};
+	u8 event[] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
+
+	if (bdev == NULL || image == NULL || fwbuf == NULL) {
+		BTMTK_ERR("%s: invalid parameters!", __func__);
+		ret = -1;
+		goto exit;
+	}
+
+	BTMTK_INFO("%s: loading rom patch... start", __func__);
+	while (1) {
+		sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT - HCI_TYPE_SIZE) ?
+				(UPLOAD_PATCH_UNIT - HCI_TYPE_SIZE) : (section_dl_size - cur_len);
+
+		if (sent_len > 0) {
+			/* btmtk_cif_send_bulk_out will send from image[1],
+			 * image[0] will be ingored
+			 */
+			image[0] = 0x2;
+			memcpy(&image[1], fwbuf + section_offset + cur_len, sent_len);
+			BTMTK_DBG("%s: sent_len = %d, cur_len = %d", __func__,
+					sent_len, cur_len);
+			ret = btmtk_main_send_cmd(bdev,
+					image, sent_len + HCI_TYPE_SIZE,
+					NULL, -1,
+					0, 0, BTMTK_TX_ACL_FROM_DRV);
+			if (ret < 0) {
+				BTMTK_ERR("%s: send patch failed, terminate", __func__);
+				goto exit;
+			}
+			cur_len += sent_len;
+		} else
+			break;
+	}
+
+	BTMTK_INFO_RAW(dl_done_cmd, sizeof(dl_done_cmd), "%s: send dl cmd - ", __func__);
+	ret = btmtk_main_send_cmd(bdev, dl_done_cmd, sizeof(dl_done_cmd),
+			event, sizeof(event),
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+	if (ret < 0)
+		BTMTK_ERR("%s: send wmd dl cmd failed, terminate!", __func__);
+	BTMTK_INFO("%s: loading rom patch... Done", __func__);
+
+exit:
+	return ret;
+}
+
+
 static void btusb_notify(struct hci_dev *hdev, unsigned int evt)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
@@ -2607,6 +2661,7 @@ int btmtk_cif_register(void)
 	hook.chip_reset_notify = btmtk_usb_chip_reset_notify;
 	hook.cif_mutex_lock = btmtk_usb_cif_mutex_lock;
 	hook.cif_mutex_unlock = btmtk_usb_cif_mutex_unlock;
+	hook.dl_dma = btmtk_usb_load_fw_patch_using_dma;
 	btmtk_reg_hif_hook(&hook);
 
 	retval = usb_register(&btusb_driver);
@@ -2998,7 +3053,7 @@ get_response_again:
 
 	if (ret > 0) {
 		BTMTK_DBG_RAW(bdev->io_buf, ret + 1, "%s OK: EVT:", __func__);
-		return ret; /* return read length */
+		return ret + 1; /* return read length */
 	} else if (retry > 0) {
 		BTMTK_WARN("%s: Trying to get response... (%d)", __func__, ret);
 		retry--;
@@ -3031,26 +3086,27 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 			goto exit;
 		}
 
-		bdev->recv_evt_len = btmtk_cif_recv_evt(bdev, delay, retry);
-		if (bdev->recv_evt_len < 0) {
-			BTMTK_ERR("%s btmtk_cif_recv_evt failed!!", __func__);
-			ret = -1;
-			goto exit;
-		}
-
-		if (bdev->io_buf && event && bdev->recv_evt_len >= event_len) {
-			if (memcmp(bdev->io_buf, event, event_len) == 0) {
-				ret = 0;
-				goto exit;
-			} else {
-				BTMTK_INFO("%s compare fail\n", __func__);
-				BTMTK_INFO_RAW(event, event_len, "%s: event_need_compare:", __func__);
-				BTMTK_INFO_RAW(bdev->io_buf, bdev->recv_evt_len, "%s: RCV:", __func__);
+		if (event && event_len > 0) {
+			bdev->recv_evt_len = btmtk_cif_recv_evt(bdev, delay, retry);
+			if (bdev->recv_evt_len < 0) {
+				BTMTK_ERR("%s btmtk_cif_recv_evt failed!!", __func__);
 				ret = -1;
 				goto exit;
 			}
-		} else
-			BTMTK_INFO("%s event maybe NULL, no need to compare event!\n", __func__);
+
+			if (bdev->io_buf && bdev->recv_evt_len >= event_len) {
+				if (memcmp(bdev->io_buf, event, event_len) == 0) {
+					ret = 0;
+					goto exit;
+				}
+			}
+			BTMTK_INFO("%s compare fail\n", __func__);
+			BTMTK_INFO_RAW(event, event_len, "%s: event_need_compare:", __func__);
+			BTMTK_INFO_RAW(bdev->io_buf, bdev->recv_evt_len, "%s: RCV:", __func__);
+			ret = -1;
+		} else {
+			ret = 0;
+		}
 	} else {
 		if (event) {
 			if (event_len > EVENT_COMPARE_SIZE) {

@@ -960,7 +960,7 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			memcpy(skb_push(skb, 1), &bt_cb(skb)->pkt_type, 1);
 			memcpy(bdev->io_buf, skb->data, skb->len);
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
-			BTMTK_INFO("%s, compare success", __func__);
+			BTMTK_DBG("%s, compare success", __func__);
 		} else {
 			BTMTK_INFO("%s compare fail", __func__);
 			BTMTK_INFO_RAW(event_need_compare, event_need_compare_len,
@@ -999,7 +999,7 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 		 * event for USB interface
 		 */
 		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_COMP_EVENT_TIMO);
-		BTMTK_INFO("event_need_compare_len %d, event_compare_status %d",
+		BTMTK_DBG("event_need_compare_len %d, event_compare_status %d",
 			event_need_compare_len, event_compare_status);
 	} else {
 		event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
@@ -1096,6 +1096,103 @@ static void btmtk_sdio_interrupt(struct sdio_func *func)
 	wake_up_interruptible(&cif_dev->sdio_thread.wait_q);
 }
 #endif
+
+static int btmtk_sdio_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
+		u8 *fwbuf, int section_dl_size, int section_offset)
+{
+	int cur_len = 0;
+	int ret = -1;
+	s32 sent_len = 0;
+	s32 sdio_len = 0;
+	u32 u32ReadCRValue = 0;
+	u32 block_count = 0;
+	u32 redundant = 0;
+	u32 delay_count = 0;
+	struct btmtk_sdio_dev *cif_dev = NULL;
+	u8 cmd[] = {0x02, 0x6F, 0xFC, 0x05, 0x00, 0x01, 0x01, 0x01, 0x00, PATCH_PHASE3};
+	u8 event[] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
+
+	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
+
+	if (bdev == NULL || image == NULL || fwbuf == NULL) {
+		BTMTK_ERR("%s: invalid parameters!", __func__);
+		return -1;
+	}
+
+	BTMTK_INFO("%s: loading rom patch... start", __func__);
+	btmtk_sdio_enable_interrupt(0, cif_dev->func);
+	while (section_dl_size != cur_len) {
+		if (!atomic_read(&cif_dev->tx_rdy)) {
+			ret = btmtk_sdio_readl(CHISR, &u32ReadCRValue, cif_dev->func);
+			if ((TX_EMPTY & u32ReadCRValue) != 0) {
+				ret = btmtk_sdio_writel(CHISR, (TX_EMPTY | TX_COMPLETE_COUNT), cif_dev->func);
+				if (ret != 0) {
+					BTMTK_ERR("%s: btmtk_sdio_writel fail", __func__);
+					goto enable_intr;
+				}
+				atomic_set(&cif_dev->tx_rdy, 1);
+			} else if (delay_count > 1000) {
+				BTMTK_ERR("%s: delay_count > 1000", __func__);
+				goto enable_intr;
+			} else {
+				udelay(200);
+				++delay_count;
+				continue;
+			}
+		}
+
+		sent_len = (section_dl_size - cur_len) >= UPLOAD_PATCH_UNIT ?
+			UPLOAD_PATCH_UNIT : (section_dl_size - cur_len);
+
+		BTMTK_DBG("%s: sent_len = %d, cur_len = %d, delay_count = %d",
+		           __func__, sent_len, cur_len, delay_count);
+
+		sdio_len = sent_len + MTK_SDIO_PACKET_HEADER_SIZE;
+		memset(image, 0, sdio_len);
+		image[0] = (sdio_len & 0x00FF);
+		image[1] = (sdio_len & 0xFF00) >> 8;
+		image[2] = 0;
+		image[3] = 0;
+
+		memcpy(image + MTK_SDIO_PACKET_HEADER_SIZE,
+			fwbuf + section_offset + cur_len,
+			sent_len);
+
+		block_count = sdio_len / SDIO_BLOCK_SIZE;
+		redundant = sdio_len % SDIO_BLOCK_SIZE;
+		if (redundant)
+			sdio_len = (block_count + 1) * SDIO_BLOCK_SIZE;
+
+		ret = btmtk_sdio_writesb(CTDR, image, sdio_len, cif_dev->func);
+		atomic_set(&cif_dev->tx_rdy, 0);
+		cur_len += sent_len;
+
+		if (ret < 0) {
+			BTMTK_ERR("%s: send patch failed, terminate", __func__);
+			goto enable_intr;
+		}
+	}
+	btmtk_sdio_enable_interrupt(1, cif_dev->func);
+
+	BTMTK_INFO("%s: send dl cmd", __func__);
+	ret = btmtk_main_send_cmd(bdev,
+			cmd, sizeof(cmd), event, sizeof(event),
+			PATCH_DOWNLOAD_PHASE3_DELAY_TIME,
+			PATCH_DOWNLOAD_PHASE3_RETRY,
+			BTMTK_TX_ACL_FROM_DRV);
+	if (ret < 0) {
+		BTMTK_ERR("%s: send wmd dl cmd failed, terminate!", __func__);
+		return ret;
+	}
+
+	BTMTK_INFO("%s: loading rom patch... Done", __func__);
+	return ret;
+
+enable_intr:
+	btmtk_sdio_enable_interrupt(1, cif_dev->func);
+	return ret;
+}
+
 static int btmtk_sdio_register_dev(struct btmtk_sdio_dev *bdev)
 {
 	struct sdio_func *func;
@@ -1178,6 +1275,27 @@ static int btmtk_sdio_enable_host_int(struct btmtk_sdio_dev *cif_dev)
 
 	return ret;
 }
+
+#if 0
+int btmtk_sdio_disable_host_int(struct btmtk_sdio_dev *cif_dev)
+{
+	int ret;
+	u32 read_data = 0;
+
+	if (!bdev || !bdev->func)
+		return -EINVAL;
+
+	/* workaround for some platform no host clock sometimes */
+
+	btmtk_sdio_readl(CSDIOCSR, &read_data, cif_dev->func);
+	BTMTK_INFO("%s read CSDIOCSR is 0x%X\n", __func__, read_data);
+	read_data = read_data & ~(0x04);
+	btmtk_sdio_writel(CSDIOCSR, read_data, cif_dev->func);
+	BTMTK_INFO("%s write CSDIOCSR is 0x%X\n", __func__, read_data);
+
+	return ret;
+}
+#endif
 
 static int btmtk_sdio_unregister_dev(struct btmtk_sdio_dev *cif_dev)
 {
@@ -1984,6 +2102,7 @@ int btmtk_cif_register(void)
 	hook.cif_mutex_lock = btmtk_sdio_cif_mutex_lock;
 	hook.cif_mutex_unlock = btmtk_sdio_cif_mutex_unlock;
 	hook.open_done = btmtk_sdio_open_done;
+	hook.dl_dma = btmtk_sdio_load_fw_patch_using_dma;
 	btmtk_reg_hif_hook(&hook);
 
 	retval = sdio_register();
