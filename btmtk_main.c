@@ -678,6 +678,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 	/* used for print debug log*/
 	const unsigned char *buffer_dbg = buffer;
 	int count_dbg = count;
+	unsigned char *skb_tmp = NULL;
 
 	if (hdev == NULL || buffer == NULL) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
@@ -733,7 +734,13 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 		}
 
 		len = min_t(uint, hci_skb_expect(skb) - skb->len, count);
-		memcpy(skb_put(skb, len), buffer, len);
+		skb_tmp = skb_put(skb, len);
+		if (!skb_tmp) {
+			BTMTK_ERR("%s, skb_put failed. Len = %d!", __func__,
+				len);
+			return ERR_PTR(-ENOMEM);
+		}
+		memcpy(skb_tmp, buffer, len);
 		/* If kernel version > 4.x */
 		/* skb_put_data(skb, buffer, len); */
 
@@ -3525,6 +3532,7 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	u8 fw_coredump_cmd[FW_COREDUMP_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
 	u8 reset_cmd[HCI_RESET_CMD_LEN] = { 0x01, 0x03, 0x0C, 0x00 };
 	struct btmtk_dev *bdev = NULL;
+	unsigned char *skb_tmp = NULL;
 
 	if (hdev == NULL || skb == NULL) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
@@ -3570,9 +3578,12 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 
 	if (!is_mt66xx(bdev->chip_id))
 		btmtk_dispatch_fwlog_bluetooth_kpi(bdev, skb->data, skb->len, hci_skb_pkt_type(skb));
-
-	memcpy(skb_push(skb, 1), &hci_skb_pkt_type(skb), 1);
-
+	skb_tmp = skb_push(skb, 1);
+	if (!skb_tmp) {
+		BTMTK_ERR("%s, skb_put failed!", __func__);
+		return -ENOMEM;
+	}
+	memcpy(skb_tmp, &hci_skb_pkt_type(skb), 1);
 #if ENABLESTP
 	skb = mtk_add_stp(bdev, skb);
 #endif

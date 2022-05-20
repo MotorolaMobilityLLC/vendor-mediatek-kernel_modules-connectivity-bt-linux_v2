@@ -778,45 +778,55 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 			crValue = ((skb->data[13] & 0xff) << 24) + ((skb->data[14] & 0xff) << 16)
 				+ ((skb->data[15] & 0xff) << 8) + (skb->data[16] & 0xff);
 
-			BTMTK_INFO("%s crAddr=0x%08x crValue=0x%08x",
+			BTMTK_INFO("%s crAddr = 0x%08x crValue = 0x%08x",
 				__func__, crAddr, crValue);
 
 			btmtk_sdio_writel(crAddr, crValue, cif_dev->func);
 			evt_skb = skb_copy(skb, GFP_KERNEL);
-			bt_cb(evt_skb)->pkt_type = notify_alt_evt[0];
-			notify_alt_evt[3] = (crValue & 0xFF000000) >> 24;
-			notify_alt_evt[4] = (crValue & 0x00FF0000) >> 16;
-			notify_alt_evt[5] = (crValue & 0x0000FF00) >> 8;
-			notify_alt_evt[6] = (crValue & 0x000000FF);
-			memcpy(evt_skb->data, &notify_alt_evt[1], NOTIFY_ALT_EVT_LEN - 1);
-			evt_skb->len = NOTIFY_ALT_EVT_LEN - 1;
-			hci_recv_frame(bdev->hdev, evt_skb);
-			kfree_skb(skb);
-			skb = NULL;
+			if (evt_skb) {
+				bt_cb(evt_skb)->pkt_type = notify_alt_evt[0];
+				notify_alt_evt[3] = (crValue & 0xFF000000) >> 24;
+				notify_alt_evt[4] = (crValue & 0x00FF0000) >> 16;
+				notify_alt_evt[5] = (crValue & 0x0000FF00) >> 8;
+				notify_alt_evt[6] = (crValue & 0x000000FF);
+				memcpy(evt_skb->data, &notify_alt_evt[1], NOTIFY_ALT_EVT_LEN - 1);
+				evt_skb->len = NOTIFY_ALT_EVT_LEN - 1;
+				hci_recv_frame(bdev->hdev, evt_skb);
+				kfree_skb(skb);
+				skb = NULL;
+			} else {
+				BTMTK_ERR("%s skb_copy failed", __func__);
+			}
 			goto exit;
-		} else	if (skb->data[0] == 0x01 && skb->data[1] == 0x6f && skb->data[2] == 0xfc &&
+		} else if (skb->data[0] == 0x01 && skb->data[1] == 0x6f && skb->data[2] == 0xfc &&
 				skb->data[3] == 0x09 && skb->data[4] == 0x01 &&
 				skb->data[5] == 0xff && skb->data[6] == 0x05 &&
 				skb->data[7] == 0x00 && skb->data[8] == 0x01) {
 
-			crAddr = ((skb->data[9] & 0xff) << 24) + ((skb->data[10] & 0xff) << 16) +
-				((skb->data[11]&0xff) << 8) + (skb->data[12]&0xff);
+			crAddr = ((skb->data[9] & 0xff) << 24) +
+				((skb->data[10] & 0xff) << 16) +
+				((skb->data[11] & 0xff) << 8) +
+				(skb->data[12] & 0xff);
 
 			btmtk_sdio_readl(crAddr, &crValue, cif_dev->func);
-			BTMTK_INFO("%s read crAddr=0x%08x crValue=0x%08x",
+			BTMTK_INFO("%s read crAddr = 0x%08x crValue = 0x%08x",
 					__func__, crAddr, crValue);
 			evt_skb = skb_copy(skb, GFP_KERNEL);
-			bt_cb(evt_skb)->pkt_type = notify_alt_evt[0];
-			/* memcpy(&notify_alt_evt[2], &crValue, sizeof(crValue)); */
-			notify_alt_evt[3] = (crValue & 0xFF000000) >> 24;
-			notify_alt_evt[4] = (crValue & 0x00FF0000) >> 16;
-			notify_alt_evt[5] = (crValue & 0x0000FF00) >> 8;
-			notify_alt_evt[6] = (crValue & 0x000000FF);
-			memcpy(evt_skb->data, &notify_alt_evt[1], NOTIFY_ALT_EVT_LEN - 1);
-			evt_skb->len = NOTIFY_ALT_EVT_LEN - 1;
-			hci_recv_frame(bdev->hdev, evt_skb);
-			kfree_skb(skb);
-			skb = NULL;
+			if (evt_skb) {
+				bt_cb(evt_skb)->pkt_type = notify_alt_evt[0];
+				/* memcpy(&notify_alt_evt[2], &crValue, sizeof(crValue)); */
+				notify_alt_evt[3] = (crValue & 0xFF000000) >> 24;
+				notify_alt_evt[4] = (crValue & 0x00FF0000) >> 16;
+				notify_alt_evt[5] = (crValue & 0x0000FF00) >> 8;
+				notify_alt_evt[6] = (crValue & 0x000000FF);
+				memcpy(evt_skb->data, &notify_alt_evt[1], NOTIFY_ALT_EVT_LEN - 1);
+				evt_skb->len = NOTIFY_ALT_EVT_LEN - 1;
+				hci_recv_frame(bdev->hdev, evt_skb);
+				kfree_skb(skb);
+				skb = NULL;
+			} else {
+				BTMTK_ERR("%s skb_copy failed", __func__);
+			}
 			goto exit;
 		}
 	}
@@ -983,8 +993,8 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 			/* If driver need to check result from skb, it can get from io_buf */
 			/* Such as chip_id, fw_version, etc. */
-			memcpy(skb_push(skb, 1), &bt_cb(skb)->pkt_type, 1);
-			memcpy(bdev->io_buf, skb->data, skb->len);
+			bdev->io_buf[0] = bt_cb(skb)->pkt_type;
+			memcpy(&bdev->io_buf[1], skb->data, skb->len);
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 			BTMTK_DBG("%s, compare success", __func__);
 		} else {
@@ -1290,7 +1300,7 @@ failed:
 
 static int btmtk_sdio_enable_host_int(struct btmtk_sdio_dev *cif_dev)
 {
-	int ret;
+	int ret = 0;
 	u32 read_data = 0;
 
 	if (!cif_dev || !cif_dev->func)
@@ -1298,11 +1308,11 @@ static int btmtk_sdio_enable_host_int(struct btmtk_sdio_dev *cif_dev)
 
 	/* workaround for some platform no host clock sometimes */
 
-	btmtk_sdio_readl(CSDIOCSR, &read_data, cif_dev->func);
-	BTMTK_INFO("%s read CSDIOCSR is 0x%X", __func__, read_data);
+	ret = btmtk_sdio_readl(CSDIOCSR, &read_data, cif_dev->func);
+	BTMTK_INFO("%s read CSDIOCSR is 0x%X, ret = %d", __func__, read_data, ret);
 	read_data |= 0x4;
-	btmtk_sdio_writel(CSDIOCSR, read_data, cif_dev->func);
-	BTMTK_INFO("%s write CSDIOCSR is 0x%X", __func__, read_data);
+	ret = btmtk_sdio_writel(CSDIOCSR, read_data, cif_dev->func);
+	BTMTK_INFO("%s write CSDIOCSR is 0x%X, ret = %d", __func__, read_data, ret);
 
 	return ret;
 }
@@ -1607,13 +1617,17 @@ static int btmtk_sdio_interrupt_process(struct btmtk_dev *bdev)
 		ret = btmtk_sdio_writel(CHISR, (TX_EMPTY | TX_COMPLETE_COUNT), cif_dev->func);
 		atomic_set(&cif_dev->tx_rdy, 1);
 		BTMTK_DBG("%s set tx_rdy true", __func__);
+		if (ret < 0)
+			BTMTK_ERR(" %s, ret:%d", __func__, ret);
 #if BTMTK_SDIO_DEBUG
 		tx_empty_cnt++;
 #endif
 	}
 
-	if (RX_DONE & u32ReadCRValue)
+	if (RX_DONE & u32ReadCRValue) {
 		ret = btmtk_cif_recv_evt(bdev);
+		BTMTK_DBG("%s recv_evt, ret = %d", __func__, ret);
+	}
 
 	ret = btmtk_sdio_enable_interrupt(1, cif_dev->func);
 	BTMTK_DBG("%s done, ret = %d", __func__, ret);
@@ -1861,7 +1875,8 @@ static int btmtk_cif_probe(struct sdio_func *func,
 	struct btmtk_dev *bdev = NULL;
 
 	/* Mediatek Driver Version */
-	BTMTK_INFO("%s: MTK BT Driver Version : %s", __func__, VERSION);
+	BTMTK_INFO("%s: MTK BT Driver Version: %s", __func__, VERSION);
+
 	BTMTK_DBG("vendor=0x%x, device=0x%x, class=%d, fn=%d",
 			id->vendor, id->device, id->class,
 			func->num);
@@ -1869,12 +1884,17 @@ static int btmtk_cif_probe(struct sdio_func *func,
 
 	/* sdio interface numbers  */
 	if (func->num != BTMTK_SDIO_FUNC) {
-		BTMTK_INFO("func num is not match, func_num = %d", func->num);
+		BTMTK_INFO("%s: func num is not match, func_num = %d", __func__, func->num);
 		return -ENODEV;
 	}
 
 	/* Retrieve priv data and set to interface structure */
 	bdev = btmtk_get_dev();
+	if (!bdev) {
+		BTMTK_INFO("%s: bdev is NULL", __func__);
+		return -ENODEV;
+	}
+
 	bdev->intf_dev = &func->dev;
 	bdev->cif_dev = &g_sdio_dev;
 	sdio_set_drvdata(func, bdev);
@@ -1953,8 +1973,6 @@ static int btmtk_cif_suspend(struct device *dev)
 	if (!dev)
 		return 0;
 	func = dev_to_sdio_func(dev);
-	if (!func)
-		return 0;
 	bdev = sdio_get_drvdata(func);
 	if (!bdev)
 		return 0;
@@ -2041,8 +2059,6 @@ static int btmtk_cif_resume(struct device *dev)
 	if (!dev)
 		return 0;
 	func = dev_to_sdio_func(dev);
-	if (!func)
-		return 0;
 	bdev = sdio_get_drvdata(func);
 	if (!bdev)
 		return 0;
