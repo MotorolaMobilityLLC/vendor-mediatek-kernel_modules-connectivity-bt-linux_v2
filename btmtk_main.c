@@ -34,6 +34,8 @@ static DEFINE_MUTEX(btmtk_fops_state_mutex);
 #define FOPS_MUTEX_LOCK()	mutex_lock(&btmtk_fops_state_mutex)
 #define FOPS_MUTEX_UNLOCK()	mutex_unlock(&btmtk_fops_state_mutex)
 
+#define SECTION_NUM_MAX 10
+
 /**
  * Global parameters(mtkbt_)
  */
@@ -1713,9 +1715,16 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 		section_num = globalDescr->u4SectionNum;
 	BTMTK_INFO("%s: section_num = 0x%08x\n", __func__, section_num);
 
+	if (section_num > SECTION_NUM_MAX) {
+		BTMTK_ERR("%s: section_num 0x%08x is an error value", __func__, section_num);
+		ret = -1;
+		goto exit;
+	}
+
 	pos = kmalloc(UPLOAD_PATCH_UNIT, GFP_ATOMIC);
 	if (!pos) {
 		BTMTK_ERR("%s: alloc memory failed", __func__);
+		ret = -1;
 		goto exit;
 	}
 
@@ -2505,10 +2514,11 @@ int btmtk_load_code_from_setting_files(char *setting_file_name,
 	BTMTK_INFO("%s: begin setting_file_name = %s", __func__, setting_file_name);
 	err = request_firmware(&fw_entry, setting_file_name, dev);
 	if (err != 0 || fw_entry == NULL) {
-		BTMTK_INFO("%s: request_firmware fail, maybe file not exist, err = %d, fw_entry = %p",
-				__func__, err, fw_entry);
+		BTMTK_INFO("%s: request_firmware fail, maybe file %s not exist, err = %d, fw_entry = %p",
+				__func__, setting_file_name, err, fw_entry);
 		if (fw_entry)
 			release_firmware(fw_entry);
+		err = -2;
 		goto end;
 	}
 
@@ -2521,7 +2531,7 @@ int btmtk_load_code_from_setting_files(char *setting_file_name,
 	if (bdev->setting_file == NULL) {
 		BTMTK_ERR("%s: kzalloc size %zu failed!!", __func__, fw_entry->size);
 		release_firmware(fw_entry);
-		err = -1;
+		err = -3;
 		goto end;
 	}
 
@@ -2766,12 +2776,23 @@ static void btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 
 static void btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_dev *bdev)
 {
+	int ret = 0;
 	u32 code_len = 0;
 
-	if (btmtk_load_code_from_setting_files(cfg_name, dev, &code_len, bdev))
-		BTMTK_ERR("btmtk_usb_load_code_from_setting_files failed!!");
-	else
-		btmtk_load_bt_cfg_item(&bdev->bt_cfg, bdev->setting_file, bdev);
+	ret = btmtk_load_code_from_setting_files(cfg_name, dev, &code_len, bdev);
+	if (ret != 0) {
+		BTMTK_ERR("btmtk_usb_load_code_from_setting_files %s failed!!", cfg_name);
+		if (ret != -2)
+			return;
+
+		if(btmtk_load_code_from_setting_files(BT_CFG_NAME, dev, &code_len, bdev) != 0) {
+			BTMTK_ERR("btmtk_usb_load_code_from_setting_files %s failed!!", BT_CFG_NAME);
+			return;
+		}
+		snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s", BT_CFG_NAME);
+	}
+
+	btmtk_load_bt_cfg_item(&bdev->bt_cfg, bdev->setting_file, bdev);
 }
 
 #if ENABLESTP

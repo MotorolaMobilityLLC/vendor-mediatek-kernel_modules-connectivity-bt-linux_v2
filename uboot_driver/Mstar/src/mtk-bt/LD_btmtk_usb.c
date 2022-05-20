@@ -74,7 +74,7 @@
 /* Local Configuration */
 /*============================================================================*/
 
-#define LD_VERSION "4.0.21031601"
+#define LD_VERSION "4.0.21042601"
 
 #define BUFFER_SIZE  (1024 * 4)	/* Size of RX Queue */
 #define BT_SEND_HCI_CMD_BEFORE_SUSPEND 1
@@ -2282,6 +2282,7 @@ static int btmtk_usb_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content, u8 *
 static int btmtk_usb_load_bt_cfg(char *cfg_name, struct LD_btmtk_usb_data *data)
 {
 	int ret = 0;
+	char bt_cfg_name[MAX_BIN_FILE_NAME_LEN] = {'\0'};
 
 	if (!data)
 		return -EINVAL;
@@ -2293,11 +2294,18 @@ static int btmtk_usb_load_bt_cfg(char *cfg_name, struct LD_btmtk_usb_data *data)
 	}
 	data->setting_file_len = 0;
 
-	LD_load_code_from_bin(&data->setting_file, BT_CFG_NAME, NULL, data->udev, &data->setting_file_len);
+	(void)snprintf(bt_cfg_name, MAX_BIN_FILE_NAME_LEN, "%s_%x.%s", BT_CFG_NAME_PREFIX, data->chip_id, BT_CFG_NAME_SUFFIX);
+	LD_load_code_from_bin(&data->setting_file, bt_cfg_name, NULL, data->udev, &data->setting_file_len);
 
 	if (data->setting_file == NULL || data->setting_file_len == 0) {
-		usb_debug("Please make sure %s in the /vendor/firmware\n", BT_CFG_NAME);
-		return -ENOMEM;
+		usb_debug("%s not exist in the /vendor/firmware\n", bt_cfg_name);
+
+		LD_load_code_from_bin(&data->setting_file, BT_CFG_NAME, NULL, data->udev, &data->setting_file_len);
+		if (data->setting_file == NULL || data->setting_file_len == 0) {
+			usb_debug("%s not exist in the /vendor/firmware\n", BT_CFG_NAME);
+			usb_debug("Please make sure %s or %s in the /vendor/firmware\n", bt_cfg_name, BT_CFG_NAME);
+			return -ENOMEM;
+		}
 	}
 
 	ret = btmtk_usb_load_bt_cfg_item(&data->bt_cfg, data->setting_file);
