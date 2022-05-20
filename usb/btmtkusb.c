@@ -367,7 +367,6 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	struct btmtk_usb_dev *cif_dev = NULL;
 	struct sk_buff *skb;
-	int err;
 
 	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 
@@ -398,35 +397,9 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 		BTMTK_DBG_RAW(skb->data, skb->len, "%s, skb recv evt", __func__);
 
 		hci_recv_frame(hdev, skb);
-		return;
 	} else if (urb->status == -ENOENT) {
-		/* Avoid suspend failed when usb_kill_urb */
-		goto exit;
+		BTMTK_INFO("%s: urb->status is ENOENT!", __func__);
 	}
-
-	usb_mark_last_busy(cif_dev->udev);
-
-	/* The URB complete handler is still called with urb->actual_length = 0
-	 * when the event is not available, so we should keep re-submitting
-	 * URB until WMT event returns, Also, It's necessary to wait some time
-	 * between the two consecutive control URBs to relax the target device
-	 * to generate the event. Otherwise, the WMT event cannot return from
-	 * the device successfully.
-	 */
-	udelay(100);
-
-	usb_anchor_urb(urb, &cif_dev->ctrl_anchor);
-	err = usb_submit_urb(urb, GFP_ATOMIC);
-	if (err < 0) {
-		kfree(urb->setup_packet);
-		/* -EPERM: urb is being killed;
-		 * -ENODEV: device got disconnected
-		 */
-		if (err != -EPERM && err != -ENODEV)
-			usb_unanchor_urb(urb);
-	}
-
-	return;
 
 exit:
 	kfree(urb->setup_packet);
@@ -2587,6 +2560,7 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_usb_dev *cif_dev = NULL;
 
+	BTMTK_WARN("%s: begin", __func__);
 	BTMTK_CIF_GET_DEV_PRIV(bdev, intf, ifnum_base);
 
 	/* Retrieve current HIF event state */

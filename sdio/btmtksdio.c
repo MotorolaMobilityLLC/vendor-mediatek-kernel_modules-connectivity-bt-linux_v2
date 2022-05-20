@@ -282,6 +282,12 @@ retry_own:
 				goto done;
 			}
 
+			ret = btmtk_sdio_writel(CSICR, 0xC0, cif_dev->func);
+			if (ret) {
+				ret = -EINVAL;
+				goto done;
+			}
+
 			u32LoopCount = SET_OWN_LOOP_COUNT;
 			pd2hrm0r_driver_own = 0;
 			do {
