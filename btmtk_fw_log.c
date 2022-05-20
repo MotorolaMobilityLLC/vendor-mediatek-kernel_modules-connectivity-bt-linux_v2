@@ -865,6 +865,10 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 		if (!bdev->bt_cfg.support_picus_to_host)
 			return 1;
+
+		/* change coredump's ACL handle to FF F0 */
+		skb->data[0] = 0xFF;
+		skb->data[1] = 0xF0;
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
 				skb->data[1] == 0x05 &&

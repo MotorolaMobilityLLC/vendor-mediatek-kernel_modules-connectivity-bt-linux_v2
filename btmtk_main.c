@@ -3936,7 +3936,8 @@ static void btmtk_rx_work(struct work_struct *work)
 			 * when is in suspend/resume state
 			 */
 			state = btmtk_get_chip_state(bdev);
-			if (bdev->bt_cfg.reset_stack_after_woble && state != BTMTK_STATE_WORKING) {
+			if (bdev->bt_cfg.reset_stack_after_woble &&
+				(state == BTMTK_STATE_SUSPEND || state == BTMTK_STATE_RESUME)) {
 				kfree_skb(skb);
 				continue;
 			}
