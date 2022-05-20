@@ -194,6 +194,9 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	int fstate = BTMTK_FOPS_STATE_INIT;
 	struct btmtk_dev *bdev = NULL;
 
+	u8 *i_fwlog_buf = kmalloc(HCI_MAX_COMMAND_BUF_SIZE, GFP_KERNEL);
+	u8 *o_fwlog_buf = kmalloc(HCI_MAX_COMMAND_SIZE, GFP_KERNEL);
+
 	for (i = 0; i < btmtk_intf_num; i++) {
 		/* Find valid dev for already probe interface. */
 		if (g_bdev[i]->hdev != NULL) {
@@ -203,42 +206,45 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 			if (state != BTMTK_STATE_WORKING) {
 				BTMTK_WARN("%s: current is in suspend/resume/standby/dump/disconnect (%d).",
 					__func__, state);
-				return -EBADFD;
+				ret = -EBADFD;
+				goto exit;
 			}
 
 			fstate = btmtk_fops_get_state(bdev);
 			if (fstate != BTMTK_FOPS_STATE_OPENED) {
 				BTMTK_WARN("%s: fops is not open yet(%d)!", __func__, fstate);
-				return -ENODEV;
+				ret = -ENODEV;
+				goto exit;
 			}
 
 			if (bdev->power_state == BTMTK_DONGLE_STATE_POWER_OFF) {
 				BTMTK_WARN("%s: dongle state already power off, do not write", __func__);
-				return -EFAULT;
+				ret = -EFAULT;
+				goto exit;
 			}
 		}
 	}
 
-	u8 *i_fwlog_buf = kmalloc(HCI_MAX_COMMAND_BUF_SIZE, GFP_KERNEL);
-	u8 *o_fwlog_buf = kmalloc(HCI_MAX_COMMAND_SIZE, GFP_KERNEL);
-
 	skb = alloc_skb(sizeof(buf) + BT_SKB_RESERVE, GFP_ATOMIC);
 	if (!skb) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto exit;
 	}
 
 	if (count > HCI_MAX_COMMAND_BUF_SIZE) {
 		BTMTK_ERR("%s: your command is larger than maximum length, count = %zd\n",
 				__func__, count);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto exit;
 	}
 
 	memset(i_fwlog_buf, 0, HCI_MAX_COMMAND_BUF_SIZE);
 	memset(o_fwlog_buf, 0, HCI_MAX_COMMAND_SIZE);
 	if (copy_from_user(i_fwlog_buf, buf, count) != 0) {
 		BT_ERR("%s: Failed to copy data", __func__);
-		return -ENODATA;
+		ret = -ENODATA;
+		goto exit;
 	}
 #if 0
 	/* For bperf, EX: echo bperf=1 > /dev/stpbtfwlog */
@@ -264,8 +270,9 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 			continue;
 		} else if (!(*pos >= '0' && *pos <= '9') && !(*pos >= 'A' && *pos <= 'F')
 			&& !(*pos >= 'a' && *pos <= 'f')) {
-			BT_ERR("%s: There is an invalid input(%c)", __func__, *pos);
-			return -EINVAL;
+			BTMTK_ERR("%s: There is an invalid input(%c)", __func__, *pos);
+			ret = -EINVAL;
+			goto exit;
 		}
 		temp_str[0] = *pos;
 		temp_str[1] = *(pos + 1);
@@ -279,12 +286,14 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 	if (o_fwlog_buf[0] != HCI_COMMAND_PKT) {
 		BT_ERR("%s: Not support 0x%02X yet", __func__, o_fwlog_buf[0]);
-		return -EPROTONOSUPPORT;
+		ret = -EPROTONOSUPPORT;
+		goto exit;
 	}
 	/* check HCI command length */
 	if (len > HCI_MAX_COMMAND_SIZE) {
 		BT_ERR("%s: command is larger than max buf size, length = %d", __func__, len);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto exit;
 	}
 
 	/* send HCI command */
@@ -306,9 +315,17 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		BTMTK_INFO("%s: OK", __func__);
 
 	BTMTK_INFO("%s: Write end(len: %d)", __func__, len);
-	return count;	/* If input is correct should return the same length */
-}
+	ret = count;
 
+exit:
+	kfree(i_fwlog_buf);
+	i_fwlog_buf = NULL;
+
+	kfree(o_fwlog_buf);
+	o_fwlog_buf = NULL;
+
+	return ret;	/* If input is correct should return the same length */
+}
 
 int btmtk_fops_openfwlog(struct inode *inode, struct file *file)
 {
@@ -1153,13 +1170,13 @@ int btmtk_compare_evt(struct btmtk_dev *bdev, const uint8_t *event,
 {
 	int ret = -1;
 
-	if (bdev && bdev->io_buf && event && recv_evt_len >= event_len - 1) {
-		if (memcmp(bdev->io_buf, event + 1, event_len - 1) == 0) {
+	if (bdev && bdev->io_buf && event && recv_evt_len >= event_len) {
+		if (memcmp(bdev->io_buf, event, event_len) == 0) {
 			ret = 0;
 			goto exit;
 		} else {
 			BTMTK_INFO("%s compare fail\n", __func__);
-			BTMTK_INFO_RAW(event + 1, event_len - 1, "%s: event_need_compare:", __func__);
+			BTMTK_INFO_RAW(event, event_len, "%s: event_need_compare:", __func__);
 			BTMTK_INFO_RAW(bdev->io_buf, recv_evt_len, "%s: RCV:", __func__);
 			goto exit;
 		}
@@ -1246,7 +1263,6 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 			do {
 				/* check if event_compare_success */
 				if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
-					BTMTK_INFO("%s, compare success!!", __func__);
 					ret = 0;
 					break;
 				}
@@ -1454,7 +1470,7 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 		}
 
 		if (bdev->recv_evt_len >= event_len)
-			return bdev->io_buf[6];
+			return bdev->io_buf[PATCH_STATUS];
 
 		return PATCH_ERR;
 	} else if (fw_state == 3 && dma_flag == PATCH_DOWNLOAD_USING_DMA) {
@@ -4253,7 +4269,9 @@ static int __init main_driver_init(void)
 	int ret = 0;
 	int i;
 
-	BTMTK_INFO("%s", __func__);
+	/* Mediatek Driver Version */
+	BTMTK_INFO("%s: MTK BT Driver Version : %s", __func__, VERSION);
+
 	ret = main_init();
 	if (ret < 0)
 		return ret;

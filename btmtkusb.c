@@ -1597,6 +1597,9 @@ int btmtk_cif_subsys_reset(struct btmtk_dev *bdev)
 {
 	int val, retry = 10;
 
+	cancel_work_sync(&bdev->work);
+	cancel_work_sync(&bdev->waker);
+
 	clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
@@ -1629,7 +1632,7 @@ int btmtk_cif_subsys_reset(struct btmtk_dev *bdev)
 		/* polling re-init CR */
 		btmtk_cif_read_uhw_register(bdev, BT_MISC, &val);
 		BTMTK_INFO("%s: reg=%x, value=0x%08x", __func__, BT_MISC, val);
-		if (val & 0x00000300) {
+		if ((val & 0x00000300) == 0x00000300) {
 			/* L0.5 reset done */
 			BTMTK_INFO("%s: Do L0.5 reset sucessfully.", __func__);
 			goto Finish;
@@ -1725,6 +1728,7 @@ static int btusb_probe(struct usb_interface *intf,
 
 	INIT_WORK(&bdev->work, btusb_work);
 	INIT_WORK(&bdev->waker, btusb_waker);
+	/* it's for L0/L0.5 reset */
 	INIT_WORK(&bdev->reset_waker, btmtk_reset_waker);
 	init_usb_anchor(&bdev->tx_anchor);
 	spin_lock_init(&bdev->txlock);
@@ -1748,9 +1752,6 @@ static int btusb_probe(struct usb_interface *intf,
 	bdev->hdev->notify = btusb_notify;
 
 	SET_HCIDEV_DEV(bdev->hdev, &bdev->intf->dev);
-
-	/* Mediatek load fw rom patch */
-	BTMTK_INFO("MTK BT Driver Version : %s", VERSION);
 
 	btmtk_cap_init(bdev);
 
@@ -2010,6 +2011,9 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
 
+	/* Mediatek Driver Version */
+	BTMTK_INFO("%s: MTK BT Driver Version : %s", __func__, VERSION);
+
 	/* USB interface only.
 	 * USB will need to identify thru descriptor's interface numbering.
 	 */
@@ -2247,14 +2251,14 @@ static int btmtk_cif_allocate_memory(struct btmtk_dev *bdev)
 		}
 	}
 
-	BT_INFO("%s: Done", __func__);
+	BTMTK_INFO("%s: Done", __func__);
 	return 0;
 }
 
 static void btmtk_cif_free_memory(struct btmtk_dev *bdev)
 {
 	if (!bdev) {
-		BT_ERR("%s: bdev is NULL!", __func__);
+		BTMTK_ERR("%s: bdev is NULL!", __func__);
 		return;
 	}
 
@@ -2276,7 +2280,7 @@ static void btmtk_cif_free_memory(struct btmtk_dev *bdev)
 	kfree(bdev->urb_transfer_buf);
 	bdev->urb_transfer_buf = NULL;
 
-	BT_INFO("%s: Success", __func__);
+	BTMTK_INFO("%s: Success", __func__);
 }
 
 int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val)
@@ -2558,13 +2562,14 @@ get_response_again:
 
 	/* check WMT event */
 	memset(bdev->io_buf, 0, IO_BUF_SIZE);
+	bdev->io_buf[0] = HCI_EVENT_PKT;
 	if (BTMTK_IS_BT_0_INTF(ifnum_base))
 		ret = usb_control_msg(bdev->udev, usb_rcvctrlpipe(bdev->udev, 0),
-				0x01, DEVICE_VENDOR_REQUEST_IN, 0x30, 0x00, bdev->io_buf,
+				0x01, DEVICE_VENDOR_REQUEST_IN, 0x30, 0x00, bdev->io_buf + 1,
 				HCI_USB_IO_BUF_SIZE, USB_CTRL_IO_TIMO);
 	else if (BTMTK_IS_BT_1_INTF(ifnum_base))
 		ret = usb_control_msg(bdev->udev, usb_rcvctrlpipe(bdev->udev, 0),
-				0x01, 0xA1, 0x30, 0x03, bdev->io_buf, HCI_USB_IO_BUF_SIZE,
+				0x01, 0xA1, 0x30, 0x03, bdev->io_buf + 1, HCI_USB_IO_BUF_SIZE,
 				USB_CTRL_IO_TIMO);
 
 	if (ret < 0) {
@@ -2573,7 +2578,7 @@ get_response_again:
 	}
 
 	if (ret > 0) {
-		BTMTK_INFO_RAW(bdev->io_buf, ret, "%s OK: EVT:", __func__);
+		BTMTK_INFO_RAW(bdev->io_buf, ret + 1, "%s OK: EVT:", __func__);
 		return ret; /* return read length */
 	} else if (retry > 0) {
 		BTMTK_WARN("%s: Trying to get response... (%d)", __func__, ret);
