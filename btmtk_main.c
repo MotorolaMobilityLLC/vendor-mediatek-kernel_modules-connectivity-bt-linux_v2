@@ -103,15 +103,16 @@ static const struct btmtk_cif_state g_cif_state[] = {
 static int btmtk_enter_standby(void);
 static int btmtk_send_hci_tci_set_sleep_cmd_766x(struct btmtk_dev *bdev);
 
-int btmtk_skb_enq_fwlog(void *src, u32 len, u8 type, struct sk_buff_head *queue)
+int btmtk_skb_enq_fwlog(struct hci_dev *hdev, void *src, u32 len, u8 type, struct sk_buff_head *queue)
 {
+	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	struct sk_buff *skb_tmp = NULL;
 	ulong flags = 0;
-	int retry = 10;
+	int retry = 10, index = FWLOG_TL_SIZE;
 
 	do {
 		/* If we need hci type, len + 1 */
-		skb_tmp = alloc_skb(type ? len + 1 : len, GFP_ATOMIC);
+		skb_tmp = alloc_skb(len + FWLOG_PRSV_LEN, GFP_ATOMIC);
 		if (skb_tmp != NULL)
 			break;
 		else if (retry <= 0) {
@@ -121,14 +122,31 @@ int btmtk_skb_enq_fwlog(void *src, u32 len, u8 type, struct sk_buff_head *queue)
 		pr_err("%s: alloc_skb return 0, error, retry = %d", __func__, retry);
 	} while (retry-- > 0);
 
-	if (type) {
+	if (type == HCI_COMMAND_PKT) {
 		memcpy(&skb_tmp->data[0], &type, 1);
 		memcpy(&skb_tmp->data[1], src, len);
 		skb_tmp->len = len + 1;
+	} else if (type == FWLOG_TYPE) {
+		skb_tmp->data[0] = type;
+		/* 01 for dongle index */
+		skb_tmp->data[index] = FWLOG_DONGLE_IDX;
+		skb_tmp->data[index + 1] = sizeof(bdev->dongle_index);
+		skb_tmp->data[index + 2] = bdev->dongle_index;
+		index += (FWLOG_ATTR_RX_LEN_LEN + FWLOG_ATTR_TYPE_LEN);
+		/* 11 for rx data*/
+		skb_tmp->data[index] = FWLOG_RX;
+		skb_tmp->data[index + 1] = len & 0x00FF;
+		skb_tmp->data[index + 2] = (len & 0xFF00) >> 8;
+		index += (FWLOG_ATTR_RX_LEN_LEN + FWLOG_ATTR_TYPE_LEN);
+		memcpy(&skb_tmp->data[index], src, len);
+		skb_tmp->data[1] = (len + index - FWLOG_TL_SIZE) & 0x00FF;
+		skb_tmp->data[2] = ((len + index - FWLOG_TL_SIZE) & 0xFF00) >> 8;
+		skb_tmp->len = len + index;
 	} else {
 		memcpy(skb_tmp->data, src, len);
 		skb_tmp->len = len;
 	}
+
 
 	spin_lock_irqsave(&g_fwlog->fwlog_lock, flags);
 	skb_queue_tail(queue, skb_tmp);
@@ -189,6 +207,8 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos)
 {
 	int i = 0, len = 0, ret = -1;
+	int hci_idx = 0;
+	int vlen = 0, index = 3;
 	struct sk_buff *skb = NULL;
 	int state = BTMTK_STATE_INIT;
 	int fstate = BTMTK_FOPS_STATE_INIT;
@@ -284,7 +304,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 			BT_ERR("%s: Convert %s failed(%d)", __func__, temp_str, ret);
 	}
 
-	if (o_fwlog_buf[0] != HCI_COMMAND_PKT) {
+	if (o_fwlog_buf[0] != HCI_COMMAND_PKT && o_fwlog_buf[0] != FWLOG_TYPE) {
 		BT_ERR("%s: Not support 0x%02X yet", __func__, o_fwlog_buf[0]);
 		ret = -EPROTONOSUPPORT;
 		goto exit;
@@ -298,17 +318,53 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 	/* send HCI command */
 	bt_cb(skb)->pkt_type = HCI_COMMAND_PKT;
-	memcpy(skb->data, o_fwlog_buf, len);
-	skb->len = len;
+
+	/* format */
+	/* 0xF0 XX XX 00 01 AA 10 BB CC CC CC CC ... */
+	/* XX XX total length */
+	/* 00 : hci index setting type */
+	/* AA hci index to indicate which hci send following command*/
+	/* 10 : raw data type*/
+	/* BB command length */
+	/* CC command */
+	if (o_fwlog_buf[0] == FWLOG_TYPE) {
+		while (index < ((o_fwlog_buf[2] << 8) + o_fwlog_buf[1])) {
+			switch(o_fwlog_buf[index]) {
+			case FWLOG_HCI_IDX:    /* hci index */
+				vlen = o_fwlog_buf[index + 1];
+				hci_idx = o_fwlog_buf[index + 2];
+				BTMTK_DBG("%s: send to hci%d", __func__, hci_idx);
+				index += (FWLOG_ATTR_TL_SIZE + vlen);
+				break;
+			case FWLOG_TX:    /* tx raw data */
+				vlen = o_fwlog_buf[index + 1];
+				memcpy(skb->data, o_fwlog_buf + index + FWLOG_ATTR_TL_SIZE, vlen);
+				skb->len = vlen;
+				index = index + FWLOG_ATTR_TL_SIZE + vlen;
+				break;
+			default:
+				BTMTK_WARN("Invalid opcode");
+				return count;
+			}
+		}
+	} else {
+		memcpy(skb->data, o_fwlog_buf, len);
+		skb->len = len;
+	}
+
+	if (g_bdev[hci_idx]->hdev == NULL) {
+		BTMTK_DBG("g_bdev[%d] not define", hci_idx);
+		return count;
+	}
 
 	/* clean fwlog queue before enable picus log */
 	if (skb_queue_len(&g_fwlog->fwlog_queue) && skb->data[0] == 0x01
-			&& skb->data[1] == 0x5d &&  skb->data[2] == 0xfc) {
+			&& skb->data[1] == 0x5d && skb->data[2] == 0xfc && skb->data[4] == 0x00) {
 		skb_queue_purge(&g_fwlog->fwlog_queue);
 		BTMTK_INFO("clean fwlog_queue, skb_queue_len = %d", skb_queue_len(&g_fwlog->fwlog_queue));
 	}
 
-	ret = btmtk_cif_send_cmd(g_bdev[0], skb, 0, 0, BTMTK_EP_TYPE_OUT_OTHER);
+	ret = btmtk_cif_send_cmd(g_bdev[hci_idx], skb, 0, 0, BTMTK_EP_TYPE_OUT_OTHER);
 	if (ret < 0)
 		BTMTK_ERR("%s failed!!", __func__);
 	else
@@ -320,7 +376,6 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 exit:
 	kfree(i_fwlog_buf);
 	i_fwlog_buf = NULL;
-
 	kfree(o_fwlog_buf);
 	o_fwlog_buf = NULL;
 
@@ -1022,7 +1077,7 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 		dump_data_counter++;
 		dump_data_length += skb->len;
 
-		/* picus or syslog */
+		/* coredump */
 		/* print dump data to console */
 		if (dump_data_counter % 1000 == 0) {
 			BTMTK_INFO("%s: FW dump on-going, total_packet = %d, total_length = %d",
@@ -1048,7 +1103,7 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 
 		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_ASSERT_QUEUE_COUNT) {
 			/* sent picus data to queue, picus tool will log it */
-			if (btmtk_skb_enq_fwlog(skb->data, skb->len, 0, &g_fwlog->fwlog_queue) == 0) {
+			if (btmtk_skb_enq_fwlog(bdev->hdev, skb->data, skb->len, 0, &g_fwlog->fwlog_queue) == 0) {
 				wake_up_interruptible(&g_fwlog->fw_log_inq);
 				fwlog_fwdump_blocking_warn = 0;
 			}
@@ -1062,9 +1117,9 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
 				skb->data[1] == 0x05) {
-		/* Coredump */
+		/* picus or syslog */
 		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_QUEUE_COUNT) {
-			if (btmtk_skb_enq_fwlog(skb->data, skb->len, 0, &g_fwlog->fwlog_queue) == 0) {
+			if (btmtk_skb_enq_fwlog(bdev->hdev, skb->data, skb->len, FWLOG_TYPE, &g_fwlog->fwlog_queue) == 0) {
 				wake_up_interruptible(&g_fwlog->fw_log_inq);
 				fwlog_picus_blocking_warn = 0;
 			}
@@ -1955,6 +2010,11 @@ struct btmtk_dev *btmtk_get_dev(void)
 		 * Identified chip_id from cap_init.
 		 */
 		if (g_bdev[i]->hdev == NULL) {
+			if (i == 0)
+				g_bdev[i]->dongle_index = i;
+			else
+				g_bdev[i]->dongle_index = g_bdev[i - 1]->dongle_index + 1;
+
 			tmp_bdev = g_bdev[i];
 
 			/* Hook pre-defined table on state machine */

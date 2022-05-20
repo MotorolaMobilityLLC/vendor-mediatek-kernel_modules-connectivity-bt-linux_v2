@@ -1837,6 +1837,11 @@ static int btusb_probe(struct usb_interface *intf,
 		}
 	}
 
+	/* dongle_index - 1 since BT1 is in same interface */
+	if (BTMTK_IS_BT_1_INTF(ifnum_base))
+		bdev->dongle_index--;
+	BTMTK_DBG("%s: bdev->dongle_index = %d ", __func__, bdev->dongle_index);
+
 	usb_set_intfdata(intf, bdev);
 	btmtk_register_hci_device(bdev);
 

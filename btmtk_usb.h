@@ -117,6 +117,7 @@ struct btmtk_dev {
 	unsigned int	chip_id;
 	unsigned int	flavor;
 	unsigned int	fw_version;
+	unsigned char	dongle_index;
 	unsigned char	power_state;
 	unsigned char	fops_state;
 	unsigned char	interface_state;

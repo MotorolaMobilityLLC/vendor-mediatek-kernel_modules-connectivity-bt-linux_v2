@@ -149,12 +149,28 @@ int btmtk_picus_disable(struct btmtk_dev *bdev);
 #define RESET_PIN_SET_LOW_TIME		500
 
 /* stpbtfwlog setting */
-#define FWLOG_QUEUE_COUNT			400
+#define FWLOG_QUEUE_COUNT			(400 * BT_MCU_MINIMUM_INTERFACE_NUM)
 #define FWLOG_ASSERT_QUEUE_COUNT		45000
 #define FWLOG_BLUETOOTH_KPI_QUEUE_COUNT		200
 #define HCI_MAX_COMMAND_SIZE			255
 #define HCI_MAX_COMMAND_BUF_SIZE		(HCI_MAX_COMMAND_SIZE * 3)
 #define HCI_MAX_ISO_SIZE	340
+
+/* fwlog information define */
+#define FWLOG_TYPE		0xF0
+#define FWLOG_LEN_SIZE		2
+#define FWLOG_TL_SIZE		(HCI_TYPE_SIZE + FWLOG_LEN_SIZE)
+#define FWLOG_ATTR_TYPE_LEN	1
+#define FWLOG_ATTR_LEN_LEN	1
+#define FWLOG_ATTR_RX_LEN_LEN	2
+#define FWLOG_ATTR_TL_SIZE	(FWLOG_ATTR_TYPE_LEN + FWLOG_ATTR_LEN_LEN)
+
+#define FWLOG_HCI_IDX		0x00
+#define FWLOG_DONGLE_IDX	0x01
+#define FWLOG_TX		0x10
+#define FWLOG_RX		0x11
+
+#define FWLOG_PRSV_LEN		32
 
 struct btmtk_cif_state {
 	unsigned char ops_enter;
