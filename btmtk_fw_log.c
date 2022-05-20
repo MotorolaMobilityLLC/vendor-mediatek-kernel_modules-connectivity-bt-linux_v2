@@ -759,7 +759,6 @@ unsigned int btmtk_fops_pollfwlog(struct file *file, poll_table *wait)
 	unsigned int mask = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	BTMTK_DBG("%s: Start.", __func__);
 	//if (is_mt66xx(g_sbdev->chip_id)) {
 	if (bmain_info->hif_hook.log_get_buf_size) {
 		poll_wait(file, &BT_log_wq, wait);
@@ -1046,22 +1045,30 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				goto coredump_fail;
 			}
 			btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
+			reinit_completion(&bdev->dump_comp);
 			btmtk_fwdump_wake_lock();
 			line = __LINE__;
 			ret = connv3_coredump_start(
 					bmain_info->hif_hook.coredump_handler, CONNV3_DRV_TYPE_BT,
 					"BT exception test", skb->data, bmain_info->fw_version_str);
+			if (ret == CONNV3_COREDUMP_ERR_WRONG_STATUS) {
+				BTMTK_ERR("%s: BT previous not end", __func__);
+				connv3_coredump_end(bmain_info->hif_hook.coredump_handler, "BT previous not end");
+				ret = connv3_coredump_start(
+					bmain_info->hif_hook.coredump_handler, CONNV3_DRV_TYPE_BT,
+					"BT exception test", skb->data, bmain_info->fw_version_str);
+			}
 			if (ret)
-				goto coredump_fail;
+				goto coredump_fail_unlock;
 			line = __LINE__;
 			ret = connv3_coredump_get_issue_info(bmain_info->hif_hook.coredump_handler, &issue_info, xml_log, CONNV3_XML_SIZE);
 			if (ret)
-				goto coredump_fail;
+				goto coredump_fail_unlock;
 			BTMTK_INFO("%s: xml_log: %s, assert_info: %s ", __func__, xml_log, issue_info.assert_info);
 			line = __LINE__;
 			ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "INFO", xml_log, strlen(xml_log));
 			if (ret)
-				goto coredump_fail;
+				goto coredump_fail_unlock;
 		}
 
 		dump_data_counter++;
@@ -1081,7 +1088,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		line = __LINE__;
 		ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "[M]", skb->data, skb->len);
 		if (ret)
-			goto coredump_fail;
+			goto coredump_fail_unlock;
 
 		/* In the new generation, we will check the keyword of coredump (; coredump end)
 		 * Such as : 79xx
@@ -1110,8 +1117,11 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 		}
 		return 1;
+coredump_fail_unlock:
+		btmtk_fwdump_wake_unlock();
 coredump_fail:
 		BTMTK_ERR("%s: coredump fail ret[%d] line[%d]", __func__, ret, line);
+		connv3_coredump_end(bmain_info->hif_hook.coredump_handler, "BT coredump fail");
 		return 1;
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&

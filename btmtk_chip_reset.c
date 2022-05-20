@@ -203,6 +203,10 @@ L0RESET:
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 	else
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+
+#if (USE_DEVICE_NODE == 1)
+	complete(&bdev->dump_comp);
+#endif
 }
 
 void btmtk_reset_trigger(struct btmtk_dev *bdev)
