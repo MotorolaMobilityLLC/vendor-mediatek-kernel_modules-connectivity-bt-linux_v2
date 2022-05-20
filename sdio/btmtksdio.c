@@ -548,12 +548,16 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 	if (bdev == NULL) {
 		BTMTK_ERR("bdev is NULL");
 		ret = -1;
+		kfree_skb(skb);
+		skb = NULL;
 		goto exit;
 	}
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 	if (cif_dev == NULL) {
 		BTMTK_ERR("cif_dev is NULL, bdev=%p", bdev);
 		ret = -1;
+		kfree_skb(skb);
+		skb = NULL;
 		goto exit;
 	}
 
@@ -581,6 +585,8 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 			memcpy(evt_skb->data, &notify_alt_evt, sizeof(notify_alt_evt));
 			evt_skb->len = sizeof(notify_alt_evt);
 			hci_recv_frame(bdev->hdev, evt_skb);
+			kfree_skb(skb);
+			skb = NULL;
 			goto exit;
 		} else	if (skb->data[0] == 0x01 && skb->data[1] == 0x6f && skb->data[2] == 0xfc &&
 				skb->data[3] == 0x09 && skb->data[4] == 0x01 &&
@@ -603,6 +609,8 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 			memcpy(evt_skb->data, &notify_alt_evt, sizeof(notify_alt_evt));
 			evt_skb->len = sizeof(notify_alt_evt);
 			hci_recv_frame(bdev->hdev, evt_skb);
+			kfree_skb(skb);
+			skb = NULL;
 			goto exit;
 		}
 	}

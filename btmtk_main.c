@@ -2515,9 +2515,10 @@ int btmtk_picus_enable(struct btmtk_dev *bdev)
 {
 	u8 dft_enable_cmd[] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x02 };
 	u8 *enable_cmd = NULL;
-	//u8 enable_event[] = { 0x19, 0x07, 0x5D, 0xFC, 0x04, 0x00, 0x00 };
+	/* Can't check event now
+	   Event will be dropped by btmtk_dispatch_pkt(). It can't be compared
 	u8 enable_event[] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
-
+	*/
 	int enable_len = 0;
 	int ret = -1;	/* if successful, 0 */
 
@@ -2537,7 +2538,7 @@ int btmtk_picus_enable(struct btmtk_dev *bdev)
 
 	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		ret = btmtk_main_send_cmd(bdev, enable_cmd, enable_len,
-			enable_event, sizeof(enable_event), DELAY_TIMES, RETRY_TIMES,
+			NULL, 0, DELAY_TIMES, RETRY_TIMES,
 			BTMTK_TX_PKT_FROM_HOST);
 	else
 		BTMTK_WARN("%s: not support for 0x%x", __func__, bdev->chip_id);
@@ -2549,15 +2550,17 @@ int btmtk_picus_enable(struct btmtk_dev *bdev)
 int btmtk_picus_disable(struct btmtk_dev *bdev)
 {
 	u8 dft_disable_cmd[] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x00 };
+	/* Can't check event now
+	   Event will be dropped by btmtk_dispatch_pkt(). It can't be compared
 	u8 dft_disable_event[] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
-
+	*/
 	int ret = -1;	/* if successful, 0 */
 
 	BTMTK_INFO("%s\n", __func__);
 
 	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		ret = btmtk_main_send_cmd(bdev, dft_disable_cmd, sizeof(dft_disable_cmd),
-			dft_disable_event, sizeof(dft_disable_event), DELAY_TIMES, RETRY_TIMES,
+			NULL, 0, DELAY_TIMES, RETRY_TIMES,
 			BTMTK_TX_PKT_FROM_HOST);
 	else
 		BTMTK_WARN("%s: not support for 0x%x", __func__, bdev->chip_id);
