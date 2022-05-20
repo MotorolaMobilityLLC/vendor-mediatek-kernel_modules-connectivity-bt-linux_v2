@@ -1794,7 +1794,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		}
 
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
-			if ((is_mt7902(bdev->chip_id) ||is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) &&
+			if ((is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) &&
 					cif_dev->bulk_cmd_tx_ep)
 				urb = alloc_bulk_cmd_urb(hdev, skb);
 			else

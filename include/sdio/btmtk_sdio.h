@@ -178,7 +178,7 @@ typedef int (*set_gpio_high)(u8 gpio);
 /* Driver & FW own related */
 #define DRIVER_OWN 0
 #define FW_OWN 1
-#define SET_OWN_LOOP_COUNT 20
+#define SET_OWN_LOOP_COUNT 10
 
 /* CMD&Event sent by driver */
 #define READ_REGISTER_CMD_LEN		16
@@ -196,6 +196,15 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define LD_PATCH_CMD_LEN 10
 #define LD_PATCH_EVT_LEN 8
 
+#define BTMTK_SDIO_THREAD_STOP	(1 << 0)
+#define BTMTK_SDIO_THREAD_TX		(1 << 1)
+#define BTMTK_SDIO_THREAD_RX		(1 << 2)
+#define BTMTK_SDIO_THREAD_FW_OWN	(1 << 3)
+
+#define FW_OWN_TIMEOUT		200
+#define FW_OWN_TIMER_CANCEL	0
+#define FW_OWN_TIMER_INIT	1
+#define FW_OWN_TIMER_RUNNING	2
 
 struct btmtk_sdio_hdr {
 	/* For SDIO Header */
@@ -232,6 +241,9 @@ struct btmtk_sdio_dev {
 	struct btmtk_sdio_thread sdio_thread;
 	struct btmtk_woble bt_woble;
 	struct btmtk_buffer_mode_struct *buffer_mode;
+
+	struct timer_list fw_own_timer;
+	atomic_t fw_own_timer_flag;
 };
 
 int btmtk_sdio_read_bt_mcu_pc(u32 *val);
