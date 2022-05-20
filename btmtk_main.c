@@ -1615,8 +1615,16 @@ static int btmtk_load_fw_patch_using_wmt_cmd(struct btmtk_dev *bdev,
 			image[9] = phase;
 			memcpy(&image[10], fwbuf + offset + cur_len, sent_len);
 			if (phase == PATCH_PHASE3) {
-				delay = PATCH_DOWNLOAD_PHASE3_DELAY_TIME;
-				retry = PATCH_DOWNLOAD_PHASE3_RETRY;
+				if (is_mt7922(bdev->chip_id)) {
+					/* if secure boot enable, it need take 76ms at less
+					 * for RSA check.
+					 */
+					delay = PATCH_DOWNLOAD_PHASE3_SECURE_BOOT_DELAY_TIME;
+					retry = PATCH_DOWNLOAD_PHASE3_RETRY;
+				} else {
+					delay = PATCH_DOWNLOAD_PHASE3_DELAY_TIME;
+					retry = PATCH_DOWNLOAD_PHASE3_RETRY;
+				}
 			}
 
 			cur_len += sent_len;
