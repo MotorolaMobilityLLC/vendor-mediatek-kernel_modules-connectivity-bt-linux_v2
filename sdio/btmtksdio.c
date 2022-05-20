@@ -27,6 +27,11 @@ static char event_need_compare[EVENT_COMPARE_SIZE] = {0};
 static char event_need_compare_len;
 static char event_compare_status;
 
+static DEFINE_MUTEX(btmtk_sdio_own_mutex);
+#define SDIO_OWN_MUTEX_LOCK()	mutex_lock(&btmtk_sdio_own_mutex)
+#define SDIO_OWN_MUTEX_UNLOCK()	mutex_unlock(&btmtk_sdio_own_mutex)
+
+
 static DEFINE_MUTEX(btmtk_sdio_ops_mutex);
 #define SDIO_OPS_MUTEX_LOCK()	mutex_lock(&btmtk_sdio_ops_mutex)
 #define SDIO_OPS_MUTEX_UNLOCK()	mutex_unlock(&btmtk_sdio_ops_mutex)
@@ -397,6 +402,7 @@ int btmtk_sdio_set_own_back(struct btmtk_sdio_dev *cif_dev, int owntype, int ret
 		return -EINVAL;
 	}
 
+	SDIO_OWN_MUTEX_LOCK();
 	/* For CHLPCR, bit 8 could help us to check driver own or fw own
 	 * 0: COM driver doesn't have ownership
 	 * 1: COM driver has ownership
@@ -416,10 +422,13 @@ int btmtk_sdio_set_own_back(struct btmtk_sdio_dev *cif_dev, int owntype, int ret
 	BTMTK_DBG("owntype: %d, CHLPCR: 0x%0x, PD2HRM0R: 0x%0x",
 		owntype, u32CHLPCRValue, u32PD2HRM0RValue);
 
-	if (owntype == DRIVER_OWN && chlpcr_driver_own && pd2hrm0r_driver_own)
-		return 0;
-	else if (owntype == FW_OWN && !chlpcr_driver_own && !pd2hrm0r_driver_own)
-		return 0;
+	if (owntype == DRIVER_OWN && chlpcr_driver_own && pd2hrm0r_driver_own) {
+		ret = 0;
+		goto unlock;
+	} else if (owntype == FW_OWN && !chlpcr_driver_own && !pd2hrm0r_driver_own) {
+		ret = 0;
+		goto unlock;
+	}
 
 	if (owntype == DRIVER_OWN)
 		ownValue = 0x00000200;
@@ -546,6 +555,8 @@ done:
 			BTMTK_DBG("%s set FW own success", __func__);
 	}
 
+unlock:
+	SDIO_OWN_MUTEX_UNLOCK();
 	return ret;
 }
 
@@ -686,6 +697,40 @@ int btmtk_sdio_read_conn_infra_pc(u32 *val)
 	return 0;
 }
 EXPORT_SYMBOL(btmtk_sdio_read_conn_infra_pc);
+
+typedef u_int8_t (*wifi_driver_own)(int32_t enable);
+static wifi_driver_own wifi_driver_own_ptr;
+static void btmtk_sdio_set_wifi_driver_own(int enable)
+{
+	if (!wifi_driver_own_ptr)
+		wifi_driver_own_ptr =
+			(wifi_driver_own)btmtk_kallsyms_lookup_name("halPreventFwOwnEn");
+
+	if (wifi_driver_own_ptr) {
+		BTMTK_INFO("%s set wifi own to %d", __func__, enable);
+		wifi_driver_own_ptr(enable);
+	} else {
+		BTMTK_INFO("%s wifi_driver_own_ptr is NULL", __func__);
+	}
+}
+
+int btmtk_sdio_set_driver_own_for_subsys_reset(int enable)
+{
+	if (!g_sdio_dev.func)
+		return -ENODEV;
+
+	BTMTK_INFO("%s enter! enable = %d", __func__, enable);
+	if (enable == 1) {
+		btmtk_sdio_set_no_fwn_own(&g_sdio_dev, 1);
+		return 0;
+	} else if (enable == 0) {
+		btmtk_sdio_set_no_fwn_own(&g_sdio_dev, 0);
+		return 0;
+	}
+
+	return -EINVAL;
+}
+EXPORT_SYMBOL(btmtk_sdio_set_driver_own_for_subsys_reset);
 
 static int btmtk_sdio_open(struct hci_dev *hdev)
 {
@@ -1628,6 +1673,8 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s read PD2HRM0R 0x%08X", __func__, u32ReadCRValue);
 	cif_dev->patched = 0;
 
+	btmtk_sdio_set_wifi_driver_own(1);
+
 	/* write CHCR[3] 0 */
 	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
 	BTMTK_INFO("%s read CHCR 0x%08X", __func__, u32ReadCRValue);
@@ -2389,6 +2436,8 @@ static void btmtk_sdio_chip_reset_notify(struct btmtk_dev *bdev)
 	btmtk_sdio_set_own_back(cif_dev, FW_OWN, RETRY_TIMES);
 	cif_dev->patched = 1;
 	atomic_set(&cif_dev->tx_rdy, 1);
+
+	btmtk_sdio_set_wifi_driver_own(0);
 }
 
 int btmtk_cif_register(void)
