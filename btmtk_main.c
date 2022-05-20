@@ -475,6 +475,8 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		BTMTK_INFO("clean fwlog_queue, skb_queue_len = %d", skb_queue_len(&g_fwlog->fwlog_queue));
 	}
 
+	btmtk_dispatch_data_bluetooth_kpi(bdev->hdev, skb->data, skb->len, KPI_WITHOUT_TYPE);
+
 	ret = main_info.hif_hook.send_cmd(g_bdev[hci_idx], skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST);
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);

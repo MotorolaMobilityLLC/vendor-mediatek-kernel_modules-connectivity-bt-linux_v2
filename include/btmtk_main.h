@@ -128,6 +128,9 @@
 /* total fwlog info len */
 #define FWLOG_PRSV_LEN		32
 
+/* bluetooth kpi */
+#define KPI_WITHOUT_TYPE	0
+
 struct btmtk_cif_state {
 	unsigned char ops_enter;
 	unsigned char ops_end;
