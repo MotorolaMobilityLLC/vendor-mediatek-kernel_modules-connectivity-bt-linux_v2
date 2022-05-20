@@ -15,12 +15,15 @@
 #define _BTMTK_USB_H_
 #include <linux/usb.h>
 #include "btmtk_define.h"
+#include "btmtk_main.h"
 
 #define HCI_MAX_COMMAND_SIZE	255
 #define URB_MAX_BUFFER_SIZE	(4*1024)
 
 #define BT0_MCU_INTERFACE_NUM 0
 #define BT1_MCU_INTERFACE_NUM 3
+#define BT_MCU_INTERFACE_NUM_MAX 4
+#define BT_MCU_NUM_MAX 2
 
 typedef int (*pdwnc_func) (u8 fgReset);
 typedef int (*reset_func_ptr2) (unsigned int gpio, int init_value);
@@ -43,36 +46,17 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define EP_RST_OPT 0x74011890
 #define EP_RST_IN_OUT_OPT 0x00010001
 
-struct btmtk_dev {
-	struct hci_dev	*hdev;
-	unsigned long	hdev_flags;
+extern u8 wmt_over_hci_header[];
 
-	struct usb_device	*udev;
-	struct usb_interface	*intf;
-	struct usb_interface	*isoc;
-	struct usb_interface	*iso_channel;
+struct btmtk_cif_chip_reset {
+	/* For Whole chip reset */
+	pdwnc_func pf_pdwndFunc;
+	reset_func_ptr2 pf_resetFunc2;
+	set_gpio_low pf_lowFunc;
+	set_gpio_high pf_highFunc;
+};
 
-	unsigned long	flags;
-
-	struct work_struct	work;
-	struct work_struct	waker;
-	struct work_struct	reset_waker;
-
-	int recv_evt_len;
-	struct usb_anchor	tx_anchor;
-	int	tx_in_flight;
-	spinlock_t	txlock;
-
-	struct usb_anchor	intr_anchor;
-	struct usb_anchor	bulk_anchor;
-	struct usb_anchor	isoc_anchor;
-	struct usb_anchor	ctrl_anchor;
-	struct usb_anchor	ble_isoc_anchor;
-	spinlock_t	rxlock;
-
-	struct sk_buff	*evt_skb;
-	struct sk_buff	*sco_skb;
-
+struct btmtk_usb_dev {
 	struct usb_endpoint_descriptor	*intr_ep;
 	/* EP10 OUT */
 	struct usb_endpoint_descriptor	*intr_iso_tx_ep;
@@ -87,73 +71,26 @@ struct btmtk_dev {
 	struct usb_endpoint_descriptor	*isoc_tx_ep;
 	struct usb_endpoint_descriptor	*isoc_rx_ep;
 
-	/* For ble iso packet size */
-	int iso_threshold;
+	struct usb_device	*udev;
+	struct usb_interface	*intf;
+	struct usb_interface	*isoc;
+	struct usb_interface	*iso_channel;
+
+
+	struct usb_anchor	tx_anchor;
+	struct usb_anchor	intr_anchor;
+	struct usb_anchor	bulk_anchor;
+	struct usb_anchor	isoc_anchor;
+	struct usb_anchor	ctrl_anchor;
+	struct usb_anchor	ble_isoc_anchor;
 
 	__u8	cmdreq_type;
 	__u8	cmdreq;
 
-	unsigned int	sco_num;
-	int	isoc_altsetting;
-
 	int new_isoc_altsetting;
 	int new_isoc_altsetting_interface;
 
-	int	suspend_count;
-
-	/* For tx queue */
-	unsigned long	tx_state;
-
-	/* For rx queue */
-	struct workqueue_struct	*workqueue;
-	struct sk_buff_head	rx_q;
-	struct work_struct	rx_work;
-	struct sk_buff		*rx_skb;
-
-	wait_queue_head_t	p_wait_event_q;
-
-	unsigned int	subsys_reset;
-	unsigned int	chip_reset;
-	unsigned char	*rom_patch_bin_file_name;
-	unsigned int	chip_id;
-	unsigned int	flavor;
-	unsigned int	fw_version;
-	unsigned char	dongle_index;
-	unsigned char	power_state;
-	unsigned char	fops_state;
-	unsigned char	interface_state;
-	struct btmtk_cif_state *cif_state;
-
-	/* io buffer for usb control transfer */
-	unsigned char	*io_buf;
 	unsigned char	*o_usb_buf;
-
-	unsigned char	*setting_file;
-	unsigned char	*woble_setting_file_name;
-	unsigned int	woble_setting_len;
-
-	struct fw_cfg_struct	woble_setting_apcf[WOBLE_SETTING_COUNT];
-	struct fw_cfg_struct	woble_setting_apcf_fill_mac[WOBLE_SETTING_COUNT];
-	struct fw_cfg_struct	woble_setting_apcf_fill_mac_location[WOBLE_SETTING_COUNT];
-
-	struct fw_cfg_struct	woble_setting_radio_off;
-	struct fw_cfg_struct	woble_setting_wakeup_type;
-	struct fw_cfg_struct	woble_setting_radio_off_status_event;
-	/* complete event */
-	struct fw_cfg_struct	woble_setting_radio_off_comp_event;
-
-	struct fw_cfg_struct	woble_setting_radio_on;
-	struct fw_cfg_struct	woble_setting_radio_on_status_event;
-	struct fw_cfg_struct	woble_setting_radio_on_comp_event;
-
-	/* set apcf after resume(radio on) */
-	struct fw_cfg_struct	woble_setting_apcf_resume[WOBLE_SETTING_COUNT];
-	unsigned char	bdaddr[BD_ADDRESS_SIZE];
-	unsigned int	woble_need_trigger_coredump;
-	unsigned int	woble_need_set_radio_off_in_probe;
-
-	unsigned char		*bt_cfg_file_name;
-	struct bt_cfg_struct	bt_cfg;
 
 	/* TODO, need to confirm the max size of urb data, also need to confirm
 	 * whether intr_complete and bulk_complete and soc_complete can all share
@@ -161,26 +98,4 @@ struct btmtk_dev {
 	 */
 	unsigned char	*urb_transfer_buf;
 };
-
-struct btmtk_cif_chip_reset {
-	/* For Whole chip reset */
-	pdwnc_func pf_pdwndFunc;
-	reset_func_ptr2 pf_resetFunc2;
-	set_gpio_low pf_lowFunc;
-	set_gpio_high pf_highFunc;
-};
-
-int btmtk_cif_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
-		int delay, int retry, int endpoint);
-int btmtk_cif_send_calibration(struct btmtk_dev *bdev);
-int btmtk_cif_open(struct hci_dev *hdev);
-int btmtk_cif_close(struct hci_dev *hdev);
-int btmtk_cif_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val);
-int btmtk_cif_write_register(struct btmtk_dev *bdev, u32 reg, u32 val);
-int btmtk_cif_get_rom_patch_result(struct btmtk_dev *bdev);
-int btmtk_cif_recv_evt(struct btmtk_dev *bdev, int delay, int retry);
-int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val);
-int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val);
-int btmtk_cif_subsys_reset(struct btmtk_dev *bdev);
-void btmtk_cif_toggle_rst_pin(struct btmtk_dev *bdev);
 #endif

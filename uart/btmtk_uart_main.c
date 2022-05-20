@@ -54,9 +54,6 @@ int btmtk_cif_send_cmd(struct hci_dev *hdev, const uint8_t *cmd,
 	int ret = -1, len = 0;
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 
-	if (cmd_len > 30)
-	BTMTK_DBG_RAW(cmd, 30, "%s, len = %d Send CMD : ", __func__, cmd_len);
-	else
 	BTMTK_DBG_RAW(cmd, cmd_len, "%s, len = %d Send CMD : ", __func__, cmd_len);
 	//BTMTK_INFO("%s: tty %p\n", __func__, bdev->tty);
 	while (len != cmd_len) {
@@ -225,7 +222,6 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, char 
 	struct btmtk_dev *bdev = tty->disc_data;
 
 	BTMTK_DBG_RAW(data, count, "Receive");
-
 
 	/* add hci device part */
 	ret = btmtk_recv(bdev->hdev, data, count);

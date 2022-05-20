@@ -15,67 +15,6 @@
 #include "btmtk_define.h"
 #include "btmtk_chip_if.h"
 
-int btmtk_get_chip_state(struct btmtk_dev *bdev);
-void btmtk_set_chip_state(struct btmtk_dev *bdev, int new_state);
-int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
-void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
-int btmtk_register_hci_device(struct btmtk_dev *bdev);
-int btmtk_deregister_hci_device(struct btmtk_dev *bdev);
-int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count);
-int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb);
-int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb);
-int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb);
-int btmtk_send_init_cmds(struct btmtk_dev *hdev);
-int btmtk_send_deinit_cmds(struct btmtk_dev *hdev);
-int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
-		const int cmd_len, const uint8_t *event, const int event_len, int delay,
-		int retry, int endpoint);
-int btmtk_send_wmt_reset(struct btmtk_dev *hdev);
-int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *hdev);
-int btmtk_send_wmt_power_off_cmd(struct btmtk_dev *hdev);
-int btmtk_woble_suspend(struct btmtk_dev *bdev);
-int btmtk_woble_resume(struct btmtk_dev *bdev);
-int btmtk_handle_leaving_WoBLE_state(struct btmtk_dev *bdev);
-int btmtk_handle_entering_WoBLE_state(struct btmtk_dev *bdev);
-int btmtk_load_woble_setting(char *bin_name,
-		struct device *dev, u32 *code_len, struct btmtk_dev *bdev);
-int btmtk_load_rom_patch_766x(struct btmtk_dev *hdev);
-int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev);
-int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev);
-void btmtk_cap_init(struct btmtk_dev *bdev);
-int btmtk_load_rom_patch(struct btmtk_dev *bdev);
-struct btmtk_dev *btmtk_get_dev(void);
-void btmtk_release_dev(struct btmtk_dev *bdev);
-struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev);
-void btmtk_free_dev_memory(struct device *dev, struct btmtk_dev *bdev);
-void btmtk_reset_waker(struct work_struct *work);
-void btmtk_initialize_cfg_items(struct btmtk_dev *bdev);
-bool btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_dev *bdev);
-u8 btmtk_get_reset_stack_flag(void);
-int btmtk_reset_power_on(struct btmtk_dev *bdev);
-void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev);
-void btmtk_free_setting_file(struct btmtk_dev *bdev);
-int btmtk_dispatch_data_bluetooth_kpi(struct hci_dev *hdev, u8 *buf, int len, u8 type);
-/** file_operations: stpbtfwlog */
-int btmtk_fops_openfwlog(struct inode *inode, struct file *file);
-int btmtk_fops_closefwlog(struct inode *inode, struct file *file);
-ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, loff_t *f_pos);
-ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos);
-unsigned int btmtk_fops_pollfwlog(struct file *filp, poll_table *wait);
-long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigned long arg);
-
-/* Auto enable picus */
-int btmtk_picus_enable(struct btmtk_dev *bdev);
-int btmtk_picus_disable(struct btmtk_dev *bdev);
-
-void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf);
-void btmtk_hci_snoop_save_event(u32 len, u8 *buf);
-void btmtk_hci_snoop_save_adv_event(u32 len, u8 *buf);
-void btmtk_hci_snoop_save_acl(u32 len, u8 *buf);
-void btmtk_hci_snoop_print(u32 len, const u8 *buf);
-unsigned long btmtk_kallsyms_lookup_name(const char *name);
-void btmtk_woble_wake_lock(struct btmtk_dev *bdev);
-void btmtk_woble_wake_unlock(struct btmtk_dev *bdev);
 
 //static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb);
 
@@ -190,10 +129,10 @@ struct btmtk_cif_state {
 	unsigned char ops_error;
 };
 
-enum {
-	BTMTK_EP_TYPE_OUT_CMD = 0,	/*EP type out for hci cmd and wmt cmd */
-	BTMTK_EP_TPYE_OUT_ACL,	/* EP type out for acl pkt with load rompatch */
-	BTMTK_EP_TYPE_OUT_OTHER,	/* EP type out for pkt from host, include acl and hci */
+enum TX_TYPE {
+	BTMTK_TX_CMD_FROM_DRV = 0,	/* send hci cmd and wmt cmd by driver */
+	BTMTK_TX_ACL_FROM_DRV,	/* send acl pkt with load rompatch by driver */
+	BTMTK_TX_PKT_FROM_HOST,	/* send pkt from host, include acl and hci */
 };
 
 /* Device node */
@@ -215,12 +154,6 @@ struct btmtk_fops_fwlog {
 	spinlock_t fwlog_lock;
 	u8 btmtk_bluetooth_kpi;
 };
-
-struct btmtk_main_info {
-	u8 reset_stack_flag;
-	struct wakeup_source *woble_ws;
-};
-
 
 enum {
 	BTMTK_DONGLE_STATE_UNKNOWN,
@@ -335,6 +268,128 @@ struct _Section_Map {
 	.maxlen = HCI_MAX_EVENT_SIZE
 
 
+struct btmtk_dev {
+	struct hci_dev	*hdev;
+	unsigned long	hdev_flags;
+	unsigned long	flags;
+	void *intf_dev;
+	void *cif_dev;
+
+	struct work_struct	work;
+	struct work_struct	waker;
+	struct work_struct	reset_waker;
+
+	int	recv_evt_len;
+	int	tx_in_flight;
+	spinlock_t	txlock;
+	spinlock_t	rxlock;
+
+	struct sk_buff	*evt_skb;
+	struct sk_buff	*sco_skb;
+
+	/* For ble iso packet size */
+	int iso_threshold;
+
+	unsigned int	sco_num;
+	int	isoc_altsetting;
+
+	int	suspend_count;
+
+	/* For tx queue */
+	unsigned long	tx_state;
+
+	/* For rx queue */
+	struct workqueue_struct	*workqueue;
+	struct sk_buff_head	rx_q;
+	struct work_struct	rx_work;
+	struct sk_buff		*rx_skb;
+
+	wait_queue_head_t	p_wait_event_q;
+
+	unsigned int	subsys_reset;
+	unsigned int	chip_reset;
+	unsigned char	*rom_patch_bin_file_name;
+	unsigned int	chip_id;
+	unsigned int	flavor;
+	unsigned int	fw_version;
+	unsigned char	dongle_index;
+	unsigned char	power_state;
+	unsigned char	fops_state;
+	unsigned char	interface_state;
+	struct btmtk_cif_state *cif_state;
+
+	/* io buffer for usb control transfer */
+	unsigned char	*io_buf;
+
+	unsigned char	*setting_file;
+	unsigned char	*woble_setting_file_name;
+	unsigned int	woble_setting_len;
+
+	struct fw_cfg_struct	woble_setting_apcf[WOBLE_SETTING_COUNT];
+	struct fw_cfg_struct	woble_setting_apcf_fill_mac[WOBLE_SETTING_COUNT];
+	struct fw_cfg_struct	woble_setting_apcf_fill_mac_location[WOBLE_SETTING_COUNT];
+
+	struct fw_cfg_struct	woble_setting_radio_off;
+	struct fw_cfg_struct	woble_setting_wakeup_type;
+	struct fw_cfg_struct	woble_setting_radio_off_status_event;
+	/* complete event */
+	struct fw_cfg_struct	woble_setting_radio_off_comp_event;
+
+	struct fw_cfg_struct	woble_setting_radio_on;
+	struct fw_cfg_struct	woble_setting_radio_on_status_event;
+	struct fw_cfg_struct	woble_setting_radio_on_comp_event;
+
+	/* set apcf after resume(radio on) */
+	struct fw_cfg_struct	woble_setting_apcf_resume[WOBLE_SETTING_COUNT];
+	unsigned char	bdaddr[BD_ADDRESS_SIZE];
+	unsigned int	woble_need_trigger_coredump;
+	unsigned int	woble_need_set_radio_off_in_probe;
+
+	unsigned char		*bt_cfg_file_name;
+	struct bt_cfg_struct	bt_cfg;
+
+	/* Foe Woble eint */
+	unsigned int wobt_irq;
+	int wobt_irqlevel;
+	atomic_t irq_enable_count;
+	struct input_dev *WoBLEInputDev;
+};
+
+typedef int (*cif_open_ptr)(struct hci_dev *hdev);
+typedef int (*cif_close_ptr)(struct hci_dev *hdev);
+typedef int (*cif_reg_read_ptr)(struct btmtk_dev *bdev, u32 reg, u32 *val);
+typedef int (*cif_reg_write_ptr)(struct btmtk_dev *bdev, u32 reg, u32 val);
+typedef int (*cif_send_cmd_ptr)(struct btmtk_dev *bdev, struct sk_buff *skb,
+		int delay, int retry, int pkt_type);
+typedef int (*cif_send_and_recv_ptr)(struct btmtk_dev *bdev,
+		struct sk_buff *skb,
+		const uint8_t *event, const int event_len,
+		int delay, int retry, int pkt_type);
+typedef int (*cif_event_filter_ptr)(struct btmtk_dev *bdev, struct sk_buff *skb);
+typedef int (*cif_subsys_reset_ptr)(struct btmtk_dev *bdev);
+typedef int (*cif_whole_reset_ptr)(struct btmtk_dev *bdev);
+typedef void (*cif_chip_reset_notify_ptr)(struct btmtk_dev *bdev);
+
+struct hif_hook_ptr {
+	cif_open_ptr			open;
+	cif_close_ptr			close;
+	cif_reg_read_ptr		reg_read;
+	cif_reg_write_ptr		reg_write;
+	cif_send_cmd_ptr		send_cmd;
+	cif_send_and_recv_ptr		send_and_recv;
+	cif_event_filter_ptr		event_filter;
+	cif_subsys_reset_ptr		subsys_reset;
+	cif_whole_reset_ptr		whole_reset;
+	cif_chip_reset_notify_ptr	chip_reset_notify;
+};
+
+struct btmtk_main_info {
+	u8 reset_stack_flag;
+	struct wakeup_source *woble_ws;
+	struct wakeup_source *eint_ws;
+	struct hif_hook_ptr hif_hook;
+};
+
 static inline int is_mt7922(u32 chip_id)
 {
 	chip_id &= 0xFFFF;
@@ -370,5 +425,73 @@ static inline int is_support_unify_woble(struct btmtk_dev *bdev)
 		return 0;
 	}
 }
+
+int btmtk_get_chip_state(struct btmtk_dev *bdev);
+void btmtk_set_chip_state(struct btmtk_dev *bdev, int new_state);
+int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
+void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
+int btmtk_register_hci_device(struct btmtk_dev *bdev);
+int btmtk_deregister_hci_device(struct btmtk_dev *bdev);
+int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count);
+int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb);
+int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb);
+int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb);
+int btmtk_send_init_cmds(struct btmtk_dev *hdev);
+int btmtk_send_deinit_cmds(struct btmtk_dev *hdev);
+int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
+		const int cmd_len, const uint8_t *event, const int event_len, int delay,
+		int retry, int pkt_type);
+int btmtk_send_wmt_reset(struct btmtk_dev *hdev);
+int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *hdev);
+int btmtk_send_wmt_power_off_cmd(struct btmtk_dev *hdev);
+int btmtk_woble_suspend(struct btmtk_dev *bdev);
+int btmtk_woble_resume(struct btmtk_dev *bdev);
+int btmtk_handle_leaving_WoBLE_state(struct btmtk_dev *bdev);
+int btmtk_handle_entering_WoBLE_state(struct btmtk_dev *bdev);
+int btmtk_load_woble_setting(char *bin_name,
+		struct device *dev, u32 *code_len, struct btmtk_dev *bdev);
+int btmtk_load_rom_patch_766x(struct btmtk_dev *hdev);
+int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev);
+int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev);
+int btmtk_load_rom_patch(struct btmtk_dev *bdev);
+struct btmtk_dev *btmtk_get_dev(void);
+void btmtk_release_dev(struct btmtk_dev *bdev);
+struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev);
+void btmtk_free_dev_memory(struct device *dev, struct btmtk_dev *bdev);
+void btmtk_reset_waker(struct work_struct *work);
+void btmtk_initialize_cfg_items(struct btmtk_dev *bdev);
+bool btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_dev *bdev);
+struct btmtk_main_info *btmtk_get_main_info(void);
+int btmtk_reset_power_on(struct btmtk_dev *bdev);
+void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev);
+void btmtk_free_setting_file(struct btmtk_dev *bdev);
+int btmtk_dispatch_data_bluetooth_kpi(struct hci_dev *hdev, u8 *buf, int len, u8 type);
+/** file_operations: stpbtfwlog */
+int btmtk_fops_openfwlog(struct inode *inode, struct file *file);
+int btmtk_fops_closefwlog(struct inode *inode, struct file *file);
+ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, loff_t *f_pos);
+ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos);
+unsigned int btmtk_fops_pollfwlog(struct file *filp, poll_table *wait);
+long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigned long arg);
+
+/* Auto enable picus */
+int btmtk_picus_enable(struct btmtk_dev *bdev);
+int btmtk_picus_disable(struct btmtk_dev *bdev);
+
+void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf);
+void btmtk_hci_snoop_save_event(u32 len, u8 *buf);
+void btmtk_hci_snoop_save_adv_event(u32 len, u8 *buf);
+void btmtk_hci_snoop_save_acl(u32 len, u8 *buf);
+void btmtk_hci_snoop_print(u32 len, const u8 *buf);
+unsigned long btmtk_kallsyms_lookup_name(const char *name);
+void btmtk_woble_wake_lock(struct btmtk_dev *bdev);
+void btmtk_woble_wake_unlock(struct btmtk_dev *bdev);
+void btmtk_reg_hif_hook(struct hif_hook_ptr *hook);
+int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus);
+void btmtk_main_cif_uninitialize(struct btmtk_dev *bdev, int hci_bus);
+int btmtk_main_woble_initialize(struct btmtk_dev *bdev);
+int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus);
+
+int btmtk_cif_send_calibration(struct btmtk_dev *bdev);
 
 #endif /* __BTMTK_MAIN_H__ */

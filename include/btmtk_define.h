@@ -39,7 +39,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.2000072401"
+#define VERSION "7.0.2000073101"
 #define SUBVER ":turnkey"
 
 
@@ -78,7 +78,6 @@
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
 
-
 /**
  * Log and level definition
  */
@@ -96,7 +95,6 @@
 
 
 extern uint8_t btmtk_log_lvl;
-extern u8 wmt_over_hci_header[];
 
 #define BTMTK_ERR(fmt, ...)	 \
 	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR) pr_warn("[btmtk_err] ***"fmt"***\n", ##__VA_ARGS__); } while (0)

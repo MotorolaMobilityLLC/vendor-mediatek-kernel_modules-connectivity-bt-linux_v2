@@ -32,7 +32,7 @@ struct mtk_stp_hdr {
 #define STP_HEADER_CRC_LEN	2
 
 
-struct btmtk_dev {
+struct btmtk_uart_dev {
 	struct hci_dev	   *hdev;
 	struct tty_struct *tty;
 	unsigned long	hdev_flags;
@@ -80,8 +80,6 @@ struct btmtk_dev {
 
 #define N_MTK        (15+1)
 
-int btmtk_cif_send_cmd(struct hci_dev *hdev, const uint8_t *cmd,
-		const int cmd_len, int retry, int endpoint, unsigned long tx_state);
 int btmtk_cif_send_calibration(struct hci_dev *hdev);
 #endif
 

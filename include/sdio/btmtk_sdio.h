@@ -26,6 +26,8 @@
 
 #include "btmtk_define.h"
 
+#include "btmtk_main.h"
+
 /**
  * Card-relate definition.
  */
@@ -87,7 +89,7 @@ typedef int (*set_gpio_high)(u8 gpio);
  */
 #define RETRY_TIMES 10
 #define HCI_EV_VENDOR			0xff
-#define SDIO_BLOCK_SIZE                 256
+#define SDIO_BLOCK_SIZE                 512
 #define SDIO_RW_RETRY_COUNT 500
 #define MTK_SDIO_PACKET_HEADER_SIZE 4
 
@@ -103,10 +105,8 @@ struct btmtk_sdio_hdr {
 	u8	bt_type;
 } __packed;
 
-struct btmtk_dev {
-	struct hci_dev	*hdev;
+struct btmtk_sdio_dev {
 	struct sdio_func *func;
-	unsigned long	hdev_flags;
 
 	bool keep_drv_on;
 	u8 tx_empty;
@@ -114,83 +114,7 @@ struct btmtk_dev {
 	u32 int_count;
 	bool no_fw_own;
 	bool tx_dnld_rdy;
-	bool rx_dnld_rdy;
-
-	unsigned long	flags;
-
-	struct work_struct	work;
-	struct work_struct	waker;
-	struct work_struct	reset_waker;
-
-	int recv_evt_len;
-	int	tx_in_flight;
-	spinlock_t	txlock;
-	spinlock_t	rxlock;
-
-	struct sk_buff	*evt_skb;
-	struct sk_buff	*sco_skb;
-	struct sk_buff_head tx_queue;
-
-	/* For ble iso packet size */
-	int iso_threshold;
-
-	unsigned int	sco_num;
-	int	isoc_altsetting;
-	int	suspend_count;
-
-	/* For tx queue */
-	unsigned long	tx_state;
-
-	/* For rx queue */
-	struct workqueue_struct	*workqueue;
-	struct sk_buff_head	rx_q;
-	struct work_struct	rx_work;
-	struct sk_buff		*rx_skb;
-
-	wait_queue_head_t p_wait_event_q;
-
-	unsigned int	subsys_reset;
-	unsigned int	chip_reset;
-	unsigned char	*rom_patch_bin_file_name;
-	unsigned char	power_state;
-	unsigned char	fops_state;
-	unsigned char	interface_state;
-	unsigned int	chip_id;
-	unsigned int	flavor;
-	unsigned int	fw_version;
-	unsigned char	dongle_index;
-	struct btmtk_cif_state *cif_state;
-
-	/* io buffer for receiving control transfer */
-	unsigned char	*io_buf;
-	unsigned char	*o_usb_buf;
-
-	unsigned char	*setting_file;
-	unsigned char	*woble_setting_file_name;
-	unsigned int	woble_setting_len;
-
-	struct fw_cfg_struct	woble_setting_apcf[WOBLE_SETTING_COUNT];
-	struct fw_cfg_struct	woble_setting_apcf_fill_mac[WOBLE_SETTING_COUNT];
-	struct fw_cfg_struct	woble_setting_apcf_fill_mac_location[WOBLE_SETTING_COUNT];
-
-	struct fw_cfg_struct	woble_setting_radio_off;
-	struct fw_cfg_struct	woble_setting_wakeup_type;
-	struct fw_cfg_struct	woble_setting_radio_off_status_event;
-	/* complete event */
-	struct fw_cfg_struct	woble_setting_radio_off_comp_event;
-
-	struct fw_cfg_struct	woble_setting_radio_on;
-	struct fw_cfg_struct	woble_setting_radio_on_status_event;
-	struct fw_cfg_struct	woble_setting_radio_on_comp_event;
-
-	/* set apcf after resume(radio on) */
-	struct fw_cfg_struct	woble_setting_apcf_resume[WOBLE_SETTING_COUNT];
-	unsigned char	bdaddr[BD_ADDRESS_SIZE];
-	unsigned int	woble_need_trigger_coredump;
-	unsigned int	woble_need_set_radio_off_in_probe;
-
-	unsigned char		*bt_cfg_file_name;
-	struct bt_cfg_struct	bt_cfg;
+	/* bool rx_dnld_rdy; */
 
 	/* TODO, need to confirm the max size of urb data, also need to confirm
 	 * whether intr_complete and bulk_complete and soc_complete can all share
@@ -198,21 +122,5 @@ struct btmtk_dev {
 	 */
 	unsigned char	*transfer_buf;
 	unsigned char	*sdio_packet;
-	/* To-do
-	 * We must be remove it
-	 */
-	unsigned char	*urb_transfer_buf;
 };
-
-int btmtk_cif_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
-		int delay, int retry, int endpoint);
-int btmtk_cif_send_calibration(struct btmtk_dev *bdev);
-struct btmtk_dev *btmtk_cif_get_btmtk_dev_data(void);
-int btmtk_cif_open(struct hci_dev *hdev);
-int btmtk_cif_close(struct hci_dev *hdev);
-int btmtk_cif_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val);
-int btmtk_cif_get_rom_patch_result(struct btmtk_dev *bdev);
-int btmtk_cif_recv_evt(struct btmtk_dev *bdev, int delay, int retry);
-int btmtk_cif_subsys_reset(struct btmtk_dev *bdev);
-
 #endif
