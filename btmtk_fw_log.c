@@ -803,6 +803,8 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			bmain_info->reset_stack_flag = HW_ERR_CODE_CORE_DUMP;
 			btmtk_fwdump_wake_unlock();
 			DUMP_TIME_STAMP("FW_dump_end");
+			if (bmain_info->hif_hook.waker_notify)
+				bmain_info->hif_hook.waker_notify(bdev);
 		}
 
 		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_ASSERT_QUEUE_COUNT) {

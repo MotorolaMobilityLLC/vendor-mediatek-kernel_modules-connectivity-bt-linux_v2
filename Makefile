@@ -39,7 +39,7 @@ else
 endif
 
 #################### Configurations ####################
-# For chip interface, driver supports "usb", "sdio", "uart" and "btif"
+# For chip interface, driver supports "usb", "sdio", "uart_tty", "uart_serdev" and "btif"
 MTK_CHIP_IF := usb
 
 ifeq ($(MTK_CHIP_IF), sdio)
@@ -53,11 +53,16 @@ else ifeq ($(MTK_CHIP_IF), usb)
     CFILES := usb/btmtkusb.c btmtk_woble.c btmtk_chip_reset.c
     ccflags-y += -DCHIP_IF_USB
     ccflags-y += -I$(src)/include/usb
-else ifeq ($(MTK_CHIP_IF), uart)
+else ifeq ($(MTK_CHIP_IF), uart_tty)
     MOD_NAME = btmtk_uart_unify
-    CFILES := uart/btmtk_uart_main.c
-    ccflags-y += -DCHIP_IF_UART
-    ccflags-y += -I$(src)/include/uart
+    CFILES := uart/btmtktty.c btmtk_woble.c btmtk_chip_reset.c
+    ccflags-y += -DCHIP_IF_UART_TTY
+    ccflags-y += -I$(src)/include/uart/tty
+else ifeq ($(MTK_CHIP_IF), uart_serdev)
+    MOD_NAME = btmtk_uart_unify
+    ccflags-y += -DCHIP_IF_UART_SERDEV
+    CFILES := uart/btmtkserdev.c
+    ccflags-y += -I$(src)/include/uart/serdev
 else
     MOD_NAME = btmtkbtif_unify
     CFILES := btif/btmtk_btif.c
@@ -97,6 +102,8 @@ ccs:
 	./util/checkpatch.pl -f ./include/btmtk_chip_if.h
 	./util/checkpatch.pl -f ./include/btmtk_main.h
 	./util/checkpatch.pl -f ./include/btmtk_buffer_mode.h
+	./util/checkpatch.pl -f ./include/uart/tty/btmtk_uart_tty.h
+	./util/checkpatch.pl -f ./uart/btmtktty.c
 	./util/checkpatch.pl -f ./include/btmtk_fw_log.h
 	./util/checkpatch.pl -f ./include/btmtk_woble.h
 	./util/checkpatch.pl -f ./include/uart/btmtk_uart.h

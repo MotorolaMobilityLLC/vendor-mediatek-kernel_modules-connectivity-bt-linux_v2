@@ -1,0 +1,11 @@
+cc_binary
+{
+    name: "uart_launcher",
+    srcs: ["uart_launcher.c"],
+    vendor: true,
+    cflags:[
+        "-Wall",
+        "-Werror",
+        "-Wno-error=date-time",
+    ],
+}

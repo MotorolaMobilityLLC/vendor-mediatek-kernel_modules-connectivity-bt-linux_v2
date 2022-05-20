@@ -1851,7 +1851,7 @@ int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, bool patch_flag)
 	u8 *rom_patch = NULL;
 	unsigned int rom_patch_len = 0;
 
-	BTMTK_ERR("%s, patch_flag = %d!", __func__, patch_flag);
+	BTMTK_INFO("%s, patch_flag = %d!", __func__, patch_flag);
 
 
 	if (!bdev) {

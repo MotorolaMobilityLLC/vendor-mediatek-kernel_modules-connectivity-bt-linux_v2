@@ -1,10 +1,36 @@
-LAUNCHER_SDIO=uart_launcher
-LAUNCHER_SDIO_SRC=uart_launcher.c
+#---------------------------------------------------------------------------
+TARGET = uart_launcher
 
-all: $(LAUNCHER_SDIO)
+OBJECT = \
+		 uart_launcher.o \
+		 $(NULL)
 
-$(LAUNCHER_SDIO):
-	$(CC) -o $(LAUNCHER_SDIO) $(LAUNCHER_SDIO_SRC)
+CFLAGS = \
+		 -g \
+		 -Wall \
+		 -Werror \
+		 $(NULL)
+
+#---------------------------------------------------------------------------
+ifeq ($(CROSS_COMPILE),)
+    CC = gcc
+    STRIP = strip
+else
+    CC = $(CROSS_COMPILE)-gcc
+    STRIP = $(CROSS_COMPILE)-strip
+endif
+
+#---------------------------------------------------------------------------
+all: uart_launcher
+
+uart_launcher: clean $(OBJECT)
+	$(CC) -pthread -C -o $(TARGET) $(OBJECT)
+	$(STRIP) $(TARGET)
+
+%.o: %.c
+	$(CC) $(LINKFLAGS) $(CFLAGS) $(INCLUDE) -c -o $@ $<
 
 clean:
-	rm $(LAUNCHER_UART) ${LAUNCHER_SDIO}
+	rm -f $(TARGET) *.o
+
+#---------------------------------------------------------------------------
