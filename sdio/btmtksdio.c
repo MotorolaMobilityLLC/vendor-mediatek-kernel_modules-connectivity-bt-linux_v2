@@ -34,6 +34,10 @@ static DEFINE_MUTEX(btmtk_sdio_ops_mutex);
 #define SDIO_OPS_MUTEX_LOCK()	mutex_lock(&btmtk_sdio_ops_mutex)
 #define SDIO_OPS_MUTEX_UNLOCK()	mutex_unlock(&btmtk_sdio_ops_mutex)
 
+static DEFINE_MUTEX(btmtk_sdio_debug_mutex);
+#define SDIO_DEBUG_MUTEX_LOCK()	mutex_lock(&btmtk_sdio_debug_mutex)
+#define SDIO_DEBUG_MUTEX_UNLOCK()	mutex_unlock(&btmtk_sdio_debug_mutex)
+
 /*static const struct btmtksdio_data btmtk_sdio_7663 = {
 	.fwname = FIRMWARE_MT7663,
 };
@@ -44,15 +48,16 @@ static const struct btmtksdio_data btmtk_sdio_7961 = {
 int btmtk_sdio_readl(u32 offset,  u32 *val, struct sdio_func *func);
 int btmtk_sdio_writel(u32 offset, u32 val, struct sdio_func *func);
 
+int btmtk_sdio_read_bt_mcu_pc(u32 *val);
+int btmtk_sdio_read_conn_infra_pc(u32 *val);
+
 #define DUMP_FW_PC(cif_dev)			\
 do {							\
 	u32 __value = 0;				\
-	btmtk_sdio_writel(0x30, 0xFD, cif_dev->func);	\
-	btmtk_sdio_readl(0x2c, &__value, cif_dev->func);\
-	BTMTK_INFO("%s, FW pc: 0x%08X", __func__, __value);		\
-	btmtk_sdio_writel(0x40, 0x9F1E0000, cif_dev->func);	\
-	btmtk_sdio_readl(0x38, &__value, cif_dev->func);\
-	BTMTK_INFO("%s, FW 0x38: 0x%08X", __func__, __value);		\
+	btmtk_sdio_read_bt_mcu_pc(&__value);		\
+	BTMTK_INFO("%s, BT mcu pc: 0x%08X", __func__, __value);	\
+	btmtk_sdio_read_conn_infra_pc(&__value);	\
+	BTMTK_INFO("%s, conn infra pc: 0x%08X", __func__, __value);	\
 } while(0)
 
 static struct btmtk_sdio_dev g_sdio_dev;
@@ -394,6 +399,8 @@ int btmtk_sdio_read_wifi_mcu_pc(u8 PcLogSel, u32 *val)
 	if(!g_sdio_dev.func)
 		return -EINVAL;
 
+	SDIO_DEBUG_MUTEX_LOCK();
+
 	ret = btmtk_sdio_readl(CONDBGCR_SEL, &value, g_sdio_dev.func);
 	value |= SDIO_CTRL_EN;
 	value &= WM_MONITER_SEL;
@@ -403,9 +410,43 @@ int btmtk_sdio_read_wifi_mcu_pc(u8 PcLogSel, u32 *val)
 	ret = btmtk_sdio_writel(CONDBGCR_SEL, value, g_sdio_dev.func);
 	ret = btmtk_sdio_readl(CONDBGCR, val, g_sdio_dev.func);
 
+	SDIO_DEBUG_MUTEX_UNLOCK();
+
 	return 0;
 }
 EXPORT_SYMBOL(btmtk_sdio_read_wifi_mcu_pc);
+
+int btmtk_sdio_read_bt_mcu_pc(u32 *val)
+{
+	if(!g_sdio_dev.func)
+		return -EINVAL;
+
+	SDIO_DEBUG_MUTEX_LOCK();
+
+	btmtk_sdio_writel(0x30, 0xFD, g_sdio_dev.func);
+	btmtk_sdio_readl(0x2c, val, g_sdio_dev.func);
+
+	SDIO_DEBUG_MUTEX_UNLOCK();
+
+	return 0;
+}
+EXPORT_SYMBOL(btmtk_sdio_read_bt_mcu_pc);
+
+int btmtk_sdio_read_conn_infra_pc(u32 *val)
+{
+	if(!g_sdio_dev.func)
+		return -EINVAL;
+
+	SDIO_DEBUG_MUTEX_LOCK();
+
+	btmtk_sdio_writel(0x3C, 0x9F1E0000, g_sdio_dev.func);
+	btmtk_sdio_readl(0x38, val, g_sdio_dev.func);
+
+	SDIO_DEBUG_MUTEX_UNLOCK();
+
+	return 0;
+}
+EXPORT_SYMBOL(btmtk_sdio_read_conn_infra_pc);
 
 /*
 static int btmtk_sdio_suspend(struct device *dev)
