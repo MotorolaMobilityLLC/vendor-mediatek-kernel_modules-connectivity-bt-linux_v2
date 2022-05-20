@@ -77,6 +77,13 @@
 #define MCU_ADDRESS_OFFSET_CMD 12
 #define MCU_ADDRESS_OFFSET_EVT 16
 
+/* wifi CR */
+#define CONDBGCR		0x0034
+#define CONDBGCR_SEL		0x0040
+#define SDIO_CTRL_EN		(1 << 31)
+#define WM_MONITER_SEL		(~(0x40000000))
+#define PC_MONITER_SEL		(~(0x20000000))
+#define PC_IDX_SWH(val, idx)	((val & (~(0x3F << 16))) | ((0x3F & idx) << 16))
 
 typedef int (*pdwnc_func) (u8 fgReset);
 typedef int (*reset_func_ptr2) (unsigned int gpio, int init_value);

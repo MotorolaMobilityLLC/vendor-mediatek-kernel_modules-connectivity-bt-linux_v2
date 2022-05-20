@@ -167,7 +167,7 @@ retry_own:
 			}
 
 			retry--;
-			mdelay(1);
+			mdelay(5);
 			goto retry_own;
 		}
 	} else {
@@ -297,6 +297,27 @@ static void btmtk_cif_free_memory(struct btmtk_sdio_dev *cif_dev)
 
 	BTMTK_INFO("%s: Success", __func__);
 }
+
+int btmtk_sdio_read_wifi_mcu_pc(u8 PcLogSel, u32 *val)
+{
+	int ret = 0;
+	unsigned int value = 0;
+
+	if(!g_sdio_dev.func)
+		return -EINVAL;
+
+	ret = btmtk_sdio_readl(CONDBGCR_SEL, &value, g_sdio_dev.func);
+	value |= SDIO_CTRL_EN;
+	value &= WM_MONITER_SEL;
+	value &= PC_MONITER_SEL;
+	value = PC_IDX_SWH(value, PcLogSel);
+
+	ret = btmtk_sdio_writel(CONDBGCR_SEL, value, g_sdio_dev.func);
+	ret = btmtk_sdio_readl(CONDBGCR, val, g_sdio_dev.func);
+
+	return 0;
+}
+EXPORT_SYMBOL(btmtk_sdio_read_wifi_mcu_pc);
 
 /*
 static int btmtk_sdio_suspend(struct device *dev)
@@ -641,6 +662,7 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 		!memcmp(skb->data, fw_assert_cmd, sizeof(fw_assert_cmd)))
 		|| (skb->len == sizeof(fw_assert_cmd1) &&
 		!memcmp(skb->data, fw_assert_cmd1, sizeof(fw_assert_cmd1)))) {
+		btmtk_sdio_set_no_fwn_own(cif_dev, 1);
 		BTMTK_INFO_RAW(skb->data, skb->len, "%s: Trigger FW assert, dump CR", __func__);
 		btmtk_sdio_print_debug_sr(cif_dev);
 	}
@@ -1235,6 +1257,8 @@ static int btmtk_sdio_interrupt_process(struct btmtk_dev *bdev)
 		 */
 		ret = btmtk_sdio_readl(CHISR, &u32ReadCRValue, cif_dev->func);
 		BTMTK_INFO("%s CHISR 0x%08x", __func__, u32ReadCRValue);
+		/* FW can't send TX_EMPTY for 0xFD5B */
+		atomic_set(&cif_dev->tx_rdy, 1);
 		schedule_work(&bdev->reset_waker);
 		return ret;
 	}
