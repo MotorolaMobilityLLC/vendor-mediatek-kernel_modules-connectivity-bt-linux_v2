@@ -195,6 +195,15 @@ enum {
 	BTMTK_EP_TYPE_OUT_OTHER,	/* EP type out for pkt from host, include acl and hci */
 };
 
+/* Device node */
+#if CFG_SUPPORT_MULTI_DEV_NODE
+	#define BT_CHR_DEV	"BT_multi_chrdevfwlog"
+	#define BT_DEV_NODE	"stpbt_multi_fwlog"
+#else
+	#define BT_CHR_DEV	"BT_chrdevfwlog"
+	#define BT_DEV_NODE	"stpbtfwlog"
+#endif
+
 struct btmtk_fops_fwlog {
 	dev_t g_devIDfwlog;
 	struct cdev BT_cdevfwlog;

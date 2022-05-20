@@ -1935,9 +1935,13 @@ static int btusb_suspend(struct usb_interface *intf, pm_message_t message)
 		return 0;
 	}
 
+#if CFG_SUPPORT_DVT
+	BTMTK_INFO("%s: SKIP Driver woble_suspend flow", __func__);
+#else
 	ret = btmtk_woble_suspend(bdev);
 	if (ret < 0)
 		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
+#endif
 
 	spin_lock_irq(&bdev->txlock);
 	if (!(PMSG_IS_AUTO(message) && bdev->tx_in_flight)) {
@@ -2038,11 +2042,15 @@ static int btusb_resume(struct usb_interface *intf)
 	spin_unlock_irq(&bdev->txlock);
 	schedule_work(&bdev->work);
 
+#if CFG_SUPPORT_DVT
+	BTMTK_INFO("%s: SKIP Driver woble_resume flow", __func__);
+#else
 	err = btmtk_woble_resume(bdev);
 	if (err < 0) {
 		BTMTK_ERR("%s: btmtk_woble_resume return fail %d", __func__, err);
 		goto done;
 	}
+#endif
 
 	BTMTK_INFO("%s end", __func__);
 

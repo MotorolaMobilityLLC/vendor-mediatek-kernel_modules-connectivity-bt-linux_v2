@@ -496,6 +496,7 @@ void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	bdev->bt_cfg.support_woble_wakelock = 0;
 	bdev->bt_cfg.reset_stack_after_woble = 0;
 	bdev->bt_cfg.support_auto_picus = 0;
+	bdev->bt_cfg.support_picus_to_host = 0;
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_filter, 1);
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_enable, 1);
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.wmt_cmd, WMT_CMD_COUNT);
@@ -1293,7 +1294,8 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 		return 1;
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
-				skb->data[1] == 0x05) {
+				skb->data[1] == 0x05 &&
+				!bdev->bt_cfg.support_picus_to_host) {
 		/* picus or syslog */
 		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_QUEUE_COUNT) {
 			if (btmtk_skb_enq_fwlog(bdev->hdev, skb->data, skb->len,
@@ -3596,6 +3598,15 @@ static bool btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_AUTO_PICUS);
 	}
 
+	ret = btmtk_parse_bt_cfg_file(BT_PICUS_TO_HOST, text, searchcontent);
+	if (ret) {
+		btmtk_bt_cfg_item_value_to_bool(text, &bt_cfg_content->support_picus_to_host);
+		BTMTK_INFO("%s: bt_cfg_content->support_picus_to_host = %d", __func__,
+				bt_cfg_content->support_picus_to_host);
+	} else {
+		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_PICUS_TO_HOST);
+	}
+
 	ret = btmtk_load_fw_cfg_setting(BT_WMT_CMD, bt_cfg_content->wmt_cmd,
 				WMT_CMD_COUNT, searchcontent, FW_CFG_INX_LEN_3);
 	if (ret)
@@ -3849,7 +3860,7 @@ int btmtk_fops_init(void)
 	skb_queue_head_init(&g_fwlog->fwlog_queue);
 	init_waitqueue_head(&(g_fwlog->fw_log_inq));
 
-	ret = alloc_chrdev_region(&devIDfwlog, 0, 1, "BT_chrdevfwlog");
+	ret = alloc_chrdev_region(&devIDfwlog, 0, 1, BT_CHR_DEV);
 	if (ret) {
 		BT_ERR("%s: fail to allocate chrdev", __func__);
 		return ret;
@@ -3864,13 +3875,13 @@ int btmtk_fops_init(void)
 	if (cdevErr)
 		goto error;
 
-	g_fwlog->pBTClass = class_create(THIS_MODULE, "BT_chrdevfwlog");
+	g_fwlog->pBTClass = class_create(THIS_MODULE, BT_CHR_DEV);
 	if (IS_ERR(g_fwlog->pBTClass)) {
 		BT_ERR("%s: class create fail, error code(%ld)\n", __func__, PTR_ERR(g_fwlog->pBTClass));
 		goto err1;
 	}
 
-	g_fwlog->pBTDevfwlog = device_create(g_fwlog->pBTClass, NULL, devIDfwlog, NULL, "stpbtfwlog");
+	g_fwlog->pBTDevfwlog = device_create(g_fwlog->pBTClass, NULL, devIDfwlog, NULL, BT_DEV_NODE);
 	if (IS_ERR(g_fwlog->pBTDevfwlog)) {
 		BT_ERR("%s: device(stpbtfwlog) create fail, error code(%ld)", __func__, PTR_ERR(g_fwlog->pBTDevfwlog));
 		goto error;
