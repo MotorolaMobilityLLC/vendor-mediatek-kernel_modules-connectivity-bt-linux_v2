@@ -98,18 +98,24 @@ static int btmtk_buffer_mode_set_addr(struct btmtk_buffer_mode_struct *buffer_mo
 	u8 event[SET_ADDRESS_EVT_LEN] = {0x04, 0x0E, 0x04, 0x01, 0x1A, 0xFC, 0x00};
 	int ret = 0;
 
-	cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 5] = buffer_mode->bt0_mac[0];
-	cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 4] = buffer_mode->bt0_mac[1];
-	cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 3] = buffer_mode->bt0_mac[2];
-	cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 2] = buffer_mode->bt0_mac[3];
-	cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 1] = buffer_mode->bt0_mac[4];
-	cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET] = buffer_mode->bt0_mac[5];
+	if (buffer_mode->bt0_mac[0] == 0x00 && buffer_mode->bt0_mac[1] == 0x00
+		&& buffer_mode->bt0_mac[2] == 0x00 && buffer_mode->bt0_mac[3] == 0x00
+		&& buffer_mode->bt0_mac[4] == 0x00 && buffer_mode->bt0_mac[5] == 0x00) {
+		BTMTK_WARN("BDAddr is Zero, not set");
+	} else {
+		cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 5] = buffer_mode->bt0_mac[0];
+		cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 4] = buffer_mode->bt0_mac[1];
+		cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 3] = buffer_mode->bt0_mac[2];
+		cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 2] = buffer_mode->bt0_mac[3];
+		cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 1] = buffer_mode->bt0_mac[4];
+		cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET] = buffer_mode->bt0_mac[5];
 
-	BTMTK_INFO_RAW(cmd, SET_ADDRESS_CMD_LEN, "%s: Send", __func__);
-	ret = btmtk_main_send_cmd(buffer_mode->bdev,
-			cmd, SET_ADDRESS_CMD_LEN,
-			event, SET_ADDRESS_EVT_LEN,
-			0, 0, BTMTK_TX_CMD_FROM_DRV);
+		BTMTK_INFO_RAW(cmd, SET_ADDRESS_CMD_LEN, "%s: Send", __func__);
+		ret = btmtk_main_send_cmd(buffer_mode->bdev,
+				cmd, SET_ADDRESS_CMD_LEN,
+				event, SET_ADDRESS_EVT_LEN,
+				0, 0, BTMTK_TX_CMD_FROM_DRV);
+	}
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
