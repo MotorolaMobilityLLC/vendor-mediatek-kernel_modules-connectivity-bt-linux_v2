@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2021112401"
+#define VERSION "7.0.2021120201"
 #define SUBVER ":turnkey"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -256,7 +256,8 @@ extern uint8_t btmtk_log_lvl;
 #define BT_PHASE1_WMT_CMD "PHASE1_WMT_CMD"
 #define BT_VENDOR_CMD "VENDOR_CMD"
 #define BT_SINGLE_SKU "SUPPORT_BT_SINGLE_SKU"
-
+#define BT_AUDIO_SET "SUPPORT_BT_AUDIO_SETTING"
+#define BT_AUDIO_ENABLE_CMD "AUDIO_ENABLE_CMD"
 
 #define PM_KEY_BTW (0x0015) /* Notify PM the unify woble type */
 
@@ -299,6 +300,8 @@ struct bt_cfg_struct {
 	struct fw_cfg_struct phase1_wmt_cmd[PHASE1_WMT_CMD_COUNT];
 	struct fw_cfg_struct vendor_cmd[VENDOR_CMD_COUNT];
 	bool	support_bt_single_sku;
+	bool	support_audio_setting;			/* support audio set pinmux */
+	struct fw_cfg_struct audio_cmd;	/* support on PICUS enable command customization */
 };
 
 #define WIFI_DOWNLOAD	TRUE
