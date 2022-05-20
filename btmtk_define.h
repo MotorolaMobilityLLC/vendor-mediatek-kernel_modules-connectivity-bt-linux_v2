@@ -37,7 +37,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.200030201"
+#define VERSION "7.0.200030202"
 #define SUBVER ":turnkey"
 
 
@@ -174,6 +174,24 @@ extern uint8_t btmtk_log_lvl;
 #define EVENT_COMPARE_SIZE	64
 
 #define SECTION_SPEC_NUM	13
+
+/* Define for WoBLE */
+#define BD_ADDRESS_SIZE 6
+#define WOBLE_SETTING_COUNT 10
+#define WOBLE_SETTING_FILE_NAME "woble_setting_7663.bin"
+#define WOBLE_EVENT_INTERVAL_TIMO	500
+#define WOBLE_COMP_EVENT_TIMO		5000
+
+enum fw_cfg_index_len {
+	FW_CFG_INX_LEN_NONE = 0,
+	FW_CFG_INX_LEN_2 = 2,
+	FW_CFG_INX_LEN_3 = 3,
+};
+
+struct fw_cfg_struct {
+	char	*content;	/* APCF content or radio off content */
+	int	length;		/* APCF content or radio off content of length */
+};
 
 #define WIFI_DOWNLOAD	TRUE
 #define BT_DOWNLOAD	FALSE

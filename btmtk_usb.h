@@ -118,6 +118,30 @@ struct btmtk_dev {
 	unsigned char	*io_buf;
 	unsigned char	*o_usb_buf;
 
+	unsigned char	*setting_file;
+	unsigned char	*woble_setting_file_name;
+	unsigned int	woble_setting_len;
+
+	struct fw_cfg_struct	woble_setting_apcf[WOBLE_SETTING_COUNT];
+	struct fw_cfg_struct	woble_setting_apcf_fill_mac[WOBLE_SETTING_COUNT];
+	struct fw_cfg_struct	woble_setting_apcf_fill_mac_location[WOBLE_SETTING_COUNT];
+
+	struct fw_cfg_struct	woble_setting_radio_off;
+	struct fw_cfg_struct	woble_setting_wakeup_type;
+	struct fw_cfg_struct	woble_setting_radio_off_status_event;
+	/* complete event */
+	struct fw_cfg_struct	woble_setting_radio_off_comp_event;
+
+	struct fw_cfg_struct	woble_setting_radio_on;
+	struct fw_cfg_struct	woble_setting_radio_on_status_event;
+	struct fw_cfg_struct	woble_setting_radio_on_comp_event;
+
+	/* set apcf after resume(radio on) */
+	struct fw_cfg_struct	woble_setting_apcf_resume[WOBLE_SETTING_COUNT];
+	unsigned char	bdaddr[BD_ADDRESS_SIZE];
+	unsigned int	woble_need_trigger_coredump;
+	struct	wakeup_source	woble_ws;
+	unsigned int	woble_need_set_radio_off_in_probe;
 	/* TODO, need to confirm the max size of urb data, also need to confirm
 	 * whether intr_complete and bulk_complete and soc_complete can all share
 	 * this urb_transfer_buf

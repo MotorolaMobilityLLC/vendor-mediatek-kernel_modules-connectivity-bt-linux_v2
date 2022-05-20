@@ -1584,6 +1584,14 @@ static int btusb_probe(struct usb_interface *intf,
 	btmtk_register_hci_device(bdev);
 	usb_set_intfdata(intf, bdev);
 
+	memset(bdev->bdaddr, 0, BD_ADDRESS_SIZE);
+	//if (is_support_unify_woble(bdev)) {
+	if (is_mt7961(bdev->chip_id)) {
+		btmtk_load_woble_setting(bdev->woble_setting_file_name,
+			&bdev->udev->dev,
+			&bdev->woble_setting_len,
+			bdev);
+	}
 	return 0;
 }
 
@@ -1621,8 +1629,9 @@ static void btusb_disconnect(struct usb_interface *intf)
 static int btusb_suspend(struct usb_interface *intf, pm_message_t message)
 {
 	struct btmtk_dev *bdev = usb_get_intfdata(intf);
+	int ret = -1;
 
-	BTMTK_INFO("%s begin", __func__);
+	BT_DBG("intf %p", intf);
 
 	if (bdev->suspend_count++)
 		return 0;
@@ -1642,7 +1651,12 @@ static int btusb_suspend(struct usb_interface *intf, pm_message_t message)
 	btusb_stop_traffic(bdev);
 	usb_kill_anchored_urbs(&bdev->tx_anchor);
 
+	ret = btmtk_woble_wake_up(bdev);
+	if (ret)
+		BTMTK_ERR("%s: btmtk_usb_handle_entering_WoBLE_state return fail  %d", __func__, ret);
+
 	BTMTK_INFO("%s END", __func__);
+
 	return 0;
 }
 
@@ -1690,7 +1704,12 @@ static int btusb_resume(struct usb_interface *intf)
 	spin_unlock_irq(&bdev->txlock);
 	schedule_work(&bdev->work);
 
+	err = btmtk_handle_leaving_WoBLE_state(bdev);
+	if (err)
+		BTMTK_ERR("%s: btmtk_handle_leaving_WoBLE_state return fail  %d", __func__, err);
+
 	BTMTK_INFO("%s end", __func__);
+
 	return 0;
 
 done:
@@ -1756,6 +1775,14 @@ static int btmtk_cif_allocate_memory(struct btmtk_dev *bdev)
 		}
 	}
 
+	if (bdev->woble_setting_file_name == NULL) {
+		bdev->woble_setting_file_name = kzalloc(MAX_BIN_FILE_NAME_LEN, GFP_KERNEL);
+		if (!bdev->woble_setting_file_name) {
+			BT_ERR("%s: alloc memory fail (g_data->woble_setting_file_name)", __func__);
+			return -1;
+		}
+	}
+
 	if (bdev->o_usb_buf == NULL) {
 		bdev->o_usb_buf = kzalloc(HCI_MAX_COMMAND_SIZE, GFP_KERNEL);
 		if (!bdev->o_usb_buf) {
@@ -1785,6 +1812,9 @@ static void btmtk_cif_free_memory(struct btmtk_dev *bdev)
 
 	kfree(bdev->rom_patch_bin_file_name);
 	bdev->rom_patch_bin_file_name = NULL;
+
+	kfree(bdev->woble_setting_file_name);
+	bdev->woble_setting_file_name = NULL;
 
 	kfree(bdev->io_buf);
 	bdev->io_buf = NULL;
