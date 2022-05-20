@@ -175,6 +175,14 @@ static void btusb_intr_complete(struct urb *urb)
 			return;
 		}
 
+		if (urb->actual_length >= URB_MAX_BUFFER_SIZE) {
+			BT_ERR("%s: urb->actual_length is invalid!", __func__);
+			BTMTK_INFO_RAW(urb->transfer_buffer, urb->actual_length,
+				"urb->actual_length:%d, urb->transfer_buffer:%p",
+				urb->actual_length, urb->transfer_buffer);
+			goto intr_resub;
+		}
+		memset(bdev->urb_transfer_buf, 0, URB_MAX_BUFFER_SIZE);
 		bdev->urb_transfer_buf[0] = HCI_EVENT_PKT;
 		memcpy(bdev->urb_transfer_buf + 1, urb->transfer_buffer, urb->actual_length);
 
@@ -192,7 +200,12 @@ static void btusb_intr_complete(struct urb *urb)
 		}
 		err = btmtk_recv(hdev, bdev->urb_transfer_buf, urb->actual_length + 1);
 		if (err) {
-			BT_ERR("%s corrupted event packet", hdev->name);
+			BT_ERR("%s corrupted event packet, urb_transfer_buf = %p, transfer_buffer = %p",
+				hdev->name, bdev->urb_transfer_buf, urb->transfer_buffer);
+			BTMTK_INFO_RAW(bdev->urb_transfer_buf, urb->actual_length + 1,
+				"urb->actual_length:%d", urb->actual_length + 1);
+			BTMTK_INFO_RAW(urb->transfer_buffer, urb->actual_length,
+				"urb->actual_length:%d", urb->actual_length);
 			hdev->stat.err_rx++;
 		}
 
@@ -293,9 +306,21 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 		BTMTK_DBG_RAW(urb->transfer_buffer, urb->actual_length, "%s, recv evt", __func__);
 		hdev->stat.byte_rx += urb->actual_length;
 		skb = bt_skb_alloc(HCI_MAX_EVENT_SIZE, GFP_ATOMIC);
-		if (!skb)
+		if (!skb) {
+			BT_ERR("%s skb is null!", __func__);
 			hdev->stat.err_rx++;
+			return;
+		}
 
+		if (urb->actual_length >= HCI_MAX_EVENT_SIZE) {
+			BT_ERR("%s urb->actual_length is invalid!", __func__);
+			BTMTK_INFO_RAW(urb->transfer_buffer, urb->actual_length,
+				"urb->actual_length:%d, urb->transfer_buffer:%p",
+				urb->actual_length, urb->transfer_buffer);
+			kfree_skb(skb);
+			hdev->stat.err_rx++;
+			return;
+		}
 		hci_skb_pkt_type(skb) = HCI_EVENT_PKT;
 		memcpy(skb_put(skb, urb->actual_length), urb->transfer_buffer, urb->actual_length);
 		BTMTK_DBG_RAW(skb->data, skb->len, "%s, skb recv evt", __func__);
@@ -480,13 +505,26 @@ static void btusb_bulk_complete(struct urb *urb)
 			return;
 		}
 
+		if (urb->actual_length >= URB_MAX_BUFFER_SIZE) {
+			BT_ERR("%s urb->actual_length is invalid!", __func__);
+			BTMTK_INFO_RAW(urb->transfer_buffer, urb->actual_length,
+				"urb->actual_length:%d, urb->transfer_buffer:%p",
+				urb->actual_length, urb->transfer_buffer);
+			goto bulk_resub;
+		}
+		memset(bdev->urb_transfer_buf, 0, URB_MAX_BUFFER_SIZE);
 		bdev->urb_transfer_buf[0] = HCI_ACLDATA_PKT;
 		memcpy(bdev->urb_transfer_buf + 1, urb->transfer_buffer, urb->actual_length);
 
 		/* BTMTK_DBG_RAW(bdev->urb_transfer_buf, urb->actual_length + 1, "%s, recv from bulk", __func__); */
 		err = btmtk_recv(hdev, bdev->urb_transfer_buf, urb->actual_length + 1);
 		if (err) {
-			BT_ERR("%s corrupted ACL packet", hdev->name);
+			BT_ERR("%s corrupted ACL packet, urb_transfer_buf = %p, transfer_buffer = %p",
+				hdev->name, bdev->urb_transfer_buf, urb->transfer_buffer);
+			BTMTK_INFO_RAW(bdev->urb_transfer_buf, urb->actual_length + 1,
+				"urb->actual_length:%d", urb->actual_length + 1);
+			BTMTK_INFO_RAW(urb->transfer_buffer, urb->actual_length,
+				"urb->actual_length:%d", urb->actual_length);
 			hdev->stat.err_rx++;
 		}
 
@@ -504,6 +542,7 @@ static void btusb_bulk_complete(struct urb *urb)
 	if (!test_bit(BTUSB_BULK_RUNNING, &bdev->flags))
 		return;
 
+bulk_resub:
 	usb_anchor_urb(urb, &bdev->bulk_anchor);
 	usb_mark_last_busy(bdev->udev);
 
@@ -606,6 +645,13 @@ static void btusb_ble_isoc_complete(struct urb *urb)
 			goto ble_iso_resub;
 		}
 
+		if (urb->actual_length + HCI_ISO_PKT_WITH_ACL_HEADER_SIZE > URB_MAX_BUFFER_SIZE) {
+			BT_ERR("%s urb->actual_length is invalid!", __func__);
+			BTMTK_INFO_RAW(urb->transfer_buffer, urb->actual_length,
+				"urb->actual_length:%d, urb->transfer_buffer:%p",
+				urb->actual_length, urb->transfer_buffer);
+			goto ble_iso_resub;
+		}
 		/* It's mtk specific heade for stack
 		 * hci layered didn't support 0x05 for ble iso, it will drop the packet type with 0x05
 		 * Driver will replace 0x05 to 0x02
@@ -1350,6 +1396,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		if (skb->data[0] == 0x00 && skb->data[1] == 0x44) {
 			int isoc_pkt_len = 0;
 			int isoc_pkt_padding = 0;
+
 			skb_pull(skb, 4);
 			isoc_pkt_len = skb->data[2] + (skb->data[3] << 8) + HCI_ISO_PKT_HEADER_SIZE;
 			isoc_pkt_padding = bdev->iso_threshold - isoc_pkt_len;

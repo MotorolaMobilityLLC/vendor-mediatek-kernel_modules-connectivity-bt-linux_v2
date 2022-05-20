@@ -73,6 +73,10 @@ static u8 hci_event_snoop_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
 static unsigned int hci_event_snoop_timestamp[HCI_SNOOP_ENTRY_NUM];
 static int hci_event_snoop_index = HCI_SNOOP_ENTRY_NUM - 1;
 
+static u8 hci_acl_snoop_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_BUF_SIZE];
+static u8 hci_acl_snoop_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
+static unsigned int hci_acl_snoop_timestamp[HCI_SNOOP_ENTRY_NUM];
+static int hci_acl_snoop_index = HCI_SNOOP_ENTRY_NUM - 1;
 
 /* State machine table that clarify through each HIF events,
  * To specify HIF event on
@@ -462,8 +466,7 @@ static void btmtk_hci_snoop_print_to_log(void)
 	for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
 		if (hci_cmd_snoop_len[index] > 0)
 			BTMTK_INFO_RAW(hci_cmd_snoop_buf[index], hci_cmd_snoop_len[index],
-				"time(%u)--len(%d):", hci_cmd_snoop_timestamp[index],
-				hci_cmd_snoop_len[index]);
+				"time(%u)--len(%d):", hci_cmd_snoop_timestamp[index], hci_cmd_snoop_len[index]);
 		index++;
 		if (index >= HCI_SNOOP_ENTRY_NUM)
 			index = 0;
@@ -477,8 +480,22 @@ static void btmtk_hci_snoop_print_to_log(void)
 	for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
 		if (hci_event_snoop_len[index] > 0)
 			BTMTK_INFO_RAW(hci_event_snoop_buf[index], hci_event_snoop_len[index],
-				"time(%u)--len(%d):", hci_event_snoop_timestamp[index],
-				hci_event_snoop_len[index]);
+				"time(%u)--len(%d):", hci_event_snoop_timestamp[index], hci_event_snoop_len[index]);
+		index++;
+		if (index >= HCI_SNOOP_ENTRY_NUM)
+			index = 0;
+	}
+
+	BTMTK_INFO("HCI ACL Dump");
+	BTMTK_INFO("index(len)(timestamp:us) :ACL");
+	index = hci_acl_snoop_index + 1;
+	if (index >= HCI_SNOOP_ENTRY_NUM)
+		index = 0;
+	for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
+		if (hci_acl_snoop_len[index] > 0) {
+			BTMTK_INFO_RAW(hci_acl_snoop_buf[index], hci_acl_snoop_len[index],
+				"time(%u)--len(%d):", hci_acl_snoop_timestamp[index], hci_acl_snoop_len[index]);
+		}
 		index++;
 		if (index >= HCI_SNOOP_ENTRY_NUM)
 			index = 0;
@@ -526,6 +543,24 @@ static void btmtk_hci_snoop_save_event(u32 len, u8 *buf)
 		hci_event_snoop_index--;
 		if (hci_event_snoop_index < 0)
 			hci_event_snoop_index = HCI_SNOOP_ENTRY_NUM - 1;
+	}
+}
+
+static void btmtk_hci_snoop_save_acl(u32 len, u8 *buf)
+{
+	u32 copy_len = HCI_SNOOP_BUF_SIZE;
+
+	if (buf) {
+		if (len < HCI_SNOOP_BUF_SIZE)
+			copy_len = len;
+		hci_acl_snoop_len[hci_acl_snoop_index] = copy_len & 0xff;
+		memset(hci_acl_snoop_buf[hci_acl_snoop_index], 0, HCI_SNOOP_BUF_SIZE);
+		memcpy(hci_acl_snoop_buf[hci_acl_snoop_index], buf, copy_len & 0xff);
+		hci_acl_snoop_timestamp[hci_acl_snoop_index] = btmtk_hci_snoop_get_microseconds();
+
+		hci_acl_snoop_index--;
+		if (hci_acl_snoop_index < 0)
+			hci_acl_snoop_index = HCI_SNOOP_ENTRY_NUM - 1;
 	}
 }
 
@@ -611,6 +646,9 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 					  int pkts_count)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	/* used for print debug log*/
+	const unsigned char *buffer_dbg = buffer;
+	int count_dbg = count;
 
 	if (bdev == NULL || hdev == NULL || buffer == NULL) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
@@ -646,7 +684,11 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 
 			/* Check for invalid packet type */
 			if (!skb) {
-				BTMTK_ERR("%s,skb is invalid!", __func__);
+				BTMTK_ERR("%s,skb is invalid, buffer[0] = %d!", __func__,
+					buffer[0]);
+				BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
+						count_dbg, buffer_dbg);
+				btmtk_hci_snoop_print_to_log();
 				return ERR_PTR(-EILSEQ);
 			}
 
@@ -675,6 +717,9 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 
 		if (i >= pkts_count) {
 			BTMTK_ERR("%s, pkt type is invalid!", __func__);
+			BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
+				count_dbg, buffer_dbg);
+			btmtk_hci_snoop_print_to_log();
 			kfree_skb(skb);
 			return ERR_PTR(-EILSEQ);
 		}
@@ -697,6 +742,9 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				if (skb_tailroom(skb) < dlen) {
 					BTMTK_ERR("%s, skb_tailroom is not enough!", __func__);
 					BTMTK_INFO_RAW(skb->data, skb->len, "dlen:%d", dlen);
+					BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
+						count_dbg, buffer_dbg);
+					btmtk_hci_snoop_print_to_log();
 					kfree_skb(skb);
 					return ERR_PTR(-EMSGSIZE);
 				}
@@ -710,6 +758,9 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				if (skb_tailroom(skb) < dlen) {
 					BTMTK_ERR("%s, skb_tailroom is not enough in case 2!", __func__);
 					BTMTK_INFO_RAW(skb->data, skb->len, "dlen:%d", dlen);
+					BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
+						count_dbg, buffer_dbg);
+					btmtk_hci_snoop_print_to_log();
 					kfree_skb(skb);
 					return ERR_PTR(-EMSGSIZE);
 				}
@@ -717,6 +768,9 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 			default:
 				/* Unsupported variable length */
 				BTMTK_ERR("%s, Unsupported variable length!", __func__);
+				BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
+					count_dbg, buffer_dbg);
+				btmtk_hci_snoop_print_to_log();
 				kfree_skb(skb);
 				return ERR_PTR(-EILSEQ);
 			}
@@ -978,10 +1032,11 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 		BTMTK_INFO("%s: Get RESET_EVENT", __func__);
 		/* Need confirm with Shawn */
 		/* if (bdev->bt_cfg.support_auto_picus == true) {
-			if (btmtk_picus_enable(bdev) < 0) {
-				BTMTK_ERR("send picus filter param failed");
-			}
-		} */
+		 * if (btmtk_picus_enable(bdev) < 0) {
+		 * BTMTK_ERR("send picus filter param failed");
+		 * }
+		}
+		*/
 	}
 	return 0;
 }
@@ -3665,7 +3720,7 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	if (fstate != BTMTK_FOPS_STATE_OPENED) {
 		BTMTK_WARN("%s: fops is not open yet(%d)!", __func__, fstate);
 		ret = -ENODEV;
-		goto err;
+		goto exit;
 	}
 
 	state = btmtk_get_chip_state(bdev);
@@ -3673,18 +3728,19 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		BTMTK_WARN("%s: current is in suspend/resume/standby (%d).", __func__, state);
 		msleep(3000);
 		ret = -EAGAIN;
-		goto err;
+		goto exit;
 	}
 
 	if (bdev->power_state == BTMTK_DONGLE_STATE_POWER_OFF) {
 		BTMTK_WARN("%s: dongle state already power off, do not write", __func__);
 		ret = -EFAULT;
-		goto err;
+		goto exit;
 	}
 
 	if (reset_stack_flag) {
 		BTMTK_WARN("%s: reset_stack_flag (%d)!", __func__, reset_stack_flag);
-		return -EFAULT;
+		ret = -EFAULT;
+		goto exit;
 	}
 
 	memcpy(skb_push(skb, 1), &hci_skb_pkt_type(skb), 1);
@@ -3706,11 +3762,6 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	ret = btmtk_cif_send_cmd(bdev, skb, 0, 0, BTMTK_EP_TYPE_OUT_OTHER);
 	if (ret < 0)
 		BTMTK_ERR("%s failed!!", __func__);
-	else
-		goto exit;
-
-err:
-	kfree_skb(skb);
 
 exit:
 	return ret;
@@ -3951,7 +4002,11 @@ EVT_PROCESS:
 				kfree_skb(skb);
 				continue;
 			}
+		} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
+			/* save hci acl pkt for debug, not include picus log and coredump*/
+			btmtk_hci_snoop_save_acl(skb->len, skb->data);
 		}
+
 		fstate = btmtk_fops_get_state(bdev);
 		if (fstate != BTMTK_FOPS_STATE_OPENED) {
 			/* BT close case, drop by driver, don't send to stack */
