@@ -2247,6 +2247,7 @@ exit:
 static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 {
 	int val, retry = 10;
+	u32 mcu_init_done = MCU_BT0_INIT_DONE;
 
 	cancel_work_sync(&bdev->work);
 	cancel_work_sync(&bdev->waker);
@@ -2280,11 +2281,14 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	/* Read reset CR */
 	btmtk_cif_read_uhw_register(bdev, BT_SUBSYS_RST, &val);
 
+	if (!bdev->flavor)
+		mcu_init_done |= MCU_BT1_INIT_DONE;
+
 	do {
 		/* polling re-init CR */
 		btmtk_cif_read_uhw_register(bdev, BT_MISC, &val);
 		BTMTK_INFO("%s: reg=%x, value=0x%08x", __func__, BT_MISC, val);
-		if ((val & 0x00000300) == 0x00000300) {
+		if ((val & mcu_init_done) == mcu_init_done) {
 			/* L0.5 reset done */
 			BTMTK_INFO("%s: Do L0.5 reset sucessfully.", __func__);
 			goto Finish;

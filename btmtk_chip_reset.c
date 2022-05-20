@@ -98,10 +98,10 @@ void btmtk_reset_waker(struct work_struct *work)
 
 	if (bmain_info->chip_reset_flag == 0) {
 		if (bmain_info->hif_hook.subsys_reset) {
-			bdev->subsys_reset = 1;
-
 			DUMP_TIME_STAMP("subsys_chip_reset_start");
+			bdev->subsys_reset = 1;
 			err = bmain_info->hif_hook.subsys_reset(bdev);
+			bdev->subsys_reset = 0;
 			if (err < 0) {
 				BTMTK_INFO("subsys reset failed, do whole chip reset!");
 			} else {
@@ -109,7 +109,6 @@ void btmtk_reset_waker(struct work_struct *work)
 				DUMP_TIME_STAMP("subsys_chip_reset_end");
 
 				bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
-				bdev->subsys_reset = 0;
 
 				err = btmtk_cap_init(bdev);
 				if (err < 0) {

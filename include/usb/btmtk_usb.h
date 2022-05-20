@@ -41,6 +41,8 @@ typedef int (*set_gpio_high)(u8 gpio);
 
 /* UHW CR mapping */
 #define BT_MISC 0x70002510
+#define MCU_BT0_INIT_DONE (0x1 << 8)
+#define MCU_BT1_INIT_DONE (0x1 << 9)
 #define BT_SUBSYS_RST 0x70002610
 #define UDMA_INT_STA_BT 0x74000024
 #define UDMA_INT_STA_BT1 0x74000308
