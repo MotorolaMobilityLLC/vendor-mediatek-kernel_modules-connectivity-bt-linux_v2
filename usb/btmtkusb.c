@@ -2541,6 +2541,11 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					skb->data[6] == 0x00 && skb->data[7] == 0x00) {
 				/* return evt to upper layered */
 				evt_skb = skb_copy(skb, GFP_KERNEL);
+				if (!evt_skb){
+					BTMTK_ERR("%s skb_copy failed", __func__);
+					return -ENOMEM;
+				}
+
 				bt_cb(evt_skb)->pkt_type = notify_alt_evt[0];
 				memcpy(evt_skb->data, &notify_alt_evt[1], NOTIFY_ALT_EVT_LEN - 1);
 				evt_skb->len = NOTIFY_ALT_EVT_LEN - 1;
@@ -2561,6 +2566,11 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					skb->data[4] == 0xff && skb->data[5] == 0x03 &&
 					skb->data[6] == 0x00 && skb->data[7] == 0x00 && skb->data[9] == 0x00) {
 				evt_skb = skb_copy(skb, GFP_KERNEL);
+				if (!evt_skb){
+					BTMTK_ERR("%s skb_copy failed", __func__);
+					return -ENOMEM;
+				}
+
 				bt_cb(evt_skb)->pkt_type = notify_alt_evt[0];
 				memcpy(evt_skb->data, &notify_alt_evt[1], NOTIFY_ALT_EVT_LEN - 1);
 				evt_skb->len = NOTIFY_ALT_EVT_LEN - 1;

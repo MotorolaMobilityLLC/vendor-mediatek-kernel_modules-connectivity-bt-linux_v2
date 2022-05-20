@@ -218,7 +218,7 @@ int btmtk_fops_initfwlog(void)
 	}
 
 	g_fwlog->pBTDevfwlog = device_create(g_fwlog->pBTClass, NULL, devIDfwlog, NULL,
-		BT_FWLOG_DEV_NODE);
+		"%s", BT_FWLOG_DEV_NODE);
 	if (IS_ERR(g_fwlog->pBTDevfwlog)) {
 		BTMTK_ERR("%s: device(stpbtfwlog) create fail, error code(%ld)", __func__,
 			PTR_ERR(g_fwlog->pBTDevfwlog));
