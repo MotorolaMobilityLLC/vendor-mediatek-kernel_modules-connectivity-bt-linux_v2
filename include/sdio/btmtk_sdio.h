@@ -209,7 +209,7 @@ struct btmtk_sdio_thread {
 	struct task_struct *task;
 	wait_queue_head_t wait_q;
 	void *priv;
-	u8 thread_status;
+	atomic_t thread_status;
 };
 
 struct btmtk_sdio_dev {

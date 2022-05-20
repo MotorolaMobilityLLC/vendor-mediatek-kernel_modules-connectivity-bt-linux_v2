@@ -1800,6 +1800,8 @@ static int btmtk_sdio_main_thread(void *data)
 /*	sched_setscheduler(current, SCHED_RR, &param); */
 
 	BTMTK_INFO("btmtk_sdio_main_thread start running...");
+	atomic_set(&cif_dev->sdio_thread.thread_status, 1);
+
 	for (;;) {
 		wait_event_interruptible(cif_dev->sdio_thread.wait_q, btmtk_thread_wait_for_msg(cif_dev));
 		if (kthread_should_stop()) {
@@ -1858,6 +1860,7 @@ static int btmtk_sdio_main_thread(void *data)
 		}
 	}
 
+	atomic_set(&cif_dev->sdio_thread.thread_status, 0);
 	BTMTK_WARN("end");
 	return 0;
 }
@@ -2000,6 +2003,23 @@ end:
 	return 0;
 }
 
+static void btmtk_sdio_stop_main_thread(struct btmtk_sdio_dev *cif_dev)
+{
+	skb_queue_purge(&cif_dev->tx_queue);
+	if (!IS_ERR(cif_dev->sdio_thread.task)) {
+		kthread_stop(cif_dev->sdio_thread.task);
+		wake_up_interruptible(&cif_dev->sdio_thread.wait_q);
+
+		while (atomic_read(&cif_dev->sdio_thread.thread_status))
+		{
+			BTMTK_INFO("wait btmtk_sdio_main_thread stop");
+			msleep(100);
+		}
+
+		BTMTK_INFO("btmtk_sdio_main_thread stop success!");
+	}
+}
+
 static void btmtk_sdio_disconnect(struct sdio_func *func)
 {
 	struct btmtk_dev *bdev = sdio_get_drvdata(func);
@@ -2009,6 +2029,7 @@ static void btmtk_sdio_disconnect(struct sdio_func *func)
 		return;
 
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
+	btmtk_sdio_stop_main_thread(cif_dev);
 	btmtk_woble_uninitialize(&cif_dev->bt_woble);
 	btmtk_cif_free_memory(cif_dev);
 	btmtk_sdio_unregister_dev(cif_dev);
@@ -2340,14 +2361,7 @@ int btmtk_cif_register(void)
 int btmtk_cif_deregister(void)
 {
 	BTMTK_INFO("%s", __func__);
-#if 0
-	skb_queue_purge(&cif_dev->tx_queue);
-	if (!IS_ERR(priv->main_thread.task) && (priv->main_thread.thread_status)) {
-		kthread_stop(priv->main_thread.task);
-		wake_up_interruptible(&priv->main_thread.wait_q);
-		BTMTK_INFO("wake_up_interruptible main_thread done");
-	}
-#endif
+
 	sdio_deregister();
 	BTMTK_INFO("%s: Done", __func__);
 	return 0;
