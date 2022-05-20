@@ -38,12 +38,6 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define BGF1_CMD_BULK
 
 
-enum {
-	BTMTK_EP_TYPE_OUT_CMD = 0,	/*EP type out for hci cmd and wmt cmd */
-	BTMTK_EP_TPYE_OUT_ACL,	/* EP type out for acl pkt with load rompatch */
-	BTMTK_EP_TYPE_OUT_OTHER,	/* EP type out for pkt from host, include acl and hci */
-};
-
 /* UHW CR mapping */
 #define BT_MISC 0x70002510
 #define BT_SUBSYS_RST 0x70002610
@@ -68,6 +62,7 @@ struct btmtk_dev {
 	struct work_struct	waker;
 	struct work_struct	reset_waker;
 
+	int recv_evt_len;
 	struct usb_anchor	tx_anchor;
 	int	tx_in_flight;
 	spinlock_t	txlock;

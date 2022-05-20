@@ -42,7 +42,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.200041502"
+#define VERSION "7.0.200042001"
 #define SUBVER ":turnkey"
 
 
@@ -179,7 +179,7 @@ extern uint8_t btmtk_log_lvl;
 #define SEC_MAP_NEED_SEND_SIZE	52
 
 
-#define USB_IO_BUF_SIZE		(HCI_MAX_EVENT_SIZE > 256 ? HCI_MAX_EVENT_SIZE : 256)
+#define IO_BUF_SIZE		(HCI_MAX_EVENT_SIZE > 256 ? HCI_MAX_EVENT_SIZE : 256)
 #define HCI_SNOOP_ENTRY_NUM	30
 #define HCI_SNOOP_BUF_SIZE	32
 #define EVENT_COMPARE_SIZE	64

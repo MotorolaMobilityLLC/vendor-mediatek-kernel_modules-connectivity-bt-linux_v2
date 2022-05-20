@@ -1060,7 +1060,7 @@ int btmtk_compare_evt(struct btmtk_dev *bdev, const uint8_t *event,
 
 	if (bdev && bdev->io_buf && event && recv_evt_len >= event_len - 1) {
 		if (memcmp(bdev->io_buf, event + 1, event_len - 1) == 0) {
-			ret = recv_evt_len;
+			ret = 0;
 			goto exit;
 		} else {
 			BTMTK_INFO("%s compare fail\n", __func__);
@@ -1082,7 +1082,6 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 {
 	struct sk_buff *skb = NULL;
 	int ret = 0;
-	int recv_evt_len = 0;
 	unsigned long comp_event_timo = 0, start_time = 0;
 
 	if (bdev == NULL || bdev->hdev == NULL ||
@@ -1122,13 +1121,13 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	 */
 	if (event && bdev->hdev->bus == HCI_USB &&
 		(endpoint == BTMTK_EP_TYPE_OUT_CMD || endpoint == BTMTK_EP_TPYE_OUT_ACL)) {
-		recv_evt_len = btmtk_cif_recv_evt(bdev, delay, retry);
-		if (recv_evt_len < 0) {
+		bdev->recv_evt_len = btmtk_cif_recv_evt(bdev, delay, retry);
+		if (bdev->recv_evt_len < 0) {
 			BTMTK_ERR("%s btmtk_cif_recv_evt failed!!", __func__);
 			ret = -1;
 			goto err_free_skb;
 		}
-		ret = btmtk_compare_evt(bdev, event, event_len, recv_evt_len);
+		ret = btmtk_compare_evt(bdev, event, event_len, bdev->recv_evt_len);
 	} else {
 		if (event) {
 			if (event_len > EVENT_COMPARE_SIZE) {
@@ -1193,7 +1192,7 @@ static int btmtk_check_need_load_rom_patch(struct btmtk_dev *bdev)
 	if (ret < 0)
 		return PATCH_ERR;
 
-	if (ret == sizeof(event))
+	if (bdev->recv_evt_len == sizeof(event))
 		return bdev->io_buf[6];
 
 	return PATCH_ERR;
@@ -1359,7 +1358,7 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 			return PATCH_ERR;
 		}
 
-		if (ret == event_len)
+		if (bdev->recv_evt_len >= event_len)
 			return bdev->io_buf[6];
 
 		return PATCH_ERR;
@@ -2018,7 +2017,7 @@ int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *bdev)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 		bdev->power_state = BTMTK_DONGLE_STATE_ERROR;
 		ret = -1;
-	} else if (ret > 0) {
+	} else if (ret == 0 && bdev->recv_evt_len > 0) {
 		switch (bdev->io_buf[6]) {
 		case 0:			 /* successful */
 			BTMTK_INFO("%s: OK", __func__);
@@ -3842,6 +3841,10 @@ static void btmtk_rx_work(struct work_struct *work)
 							event_need_compare_len) == 0) {
 					event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 					BTMTK_INFO("%s, compare success", __func__);
+					/* If driver need to check result from skb, it can get from io_buf */
+					/* Such as chip_id, fw_version, etc. */
+					memcpy(skb_push(skb, 1), &bt_cb(skb)->pkt_type, 1);
+					memcpy(bdev->io_buf, skb->data, skb->len);
 				} else {
 					BTMTK_DBG("%s compare fail", __func__);
 					BTMTK_INFO_RAW(event_need_compare, event_need_compare_len,

@@ -1279,7 +1279,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				crBaseAddr = (skb->data[8]<<8) + skb->data[9];
 				crRegOffset = (skb->data[10]<<8) + skb->data[11];
 				BTMTK_INFO("base + offset = %04x %04x\n", crBaseAddr, crRegOffset);
-				memset(bdev->io_buf, 0, USB_IO_BUF_SIZE);
+				memset(bdev->io_buf, 0, IO_BUF_SIZE);
 				ret = usb_control_msg(bdev->udev, usb_rcvctrlpipe(bdev->udev, 0),
 						1, 0xDE, crBaseAddr, crRegOffset,
 						bdev->io_buf, 4, USB_CTRL_IO_TIMO);
@@ -2144,7 +2144,7 @@ static int btmtk_cif_allocate_memory(struct btmtk_dev *bdev)
 	}
 
 	if (bdev->io_buf == NULL) {
-		bdev->io_buf = kzalloc(USB_IO_BUF_SIZE, GFP_KERNEL);
+		bdev->io_buf = kzalloc(IO_BUF_SIZE, GFP_KERNEL);
 		if (!bdev->io_buf) {
 			BT_ERR("%s: alloc memory fail (bdev->io_buf)", __func__);
 			return -1;
@@ -2230,7 +2230,7 @@ int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 	reset_buf[2] = ((val >> 16) & 0x00ff);
 	reset_buf[3] = ((val >> 24) & 0x00ff);
 
-	memset(bdev->io_buf, 0, USB_IO_BUF_SIZE);
+	memset(bdev->io_buf, 0, IO_BUF_SIZE);
 	ret = usb_control_msg(bdev->udev, usb_sndctrlpipe(bdev->udev, 0),
 			0x02,						/* bRequest */
 			0x5E,						/* bRequestType */
@@ -2259,7 +2259,7 @@ int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 	reg_high = ((reg >> 16) & 0xffff);
 	reg_low = (reg & 0xffff);
 
-	memset(bdev->io_buf, 0, USB_IO_BUF_SIZE);
+	memset(bdev->io_buf, 0, IO_BUF_SIZE);
 	ret = usb_control_msg(bdev->udev, usb_rcvctrlpipe(bdev->udev, 0),
 			0x01,						/* bRequest */
 			0xDE,						/* bRequestType */
@@ -2291,7 +2291,7 @@ int btmtk_cif_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 	reg_high = ((reg >> 16) & 0xffff);
 	reg_low = (reg & 0xffff);
 
-	memset(bdev->io_buf, 0, USB_IO_BUF_SIZE);
+	memset(bdev->io_buf, 0, IO_BUF_SIZE);
 	ret = usb_control_msg(bdev->udev, usb_rcvctrlpipe(bdev->udev, 0),
 			0x63,						/* bRequest */
 			DEVICE_VENDOR_REQUEST_IN,	/* bRequestType */
@@ -2322,7 +2322,7 @@ int btmtk_cif_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 	reg_high = ((reg >> 16) & 0xffff);
 	reg_low = (reg & 0xffff);
 
-	memset(bdev->io_buf, 0, USB_IO_BUF_SIZE);
+	memset(bdev->io_buf, 0, IO_BUF_SIZE);
 
 	buf[0] = 0;
 	buf[1] = 0;
@@ -2493,7 +2493,7 @@ get_response_again:
 	mdelay(delay);
 
 	/* check WMT event */
-	memset(bdev->io_buf, 0, USB_IO_BUF_SIZE);
+	memset(bdev->io_buf, 0, IO_BUF_SIZE);
 	if (BTMTK_IS_BT_0_INTF(ifnum_base))
 		ret = usb_control_msg(bdev->udev, usb_rcvctrlpipe(bdev->udev, 0),
 				0x01, DEVICE_VENDOR_REQUEST_IN, 0x30, 0x00, bdev->io_buf,

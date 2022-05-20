@@ -85,6 +85,8 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 #define HCI_I2C		8
 #define HCI_SMD		9
 
+#define HCI_TYPE_SIZE	1
+
 /* this for 7663 need download patch staus
  * 0:
  * patch download is not complete/BT get patch semaphore fail (WiFi get semaphore success)
@@ -144,7 +146,7 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 
 /* stpbtfwlog setting */
 #define FWLOG_QUEUE_COUNT			400
-#define FWLOG_ASSERT_QUEUE_COUNT		12000
+#define FWLOG_ASSERT_QUEUE_COUNT		45000
 #define FWLOG_BLUETOOTH_KPI_QUEUE_COUNT		200
 #define HCI_MAX_COMMAND_SIZE			255
 #define HCI_MAX_COMMAND_BUF_SIZE		(HCI_MAX_COMMAND_SIZE * 3)
@@ -153,6 +155,12 @@ struct btmtk_cif_state {
 	unsigned char ops_enter;
 	unsigned char ops_end;
 	unsigned char ops_error;
+};
+
+enum {
+	BTMTK_EP_TYPE_OUT_CMD = 0,	/*EP type out for hci cmd and wmt cmd */
+	BTMTK_EP_TPYE_OUT_ACL,	/* EP type out for acl pkt with load rompatch */
+	BTMTK_EP_TYPE_OUT_OTHER,	/* EP type out for pkt from host, include acl and hci */
 };
 
 struct btmtk_fops_fwlog {
