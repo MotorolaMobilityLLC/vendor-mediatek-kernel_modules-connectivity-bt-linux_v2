@@ -50,6 +50,7 @@ struct btmtk_fops_fwlog {
 	struct device *pBTDevfwlog;
 	spinlock_t fwlog_lock;
 	u8 btmtk_bluetooth_kpi;
+	struct sk_buff_head usr_opcode_queue;
 };
 
 int btmtk_fops_initfwlog(void);
