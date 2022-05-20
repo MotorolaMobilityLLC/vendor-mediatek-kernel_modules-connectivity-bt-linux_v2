@@ -683,6 +683,14 @@ struct btmtk_main_info {
 	atomic_t fwlog_ref_cnt;
 };
 
+static inline int is_mt6639(u32 chip_id)
+{
+	chip_id &= 0xFFFF;
+	if (chip_id == 0x6639)
+		return 1;
+	return 0;
+}
+
 static inline int is_mt7902(u32 chip_id)
 {
 	chip_id &= 0xFFFF;
