@@ -1716,7 +1716,8 @@ int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, bool patch_flag)
 	}
 
 	if (patch_flag) {
-		if (bdev->flavor)
+		/* For 7902, we can't read flavor from controller successfully */
+		if (bdev->flavor && !is_mt7902(bdev->chip_id))
 			/* if flavor equals 1, it represent 7920, else it represent 7921*/
 			(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 					"WIFI_MT%04x_patch_mcu_1a_%x_hdr.bin",
@@ -2585,7 +2586,7 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: flavor1 = 0x%x", __func__, bdev->flavor);
 
 	/* if flavor equals 1, it represent 7920, else it represent 7921 */
-	if (bdev->flavor) {
+	if (bdev->flavor && !is_mt7902(bdev->chip_id)) {
 		(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_1a_%x_hdr.bin",
 				bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
 		(void)snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s%x_1a_%x.%s", BT_CFG_NAME_PREFIX,
