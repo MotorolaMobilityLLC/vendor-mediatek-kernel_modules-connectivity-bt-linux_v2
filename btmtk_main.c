@@ -77,6 +77,10 @@ static const struct btmtk_cif_state g_cif_state[] = {
 	{BTMTK_STATE_RESUME, BTMTK_STATE_WORKING, BTMTK_STATE_FW_DUMP},
 	/* HIF_EVENT_STANDBY */
 	{BTMTK_STATE_STANDBY, BTMTK_STATE_STANDBY, BTMTK_STATE_FW_DUMP},
+	/* BTMTK_STATE_FW_DUMP */
+	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_WORKING, BTMTK_STATE_FW_DUMP},
+	/* BTMTK_STATE_FW_DUMP */
+	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_DISCONNECT, BTMTK_STATE_FW_DUMP},
 };
 
 static int btmtk_enter_standby(void);
@@ -144,7 +148,6 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 	ulong flags = 0;
 	struct sk_buff *skb = NULL;
 
-	BTMTK_INFO("%s: Start.", __func__);
 	/* picus read a queue, it may occur performace issue */
 	spin_lock_irqsave(&g_fwlog->fwlog_lock, flags);
 	if (skb_queue_len(&g_fwlog->fwlog_queue))
@@ -159,8 +162,6 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 			BT_ERR("%s: copy_to_user failed!", __func__);
 
 		copyLen = skb->len;
-		BTMTK_DBG("%s: Reading data and buf is %02X %02X %02X", __func__,
-				skb->data[0], skb->data[1], skb->data[2]);
 	} else {
 		BTMTK_DBG("%s: socket buffer length error(count: %d, skb.len: %d)", __func__, (int)count, skb->len);
 	}
@@ -288,12 +289,10 @@ unsigned int btmtk_fops_pollfwlog(struct file *file, poll_table *wait)
 {
 	unsigned int mask = 0;
 
-	BTMTK_DBG("%s: Start.", __func__);
 	poll_wait(file, &g_fwlog->fw_log_inq, wait);
 	if (skb_queue_len(&g_fwlog->fwlog_queue) > 0)
 		mask |= POLLIN | POLLRDNORM;			/* readable */
 
-	BTMTK_DBG("%s: data count is %d!", __func__, skb_queue_len(&g_fwlog->fwlog_queue));
 	return mask;
 }
 
@@ -525,7 +524,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 	/* Check for error from previous call */
 	if (IS_ERR(skb))
 		skb = NULL;
-	BTMTK_DBG("%s begin, count = %d", __func__, count);
+	/* BTMTK_DBG("%s begin, count = %d", __func__, count); */
 
 	while (count) {
 		int i, len;
@@ -564,7 +563,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 		count -= len;
 		buffer += len;
 
-		BTMTK_DBG("%s skb->len = %d, %d", __func__, skb->len, hci_skb_expect(skb));
+		/* BTMTK_DBG("%s skb->len = %d, %d", __func__, skb->len, hci_skb_expect(skb)); */
 
 		/* Check for partial packet */
 		if (skb->len < hci_skb_expect(skb))
@@ -583,8 +582,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 		if (skb->len == (&pkts[i])->hlen) {
 			u16 dlen;
 
-			BTMTK_DBG("%s begin, skb->len = %d, %d, %d", __func__, skb->len,
-				(&pkts[i])->hlen, (&pkts[i])->lsize);
+			/* BTMTK_DBG("%s begin, skb->len = %d, %d, %d", __func__, skb->len,
+				(&pkts[i])->hlen, (&pkts[i])->lsize); */
 			switch ((&pkts[i])->lsize) {
 			case 0:
 				/* No variable data length */
@@ -790,26 +789,56 @@ int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count)
 	return 0;
 }
 
-int btmtk_dispatch_acl(struct hci_dev *hdev, struct sk_buff *skb)
+int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	static u8 fwlog_picus_blocking_warn;
 	static u8 fwlog_fwdump_blocking_warn;
-	static int print_dump_data_counter = 0;
+	int state = BTMTK_STATE_INIT;
 
-	if (skb->data[0] == 0x6f && skb->data[1] == 0xfc && skb->len > 12) {
-		btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
-		/* sent coredump data to queue, picus tool will log it */
-		/* coredump data done
-		 * For Example : TotalTimeForDump=0xxxxxxx, (xx secs)
-		 */
+
+
+	if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
+			skb->data[0] == 0x6f &&
+			skb->data[1] == 0xfc) {
+		static int dump_data_counter;
+		static int dump_data_length;
+		state = btmtk_get_chip_state(bdev);
+		if (state != BTMTK_STATE_FW_DUMP) {
+			BTMTK_INFO("%s: FW dump begin", __func__);
+			/* Print too much log, it may cause kernel panic. */
+			dump_data_counter = 0;
+			dump_data_length = 0;
+			btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
+		}
+
+		dump_data_counter++;
+		dump_data_length += skb->len;
 
 		/* picus or syslog */
 		/* print dump data to console */
-		if (print_dump_data_counter < 20) {
-			print_dump_data_counter++;
-			BT_INFO("%s: FW dump data (%d): %s", __func__, print_dump_data_counter, &skb->data[4]);
+		if (dump_data_counter % 1000 == 0) {
+			BTMTK_INFO("%s: FW dump on-going, total_packet = %d, total_length = %d",
+					__func__, dump_data_counter, dump_data_length);
 		}
+
+		/* print dump data to console */
+		if (dump_data_counter < 20)
+			BTMTK_INFO("%s: FW dump data (%d): %s",
+					__func__, dump_data_counter, &skb->data[4]);
+
+		/* In the new generation, we will check the keyword of coredump (; coredump end)
+		 * Such as : 79xx
+		 */
+		if (skb->data[skb->len - 4] == 'e' &&
+			skb->data[skb->len - 3] == 'n' &&
+			skb->data[skb->len - 2] == 'd') {
+			/* This is the latest coredump packet. */
+			BTMTK_INFO("%s: FW dump end, dump_data_counter = %d", __func__, dump_data_counter);
+			/* TODO: Chip reset*/
+			reset_stack_flag = HW_ERR_CODE_CORE_DUMP;
+		}
+
 		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_ASSERT_QUEUE_COUNT) {
 			/* sent picus data to queue, picus tool will log it */
 			if (btmtk_skb_enq_fwlog(skb->data, skb->len, 0, &g_fwlog->fwlog_queue) == 0) {
@@ -822,22 +851,9 @@ int btmtk_dispatch_acl(struct hci_dev *hdev, struct sk_buff *skb)
 				pr_warn("btmtk fwlog queue size is full(coredump)");
 			}
 		}
-
-		if (skb->data[4] == 0x54 && skb->data[5] == 0x6F &&
-			skb->data[6] == 0x74 && skb->data[7] == 0x61 &&
-			skb->data[8] == 0x6C && skb->data[9] == 0x54 &&
-			skb->data[10] == 0x69 && skb->data[11] == 0x6D &&
-			skb->data[12] == 0x65) {
-			/* coredump end, do reset */
-			BTMTK_INFO("%s coredump done", __func__);
-			msleep(3000);
-			/* TODO: Chip reset*/
-			reset_stack_flag = HW_ERR_CODE_CORE_DUMP;
-		}
 		return 1;
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) && (skb->data[0] == 0xff || skb->data[0] == 0xfe)
                     && skb->data[1] == 0x05) {
-		BTMTK_DBG("%s correct picus log by ACL", __func__);
 		/* Coredump */
 		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_QUEUE_COUNT) {
 			if (btmtk_skb_enq_fwlog(skb->data, skb->len, 0, &g_fwlog->fwlog_queue) == 0) {
@@ -854,7 +870,8 @@ int btmtk_dispatch_acl(struct hci_dev *hdev, struct sk_buff *skb)
 	}
 	return 0;
 }
-
+/* remove it, if workqueue can't be scheduled, you can reuse it */
+#if 0
 int btmtk_dispatch_event(struct hci_dev *hdev, struct sk_buff *skb)
 {
 
@@ -864,6 +881,7 @@ int btmtk_dispatch_event(struct hci_dev *hdev, struct sk_buff *skb)
 
 	return 0;
 }
+#endif
 
 int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb)
 {
@@ -879,7 +897,7 @@ int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb)
 
 	/* remove it, if workqueue can't be scheduled, you can reuse it */
 #if 0
-	skip_pkt = btmtk_dispatch_acl(hdev, skb);
+	skip_pkt = btmtk_dispatch_pkt(hdev, skb);
 	if (skip_pkt == 0)
 		err = hci_recv_frame(hdev, skb);
 #endif
@@ -3177,11 +3195,20 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 	return ret;
 }
 
-static int btmtk_send_assert_cmd_bulk(struct btmtk_dev *bdev)
+static int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 {
-	int ret = -1;
-	u8 buf[] = { 0x02, 0x6F, 0xFC, 0x05, 0x00, 0x01, 0x02, 0x01, 0x00, 0x08 };
+	int ret = 0;
+	int state;
+	u8 buf[] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x02, 0x01, 0x00, 0x08 };
 	struct sk_buff *skb = NULL;
+
+	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_FW_DUMP) {
+		BTMTK_WARN("%s: FW dumping already!!!", __func__);
+		return ret;
+	}
+
+	BTMTK_INFO("%s: send assert cmd", __func__);
 
 	if (!bdev) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
@@ -3194,42 +3221,19 @@ static int btmtk_send_assert_cmd_bulk(struct btmtk_dev *bdev)
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		goto exit;
 	}
-	/* Reserv for core and drivers use */
-	skb_reserve(skb, 7);
-	bt_cb(skb)->pkt_type = HCI_ACLDATA_PKT;
+	bt_cb(skb)->pkt_type = HCI_COMMAND_PKT;
 	memcpy(skb->data, buf, sizeof(buf));
 	skb->len = sizeof(buf);
 
-	ret = btmtk_cif_send_cmd(bdev, skb, 0, 0, BTMTK_EP_TYPE_OUT_OTHER);
+	ret = btmtk_cif_send_cmd(bdev, skb, 100, 20, BTMTK_EP_TYPE_OUT_CMD);
 	if (ret < 0)
 		BTMTK_ERR("%s failed!!", __func__);
 	else
 		BTMTK_INFO("%s: OK", __func__);
 
+	kfree_skb(skb);
+
 exit:
-	return ret;
-}
-
-static int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
-{
-	int ret = 0;
-	int state;
-
-	state = btmtk_get_chip_state(bdev);
-	if (state == BTMTK_STATE_FW_DUMP) {
-		BTMTK_WARN("%s: FW dumping already!!!", __func__);
-		return ret;
-	}
-
-	BTMTK_INFO("%s: send assert cmd", __func__);
-
-	ret = btmtk_send_assert_cmd_bulk(bdev);
-	if (ret < 0) {
-		BTMTK_ERR("%s: send assert cmd fail, tigger hw reset only", __func__);
-		/* TODO */
-		/* btmtk_usb_start_reset_dongle_progress(); */
-	}
-
 	return ret;
 }
 
@@ -3518,6 +3522,170 @@ static int bt_setup(struct hci_dev *hdev)
 	return 0;
 }
 
+void btmtk_toggle_rst_pin(struct btmtk_dev *bdev)
+{
+	struct device_node *node;
+	u32 rst_pin_num = 0;
+
+	BTMTK_INFO("%s: begin", __func__);
+
+	/* Initialize the interface specific function pointers */
+	bdev->pf_pdwndFunc = (pdwnc_func) btmtk_kallsyms_lookup_name("PDWNC_SetBTInResetState");
+	if (bdev->pf_pdwndFunc)
+		BTMTK_INFO("%s: Found PDWNC_SetBTInResetState", __func__);
+	else
+		BTMTK_WARN("%s: No Exported Func Found PDWNC_SetBTInResetState", __func__);
+
+	bdev->pf_resetFunc2 = (reset_func_ptr2) btmtk_kallsyms_lookup_name("mtk_gpio_set_value");
+	if (!bdev->pf_resetFunc2)
+		BTMTK_ERR("%s: No Exported Func Found mtk_gpio_set_value", __func__);
+	else {
+		BTMTK_INFO("%s: Found mtk_gpio_set_value", __func__);
+	}
+
+	bdev->pf_lowFunc = (set_gpio_low) btmtk_kallsyms_lookup_name("MDrv_GPIO_Set_Low");
+	bdev->pf_highFunc = (set_gpio_high) btmtk_kallsyms_lookup_name("MDrv_GPIO_Set_High");
+	if (!bdev->pf_lowFunc || !bdev->pf_highFunc)
+		BTMTK_WARN("%s: No Exported Func Found MDrv_GPIO_Set_Low or High", __func__);
+	else {
+		BTMTK_INFO("%s: Found MDrv_GPIO_Set_Low & MDrv_GPIO_Set_High", __func__);
+	}
+
+	if (bdev->pf_pdwndFunc) {
+		BTMTK_INFO("%s: Invoke PDWNC_SetBTInResetState(%d)", __func__, 1);
+		bdev->pf_pdwndFunc(1);
+	} else
+		BTMTK_INFO("%s: No Exported Func Found PDWNC_SetBTInResetState", __func__);
+
+	if (bdev->pf_resetFunc2) {
+		rst_pin_num = bdev->bt_cfg.dongle_reset_gpio_pin;
+		BTMTK_INFO("%s: Invoke bdev->pf_resetFunc2(%d,%d)", __func__, rst_pin_num, 0);
+		bdev->pf_resetFunc2(rst_pin_num, 0);
+		mdelay(RESET_PIN_SET_LOW_TIME);
+		BTMTK_INFO("%s: Invoke bdev->pf_resetFunc2(%d,%d)", __func__, rst_pin_num, 1);
+		bdev->pf_resetFunc2(rst_pin_num, 1);
+		goto exit;
+	}
+
+	node = of_find_compatible_node(NULL, NULL, "mstar,gpio-wifi-ctl");
+	if (node) {
+		if (of_property_read_u32(node, "wifi-ctl-gpio", &rst_pin_num) == 0) {
+			if (bdev->pf_lowFunc && bdev->pf_highFunc) {
+				BTMTK_INFO("%s: Invoke bdev->pf_lowFunc(%d)", __func__, rst_pin_num);
+				bdev->pf_lowFunc(rst_pin_num);
+				mdelay(RESET_PIN_SET_LOW_TIME);
+				BTMTK_INFO("%s: Invoke bdev->pf_highFunc(%d)", __func__, rst_pin_num);
+				bdev->pf_highFunc(rst_pin_num);
+				goto exit;
+			}
+		} else
+			BTMTK_WARN("%s, failed to obtain wifi control gpio\n", __func__);
+	} else {
+		if (bdev->pf_lowFunc && bdev->pf_highFunc) {
+			rst_pin_num = bdev->bt_cfg.dongle_reset_gpio_pin;
+			BTMTK_INFO("%s: Invoke bdev->pf_lowFunc(%d)", __func__, rst_pin_num);
+			bdev->pf_lowFunc(rst_pin_num);
+			mdelay(RESET_PIN_SET_LOW_TIME);
+			BTMTK_INFO("%s: Invoke bdev->pf_highFunc(%d)", __func__, rst_pin_num);
+			bdev->pf_highFunc(rst_pin_num);
+			goto exit;
+		}
+	}
+
+	/* use linux kernel common api */
+	do {
+		struct device_node *node;
+		u32 mt76xx_reset_gpio = bdev->bt_cfg.dongle_reset_gpio_pin;
+
+		node = of_find_compatible_node(NULL, NULL, "mediatek,connectivity-combo");
+		if (node) {
+			mt76xx_reset_gpio = of_get_named_gpio(node, "mt76xx-reset-gpio", 0);
+			if (gpio_is_valid(mt76xx_reset_gpio))
+				BTMTK_INFO("%s: Get chip reset gpio(%d)", __func__, mt76xx_reset_gpio);
+			else
+				mt76xx_reset_gpio = bdev->bt_cfg.dongle_reset_gpio_pin;
+		}
+
+		BTMTK_INFO("%s: Invoke Low(%d)", __func__, mt76xx_reset_gpio);
+		gpio_direction_output(mt76xx_reset_gpio, 0);
+		mdelay(RESET_PIN_SET_LOW_TIME);
+		BTMTK_INFO("%s: Invoke High(%d)", __func__, mt76xx_reset_gpio);
+		gpio_direction_output(mt76xx_reset_gpio, 1);
+		goto exit;
+	} while (0);
+
+exit:
+	BTMTK_INFO("%s: end", __func__);
+}
+
+void btmtk_reset_waker(struct work_struct *work)
+{
+	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, reset_waker);
+	struct btmtk_cif_state *cif_state = NULL;
+	int cif_event = 0, err = 0;
+	cif_event = HIF_EVENT_SUBSYS_RESET;
+	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
+		/* Error */
+		BTMTK_WARN("%s priv setting is NULL", __func__);
+		goto Finish;
+	}
+
+	cif_state = &bdev->cif_state[cif_event];
+
+	/* Set Entering state */
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+	BTMTK_INFO("%s: Receive a byte (0xFF)", __func__);
+	/* read interrupt EP15 CR */
+
+	mdelay(500); /* Need to improve */
+	cancel_work_sync(&bdev->work);
+	cancel_work_sync(&bdev->waker);
+
+	bdev->sco_num = 0;
+	reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
+
+	err = btmtk_cif_subsys_reset(bdev);
+	if (err) {
+		/* L0.5 reset failed, do whole chip reset */
+		/* We will add support dongle reset flag, reading from bt.cfg */
+		btmtk_toggle_rst_pin(bdev);
+		goto Finish;
+	}
+
+	/* It's a test code for stress test (whole chip reset & L0.5 reset) */
+#if 0
+	if(bdev->bt_cfg.dongle_reset_gpio_pin == 0) {
+		err = btmtk_cif_subsys_reset(bdev);
+		if (err) {
+			/* L0.5 reset failed, do whole chip reset */
+			btmtk_toggle_rst_pin(bdev);
+			goto Finish;
+		}
+	} else {
+		/* L0.5 reset failed, do whole chip reset */
+		btmtk_toggle_rst_pin(bdev);
+		btmtk_send_hw_err_to_host(bdev);
+		goto Finish;
+	}
+#endif
+
+	btmtk_cap_init(bdev);
+	err = btmtk_load_rom_patch(bdev);
+	if (err < 0) {
+		BTMTK_ERR("btmtk load rom patch failed!");
+		goto Finish;
+	}
+	btmtk_send_hw_err_to_host(bdev);
+
+Finish:
+	/* Set End/Error state */
+	if (err < 0)
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+	else
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+}
+
 static void btmtk_rx_work(struct work_struct *work)
 {
 	int err = 0, skip_pkt = 0;
@@ -3525,25 +3693,11 @@ static void btmtk_rx_work(struct work_struct *work)
 	struct sk_buff *skb;
 	int i = 0;
 	int fstate = BTMTK_FOPS_STATE_INIT;
-
-	BTMTK_DBG("%s enter", __func__);
+	/* BTMTK_DBG("%s enter", __func__); */
 
 	while ((skb = skb_dequeue(&bdev->rx_q))) {
-		BTMTK_DBG_RAW(skb->data, skb->len, "%s, recv evt", __func__);
-		if (skb->len == 2 && bdev->urb_transfer_buf[1] == 0xFF) {
-			/* We can't use usb_control_msg in interrupt.
-			 * If you use usb_control_msg , it will cause crash.
-			 */
-			/* TODO: need to rewrite reset interrupt on EP15 for all interfaces,
-			 * maybe need to move reset_waker to btmtk_dev for common
-			 */
-
-			btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
-
-			schedule_work(&bdev->reset_waker);
-			continue;
-		}
-		skip_pkt = btmtk_dispatch_acl(bdev->hdev, skb);
+		/* BTMTK_DBG_RAW(skb->data, skb->len, "%s, recv evt", __func__); */
+		skip_pkt = btmtk_dispatch_pkt(bdev->hdev, skb);
 		if (skip_pkt != 0)
 			continue;
 

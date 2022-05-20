@@ -33,11 +33,16 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 
+/* Define for whole chip reset */
+#include <linux/of.h>
+#include <linux/of_gpio.h>
+
+
 #include "btmtk_config.h"
 
 
 /** Driver version */
-#define VERSION "7.0.200032601"
+#define VERSION "7.0.200032602"
 #define SUBVER ":turnkey"
 
 

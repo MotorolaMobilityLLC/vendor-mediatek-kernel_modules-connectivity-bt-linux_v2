@@ -22,6 +22,10 @@
 #define BT0_MCU_INTERFACE_NUM 0
 #define BT1_MCU_INTERFACE_NUM 3
 
+typedef int (*pdwnc_func) (u8 fgReset);
+typedef int (*reset_func_ptr2) (unsigned int gpio, int init_value);
+typedef int (*set_gpio_low)(u8 gpio);
+typedef int (*set_gpio_high)(u8 gpio);
 
 /**
  * Send cmd dispatch evt
@@ -39,6 +43,15 @@ enum {
 	BTMTK_EP_TPYE_OUT_ACL,	/* EP type out for acl pkt with load rompatch */
 	BTMTK_EP_TYPE_OUT_OTHER,	/* EP type out for pkt from host, include acl and hci */
 };
+
+/* UHW CR mapping */
+#define BT_MISC 0x70002510
+#define BT_SUBSYS_RST 0x70002610
+#define UDMA_INT_STA_BT 0x74000024
+#define UDMA_INT_STA_BT1 0x74000308
+#define BT_WDT_STATUS 0x740003A0
+#define EP_RST_OPT 0x74011890
+#define EP_RST_IN_OUT_OPT 0x00010001
 
 struct btmtk_dev {
 	struct hci_dev	*hdev;
@@ -152,6 +165,12 @@ struct btmtk_dev {
 	 * this urb_transfer_buf
 	 */
 	unsigned char	*urb_transfer_buf;
+
+	/* For Whole chip reset */
+	pdwnc_func pf_pdwndFunc;
+	reset_func_ptr2 pf_resetFunc2;
+	set_gpio_low pf_lowFunc;
+	set_gpio_high pf_highFunc;
 };
 
 int btmtk_cif_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
@@ -165,4 +184,6 @@ int btmtk_cif_get_rom_patch_result(struct btmtk_dev *bdev);
 int btmtk_cif_recv_evt(struct btmtk_dev *bdev, int delay, int retry);
 int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val);
 int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val);
+int btmtk_cif_subsys_reset(struct btmtk_dev *bdev);
+
 #endif

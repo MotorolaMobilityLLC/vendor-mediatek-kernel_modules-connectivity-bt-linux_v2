@@ -24,8 +24,7 @@ int btmtk_deregister_hci_device(struct btmtk_dev *bdev);
 int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count);
 int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb);
-int btmtk_dispatch_event(struct hci_dev *hdev, struct sk_buff *skb);
-int btmtk_dispatch_acl(struct hci_dev *hdev, struct sk_buff *skb);
+int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_send_init_cmds(struct btmtk_dev *hdev);
 int btmtk_send_deinit_cmds(struct btmtk_dev *hdev);
 int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
@@ -49,6 +48,8 @@ struct btmtk_dev *btmtk_get_dev(void);
 void btmtk_release_dev(struct btmtk_dev *bdev);
 struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev);
 void btmtk_free_dev_memory(struct device *dev, struct btmtk_dev *bdev);
+void btmtk_reset_waker(struct work_struct *work);
+void btmtk_toggle_rst_pin(struct btmtk_dev *bdev);
 void btmtk_initialize_cfg_items(struct btmtk_dev *bdev);
 bool btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_dev *bdev);
 u8 btmtk_get_reset_stack_flag(void);
@@ -131,8 +132,15 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 #define HIF_EVENT_SUSPEND	2
 #define HIF_EVENT_RESUME	3
 #define HIF_EVENT_STANDBY	4
+#define HIF_EVENT_SUBSYS_RESET	5
+#define HIF_EVENT_WHOLE_CHIP_RESET	6
 
 #define CHAR2HEX_SIZE	4
+
+/**
+ * For chip reset pin
+ */
+#define RESET_PIN_SET_LOW_TIME		500
 
 /* stpbtfwlog setting */
 #define FWLOG_QUEUE_COUNT			400
