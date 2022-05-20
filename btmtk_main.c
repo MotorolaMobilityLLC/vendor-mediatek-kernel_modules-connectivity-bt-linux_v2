@@ -1474,7 +1474,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		bdev->power_state != BTMTK_DONGLE_STATE_POWER_ON) {
 		BTMTK_WARN("%s: chip power isn't on, ignore this command, state is %d",
 			__func__, bdev->power_state);
-		return ret;
+		goto exit;
 	}
 
 	state = btmtk_get_chip_state(bdev);
@@ -1502,18 +1502,18 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	if (skb->len < 30)
 		BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
 
-	ret = btmtk_cif_send_cmd(bdev, skb, delay, retry, endpoint);
-	if (ret < 0) {
-		BTMTK_ERR("%s btmtk_cif_send_cmd failed!!", __func__);
-		goto err_free_skb;
-	}
-
 	/* wmt cmd and download fw patch using wmt cmd with USB interface, need use
 	 * usb_control_msg to recv wmt event;
 	 * other HIF don't use this method to recv wmt event
 	 */
 	if (event && bdev->hdev->bus == HCI_USB &&
 		(endpoint == BTMTK_EP_TYPE_OUT_CMD || endpoint == BTMTK_EP_TPYE_OUT_ACL)) {
+		ret = btmtk_cif_send_cmd(bdev, skb, delay, retry, endpoint);
+		if (ret < 0) {
+			BTMTK_ERR("%s btmtk_cif_send_cmd failed!!", __func__);
+			goto err_free_skb;
+		}
+
 		bdev->recv_evt_len = btmtk_cif_recv_evt(bdev, delay, retry);
 		if (bdev->recv_evt_len < 0) {
 			BTMTK_ERR("%s btmtk_cif_recv_evt failed!!", __func__);
@@ -1536,7 +1536,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 				BTMTK_ERR("%s, event_len (%d) > EVENT_COMPARE_SIZE(%d), error",
 					__func__, event_len, EVENT_COMPARE_SIZE);
 				ret = -1;
-				goto exit;
+				goto err_free_skb;
 			}
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE;
 			memcpy(event_need_compare, event + 1, event_len - 1);
@@ -1549,49 +1549,57 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 			comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_COMP_EVENT_TIMO);
 			BTMTK_INFO("event_need_compare_len %d, event_compare_status %d",
 				event_need_compare_len, event_compare_status);
-			ret = -1;
-			do {
-				/* check if event_compare_success */
-				if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
-					ret = 0;
-					break;
-				}
-				usleep_range(10, 100);
-			} while (time_before(jiffies, comp_event_timo));
+		} else
+			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 
-			event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
-#if 0
-			if (ret == -1) {
-				if (memcmp(cmd + 1, wmt_over_hci_header + 1,
-					sizeof(wmt_over_hci_header) - 1) == 0 &&
-					bdev->bt_cfg.support_dongle_reset) {
-					/* Just need do L0.5 reset when wmt compare event failed,
-					 * -110 case FW will send WDT interrupt to driver, then do L0.5 reset
-					 */
-					BTMTK_ERR("wmt compare evt failed, do L0.5 reset, ret = %d!", ret);
-					schedule_work(&bdev->reset_waker);
-				} else {
-					/* Just need do fw assert when hci compare event failed,
-					 * -110 case FW will send WDT interrupt to driver, then do L0.5 reset
-					 */
-					BTMTK_ERR("hci compare evt failed, do fw assert, ret = %d!", ret);
-					btmtk_send_assert_cmd(bdev);
-				}
+		ret = btmtk_cif_send_cmd(bdev, skb, delay, retry, endpoint);
+		if (ret < 0) {
+			BTMTK_ERR("%s btmtk_cif_send_cmd failed!!", __func__);
+			goto err_free_skb;
+		}
+
+		ret = -1;
+		do {
+			/* check if event_compare_success */
+			if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
+				ret = 0;
+				break;
 			}
-#endif
+			usleep_range(10, 100);
+		} while (time_before(jiffies, comp_event_timo));
+
+		event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
 #if 0
-			ret = -1;
-			if (ret == -1 &&
-				memcmp(cmd + 1, wmt_over_hci_header + 1,
-					sizeof(wmt_over_hci_header) - 1) != 0) {
+		if (ret == -1) {
+			if (memcmp(cmd + 1, wmt_over_hci_header + 1,
+				sizeof(wmt_over_hci_header) - 1) == 0 &&
+				bdev->bt_cfg.support_dongle_reset) {
+				/* Just need do L0.5 reset when wmt compare event failed,
+				 * -110 case FW will send WDT interrupt to driver, then do L0.5 reset
+				 */
+				BTMTK_ERR("wmt compare evt failed, do L0.5 reset, ret = %d!", ret);
+				schedule_work(&bdev->reset_waker);
+			} else {
 				/* Just need do fw assert when hci compare event failed,
 				 * -110 case FW will send WDT interrupt to driver, then do L0.5 reset
 				 */
 				BTMTK_ERR("hci compare evt failed, do fw assert, ret = %d!", ret);
 				btmtk_send_assert_cmd(bdev);
 			}
-#endif
 		}
+#endif
+#if 0
+		ret = -1;
+		if (ret == -1 &&
+			memcmp(cmd + 1, wmt_over_hci_header + 1,
+				sizeof(wmt_over_hci_header) - 1) != 0) {
+			/* Just need do fw assert when hci compare event failed,
+			 * -110 case FW will send WDT interrupt to driver, then do L0.5 reset
+			 */
+			BTMTK_ERR("hci compare evt failed, do fw assert, ret = %d!", ret);
+			btmtk_send_assert_cmd(bdev);
+		}
+#endif
 		goto exit;
 	}
 

@@ -1967,7 +1967,6 @@ static int btusb_probe(struct usb_interface *intf,
 	BTMTK_DBG("%s: bdev->dongle_index = %d ", __func__, bdev->dongle_index);
 
 	usb_set_intfdata(intf, bdev);
-	btmtk_register_hci_device(bdev);
 
 	if (is_support_unify_woble(bdev)) {
 		btmtk_load_woble_setting(bdev->woble_setting_file_name,
@@ -1982,7 +1981,6 @@ static int btusb_probe(struct usb_interface *intf,
 			err = btmtk_reset_power_on(bdev);
 			if (err < 0) {
 				btmtk_free_setting_file(bdev);
-				btmtk_deregister_hci_device(bdev);
 				btmtk_free_hci_device(bdev, HCI_USB);
 				btmtk_cif_free_memory(bdev);
 				return err;
@@ -1992,6 +1990,7 @@ static int btusb_probe(struct usb_interface *intf,
 
 	btmtk_send_hw_err_to_host(bdev);
 	btmtk_woble_wake_unlock(bdev);
+	btmtk_register_hci_device(bdev);
 
 	return 0;
 }
