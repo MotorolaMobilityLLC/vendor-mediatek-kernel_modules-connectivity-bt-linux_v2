@@ -641,7 +641,7 @@ static int btusb_open(struct hci_dev *hdev)
 
 	if (is_mt7961(bdev->chip_id)) {
 		BT_INFO("%s 7961 submit urb\n", __func__);
-		if (hdev->id == 0) {
+		if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM) {
 			err = btusb_submit_intr_reset_urb(hdev, GFP_KERNEL);
 			if (err < 0)
 				goto failed;
@@ -650,7 +650,7 @@ static int btusb_open(struct hci_dev *hdev)
 				usb_kill_anchored_urbs(&bdev->intr_anchor);
 				goto failed;
 			}
-		} else if (hdev->id == 1) {
+		} else if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT1_MCU_INTERFACE_NUM) {
 			/*need to do in bt_open in btmtk_main.c */
 			/* btmtk_usb_send_power_on_cmd_7668(hdev); */
 		}
@@ -1037,7 +1037,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		}
 #endif
 
-		if (hdev->id == 0) {
+		if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM) {
 			if (is_mt7961(bdev->chip_id))
 #ifdef BGF0_CMD_BULK
 				urb = alloc_bulk_cmd_urb(hdev, skb);
@@ -1047,7 +1047,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			else if (is_mt7663(bdev->chip_id))
 				urb = alloc_ctrl_urb(hdev, skb);
 
-		} else if (hdev->id == 1) {
+		} else if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT1_MCU_INTERFACE_NUM) {
 			if (is_mt7961(bdev->chip_id)) {
 #ifdef BGF1_CMD_BULK
 				UNUSED(alloc_ctrl_bgf1_urb);
@@ -1310,8 +1310,8 @@ static int btusb_probe(struct usb_interface *intf,
 	BT_DBG("intf %p id %p, interfacenum = %d", intf, id, intf->cur_altsetting->desc.bInterfaceNumber);
 
 	/* interface numbers are hardcoded in the spec */
-	if (intf->cur_altsetting->desc.bInterfaceNumber != 0 &&
-		intf->cur_altsetting->desc.bInterfaceNumber != 3)
+	if (intf->cur_altsetting->desc.bInterfaceNumber != BT0_MCU_INTERFACE_NUM &&
+		intf->cur_altsetting->desc.bInterfaceNumber != BT1_MCU_INTERFACE_NUM)
 		return -ENODEV;
 
 	ifnum_base = intf->cur_altsetting->desc.bInterfaceNumber;
@@ -1719,11 +1719,11 @@ int btmtk_cif_send_control_out(struct btmtk_dev *bdev, const uint8_t *cmd,
 	/* send hci or wmt command */
 	memcpy(bdev->o_usb_buf, cmd, cmd_len);
 	BTMTK_INFO_RAW(cmd, cmd_len, "%s: cmd:", __func__);
-	if (bdev->hdev->id == 0)
+	if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM)
 		ret = usb_control_msg(bdev->udev, usb_sndctrlpipe(bdev->udev, 0),
 				0x01, DEVICE_CLASS_REQUEST_OUT, 0x30, 0x00, (void *)bdev->o_usb_buf,
 				cmd_len, USB_CTRL_IO_TIMO);
-	else if (bdev->hdev->id == 1)
+	else if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT1_MCU_INTERFACE_NUM)
 		ret = usb_control_msg(bdev->udev, usb_sndctrlpipe(bdev->udev, 0),
 				0x00, 0x21, 0x00, 0x03, (void *)bdev->o_usb_buf, cmd_len, USB_CTRL_IO_TIMO);
 
@@ -1828,11 +1828,11 @@ get_response_again:
 
 	/* check WMT event */
 	memset(bdev->io_buf, 0, USB_IO_BUF_SIZE);
-	if (bdev->hdev->id == 0)
+	if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM)
 		ret = usb_control_msg(bdev->udev, usb_rcvctrlpipe(bdev->udev, 0),
 				0x01, DEVICE_VENDOR_REQUEST_IN, 0x30, 0x00, bdev->io_buf,
 				HCI_USB_IO_BUF_SIZE, USB_CTRL_IO_TIMO);
-	else if (bdev->hdev->id == 1)
+	else if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT1_MCU_INTERFACE_NUM)
 		ret = usb_control_msg(bdev->udev, usb_rcvctrlpipe(bdev->udev, 0),
 				0x01, 0xA1, 0x30, 0x03, bdev->io_buf, HCI_USB_IO_BUF_SIZE,
 				USB_CTRL_IO_TIMO);

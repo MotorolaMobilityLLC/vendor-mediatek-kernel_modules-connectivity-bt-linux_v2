@@ -19,6 +19,10 @@
 #define HCI_MAX_COMMAND_SIZE	255
 #define URB_MAX_BUFFER_SIZE	(4*1024)
 
+#define BT0_MCU_INTERFACE_NUM 0
+#define BT1_MCU_INTERFACE_NUM 3
+
+
 /**
  * Send cmd dispatch evt
  */

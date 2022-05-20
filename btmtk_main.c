@@ -1214,20 +1214,15 @@ int btmtk_load_rom_patch(struct btmtk_dev *bdev)
 	if (is_mt7663(bdev->chip_id))
 		err = btmtk_load_rom_patch_766x(bdev);
 	else if (is_mt7961(bdev->chip_id)) {
-		if (bdev->hdev->id == 0) {
-			err = btmtk_load_rom_patch_79xx(bdev, BT_DOWNLOAD);
-			if (err < 0) {
-				BTMTK_ERR("%s: btmtk_load_rom_patch_79xx bt patch failed!", __func__);
-				return err;
-			}
+		err = btmtk_load_rom_patch_79xx(bdev, BT_DOWNLOAD);
+		if (err < 0) {
+			BTMTK_ERR("%s: btmtk_load_rom_patch_79xx bt patch failed!", __func__);
+			return err;
+		}
 
-			err = btmtk_load_rom_patch_79xx(bdev, WIFI_DOWNLOAD);
-			if (err < 0) {
-				BTMTK_WARN("%s: btmtk_load_rom_patch_79xx wifi patch failed!", __func__);
-				err = 0;
-			}
-		} else {
-			BTMTK_INFO("%s: hci%d no need to download rom patch", __func__, bdev->hdev->id);
+		err = btmtk_load_rom_patch_79xx(bdev, WIFI_DOWNLOAD);
+		if (err < 0) {
+			BTMTK_WARN("%s: btmtk_load_rom_patch_79xx wifi patch failed!", __func__);
 			err = 0;
 		}
 	} else
