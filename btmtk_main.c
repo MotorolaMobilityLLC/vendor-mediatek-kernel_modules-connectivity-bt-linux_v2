@@ -1903,8 +1903,6 @@ void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev)
 			BTMTK_DBG_RAW(skb->data, skb->len, "%s: hw err event:", __func__);
 			hci_recv_frame(bdev->hdev, skb);
 		}
-
-		reset_stack_flag = HW_ERR_NONE;
 	}
 }
 
@@ -4050,6 +4048,7 @@ static int bt_open(struct hci_dev *hdev)
 #endif /* CFG_SUPPORT_DVT */
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENED);
+	reset_stack_flag = HW_ERR_NONE;
 
 	return 0;
 
