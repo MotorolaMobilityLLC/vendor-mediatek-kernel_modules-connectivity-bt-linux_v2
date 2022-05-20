@@ -64,6 +64,10 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 unsigned int btmtk_fops_pollfwlog(struct file *filp, poll_table *wait);
 long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigned long arg);
 
+/* Auto enable picus */
+int btmtk_picus_enable(struct btmtk_dev *bdev);
+int btmtk_picus_disable(struct btmtk_dev *bdev);
+
 //static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb);
 
 #define hci_dev_test_and_clear_flag(hdev, nr)  test_and_clear_bit((nr), (hdev)->dev_flags)

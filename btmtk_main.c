@@ -55,6 +55,7 @@ static char event_need_compare[EVENT_COMPARE_SIZE] = {0};
 static char event_need_compare_len;
 static char event_compare_status;
 const u8 READ_ADDRESS_EVENT[] = { 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00 };
+const u8 RESET_EVENT[] = { 0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00 };
 const u8 READ_ISO_PACKET_SIZE_CMD[] = {0x01, 0x98, 0xFD, 0x02 };
 
 /*TODO, maybe need to support multiple dongle to do reset stack*/
@@ -346,6 +347,7 @@ void btmtk_free_setting_file(struct btmtk_dev *bdev)
 	bdev->woble_setting_len = 0;
 
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_filter, 1);
+	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_enable, 1);
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.wmt_cmd, WMT_CMD_COUNT);
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.vendor_cmd, VENDOR_CMD_COUNT);
 
@@ -371,6 +373,7 @@ void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	bdev->bt_cfg.reset_stack_after_woble = 0;
 	bdev->bt_cfg.support_auto_picus = 0;
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_filter, 1);
+	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_enable, 1);
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.wmt_cmd, WMT_CMD_COUNT);
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.vendor_cmd, VENDOR_CMD_COUNT);
 
@@ -971,6 +974,14 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 			}
 		}
 		return 1;
+	} else if (memcmp(skb->data, RESET_EVENT, sizeof(RESET_EVENT)) == 0) {
+		BTMTK_INFO("%s: Get RESET_EVENT", __func__);
+		/* Need confirm with Shawn */
+		/* if (bdev->bt_cfg.support_auto_picus == true) {
+			if (btmtk_picus_enable(bdev) < 0) {
+				BTMTK_ERR("send picus filter param failed");
+			}
+		} */
 	}
 	return 0;
 }
@@ -2068,6 +2079,61 @@ int btmtk_send_wmt_power_off_cmd(struct btmtk_dev *bdev)
 	return ret;
 }
 
+int btmtk_picus_enable(struct btmtk_dev *bdev)
+{
+	u8 dft_enable_cmd[] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x02 };
+	u8 *enable_cmd = NULL;
+	//u8 enable_event[] = { 0x19, 0x07, 0x5D, 0xFC, 0x04, 0x00, 0x00 };
+	u8 enable_event[] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
+
+	int enable_len = 0;
+	int ret = -1;	/* if successful, 0 */
+
+	struct fw_cfg_struct *picus_setting = &bdev->bt_cfg.picus_enable;
+
+	BTMTK_INFO("%s", __func__);
+
+	if (picus_setting->content && picus_setting->length) {
+		BTMTK_INFO("%s load picus from bt.cfg", __func__);
+		enable_cmd = picus_setting->content;
+		enable_len = picus_setting->length;
+	} else {
+		enable_cmd = dft_enable_cmd;
+		enable_len = sizeof(dft_enable_cmd);
+	}
+	BTMTK_INFO_RAW(enable_cmd, enable_len, "%s: Send CMD:", __func__);
+
+	if (is_mt7961(bdev->chip_id))
+		ret = btmtk_main_send_cmd(bdev, enable_cmd, enable_len,
+			enable_event, sizeof(enable_event), 10, 10,
+			BTMTK_EP_TYPE_OUT_OTHER);
+	else
+		BTMTK_WARN("%s: not support for 0x%x", __func__, bdev->chip_id);
+
+	BTMTK_INFO("%s: ret %d", __func__, ret);
+	return ret;
+}
+
+int btmtk_picus_disable(struct btmtk_dev *bdev)
+{
+	u8 dft_disable_cmd[] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x00 };
+	u8 dft_disable_event[] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
+
+	int ret = -1;	/* if successful, 0 */
+
+	BTMTK_INFO("%s\n", __func__);
+
+	if (is_mt7961(bdev->chip_id))
+		ret = btmtk_main_send_cmd(bdev, dft_disable_cmd, sizeof(dft_disable_cmd),
+			dft_disable_event, sizeof(dft_disable_event), 10, 10,
+			BTMTK_EP_TYPE_OUT_OTHER);
+	else
+		BTMTK_WARN("%s: not support for 0x%x", __func__, bdev->chip_id);
+
+	BTMTK_INFO("%s: ret %d", __func__, ret);
+	return ret;
+}
+
 static int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 {
 	int ret = -1;
@@ -3120,6 +3186,11 @@ static bool btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 					&bt_cfg_content->picus_filter, 1, searchcontent, FW_CFG_INX_LEN_NONE);
 			if (ret)
 				BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_AUTO_PICUS_FILTER);
+
+			ret = btmtk_load_fw_cfg_setting(BT_AUTO_PICUS_ENABLE,
+					&bt_cfg_content->picus_enable, 1, searchcontent, FW_CFG_INX_LEN_NONE);
+			if (ret)
+				BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_AUTO_PICUS_ENABLE);
 		}
 	} else {
 		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_AUTO_PICUS);
@@ -3269,6 +3340,13 @@ int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 		return ret;
 	}
 
+	if (bdev->bt_cfg.support_auto_picus == true) {
+		if (btmtk_picus_enable(bdev) < 0) {
+			BTMTK_ERR("send picus filter param failed");
+			return -1;
+		}
+	}
+
 	if (is_mt7663(bdev->chip_id))
 		ret = btmtk_send_hci_tci_set_sleep_cmd_766x(bdev);
 
@@ -3286,6 +3364,13 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 	}
 
 	BTMTK_INFO("%s", __func__);
+
+	if (bdev->bt_cfg.support_auto_picus == true) {
+		if (btmtk_picus_disable(bdev) < 0) {
+			BTMTK_ERR("send picus filter param failed");
+			return -1;
+		}
+	}
 
 	ret = btmtk_send_wmt_power_off_cmd(bdev);
 	if (bdev->power_state != BTMTK_DONGLE_STATE_POWER_OFF) {
