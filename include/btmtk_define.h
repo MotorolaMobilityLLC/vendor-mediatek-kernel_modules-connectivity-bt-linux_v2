@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "8.0.2022041501"
+#define VERSION "8.0.2022041801"
 #define SUBVER ":connac3_dev"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
