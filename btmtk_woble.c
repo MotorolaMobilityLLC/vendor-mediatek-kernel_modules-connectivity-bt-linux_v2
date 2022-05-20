@@ -727,16 +727,6 @@ int btmtk_woble_suspend(struct btmtk_woble *bt_woble)
 	if (ret)
 		BTMTK_ERR("%s: btmtk_handle_entering_WoBLE_state return fail %d", __func__, ret);
 
-	if (bdev->bt_cfg.support_woble_by_eint) {
-		if (bt_woble->wobt_irq != 0 && atomic_read(&(bt_woble->irq_enable_count)) == 0) {
-			BTMTK_INFO("enable BT IRQ:%d", bt_woble->wobt_irq);
-			irq_set_irq_wake(bt_woble->wobt_irq, 1);
-			enable_irq(bt_woble->wobt_irq);
-			atomic_inc(&(bt_woble->irq_enable_count));
-		} else
-			BTMTK_INFO("irq_enable count:%d", atomic_read(&(bt_woble->irq_enable_count)));
-	}
-
 exit:
 	BTMTK_INFO("%s: end", __func__);
 	return ret;
@@ -762,16 +752,6 @@ int btmtk_woble_resume(struct btmtk_woble *bt_woble)
 		btmtk_send_assert_cmd(bdev);
 		ret = -EBADFD;
 		goto exit;
-	}
-
-
-	if (bdev->bt_cfg.support_woble_by_eint) {
-		if (bt_woble->wobt_irq != 0 && atomic_read(&(bt_woble->irq_enable_count)) == 1) {
-			BTMTK_INFO("disable BT IRQ:%d", bt_woble->wobt_irq);
-			atomic_dec(&(bt_woble->irq_enable_count));
-			disable_irq_nosync(bt_woble->wobt_irq);
-		} else
-			BTMTK_INFO("irq_enable count:%d", atomic_read(&(bt_woble->irq_enable_count)));
 	}
 
 	ret = btmtk_handle_leaving_WoBLE_state(bt_woble);

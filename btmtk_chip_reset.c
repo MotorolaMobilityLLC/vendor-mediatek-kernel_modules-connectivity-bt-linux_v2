@@ -17,6 +17,7 @@
 static void btmtk_reset_timer(unsigned long arg)
 {
 	struct btmtk_dev *bdev = (struct btmtk_dev *)arg;
+
 	BTMTK_INFO("%s: chip_reset not trigger in %d seconds, trigger it directly",
 		__func__, CHIP_RESET_TIMEOUT);
 	schedule_work(&bdev->reset_waker);
@@ -25,6 +26,7 @@ static void btmtk_reset_timer(unsigned long arg)
 static void btmtk_reset_timer(struct timer_list *timer)
 {
 	struct btmtk_dev *bdev = from_timer(bdev, timer, chip_reset_timer);
+
 	BTMTK_INFO("%s: chip_reset not trigger in %d seconds, trigger it directly",
 		__func__, CHIP_RESET_TIMEOUT);
 	schedule_work(&bdev->reset_waker);

@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.20210020901"
+#define VERSION "7.0.2021022201"
 #define SUBVER ":turnkey"
 
 #define ENABLESTP FALSE
@@ -126,6 +126,12 @@ extern uint8_t btmtk_log_lvl;
 	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) pr_warn("[btmtk_info] "fmt"\n", ##__VA_ARGS__); } while (0)
 #define BTMTK_DBG(fmt, ...)	 \
 	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) pr_warn("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__); } while (0)
+
+#define BTMTK_WARN_LIMITTED(fmt, ...)	\
+	do { \
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN)	\
+			printk_ratelimited(KERN_WARNING "[btmtk_warn_limit] "fmt"\n", ##__VA_ARGS__);	\
+	} while (0)
 
 #define BTMTK_INFO_RAW(p, l, fmt, ...)						\
 	do {	\
@@ -328,7 +334,7 @@ void btmtk_getUTCtime(struct rtc_time *tm, u32 *usec);
 			__func__, __LINE__, __str, \
 			tm.tm_year, tm.tm_mon, tm.tm_mday, \
 			tm.tm_hour, tm.tm_min, tm.tm_sec, usec); \
-	} while(0)
+	} while (0)
 #else
 #define DUMP_TIME_STAMP(__str)
 #endif

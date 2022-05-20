@@ -3549,13 +3549,11 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 
 	state = btmtk_get_chip_state(bdev);
 	if (state != BTMTK_STATE_WORKING) {
-		BTMTK_WARN("%s: chip state is %d.", __func__, state);
-		if (state == BTMTK_STATE_DISCONNECT) {
+		BTMTK_WARN_LIMITTED("%s: chip state is %d.", __func__, state);
+		if (state == BTMTK_STATE_DISCONNECT)
 			ret = -ENODEV;
-		} else {
-			msleep(3000);
+		else
 			ret = -EAGAIN;
-		}
 		goto exit;
 	}
 

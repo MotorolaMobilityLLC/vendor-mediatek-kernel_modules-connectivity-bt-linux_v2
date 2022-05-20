@@ -327,6 +327,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 	if (strncmp(i_fwlog_buf, "dump_debug=", strlen("dump_debug")) == 0) {
 		u8 val = *(i_fwlog_buf + strlen("dump_debug=")) - '0';
+
 		if (bmain_info->hif_hook.dump_debug_sop) {
 			BTMTK_INFO("%s: dump_debug(%s)", __func__,
 				(val == 0) ? "SLEEP" :
