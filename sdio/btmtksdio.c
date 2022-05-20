@@ -1731,7 +1731,7 @@ static int sdio_deregister(void)
 	return 0;
 }
 
-void btmtk_sdio_chip_reset_notify(struct btmtk_dev *bdev)
+static void btmtk_sdio_chip_reset_notify(struct btmtk_dev *bdev)
 {
 	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 	if (cif_dev == NULL) {

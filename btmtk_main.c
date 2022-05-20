@@ -179,7 +179,7 @@ void btmtk_fwdump_wake_unlock(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: exit", __func__);
 }
 
-int btmtk_skb_enq_fwlog(struct hci_dev *hdev, void *src, u32 len, u8 type, struct sk_buff_head *queue)
+static int btmtk_skb_enq_fwlog(struct hci_dev *hdev, void *src, u32 len, u8 type, struct sk_buff_head *queue)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	struct sk_buff *skb_tmp = NULL;
@@ -232,7 +232,7 @@ int btmtk_skb_enq_fwlog(struct hci_dev *hdev, void *src, u32 len, u8 type, struc
 	return 0;
 }
 
-int btmtk_dispatch_data_bluetooth_kpi(struct hci_dev *hdev, u8 *buf, int len, u8 type)
+static int btmtk_dispatch_data_bluetooth_kpi(struct hci_dev *hdev, u8 *buf, int len, u8 type)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	static u8 fwlog_blocking_warn;
@@ -1286,7 +1286,7 @@ mtk_stp_split(struct btmtk_dev *bdev, const unsigned char *data, int count,
 
 int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count)
 {
-	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	struct btmtk_dev *bdev = NULL;
 	const unsigned char *p_left = data;
 	int sz_left = count;
 	int err;
@@ -1295,8 +1295,14 @@ int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count)
 	int sz_h4 = 0, adv = 0;
 #endif
 
-	if (bdev == NULL || hdev == NULL || data == NULL) {
+	if (hdev == NULL || data == NULL) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
+		return -EINVAL;
+	}
+
+	bdev = hci_get_drvdata(hdev);
+	if (bdev == NULL) {
+		BTMTK_ERR("%s, bdev is NULL!", __func__);
 		return -EINVAL;
 	}
 
@@ -1354,7 +1360,7 @@ int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count)
 	return 0;
 }
 
-int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
+static int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	static u8 fwlog_picus_blocking_warn;
@@ -1419,7 +1425,7 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 			}
 		}
 
-		if(!bdev->bt_cfg.support_picus_to_host)
+		if (!bdev->bt_cfg.support_picus_to_host)
 			return 1;
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
@@ -1441,9 +1447,9 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 		return 1;
 	} else if (skb->data[3] == 0x5D && skb->data[4] == 0xFC) {
 		/* to drop picus related event after save event, don't send picus event to host,
-		* because host will trace this event as other host cmd's event,
-		* it will cause command timeout
-		*/
+		 * because host will trace this event as other host cmd's event,
+		 * it will cause command timeout
+		 */
 		BTMTK_INFO_RAW(skb->data, skb->len, "%s: discard picus related event:", __func__);
 		return 1;
 	} else if (memcmp(skb->data, RESET_EVENT, sizeof(RESET_EVENT)) == 0) {
@@ -1813,6 +1819,7 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 	return ret;
 }
 
+#if 0
 static int btmtk_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset)
 {
@@ -1846,6 +1853,7 @@ static int btmtk_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 exit:
 	return ret;
 }
+#endif
 
 static int btmtk_load_fw_patch_using_wmt_cmd(struct btmtk_dev *bdev,
 		u8 *image, u8 *fwbuf, u8 *event, int event_len, u32 patch_len, int offset)
@@ -2027,6 +2035,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 			}
 
 			if (dma_flag == PATCH_DOWNLOAD_USING_DMA) {
+#if 0	/* need revert after DMA supported */
 				/* using DMA to download fw patch*/
 				ret = btmtk_load_fw_patch_using_dma(bdev, pos, fwbuf, dl_size,
 						section_offset);
@@ -2034,6 +2043,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 					BTMTK_ERR("%s: btmtk_load_fw_patch_using_dma failed!", __func__);
 					goto err;
 				}
+#endif
 			} else {
 				/* using legacy wmt cmd to download fw patch */
 				ret = btmtk_load_fw_patch_using_wmt_cmd(bdev, pos, fwbuf, event,
@@ -2045,10 +2055,11 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 			}
 		}
 
-		/*FW Download finished */
+		/* FW Download finished */
 		if (loop_count == section_num - 1) {
 /* need to remove check wifi dl patch success or not according to Jyun-ji's
- * comment, because bt driver do nothing when wifi dl patch failed */
+ * comment, because bt driver do nothing when wifi dl patch failed
+ */
 #if 1
 			if (patch_flag) {
 				mdelay(500);
@@ -2060,6 +2071,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 				BTMTK_ERR("%s: Wifi patch download failed!", __func__);
 			} else {
 #endif
+#if 0	/* need revert after DMA supported */
 				if (dma_flag == PATCH_DOWNLOAD_USING_DMA) {
 					ret = btmtk_send_wmt_download_cmd(bdev, pos, 0, event,
 					sizeof(event) - 1, sectionMap, 3, dma_flag, patch_flag);
@@ -2069,6 +2081,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 					}
 				}
 				BTMTK_INFO("%s: loading rom patch... Done", __func__);
+#endif
 #if 1
 			}
 #endif
@@ -2529,9 +2542,9 @@ int btmtk_picus_enable(struct btmtk_dev *bdev)
 	u8 dft_enable_cmd[] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x02 };
 	u8 *enable_cmd = NULL;
 	/* Can't check event now
-	   Event will be dropped by btmtk_dispatch_pkt(). It can't be compared
-	u8 enable_event[] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
-	*/
+	 * Event will be dropped by btmtk_dispatch_pkt(). It can't be compared
+	 * u8 enable_event[] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
+	 */
 	int enable_len = 0;
 	int ret = -1;	/* if successful, 0 */
 
@@ -2564,9 +2577,9 @@ int btmtk_picus_disable(struct btmtk_dev *bdev)
 {
 	u8 dft_disable_cmd[] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x00 };
 	/* Can't check event now
-	   Event will be dropped by btmtk_dispatch_pkt(). It can't be compared
-	u8 dft_disable_event[] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
-	*/
+	 * Event will be dropped by btmtk_dispatch_pkt(). It can't be compared
+	 * u8 dft_disable_event[] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
+	 */
 	int ret = -1;	/* if successful, 0 */
 
 	BTMTK_INFO("%s\n", __func__);

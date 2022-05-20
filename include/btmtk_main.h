@@ -444,7 +444,6 @@ int btmtk_deregister_hci_device(struct btmtk_dev *bdev);
 int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count);
 int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb);
-int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_send_init_cmds(struct btmtk_dev *hdev);
 int btmtk_send_deinit_cmds(struct btmtk_dev *hdev);
 int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
@@ -474,7 +473,6 @@ struct btmtk_main_info *btmtk_get_main_info(void);
 int btmtk_reset_power_on(struct btmtk_dev *bdev);
 void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev);
 void btmtk_free_setting_file(struct btmtk_dev *bdev);
-int btmtk_dispatch_data_bluetooth_kpi(struct hci_dev *hdev, u8 *buf, int len, u8 type);
 /** file_operations: stpbtfwlog */
 int btmtk_fops_openfwlog(struct inode *inode, struct file *file);
 int btmtk_fops_closefwlog(struct inode *inode, struct file *file);

@@ -1024,6 +1024,7 @@ static void btusb_tx_complete(struct urb *urb)
 	struct sk_buff *skb = urb->context;
 	struct hci_dev *hdev = (struct hci_dev *)skb->dev;
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	unsigned long flags;
 
 	BTMTK_DBG("%s urb %p status %d count %d", hdev->name, urb, urb->status,
 	       urb->actual_length);
@@ -1037,9 +1038,9 @@ static void btusb_tx_complete(struct urb *urb)
 		hdev->stat.err_tx++;
 
 done:
-	spin_lock(&bdev->txlock);
+	spin_lock_irqsave(&bdev->txlock, flags);
 	bdev->tx_in_flight--;
-	spin_unlock(&bdev->txlock);
+	spin_unlock_irqrestore(&bdev->txlock, flags);
 
 	kfree(urb->setup_packet);
 
@@ -1399,13 +1400,14 @@ static int submit_or_queue_tx_urb(struct hci_dev *hdev, struct urb *urb)
 	unsigned long flags;
 	bool suspending;
 
+	spin_lock_irqsave(&bdev->txlock, flags);
 	suspending = test_bit(BTUSB_SUSPENDING, &bdev->flags);
-	if (!suspending) {
-		spin_lock_irqsave(&bdev->txlock, flags);
+	if (!suspending)
 		bdev->tx_in_flight++;
-		spin_unlock_irqrestore(&bdev->txlock, flags);
+	spin_unlock_irqrestore(&bdev->txlock, flags);
+
+	if (!suspending)
 		return submit_tx_urb(hdev, urb);
-	}
 
 	schedule_work(&bdev->waker);
 
@@ -1550,8 +1552,12 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					urb = alloc_bulk_cmd_urb(hdev, skb);
 				} else
 					urb = alloc_ctrl_bgf1_urb(hdev, skb);
-			} else if (is_mt7663(bdev->chip_id))
+			} else if (is_mt7663(bdev->chip_id)) {
 				urb = alloc_ctrl_urb(hdev, skb);
+			} else {
+				BTMTK_ERR("%s: chip_id(%d) is invalid", __func__, bdev->chip_id);
+				return -ENODEV;
+			}
 		} else {
 			BTMTK_ERR("%s: ifnum_base(%d) is invalid", __func__, ifnum_base);
 			return -ENODEV;
@@ -2643,7 +2649,7 @@ static void btmtk_cif_free_memory(struct btmtk_usb_dev *cif_dev)
 	BTMTK_INFO("%s: Success", __func__);
 }
 
-int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val)
+static int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 {
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 	int ret = -1;
@@ -2679,7 +2685,7 @@ int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 	return 0;
 }
 
-int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
+static int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 {
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 	int ret = -1;
@@ -2712,7 +2718,7 @@ int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 	return 0;
 }
 
-int btmtk_usb_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
+static int btmtk_usb_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 {
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 	int ret = -1;
@@ -2743,7 +2749,7 @@ int btmtk_usb_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 	return 0;
 }
 
-int btmtk_usb_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
+static int btmtk_usb_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 {
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 	int ret = -1;
@@ -2835,7 +2841,7 @@ exit:
 	return ret;
 }
 
-int btmtk_cif_send_bulk_out(struct btmtk_dev *bdev, struct sk_buff *skb)
+static int btmtk_cif_send_bulk_out(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
 	int ret = 0;
 	struct urb *urb;
