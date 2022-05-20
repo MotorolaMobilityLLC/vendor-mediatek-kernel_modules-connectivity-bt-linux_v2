@@ -1415,7 +1415,9 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 				pr_warn("btmtk fwlog queue size is full(coredump)");
 			}
 		}
-		return 1;
+
+		if(!bdev->bt_cfg.support_picus_to_host)
+			return 1;
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
 				skb->data[1] == 0x05 &&
@@ -4477,6 +4479,7 @@ static void btmtk_rx_work(struct work_struct *work)
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, rx_work);
 	struct sk_buff *skb;
 	int fstate = BTMTK_FOPS_STATE_INIT;
+	int state = 0;
 
 	BTMTK_DBG("%s enter", __func__);
 
@@ -4515,6 +4518,13 @@ static void btmtk_rx_work(struct work_struct *work)
 
 		/* for bluetooth kpi */
 		btmtk_dispatch_data_bluetooth_kpi(bdev->hdev, skb->data, skb->len, hci_skb_pkt_type(skb));
+
+		/* Can't send to stack when is not WORKING */
+		state = btmtk_get_chip_state(bdev);
+		if (state != BTMTK_STATE_WORKING) {
+			kfree_skb(skb);
+			continue;
+		}
 
 		err = hci_recv_frame(bdev->hdev, skb);
 		if (err < 0) {
