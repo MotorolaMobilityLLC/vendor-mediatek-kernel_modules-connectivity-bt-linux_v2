@@ -1298,13 +1298,6 @@ static void btusb_intr_complete(struct urb *urb)
 			goto intr_resub;
 		}
 
-#if 0
-		/* need to remove after SQC done*/
-		if (buf[0] == 0x3E)
-			btmtk_hci_snoop_save_adv_event(urb->actual_length, urb->transfer_buffer);
-		else
-			btmtk_hci_snoop_save_event(urb->actual_length, urb->transfer_buffer);
-#endif
 		err = btmtk_recv(hdev, cif_dev->urb_intr_buf, urb->actual_length + 1);
 		if (err) {
 			BTMTK_ERR("%s corrupted event packet, urb_intr_buf = %p, transfer_buffer = %p",
@@ -1669,10 +1662,6 @@ static void btusb_bulk_complete(struct urb *urb)
 		memcpy(cif_dev->urb_bulk_buf + 1, urb->transfer_buffer, urb->actual_length);
 
 		/* BTMTK_DBG_RAW(bdev->urb_bulk_buf, urb->actual_length + 1, "%s, recv from bulk", __func__); */
-#if 0
-		/* need to remove after SQC done*/
-		btmtk_hci_snoop_save_acl(urb->actual_length, urb->transfer_buffer);
-#endif
 		err = btmtk_recv(hdev, cif_dev->urb_bulk_buf, urb->actual_length + 1);
 		if (err) {
 			BTMTK_ERR("%s corrupted ACL packet, urb_bulk_buf = %p, transfer_buffer = %p",
@@ -3135,7 +3124,7 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	/* Read reset CR */
 	btmtk_cif_read_uhw_register(bdev, BT_SUBSYS_RST, &val);
 
-	if (!bdev->flavor)
+	if (bdev->dualBT)
 		mcu_init_done |= MCU_BT1_INIT_DONE;
 
 	do {

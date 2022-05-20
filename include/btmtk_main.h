@@ -158,6 +158,8 @@
 #define SEARCH_LEN 32
 #define TEXT_LEN 128
 
+#define DUAL_BT_FLAG (0x1 << 5)
+
 /* CMD&Event sent by driver */
 #define READ_EFUSE_CMD_LEN 18
 #define READ_EFUSE_EVT_HDR_LEN 9
@@ -371,6 +373,16 @@ enum {
 };
 
 enum {
+	HCI_SNOOP_TYPE_CMD = 0,
+	HCI_SNOOP_TYPE_EVT,
+	HCI_SNOOP_TYPE_ADV_EVT,
+	HCI_SNOOP_TYPE_NOCP_EVT,
+	HCI_SNOOP_TYPE_TX_ACL,
+	HCI_SNOOP_TYPE_RX_ACL,
+	HCI_SNOOP_TYPE_MAX
+};
+
+enum {
 	DEBUG_SOP_SLEEP,
 	DEBUG_SOP_WAKEUP,
 	DEBUG_SOP_NO_RESPONSE,
@@ -506,6 +518,7 @@ struct btmtk_dev {
 	unsigned char	*rom_patch_bin_file_name;
 	unsigned int	chip_id;
 	unsigned int	flavor;
+	unsigned int	dualBT;
 	unsigned int	fw_version;
 	unsigned char	dongle_index;
 	unsigned char	power_state;
@@ -588,6 +601,14 @@ struct hif_hook_ptr {
 	cif_enter_standby_ptr		enter_standby;
 };
 
+struct hci_snoop {
+	u8 buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
+	u8 len[HCI_SNOOP_ENTRY_NUM];
+	u16 actual_len[HCI_SNOOP_ENTRY_NUM];
+	char timestamp[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_TS_STR_LEN];
+	u8 index;
+};
+
 struct btmtk_main_info {
 	int chip_reset_flag;
 	atomic_t subsys_reset;
@@ -602,29 +623,7 @@ struct btmtk_main_info {
 	struct hif_hook_ptr hif_hook;
 	struct bt_power_setting PWS;
 	/* save Hci Snoop for debug*/
-	u8 hci_cmd_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
-	u8 hci_cmd_len[HCI_SNOOP_ENTRY_NUM];
-	u16 hci_cmd_actual_len[HCI_SNOOP_ENTRY_NUM];
-	unsigned int hci_cmd_timestamp[HCI_SNOOP_ENTRY_NUM];
-	u8 hci_cmd_index;
-
-	u8 hci_event_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
-	u8 hci_event_len[HCI_SNOOP_ENTRY_NUM];
-	u16 hci_event_actual_len[HCI_SNOOP_ENTRY_NUM];
-	unsigned int hci_event_timestamp[HCI_SNOOP_ENTRY_NUM];
-	u8 hci_event_index;
-
-	u8 hci_adv_event_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
-	u8 hci_adv_event_len[HCI_SNOOP_ENTRY_NUM];
-	u16 hci_adv_event_actual_len[HCI_SNOOP_ENTRY_NUM];
-	unsigned int hci_adv_event_timestamp[HCI_SNOOP_ENTRY_NUM];
-	u8 hci_adv_event_index;
-
-	u8 hci_acl_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
-	u8 hci_acl_len[HCI_SNOOP_ENTRY_NUM];
-	u16 hci_acl_actual_len[HCI_SNOOP_ENTRY_NUM];
-	unsigned int hci_acl_timestamp[HCI_SNOOP_ENTRY_NUM];
-	u8 hci_acl_index;
+	struct hci_snoop snoop[HCI_SNOOP_TYPE_MAX];
 
 	u8 wmt_over_hci_header[WMT_OVER_HCI_HEADER_SIZE];
 	u8 read_iso_packet_size_cmd[READ_ISO_PACKET_CMD_SIZE];
@@ -692,10 +691,7 @@ void btmtk_free_setting_file(struct btmtk_dev *bdev);
 
 unsigned char btmtk_fops_get_state(struct btmtk_dev *bdev);
 
-void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf);
-void btmtk_hci_snoop_save_event(u32 len, u8 *buf);
-void btmtk_hci_snoop_save_adv_event(u32 len, u8 *buf);
-void btmtk_hci_snoop_save_acl(u32 len, u8 *buf);
+void btmtk_hci_snoop_save(unsigned int type, u32 len, u8 *buf);
 void btmtk_hci_snoop_print(u32 len, const u8 *buf);
 void btmtk_hci_snoop_print_to_log(void);
 void *btmtk_kallsyms_lookup_name(const char *name);
