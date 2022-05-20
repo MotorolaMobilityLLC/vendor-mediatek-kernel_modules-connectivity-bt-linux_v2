@@ -74,7 +74,7 @@
 /* Local Configuration */
 /*============================================================================*/
 
-#define LD_VERSION "4.0.20110301"
+#define LD_VERSION "4.0.21012701"
 
 #define BUFFER_SIZE  (1024 * 4)	/* Size of RX Queue */
 #define BT_SEND_HCI_CMD_BEFORE_SUSPEND 1
@@ -2543,6 +2543,8 @@ int LD_btmtk_usb_probe(mtkbt_dev_t *dev,int flag)
 
 	if(flag == 1){
 		ret = Ldbtusb_getBtWakeT(data);
+		os_kfree(data->woble_setting_file_name);
+		os_kfree(data->rom_patch_bin_file_name);
 		os_kfree(data->io_buf);
 		os_kfree(data);
 		return ret;
