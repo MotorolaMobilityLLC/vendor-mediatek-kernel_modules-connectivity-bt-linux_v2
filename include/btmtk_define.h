@@ -41,7 +41,7 @@
 #include <linux/freezer.h>
 
 /** Driver version */
-#define VERSION "7.0.2020093001"
+#define VERSION "7.0.2020100801"
 #define SUBVER ":turnkey"
 
 
@@ -218,6 +218,7 @@ extern uint8_t btmtk_log_lvl;
 #define BT_PICUS_TO_HOST "SUPPORT_PICUS_TO_HOST"
 #define BT_PHASE1_WMT_CMD "PHASE1_WMT_CMD"
 #define BT_VENDOR_CMD "VENDOR_CMD"
+#define BT_SINGLE_SKU "SUPPORT_BT_SINGLE_SKU"
 
 
 #define PM_KEY_BTW (0x0015) /* Notify PM the unify woble type */
@@ -256,6 +257,7 @@ struct bt_cfg_struct {
 	unsigned int	unify_woble_type;	/* 0: legacy. 1: waveform. 2: IR */
 	struct fw_cfg_struct phase1_wmt_cmd[PHASE1_WMT_CMD_COUNT];
 	struct fw_cfg_struct vendor_cmd[VENDOR_CMD_COUNT];
+	bool	support_bt_single_sku;
 };
 
 #define WIFI_DOWNLOAD	TRUE

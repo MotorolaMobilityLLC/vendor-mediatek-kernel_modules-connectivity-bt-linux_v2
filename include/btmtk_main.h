@@ -15,6 +15,8 @@
 #include "btmtk_define.h"
 #include "btmtk_chip_if.h"
 
+#define DEFAULT_COUNTRY_TABLE_NAME "btPowerTable.dat"
+
 
 //static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb);
 
@@ -130,6 +132,52 @@
 
 /* bluetooth kpi */
 #define KPI_WITHOUT_TYPE	0
+#define COUNTRY_CODE_LEN	2
+
+
+#define EDR_MIN		-32
+#define EDR_MAX		20
+#define EDR_MIN_LV9	13
+#define BLE_MIN		-29
+#define BLE_MAX		20
+#define EDR_MIN_R1	-64
+#define EDR_MAX_R1	40
+#define EDR_MIN_LV9_R1	26
+#define BLE_MIN_R1	-58
+#define BLE_MAX_R1	40
+#define EDR_MIN_R2	-128
+#define EDR_MAX_R2	80
+#define EDR_MIN_LV9_R2	52
+#define BLE_MIN_R2	-116
+#define BLE_MAX_R2	80
+
+#define ERR_PWR		-9999
+
+enum {
+	RES_1 = 0,
+	RES_DOT_5,
+	RES_DOT_25
+};
+
+enum {
+	CHECK_SINGLE_SKU_PWR_MODE	= 0,
+	CHECK_SINGLE_SKU_EDR_MAX,
+	CHECK_SINGLE_SKU_BLE,
+	CHECK_SINGLE_SKU_BLE_2M,
+	CHECK_SINGLE_SKU_BLE_LR_S2,
+	CHECK_SINGLE_SKU_BLE_LR_S8,
+	CHECK_SINGLE_SKU_ALL
+};
+
+enum {
+	DISABLE_LV9 = 0,
+	ENABLE_LV9
+};
+
+enum {
+	DIFF_MODE_3DB = 0,
+	DIFF_MODE_0DB
+};
 
 struct btmtk_cif_state {
 	unsigned char ops_enter;
@@ -151,6 +199,18 @@ enum TX_TYPE {
 	#define BT_CHR_DEV	"BT_chrdevfwlog"
 	#define BT_DEV_NODE	"stpbtfwlog"
 #endif
+
+struct bt_power_setting {
+	int8_t EDR_Max;
+	int8_t LV9;
+	int8_t DM;
+	int8_t IR;
+	int8_t BLE_1M;
+	int8_t BLE_2M;
+	int8_t BLE_LR_S2;
+	int8_t BLE_LR_S8;
+	char country_code[3];
+};
 
 struct btmtk_fops_fwlog {
 	dev_t g_devIDfwlog;
@@ -404,6 +464,7 @@ struct btmtk_main_info {
 	struct wakeup_source *woble_ws;
 	struct wakeup_source *eint_ws;
 	struct hif_hook_ptr hif_hook;
+	struct bt_power_setting PWS;
 };
 
 static inline int is_mt7922(u32 chip_id)
@@ -510,5 +571,10 @@ int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus);
 int btmtk_cif_send_calibration(struct btmtk_dev *bdev);
 int btmtk_send_assert_cmd(struct btmtk_dev *bdev);
 int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value);
+void btmtk_requset_country_cb(const struct firmware *pwr_fw, void *context);
+void btmtk_set_country_code_from_wifi(char *code);
+void btmtk_send_txpower_cmd_to_all_interface(void);
+void btmtk_set_country_code_from_wifi(char *code);
+void btmtk_init_power_setting_struct(void);
 
 #endif /* __BTMTK_MAIN_H__ */

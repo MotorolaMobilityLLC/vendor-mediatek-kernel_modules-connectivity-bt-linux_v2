@@ -16,6 +16,7 @@
 #include <linux/input.h>
 #include <linux/pm_wakeup.h>
 #include <linux/reboot.h>
+#include <linux/string.h>
 
 #include "btmtk_define.h"
 #include "btmtk_main.h"
@@ -41,6 +42,12 @@ const struct file_operations BT_fopsfwlog = {
 };
 
 static int btmtk_fops_get_state(struct btmtk_dev *bdev);
+
+static int btmtk_send_txpower_cmd(struct btmtk_dev *bdev);
+static int btmtk_parse_power_table(char *context);
+static int btmtk_load_country_table(void);
+static int btmtk_set_power_value(char *str, int resolution, int is_edr);
+static int btmtk_check_power_resolution(char *str);
 
 /**
  * Global parameters(mtkbt_)
@@ -700,6 +707,7 @@ void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	bdev->bt_cfg.reset_stack_after_woble = 0;
 	bdev->bt_cfg.support_auto_picus = 0;
 	bdev->bt_cfg.support_picus_to_host = 0;
+	bdev->bt_cfg.support_bt_single_sku = 0;
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_filter, 1);
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_enable, 1);
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.phase1_wmt_cmd, PHASE1_WMT_CMD_COUNT);
@@ -3881,6 +3889,15 @@ static bool btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_PICUS_TO_HOST);
 	}
 
+	ret = btmtk_parse_bt_cfg_file(BT_SINGLE_SKU, text, searchcontent);
+	if (ret) {
+		btmtk_bt_cfg_item_value_to_bool(text, &bt_cfg_content->support_bt_single_sku);
+		BTMTK_INFO("%s: bt_cfg_content->support_bt_single_sku = %d", __func__,
+				bt_cfg_content->support_bt_single_sku);
+	} else {
+		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_SINGLE_SKU);
+	}
+
 	ret = btmtk_load_fw_cfg_setting(BT_PHASE1_WMT_CMD, bt_cfg_content->phase1_wmt_cmd,
 				PHASE1_WMT_CMD_COUNT, searchcontent, FW_CFG_INX_LEN_3);
 	if (ret)
@@ -4254,6 +4271,390 @@ exit:
 	return ret;
 }
 
+static int btmtk_send_txpower_cmd(struct btmtk_dev *bdev)
+{
+	/**
+	 *  TCI Set TX Power Command
+	 *  01 2C FC 0C QQ 00 00 00 XX YY ZZ GG AA BB CC DD
+	 *  QQ: EDR init TX power dbm // the value is equal to EDR MAX
+	 *  XX: BLE TX power dbm
+	 *  YY: EDR MAX TX power dbm
+	 *  ZZ: Enable LV9
+	 *  GG: 3db diff mode
+	 *  AA: [5:4] Indicator // [5] 1: command send to BT1, [4] 1: command send to BT0
+	 *      [3:0] Resolution // 0: 1dBm, 1: 0.5dBm, 2: 0.25dBm
+	 *  BB: BLE 2M
+	 *  CC: BLE S2
+	 *  DD: BLE S8
+	 */
+
+	u8 cmd[] = { 0x01, 0x2C, 0xFC, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	u8 event[] = { 0x04, 0x0E, 0x04, 0x01, 0x2C, 0xFC, 0x00 };
+	int ret = 0;
+
+	cmd[4] = (u8)main_info.PWS.EDR_Max;
+	cmd[8] = (u8)main_info.PWS.BLE_1M;
+	cmd[9] = (u8)main_info.PWS.EDR_Max;
+	cmd[10] = (u8)main_info.PWS.LV9;
+	cmd[11] = (u8)main_info.PWS.DM;
+	cmd[12] = (u8)main_info.PWS.IR;
+	cmd[13] = (u8)main_info.PWS.BLE_2M;
+	cmd[14] = (u8)main_info.PWS.BLE_LR_S2;
+	cmd[15] = (u8)main_info.PWS.BLE_LR_S8;
+
+	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 0, 0,
+			BTMTK_TX_CMD_FROM_DRV);
+
+	if (ret < 0)
+		BTMTK_ERR("%s failed!!", __func__);
+	else
+		BTMTK_INFO("%s: OK", __func__);
+
+	return ret;
+}
+
+static int btmtk_set_power_value(char *str, int resolution, int is_edr)
+{
+	int power = ERR_PWR, integer = 0, decimal = 0;
+
+	if (resolution == RES_DOT_25) {
+		/* XX.YY => XX.YY/0.25 = XX*4 + YY/25 */
+		if (strstr(str, ".")) {
+			sscanf(str, "%d.%d", &integer, &decimal);
+			if (decimal != 25 && decimal != 75 && decimal != 5 && decimal != 50)
+				return ERR_PWR;
+			if (decimal == 5) decimal = 50;
+			if (integer >= 0)
+				power = integer * 4 + decimal / 25;
+			else
+				power = integer * 4 - decimal / 25;
+		} else {
+			sscanf(str, "%d", &integer);
+			power = integer * 4;
+		}
+
+		BTMTK_DBG("%s: power = %d", __func__, power);
+
+		if (is_edr) {
+			if (power > EDR_MAX_R2 || power < EDR_MIN_R2)
+				return ERR_PWR;
+			if (power >= EDR_MIN_LV9_R2)
+				main_info.PWS.LV9 = 1;
+		} else if (!is_edr && (power > BLE_MAX_R2 || power < BLE_MIN_R2))
+			return ERR_PWR;
+	} else if (resolution == RES_DOT_5) {
+		/* XX.YY => XX.YY/0.5 = XX*2 + YY/5 */
+		if (strstr(str, ".")) {
+			sscanf(str, "%d.%d", &integer, &decimal);
+			if (decimal != 5)
+				return ERR_PWR;
+			if (integer >= 0)
+				power = integer * 2 + decimal / 5;
+			if (integer < 0)
+				power = integer * 2 - decimal / 5;
+		} else {
+			sscanf(str, "%d", &integer);
+			power = integer * 2;
+		}
+
+		BTMTK_DBG("%s: power = %d", __func__, power);
+
+		if (is_edr) {
+			if (power > EDR_MAX_R1 || power < EDR_MIN_R1)
+				return ERR_PWR;
+			if (power >= EDR_MIN_LV9_R1)
+				main_info.PWS.LV9 = 1;
+		} else if (!is_edr && (power > BLE_MAX_R1 || power < BLE_MIN_R1))
+			return ERR_PWR;
+	} else if (resolution == RES_1) {
+		sscanf(str, "%d", &power);
+
+		BTMTK_DBG("%s: power = %d", __func__, power);
+
+		if (is_edr) {
+			if (power > EDR_MAX || power < EDR_MIN)
+				return ERR_PWR;
+			if (power >= EDR_MIN_LV9)
+				main_info.PWS.LV9 = 1;
+		} else if (!is_edr && (power > BLE_MAX || power < BLE_MIN))
+			return ERR_PWR;
+	}
+
+	return power;
+}
+
+static int btmtk_check_power_resolution(char *str)
+{
+	if (str == NULL)
+		return -1;
+	if (strstr(str, ".25") || strstr(str, ".75"))
+		return RES_DOT_25;
+	if (strstr(str, ".5"))
+		return RES_DOT_5;
+	if (!strstr(str, ".") || strstr(str, ".0"))
+		return RES_1;
+	return -1;
+}
+
+void btmtk_init_power_setting_struct()
+{
+	main_info.PWS.BLE_1M = 0;
+	main_info.PWS.EDR_Max = 0;
+	main_info.PWS.LV9 = 0;
+	main_info.PWS.DM = 0;
+	main_info.PWS.IR = 0;
+	main_info.PWS.BLE_2M = 0;
+	main_info.PWS.BLE_LR_S2 = 0;
+	main_info.PWS.BLE_LR_S8 = 0;
+}
+
+static int btmtk_parse_power_table(char *context)
+{
+	char *ptr = NULL;
+	int step = 0, temp;
+	int resolution;
+	int power;
+
+	if (context == NULL) {
+		BTMTK_ERR("%s context is NULL", __func__);
+		return -1;
+	}
+
+	BTMTK_INFO("%s", __func__);
+	btmtk_init_power_setting_struct();
+
+	/* Send to BT0? BT1? */
+	if (strstr(context, "BT0")) {
+		BTMTK_INFO("Parse power for BT0");
+		main_info.PWS.IR |= 0x10;
+		context += strlen("[BT0]");
+	} else if (strstr(context, "BT1")) {
+		BTMTK_INFO("Parse power for BT1");
+		main_info.PWS.IR |= 0x20;
+		context += strlen("[BT1]");
+	} else {
+		BTMTK_ERR("%s BT indicator error", __func__);
+		return -1;
+	}
+
+	resolution = btmtk_check_power_resolution(context);
+	if (resolution == -1) {
+		BTMTK_ERR("Check resolution fail");
+		return -1;
+	}
+
+	main_info.PWS.IR |= resolution;
+	BTMTK_INFO("%s: resolution = %d", __func__, resolution);
+
+	while ((ptr = strsep(&context, ",")) != NULL) {
+		while (*ptr == '\t' || *ptr == ' ')
+			ptr++;
+
+		switch (step) {
+			/* BR_EDR_PWR_MODE */
+			case CHECK_SINGLE_SKU_PWR_MODE:
+				if (kstrtoint(ptr, 0, &temp) == 0) {
+					if (temp == 0 || temp == 1) {
+						main_info.PWS.DM = temp;
+						step++;
+						continue;
+					} else {
+						BTMTK_ERR("PWR MODE value wrong");
+						return -1;
+					}
+				} else {
+					BTMTK_ERR("Read PWR MODE Fail");
+					return -1;
+				}
+				break;
+			/* Parse EDR MAX */
+			case CHECK_SINGLE_SKU_EDR_MAX:
+				power = btmtk_set_power_value(ptr, resolution, 1);
+				if (power == ERR_PWR) {
+					BTMTK_ERR("EDR MAX value wrong");
+					return -1;
+				}
+				main_info.PWS.EDR_Max = power;
+				step++;
+				break;
+			/* Parse BLE Default */
+			case CHECK_SINGLE_SKU_BLE:
+				power = btmtk_set_power_value(ptr, resolution, 0);
+				if (power == ERR_PWR) {
+					BTMTK_ERR("BLE value wrong");
+					return -1;
+				}
+				main_info.PWS.BLE_1M = power;
+				step++;
+				break;
+			/* Parse BLE 2M */
+			case CHECK_SINGLE_SKU_BLE_2M:
+				power = btmtk_set_power_value(ptr, resolution, 0);
+				if (power == ERR_PWR) {
+					BTMTK_ERR("BLE 2M value wrong");
+					return -1;
+				}
+				main_info.PWS.BLE_2M = power;
+				step++;
+				break;
+			/* Parse BLE long range S2 */
+			case CHECK_SINGLE_SKU_BLE_LR_S2:
+				power = btmtk_set_power_value(ptr, resolution, 0);
+				if (power == ERR_PWR) {
+					BTMTK_ERR("BLE LR S2 value wrong");
+					return -1;
+				}
+				main_info.PWS.BLE_LR_S2 = power;
+				step++;
+				break;
+			/* Parse BLE long range S8 */
+			case CHECK_SINGLE_SKU_BLE_LR_S8:
+				power = btmtk_set_power_value(ptr, resolution, 0);
+				if (power == ERR_PWR) {
+					BTMTK_ERR("BLE LR S8 value wrong");
+					return -1;
+				}
+				main_info.PWS.BLE_LR_S8 = power;
+				step++;
+				break;
+			default:
+				BTMTK_ERR("%s step is wrong: %d", __func__, step);
+				break;
+		}
+		continue;
+	}
+
+	return step;
+}
+
+void btmtk_send_txpower_cmd_to_all_interface(void)
+{
+	int i, ret;
+	struct btmtk_dev *bdev = NULL;
+
+	for (i = 0; i < btmtk_intf_num; i++) {
+		if (g_bdev[i]->hdev != NULL) {
+			bdev = g_bdev[i];
+			BTMTK_INFO("send to %d", i);
+			ret = btmtk_send_txpower_cmd(bdev);
+			if (ret < 0)
+				BTMTK_ERR("Device %d send txpower cmd fail", i);
+		}
+	}
+}
+
+void btmtk_requset_country_cb(const struct firmware *fw, void *context)
+{
+	char *ptr, *data, *p_data = NULL;
+	char *country = NULL;
+	int ret = 0;
+	bool find_country = false;
+	bool read_next = false;
+
+	if(fw == NULL) {
+		BTMTK_ERR("fw is NULL");
+		return;
+	}
+
+	BTMTK_INFO("%s request %s success", __func__, DEFAULT_COUNTRY_TABLE_NAME);
+	p_data = data = kzalloc(fw->size, GFP_KERNEL);
+	if (data == NULL) {
+		BTMTK_WARN("%s allocate memory fail (data)", __func__);
+		goto exit;
+	}
+
+	memcpy(data, fw->data, fw->size);
+	while ((ptr = strsep(&p_data, "\n")) != NULL) {
+		/* If the '#' in front of the line, ignore this line */
+		if (*ptr == '#')
+			continue;
+
+		/* Set power for BT1 */
+		if (read_next) {
+			if (strncmp(ptr, "[BT1]", 5) == 0) {
+				ret = btmtk_parse_power_table(ptr);
+				if (ret != CHECK_SINGLE_SKU_ALL) {
+					BTMTK_ERR("Parse power fail, ret = %d", ret);
+					break;
+				}
+
+				btmtk_send_txpower_cmd_to_all_interface();
+			} else {
+				BTMTK_INFO("No power data for BT1");
+			}
+			break;
+		}
+
+		if (find_country) {
+			ret = btmtk_parse_power_table(ptr);
+			/* Check if the next line has power value for BT1 */
+			read_next = true;
+			if (ret != CHECK_SINGLE_SKU_ALL) {
+				BTMTK_ERR("Parse power fail, ret = %d", ret);
+				continue;
+			}
+
+			btmtk_send_txpower_cmd_to_all_interface();
+			continue;
+		}
+
+		while ((country = strsep(&ptr, ",[]")) != NULL) {
+			if (strlen(country) != COUNTRY_CODE_LEN)
+				continue;
+			if (strcmp(country, main_info.PWS.country_code) == 0) {
+				find_country = true;
+				break;
+			}
+		}
+	}
+	kfree(data);
+
+	if (find_country == false) {
+		BTMTK_ERR("Can't find country in the table");
+	}
+
+exit:
+	release_firmware(fw);
+
+	return;
+}
+
+int btmtk_load_country_table(void)
+{
+	int err = 0;
+
+	err = request_firmware_nowait(THIS_MODULE, true, DEFAULT_COUNTRY_TABLE_NAME,
+		NULL, GFP_KERNEL, NULL, btmtk_requset_country_cb);
+
+	return err;
+}
+
+void btmtk_set_country_code_from_wifi(char *code)
+{
+	int i;
+	struct btmtk_dev *bdev = NULL;
+
+	if (!code)
+		return;
+
+	if (strlen(code) == COUNTRY_CODE_LEN) {
+		BTMTK_INFO("%s country code is %s", __func__, code);
+		memcpy(main_info.PWS.country_code, code, sizeof(main_info.PWS.country_code));
+		for(i = 0; i < btmtk_intf_num; i++) {
+			if (g_bdev[i]->hdev != NULL) {
+				bdev = g_bdev[i];
+				if(bdev->bt_cfg.support_bt_single_sku) {
+					btmtk_load_country_table();
+					break;
+				}
+			}
+		}
+	} else {
+		BTMTK_INFO("%s country code is not valid", __func__);
+	}
+}
+EXPORT_SYMBOL_GPL(btmtk_set_country_code_from_wifi);
+
 int btmtk_fops_init(void)
 {
 	static int BT_majorfwlog;
@@ -4434,6 +4835,9 @@ static int bt_open(struct hci_dev *hdev)
 	int state = BTMTK_STATE_INIT;
 	int fstate = BTMTK_FOPS_STATE_INIT;
 	struct btmtk_dev *bdev = NULL;
+	void (*rlm_get_alpha2)(char *);
+	const char *wifi_func_name = "rlm_get_alpha2";
+	char alpha2[5];
 
 	BTMTK_INFO("%s: MTK BT Driver Version : %s", __func__, VERSION);
 
@@ -4495,11 +4899,27 @@ static int bt_open(struct hci_dev *hdev)
 	}
 #endif /* CFG_SUPPORT_DVT */
 
-	if (main_info.hif_hook.open_done)
-		main_info.hif_hook.open_done(bdev);
-
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENED);
 	main_info.reset_stack_flag = HW_ERR_NONE;
+
+	if (bdev->bt_cfg.support_bt_single_sku) {
+		rlm_get_alpha2 = (void *)kallsyms_lookup_name(wifi_func_name);
+
+		if (rlm_get_alpha2) {
+			rlm_get_alpha2(alpha2);
+			if (strlen(alpha2) == COUNTRY_CODE_LEN) {
+				BTMTK_INFO("Wifi set country code %s", alpha2);
+				memcpy(main_info.PWS.country_code, alpha2, sizeof(main_info.PWS.country_code));
+			} else {
+				BTMTK_ERR("Country code length is wrong");
+			}
+		} else {
+			BTMTK_INFO("Wifi didn't set country code");
+		}
+
+		if (strcmp(main_info.PWS.country_code, "") != 0)
+			btmtk_load_country_table();
+	}
 
 	return 0;
 
