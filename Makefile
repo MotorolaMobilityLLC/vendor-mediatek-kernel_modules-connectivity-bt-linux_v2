@@ -13,8 +13,10 @@ endif
 
 ifeq ($(CONFIG_SUPPORT_BLUEZ), y)
     ccflags-y += -DCFG_SUPPORT_BLUEZ=1
+    ccflags-y += -DCFG_SUPPORT_HW_DVT=0
 else
     ccflags-y += -DCFG_SUPPORT_BLUEZ=0
+    ccflags-y += -DCFG_SUPPORT_HW_DVT=1
 endif
 
 ifeq ($(CONFIG_SUPPORT_DVT), y)

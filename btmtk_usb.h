@@ -32,7 +32,6 @@
 /** For MTK Endpoint desc. */
 #define BGF0_CMD_BULK
 #define BGF1_CMD_BULK
-#define SUPPORT_HW_DVT
 
 
 enum {
@@ -90,10 +89,9 @@ struct btmtk_dev {
 	unsigned int	sco_num;
 	int	isoc_altsetting;
 
-#ifdef SUPPORT_HW_DVT
 	int new_isoc_altsetting;
 	int new_isoc_altsetting_interface;
-#endif
+
 	int	suspend_count;
 
 	/* For tx queue */

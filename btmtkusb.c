@@ -1154,11 +1154,11 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	struct urb *urb = NULL;
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	unsigned int ifnum_base;
-#ifdef SUPPORT_HW_DVT
+	int ret = 0;
+#ifdef CFG_SUPPORT_HW_DVT
 	struct sk_buff *evt_skb;
 	uint8_t notify_alt_evt[] = {0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00};
 	u16 crBaseAddr = 0, crRegOffset = 0;
-	int ret = 0;
 #endif
 
 	BT_DBG("%s", hdev->name);
@@ -1178,7 +1178,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		hci_skb_pkt_type(skb));
 	switch (hci_skb_pkt_type(skb)) {
 	case HCI_COMMAND_PKT:
-#ifdef SUPPORT_HW_DVT
+#ifdef CFG_SUPPORT_HW_DVT
 		if (skb->len > 7) {
 			if (skb->data[0] == 0x6f && skb->data[1] == 0xfc &&
 					skb->data[2] == 0x06 && skb->data[3] == 0x01 &&
@@ -1310,7 +1310,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		if (hci_conn_num(hdev, SCO_LINK) < 1) {
 			BTMTK_INFO("btusb_send_frame hci_conn sco link = %d\n", hci_conn_num(hdev, SCO_LINK));
 			/* We need to study how to solve this in hw_dvt case.*/
-#ifndef SUPPORT_HW_DVT
+#ifndef CFG_SUPPORT_HW_DVT
 			return -ENODEV;
 #endif
 		}
@@ -1326,8 +1326,6 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	return -EILSEQ;
 }
 
-/* Maybe will be used in the future*/
-#if 0
 static void btusb_notify(struct hci_dev *hdev, unsigned int evt)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
@@ -1339,7 +1337,6 @@ static void btusb_notify(struct hci_dev *hdev, unsigned int evt)
 		schedule_work(&bdev->work);
 	}
 }
-#endif
 
 static inline int __set_isoc_interface(struct hci_dev *hdev, int altsetting)
 {
@@ -1352,17 +1349,14 @@ static inline int __set_isoc_interface(struct hci_dev *hdev, int altsetting)
 	if (!bdev->isoc)
 		return -ENODEV;
 
-#ifdef SUPPORT_HW_DVT
 	ifnum_base = bdev->intf->cur_altsetting->desc.bInterfaceNumber;
 	if (BTMTK_IS_BT_0_INTF(ifnum_base))
 		bdev->new_isoc_altsetting_interface = 1;
 	else if (BTMTK_IS_BT_1_INTF(ifnum_base))
 		bdev->new_isoc_altsetting_interface = 4;
 	err = usb_set_interface(bdev->udev, bdev->new_isoc_altsetting_interface, altsetting);
-#else
-	err = usb_set_interface(bdev->udev, 1, altsetting);
-#endif
 	BTMTK_DBG("setting interface alt = %d, interface = %d", altsetting, bdev->new_isoc_altsetting_interface);
+
 	if (err < 0) {
 		BT_ERR("%s setting interface failed (%d)", hdev->name, -err);
 		return err;
@@ -1422,7 +1416,7 @@ static void btusb_work(struct work_struct *work)
 		} else {
 			new_alts = bdev->sco_num;
 		}
-#ifdef SUPPORT_HW_DVT
+#ifdef CFG_SUPPORT_HW_DVT
 		new_alts = bdev->new_isoc_altsetting;
 #endif
 
@@ -1624,6 +1618,11 @@ static int btusb_probe(struct usb_interface *intf,
 	btmtk_initialize_cfg_items(bdev);
 
 	btmtk_allocate_hci_device(bdev, HCI_USB);
+
+	/* only usb interface need this callback to allocate isoc trx endpoint
+	 * There is no need for other interface such as sdio to use this function
+	 */
+	bdev->hdev->notify = btusb_notify;
 
 	SET_HCIDEV_DEV(bdev->hdev, &bdev->intf->dev);
 
