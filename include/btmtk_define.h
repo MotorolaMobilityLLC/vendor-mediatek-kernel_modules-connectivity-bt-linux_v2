@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2021041401"
+#define VERSION "7.0.2021041701"
 #define SUBVER ":turnkey"
 
 #define ENABLESTP FALSE
@@ -228,8 +228,8 @@ extern uint8_t btmtk_log_lvl;
 #define PHASE1_WMT_CMD_COUNT 255
 #define VENDOR_CMD_COUNT 255
 
-
-#define BT_CFG_NAME "bt.cfg"
+#define BT_CFG_NAME_PREFIX "bt"
+#define BT_CFG_NAME_SUFFIX "cfg"
 #define BT_UNIFY_WOBLE "SUPPORT_UNIFY_WOBLE"
 #define BT_UNIFY_WOBLE_TYPE "UNIFY_WOBLE_TYPE"
 #define BT_WOBLE_BY_EINT "SUPPORT_WOBLE_BY_EINT"

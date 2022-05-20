@@ -2879,7 +2879,7 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s: rom patch file name is %s", __func__, bdev->rom_patch_bin_file_name);
 
-	memcpy(bdev->bt_cfg_file_name, BT_CFG_NAME, sizeof(BT_CFG_NAME));
+	snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s_%x.%s", BT_CFG_NAME_PREFIX, bdev->chip_id, BT_CFG_NAME_SUFFIX);
 	memset(bdev->bdaddr, 0, BD_ADDRESS_SIZE);
 	return 0;
 }
