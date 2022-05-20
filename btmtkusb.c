@@ -199,7 +199,8 @@ static void btusb_intr_complete(struct urb *urb)
 		BT_DBG("%s ,urb->actual_length = %d", __func__, urb->actual_length);
 		BTMTK_DBG_RAW(bdev->urb_transfer_buf, urb->actual_length + 1, "%s, recv evt", __func__);
 		BTMTK_DBG_RAW(urb->transfer_buffer, urb->actual_length, "%s, recv evt", __func__);
-		if (bdev->urb_transfer_buf[1] == 0xFF && urb->actual_length == 1) {
+		if (bdev->urb_transfer_buf[1] == 0xFF && urb->actual_length == 1 &&
+			bdev->bt_cfg.support_dongle_reset) {
 			/* We can't use usb_control_msg in interrupt.
 			 * If you use usb_control_msg , it will cause crash.
 			 * Receive a bytes 0xFF from controller, it's WDT interrupt to driver.
@@ -1936,10 +1937,8 @@ static int btusb_suspend(struct usb_interface *intf, pm_message_t message)
 	}
 
 	ret = btmtk_woble_suspend(bdev);
-	if (ret < 0) {
+	if (ret < 0)
 		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
-		bdev->suspend_count--;
-	}
 
 	spin_lock_irq(&bdev->txlock);
 	if (!(PMSG_IS_AUTO(message) && bdev->tx_in_flight)) {
@@ -1966,6 +1965,7 @@ static int btusb_resume(struct usb_interface *intf)
 	struct btmtk_dev *bdev = usb_get_intfdata(intf);
 	struct hci_dev *hdev = bdev->hdev;
 	int err = 0;
+	unsigned int ifnum_base = intf->cur_altsetting->desc.bInterfaceNumber;
 
 	BTMTK_INFO("%s begin", __func__);
 
@@ -1990,6 +1990,30 @@ static int btusb_resume(struct usb_interface *intf)
 		if (err < 0) {
 			clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
 			goto done;
+		}
+
+		if (is_mt7961(bdev->chip_id) && BTMTK_IS_BT_0_INTF(ifnum_base)) {
+			BTMTK_INFO("%s 7961 submit urb\n", __func__);
+			if (bdev->reset_intr_ep) {
+				err = btusb_submit_intr_reset_urb(hdev, GFP_KERNEL);
+				if (err < 0) {
+					clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
+					goto done;
+				}
+			} else
+				BTMTK_INFO("%s, reset_intr_ep missing, don't submit_intr_reset_urb!",
+					__func__);
+
+			if (bdev->intr_iso_rx_ep) {
+				err = btusb_submit_intr_ble_isoc_urb(hdev, GFP_KERNEL);
+				if (err < 0) {
+					usb_kill_anchored_urbs(&bdev->ble_isoc_anchor);
+					clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
+					goto done;
+				}
+			} else
+				BTMTK_INFO("%s, intr_iso_rx_ep missing, don't submit_intr_ble_isoc_urb!",
+					__func__);
 		}
 	}
 

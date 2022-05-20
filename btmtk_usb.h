@@ -113,6 +113,7 @@ struct btmtk_dev {
 	wait_queue_head_t	p_wait_event_q;
 
 	unsigned int	subsys_reset;
+	unsigned int	chip_reset;
 	unsigned char	*rom_patch_bin_file_name;
 	unsigned int	chip_id;
 	unsigned int	flavor;

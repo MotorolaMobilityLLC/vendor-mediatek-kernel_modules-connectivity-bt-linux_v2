@@ -180,6 +180,7 @@ void btmtk_hci_snoop_print(u32 len, const u8 *buf);
 #define FWLOG_TX		0x10
 #define FWLOG_RX		0x11
 
+/* total fwlog info len */
 #define FWLOG_PRSV_LEN		32
 
 struct btmtk_cif_state {
@@ -219,9 +220,8 @@ enum {
 	HW_ERR_CODE_CORE_DUMP = 0xF2,
 	HW_ERR_CODE_POWER_ON = 0xF3,
 	HW_ERR_CODE_POWER_OFF = 0xF4,
-	HW_ERR_CODE_WOBLE = 0xF5,
-	HW_ERR_CODE_SET_SLEEP_CMD = 0xF6,
-	HW_ERR_CODE_RESET_STACK_AFTER_WOBLE = 0xF7,
+	HW_ERR_CODE_SET_SLEEP_CMD = 0xF5,
+	HW_ERR_CODE_RESET_STACK_AFTER_WOBLE = 0xF6,
 };
 
 /* Please keep sync with btmtk_set_state function */
