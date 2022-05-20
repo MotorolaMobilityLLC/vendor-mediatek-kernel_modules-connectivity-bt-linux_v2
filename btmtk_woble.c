@@ -22,7 +22,8 @@
 static int is_support_unify_woble(struct btmtk_dev *bdev)
 {
 	if (bdev->bt_cfg.support_unify_woble) {
-		if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id) || is_mt7663(bdev->chip_id))
+		if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) ||
+				is_mt7961(bdev->chip_id) || is_mt7663(bdev->chip_id))
 			return 1;
 		else
 			return 0;
@@ -65,7 +66,7 @@ static int btmtk_send_woble_apcf_reserved(struct btmtk_dev *bdev)
 		return ret;
 	}
 
-	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
+	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		ret = btmtk_main_send_cmd(bdev, reserve_apcf_cmd, RES_APCF_CMD_LEN,
 			reserve_apcf_event, RES_APCF_EVT_LEN, 0, 0,
 			BTMTK_TX_PKT_FROM_HOST);
@@ -928,7 +929,7 @@ int btmtk_woble_initialize(struct btmtk_dev *bdev, struct btmtk_woble *bt_woble)
 			memcpy(bt_woble->woble_setting_file_name, WOBLE_SETTING_FILE_NAME_7663,
 				sizeof(WOBLE_SETTING_FILE_NAME_7663));
 
-		if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
+		if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 			memcpy(bt_woble->woble_setting_file_name, WOBLE_SETTING_FILE_NAME_7961,
 				sizeof(WOBLE_SETTING_FILE_NAME_7961));
 

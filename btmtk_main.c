@@ -1258,7 +1258,7 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
 
 	patchHdr = (struct _PATCH_HEADER *)fwbuf;
 
-	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
+	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		globalDesrc = (struct _Global_Descr *)(fwbuf + FW_ROM_PATCH_HEADER_SIZE);
 
 	BTMTK_INFO("[btmtk] =============== Patch Info ==============");
@@ -1296,7 +1296,7 @@ static void btmtk_print_wifi_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
 
 	patchHdr = (struct _PATCH_HEADER *)fwbuf;
 
-	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
+	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		globalDesrc = (struct _Global_Descr *)(fwbuf + FW_ROM_PATCH_HEADER_SIZE);
 
 	BTMTK_INFO("[btmtk] =============== Wifi Patch Info ==============");
@@ -1844,7 +1844,7 @@ int btmtk_load_rom_patch(struct btmtk_dev *bdev)
 
 	if (is_mt7663(bdev->chip_id))
 		err = btmtk_load_rom_patch_766x(bdev);
-	else if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
+	else if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
 		err = btmtk_load_rom_patch_79xx(bdev, BT_DOWNLOAD);
 		if (err < 0) {
 			BTMTK_ERR("%s: btmtk_load_rom_patch_79xx bt patch failed!", __func__);
@@ -2155,7 +2155,7 @@ int btmtk_picus_enable(struct btmtk_dev *bdev)
 	}
 	BTMTK_INFO_RAW(enable_cmd, enable_len, "%s: Send CMD:", __func__);
 
-	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
+	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		ret = btmtk_main_send_cmd(bdev,
 			enable_cmd, enable_len,
 			enable_event, PICUS_ENABLE_EVT_HDR_LEN,
@@ -2176,7 +2176,7 @@ int btmtk_picus_disable(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s\n", __func__);
 
-	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
+	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		ret = btmtk_main_send_cmd(bdev,
 			dft_disable_cmd, PICUS_DISABLE_CMD_LEN,
 			dft_disable_event, PICUS_DISABLE_EVT_HDR_LEN,
@@ -2659,7 +2659,7 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 	 */
 
 	main_info.hif_hook.reg_read(bdev, CHIP_ID, &bdev->chip_id);
-	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
+	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
 		main_info.hif_hook.reg_read(bdev, FLAVOR, &bdev->flavor);
 		main_info.hif_hook.reg_read(bdev, FW_VERSION, &bdev->fw_version);
 	} else {

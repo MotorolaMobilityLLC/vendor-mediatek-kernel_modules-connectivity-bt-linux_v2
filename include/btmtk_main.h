@@ -607,6 +607,14 @@ struct btmtk_main_info {
 	u8 read_iso_packet_size_cmd[READ_ISO_PACKET_CMD_SIZE];
 };
 
+static inline int is_mt7902(u32 chip_id)
+{
+	chip_id &= 0xFFFF;
+	if (chip_id == 0x7902)
+		return 1;
+	return 0;
+}
+
 static inline int is_mt7922(u32 chip_id)
 {
 	chip_id &= 0xFFFF;
