@@ -105,7 +105,7 @@ void btmtk_reset_waker(struct work_struct *work)
 			}
 			DUMP_TIME_STAMP("subsys_chip_reset_start");
 			err = bmain_info->hif_hook.subsys_reset(bdev);
-			atomic_set(&bmain_info->subsys_reset , BTMTK_RESET_DONE);
+			atomic_set(&bmain_info->subsys_reset, BTMTK_RESET_DONE);
 			if (err < 0) {
 				BTMTK_INFO("subsys reset failed, do whole chip reset!");
 			} else {

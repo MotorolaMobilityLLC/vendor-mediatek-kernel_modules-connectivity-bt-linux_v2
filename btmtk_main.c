@@ -4117,7 +4117,11 @@ int btmtk_deregister_hci_device(struct btmtk_dev *bdev)
 	 * HCI_BREDR_ENABLED, After this flag has been set to HCI_BREDR_ENABLED, we
 	 * can be able to do hci_unregister_dev.
 	 */
-	if (bdev && bdev->hdev && hci_dev_test_flag(bdev->hdev, HCI_BREDR_ENABLED)) {
+#if (KERNEL_VERSION(4, 1, 0) > LINUX_VERSION_CODE)
+	if (bdev && bdev->hdev && test_bit(HCI_BREDR_ENABLED, &bdev->hdev->dev_flags)) {
+#else
+	if (bdev && bdev->hdev && test_bit(HCI_BREDR_ENABLED, bdev->hdev->dev_flags)) {
+#endif
 		hci_unregister_dev(bdev->hdev);
 		BTMTK_INFO("%s end", __func__);
 	}
