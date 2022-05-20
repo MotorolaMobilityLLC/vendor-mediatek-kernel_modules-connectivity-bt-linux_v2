@@ -828,7 +828,8 @@ int btmtk_dispatch_acl(struct hci_dev *hdev, struct sk_buff *skb)
 			reset_stack_flag = HW_ERR_CODE_CORE_DUMP;
 		}
 		return 1;
-	} else if ((skb->data[0] == 0xff || skb->data[0] == 0xfe) && skb->data[1] == 0x05) {
+	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) && (skb->data[0] == 0xff || skb->data[0] == 0xfe)
+                    && skb->data[1] == 0x05) {
 		BTMTK_DBG("%s correct picus log by ACL", __func__);
 		/* Coredump */
 		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_ASSERT_QUEUE_COUNT) {
@@ -983,7 +984,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	ret = btmtk_cif_send_cmd(bdev, skb, delay, retry, endpoint);
 	if (ret < 0) {
 		BTMTK_ERR("%s btmtk_cif_send_cmd failed!!", __func__);
-		goto exit;
+		goto err_free_skb;
 	}
 
 	/* wmt cmd and download fw patch using wmt cmd with USB interface, need use
@@ -996,7 +997,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		if (recv_evt_len < 0) {
 			BTMTK_ERR("%s btmtk_cif_recv_evt failed!!", __func__);
 			ret = -1;
-			goto exit;
+			goto err_free_skb;
 		}
 		ret = btmtk_compare_evt(bdev, event, event_len, recv_evt_len);
 	} else {
@@ -1033,6 +1034,11 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		}
 		goto exit;
 	}
+
+err_free_skb:
+	BTMTK_DBG("%s free skb!!", __func__);
+	kfree_skb(skb);
+	skb = NULL;
 
 exit:
 	/* TOTO, need to do fw coredump*/

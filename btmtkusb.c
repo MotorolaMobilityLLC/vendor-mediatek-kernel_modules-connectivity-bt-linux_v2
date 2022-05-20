@@ -2383,11 +2383,9 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 		/* handle wmt cmd from driver */
 		ret = btmtk_cif_send_control_out(bdev, skb->data + 1, skb->len - 1,
 				delay, retry);
-		kfree_skb(skb);
 	} else if (endpoint == BTMTK_EP_TPYE_OUT_ACL) {
 		/* bulk out for load rom patch*/
 		ret = btmtk_cif_send_bulk_out(bdev, skb->data + 1, skb->len - 1);
-		kfree_skb(skb);
 	} else if (endpoint == BTMTK_EP_TYPE_OUT_OTHER) {
 		/* handle hci cmd and acl pkt from host, handle hci cmd from driver */
 		ret = btusb_send_frame(bdev->hdev, skb);
