@@ -55,7 +55,13 @@ u8 btmtk_get_reset_stack_flag(void);
 int btmtk_reset_power_on(struct btmtk_dev *bdev);
 void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev);
 void btmtk_free_setting_file(struct btmtk_dev *bdev);
-
+/** file_operations: stpbtfwlog */
+int btmtk_fops_openfwlog(struct inode *inode, struct file *file);
+int btmtk_fops_closefwlog(struct inode *inode, struct file *file);
+ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, loff_t *f_pos);
+ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos);
+unsigned int btmtk_fops_pollfwlog(struct file *filp, poll_table *wait);
+long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigned long arg);
 
 //static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb);
 
@@ -128,12 +134,29 @@ void btmtk_free_setting_file(struct btmtk_dev *bdev);
 
 #define CHAR2HEX_SIZE	4
 
+/* stpbtfwlog setting */
+#define FWLOG_QUEUE_COUNT			200
+#define FWLOG_ASSERT_QUEUE_COUNT		6000
+#define FWLOG_BLUETOOTH_KPI_QUEUE_COUNT		200
+#define HCI_MAX_COMMAND_SIZE			255
+#define HCI_MAX_COMMAND_BUF_SIZE		(HCI_MAX_COMMAND_SIZE * 3)
+
 struct btmtk_cif_state {
 	unsigned char ops_enter;
 	unsigned char ops_end;
 	unsigned char ops_error;
 };
 
+struct btmtk_fops_fwlog {
+	dev_t g_devIDfwlog;
+	struct cdev BT_cdevfwlog;
+	wait_queue_head_t fw_log_inq;
+	struct sk_buff_head fwlog_queue;
+	struct class *pBTClass;
+	struct device *pBTDevfwlog;
+	spinlock_t fwlog_lock;
+	u8 btmtk_bluetooth_kpi;
+};
 
 enum {
 	BTMTK_DONGLE_STATE_UNKNOWN,

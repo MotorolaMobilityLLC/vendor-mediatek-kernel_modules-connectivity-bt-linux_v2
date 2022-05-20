@@ -33,7 +33,6 @@
 #define BGF0_CMD_BULK
 #define BGF1_CMD_BULK
 #define SUPPORT_HW_DVT
-#define SUPPORT_STPBTFWLOG
 
 
 enum {

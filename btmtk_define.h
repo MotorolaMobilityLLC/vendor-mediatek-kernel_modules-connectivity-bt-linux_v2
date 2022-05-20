@@ -37,14 +37,14 @@
 
 
 /** Driver version */
-#define VERSION "7.0.200031801"
+#define VERSION "7.0.200031901"
 #define SUBVER ":turnkey"
 
 
 #define ENABLESTP FALSE
 #define BTMTKUART_TX_STATE_ACTIVE	1
 #define BTMTKUART_TX_STATE_WAKEUP	2
-#define BTMTK_TX_WAIT_VND_EVT	3
+#define BTMTK_TX_WAIT_VND_EVT		3
 #define BTMTKUART_REQUIRED_WAKEUP	4
 #define BTMTKUART_REQUIRED_DOWNLOAD	5
 #define BTMTK_TX_SKIP_VENDOR_EVT	6
@@ -131,7 +131,7 @@ extern uint8_t btmtk_log_lvl;
  *
  * HCI packet type
  */
-#define MTK_HCI_COMMAND_PKT	 0x01
+#define MTK_HCI_COMMAND_PKT		0x01
 #define MTK_HCI_ACLDATA_PKT		0x02
 #define MTK_HCI_SCODATA_PKT		0x03
 #define MTK_HCI_EVENT_PKT		0x04
