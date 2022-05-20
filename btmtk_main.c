@@ -24,25 +24,56 @@ static DEFINE_MUTEX(btmtk_fops_state_mutex);
 #define FOPS_MUTEX_LOCK()	mutex_lock(&btmtk_fops_state_mutex)
 #define FOPS_MUTEX_UNLOCK()	mutex_unlock(&btmtk_fops_state_mutex)
 
+static int btmtk_send_assert_cmd(struct btmtk_dev *bdev);
+
 /**
  * Global parameters(mtkbt_)
  */
 uint8_t btmtk_log_lvl = BTMTK_LOG_LVL_DEF;
 
-static int btmtk_get_chip_state(struct btmtk_dev *bdev)
+/* To support dynamic mount of interface can be probed */
+static int btmtk_intf_num = BT_MCU_MINIMUM_INTERFACE_NUM;
+/* To allow g_bdev being sized from btmtk_intf_num setting */
+static struct btmtk_dev **g_bdev = NULL;
+
+/* State machine table that clarify through each HIF events,
+ * To specify HIF event on
+ * Entering / End / Error
+ */
+static const struct btmtk_cif_state g_cif_state[] = {
+	/* HIF_EVENT_PROBE */
+	{BTMTK_STATE_PROBE, BTMTK_STATE_WORKING, BTMTK_STATE_DISCONNECT},
+	/* HIF_EVENT_DISCONNECT */
+	{BTMTK_STATE_DISCONNECT, BTMTK_STATE_DISCONNECT, BTMTK_STATE_DISCONNECT},
+	/* HIF_EVENT_SUSPEND */
+	{BTMTK_STATE_SUSPEND, BTMTK_STATE_SUSPEND, BTMTK_STATE_FW_DUMP},
+	/* HIF_EVENT_RESUME */
+	{BTMTK_STATE_RESUME, BTMTK_STATE_WORKING, BTMTK_STATE_FW_DUMP},
+};
+
+int btmtk_get_chip_state(struct btmtk_dev *bdev)
 {
-	return bdev->interface_state;
+	int state = BTMTK_STATE_INIT;
+
+	CHIP_STATE_MUTEX_LOCK();
+	state = bdev->interface_state;
+	CHIP_STATE_MUTEX_UNLOCK();
+
+	return state;
 }
 
-static void btmtk_set_chip_state(struct btmtk_dev *bdev, int new_state)
+void btmtk_set_chip_state(struct btmtk_dev *bdev, int new_state)
 {
 	static const char * const state_msg[] = {
-		"INIT", "DISCONNECT", "PROBE", "WORKING", "SUSPEND", "RESUME", "FW_DUMP", "STANDBY",
+		"UNKNOWN", "INIT", "DISCONNECT", "PROBE", "WORKING", "SUSPEND", "RESUME", "FW_DUMP", "STANDBY",
 	};
 
 	BTMTK_INFO("%s: %s(%d) -> %s(%d)", __func__, state_msg[bdev->interface_state],
 			bdev->interface_state, state_msg[new_state], new_state);
+
+		CHIP_STATE_MUTEX_LOCK();
 	bdev->interface_state = new_state;
+		CHIP_STATE_MUTEX_UNLOCK();
 }
 
 static int btmtk_fops_get_state(struct btmtk_dev *bdev)
@@ -52,7 +83,9 @@ static int btmtk_fops_get_state(struct btmtk_dev *bdev)
 
 static void btmtk_fops_set_state(struct btmtk_dev *bdev, int new_state)
 {
-	static const char * const fstate_msg[] = {"INIT", "OPENED", "CLOSING", "CLOSED"};
+	static const char * const fstate_msg[] = {
+		"UNKNOWN", "INIT", "OPENING", "OPENED", "CLOSING", "CLOSED",
+	};
 
 	BTMTK_INFO("%s: FOPS_%s(%d) -> FOPS_%s(%d)", __func__, fstate_msg[bdev->fops_state],
 			bdev->fops_state, fstate_msg[new_state], new_state);
@@ -61,11 +94,61 @@ static void btmtk_fops_set_state(struct btmtk_dev *bdev, int new_state)
 
 static int main_init(void)
 {
+	int i = 0;
+
+	BTMTK_INFO("%s", __func__);
+
+	/* Check if user changes default minimum supported intf count */
+	if (btmtk_intf_num < BT_MCU_MINIMUM_INTERFACE_NUM) {
+		btmtk_intf_num = BT_MCU_MINIMUM_INTERFACE_NUM;
+		BTMTK_WARN("%s minimum interface is %d", __func__, btmtk_intf_num);
+	}
+
+	BTMTK_INFO("%s supported intf count <%d>", __func__, btmtk_intf_num);
+
+	g_bdev = kzalloc((sizeof(*g_bdev) * btmtk_intf_num), GFP_KERNEL);
+	if (!g_bdev) {
+		BTMTK_WARN("%s insufficient memory", __func__);
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < btmtk_intf_num; i++) {
+		g_bdev[i] = btmtk_allocate_dev_memory(NULL);
+		if (g_bdev[i]) {
+			/* BTMTK_STATE_UNKNOWN instead? */
+			/* btmtk_set_chip_state(g_bdev[i], BTMTK_STATE_INIT); */
+
+			/* BTMTK_FOPS_STATE_UNKNOWN instead? */
+			FOPS_MUTEX_LOCK();
+			btmtk_fops_set_state(g_bdev[i], BTMTK_FOPS_STATE_INIT);
+			FOPS_MUTEX_UNLOCK();
+
+		} else {
+			return -ENOMEM;
+		}
+	}
+
 	return 0;
 }
 
 static int main_exit(void)
 {
+	int i = 0;
+
+	BTMTK_INFO("%s releasing intf count <%d>", __func__, btmtk_intf_num);
+
+	if (g_bdev == NULL) {
+		BTMTK_WARN("%s g_data is NULL", __func__);
+		return 0;
+	}
+
+	for (i = 0; i < btmtk_intf_num; i++) {
+		if (g_bdev[i] != NULL)
+			btmtk_free_dev_memory(NULL, g_bdev[i]);
+	}
+
+	kfree(g_bdev);
+
 	return 0;
 }
 
@@ -357,6 +440,7 @@ int btmtk_dispatch_acl(struct hci_dev *hdev, struct sk_buff *skb)
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 
 	if (skb->data[0] == 0x6f && skb->data[1] == 0xfc && skb->len > 12) {
+		btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
 		/* sent coredump data to queue, picus tool will log it */
 		/* coredump data done
 		 * For Example : TotalTimeForDump=0xxxxxxx, (xx secs)
@@ -1214,10 +1298,6 @@ int btmtk_load_rom_patch(struct btmtk_dev *bdev)
 		return err;
 	}
 
-	CHIP_STATE_MUTEX_LOCK();
-	btmtk_set_chip_state(bdev, BTMTK_STATE_PROBE);
-	CHIP_STATE_MUTEX_UNLOCK();
-
 	if (is_mt7663(bdev->chip_id))
 		err = btmtk_load_rom_patch_766x(bdev);
 	else if (is_mt7961(bdev->chip_id)) {
@@ -1235,13 +1315,86 @@ int btmtk_load_rom_patch(struct btmtk_dev *bdev)
 	} else
 		BTMTK_WARN("%s: unknown chip id (%d)", __func__, bdev->chip_id);
 
-	if (err >= 0) {
-		CHIP_STATE_MUTEX_LOCK();
-		btmtk_set_chip_state(bdev, BTMTK_STATE_WORKING);
-		CHIP_STATE_MUTEX_UNLOCK();
+	return err;
+}
+
+struct btmtk_dev *btmtk_get_dev(void)
+{
+	int i = 0;
+	struct btmtk_dev *tmp_bdev = NULL;
+
+	BTMTK_INFO("%s", __func__);
+
+	for (i = 0; i < btmtk_intf_num; i++) {
+		/* Find empty slot for newly probe interface.
+		 * Judged from load_rom_patch is done and
+		 * Identified chip_id from cap_init. */
+		if (g_bdev[i]->hdev == NULL) {
+			tmp_bdev = g_bdev[i];
+
+			/* Hook pre-defined table on state machine */
+			g_bdev[i]->cif_state = (struct btmtk_cif_state *)g_cif_state;
+
+			break;
+		}
 	}
 
-	return err;
+	return tmp_bdev;
+}
+
+void btmtk_release_dev(struct btmtk_dev *bdev)
+{
+	int i = 0;
+	struct btmtk_dev *tmp_bdev = NULL;
+
+	BTMTK_INFO("%s", __func__);
+
+	tmp_bdev = bdev;
+	if (tmp_bdev != NULL) {
+		for (i = 0; i < btmtk_intf_num; i++) {
+			/* Find slot on probed interface.
+			 * Judged from load_rom_patch is done and
+			 * Identified chip_id from cap_init. */
+			if (memcmp(tmp_bdev, g_bdev[i], sizeof(*tmp_bdev)) == 0) {
+				memset(tmp_bdev, 0, sizeof(*tmp_bdev));
+				tmp_bdev = NULL;
+				break;
+			}
+		}
+	}
+
+}
+
+struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev)
+{
+	struct btmtk_dev *bdev;
+	size_t len = sizeof(*bdev);
+
+	BTMTK_INFO("%s", __func__);
+
+	if (dev != NULL)
+		bdev = devm_kzalloc(dev, len, GFP_KERNEL);
+	else
+		bdev = kzalloc(len, GFP_KERNEL);
+
+	if (!bdev)
+		return NULL;
+
+	btmtk_set_chip_state(bdev, BTMTK_STATE_INIT);
+
+	return bdev;
+}
+
+void btmtk_free_dev_memory(struct device *dev, struct btmtk_dev *bdev)
+{
+	BTMTK_INFO("%s", __func__);
+
+	if (bdev != NULL) {
+		if (dev != NULL)
+			devm_kfree(dev, bdev);
+		else
+			kfree(bdev);
+	}
 }
 
 static int btmtk_calibration_flow(struct btmtk_dev *bdev)
@@ -1268,8 +1421,21 @@ int btmtk_send_wmt_reset(struct btmtk_dev *bdev)
 		BTMTK_ERR("%s: bdev is NULL !", __func__);
 		return ret;
 	}
+	if (bdev->power_state == BTMTK_DONGLE_STATE_POWER_OFF) {
 	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 20,
 			0, BTMTK_EP_TYPE_OUT_CMD, BTMTK_TX_WAIT_VND_EVT, true);
+
+		if (ret >= 0) {
+			bdev->power_state = BTMTK_DONGLE_STATE_POWER_ON;
+		} else {
+			bdev->power_state = BTMTK_DONGLE_STATE_ERROR;
+		}
+	}
+
+	if (bdev->power_state != BTMTK_DONGLE_STATE_POWER_ON) {
+		BTMTK_WARN("%s: end of Incorrect state:%d", __func__, bdev->power_state);
+		return -EBADFD;
+	}
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -1288,7 +1454,6 @@ int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *bdev)
 		return ret;
 	}
 
-	bdev->power_state = BTMTK_DONGLE_STATE_POWERING_ON;
 	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 100,
 			20, BTMTK_EP_TYPE_OUT_CMD, BTMTK_TX_WAIT_VND_EVT, true);
 	if (ret < 0) {
@@ -1333,7 +1498,6 @@ int btmtk_send_wmt_power_off_cmd(struct btmtk_dev *bdev)
 		return 0;
 	}
 
-	bdev->power_state = BTMTK_DONGLE_STATE_POWERING_OFF;
 	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 20,
 			20, BTMTK_EP_TYPE_OUT_CMD, BTMTK_TX_WAIT_VND_EVT, true);
 	if (ret < 0) {
@@ -1519,9 +1683,9 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 				temp[0] = 0x01;
 				temp_len ++;
 			} else if (!memcmp(block_name, "RADIOOFF_STATUS_EVENT", sizeof("RADIOOFF_STATUS_EVENT")) ||
-				!memcmp(block_name,"RADIOOFF_COMPLETE_EVENT", sizeof("RADIOOFF_STATUS_EVENT")) ||
-				!memcmp(block_name,"RADIOON_STATUS_EVENT", sizeof("RADIOOFF_STATUS_EVENT")) ||
-				!memcmp(block_name,"RADIOON_COMPLETE_EVENT", sizeof("RADIOOFF_STATUS_EVENT"))) {
+				!memcmp(block_name,"RADIOOFF_COMPLETE_EVENT", sizeof("RADIOOFF_COMPLETE_EVENT")) ||
+				!memcmp(block_name,"RADIOON_STATUS_EVENT", sizeof("RADIOON_STATUS_EVENT")) ||
+				!memcmp(block_name,"RADIOON_COMPLETE_EVENT", sizeof("RADIOON_COMPLETE_EVENT"))) {
 				temp[0] = 0x04;
 				temp_len ++;
 			}
@@ -2018,14 +2182,24 @@ int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 
 int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 {
+	int ret = -1;
+
 	if (!bdev) {
 		BTMTK_ERR("%s: bdev is NULL !", __func__);
-		return -1;
+		return ret;
 	}
 
 	BTMTK_INFO("%s", __func__);
 
-	return btmtk_send_wmt_power_off_cmd(bdev);
+	ret = btmtk_send_wmt_power_off_cmd(bdev);
+	if (bdev->power_state != BTMTK_DONGLE_STATE_POWER_OFF) {
+		BTMTK_WARN("Power off failed, reset it");
+		if (bdev->subsys_reset == HW_ERR_NONE)
+			bdev->subsys_reset = HW_ERR_CODE_POWER_OFF;
+		btmtk_send_assert_cmd(bdev);
+	}
+
+	return ret;
 }
 
 static int btmtk_send_assert_cmd_bulk(struct btmtk_dev *bdev)
@@ -2066,17 +2240,13 @@ exit:
 static int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 {
 	int ret = 0;
+	int state;
 
-	/* TODO, check chip state */
-#if 0
-	int state = btmtk_usb_get_state();
-
-	if (state == BTMTK_USB_STATE_FW_DUMP || state == BTMTK_USB_STATE_SUSPEND_FW_DUMP
-			|| state == BTMTK_USB_STATE_RESUME_FW_DUMP) {
-		BTUSB_WARN("%s: FW dumping already!!!", __func__);
+	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_FW_DUMP) {
+		BTMTK_WARN("%s: FW dumping already!!!", __func__);
 		return ret;
 	}
-#endif
 
 	BTMTK_INFO("%s: send assert cmd", __func__);
 
@@ -2120,10 +2290,8 @@ static int bt_close(struct hci_dev *hdev)
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSING);
 	FOPS_MUTEX_UNLOCK();
 
-	CHIP_STATE_MUTEX_LOCK();
 	state = btmtk_get_chip_state(bdev);
-	CHIP_STATE_MUTEX_UNLOCK();
-	if (state != BTMTK_STATE_WORKING) {
+	if (state != BTMTK_STATE_WORKING && state != BTMTK_STATE_STANDBY) {
 		BTMTK_WARN("%s: not in working state and standby state(%d).", __func__, state);
 		FOPS_MUTEX_LOCK();
 		btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
@@ -2174,16 +2342,14 @@ static int bt_open(struct hci_dev *hdev)
 		goto failed;
 	}
 
-	CHIP_STATE_MUTEX_LOCK();
 	state = btmtk_get_chip_state(bdev);
-	CHIP_STATE_MUTEX_UNLOCK();
 	if (state == BTMTK_STATE_INIT || state == BTMTK_STATE_DISCONNECT) {
 		ret = -EAGAIN;
 		goto failed;
 	}
 
-	if (state != BTMTK_STATE_WORKING) {
-		BTMTK_WARN("%s: not in working state(%d).", __func__, state);
+	if (state != BTMTK_STATE_WORKING && state != BTMTK_STATE_STANDBY) {
+		BTMTK_WARN("%s: not in working state and standby state(%d).", __func__, state);
 		ret = -ENODEV;
 		goto failed;
 	}
@@ -2197,11 +2363,15 @@ static int bt_open(struct hci_dev *hdev)
 		goto failed;
 	}
 
-	if (fstate == BTMTK_FOPS_STATE_CLOSING) {
-		BTMTK_WARN("%s: fops close is on-going !", __func__);
+	if ((fstate == BTMTK_FOPS_STATE_CLOSING) || \
+		(fstate == BTMTK_FOPS_STATE_OPENING)) {
+		BTMTK_WARN("%s: fops open/close is on-going !", __func__);
 		ret = -EAGAIN;
 		goto failed;
 	}
+	FOPS_MUTEX_LOCK();
+	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENING);
+	FOPS_MUTEX_UNLOCK();
 
 #if CFG_SUPPORT_DVT
 	/* Don't send init cmd for DVT
@@ -2230,6 +2400,10 @@ static int bt_open(struct hci_dev *hdev)
 	return 0;
 
 failed:
+	FOPS_MUTEX_LOCK();
+	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
+	FOPS_MUTEX_UNLOCK();
+
 	return ret;
 }
 
@@ -2254,9 +2428,7 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		goto err;
 	}
 
-	CHIP_STATE_MUTEX_LOCK();
 	state = btmtk_get_chip_state(bdev);
-	CHIP_STATE_MUTEX_UNLOCK();
 	if (state != BTMTK_STATE_WORKING) {
 		BTMTK_WARN("%s: current is in suspend/resume/standby (%d).", __func__, state);
 		msleep(3000);
@@ -2311,6 +2483,9 @@ static void btmtk_rx_work(struct work_struct *work)
 			/* TODO: need to rewrite reset interrupt on EP15 for all interfaces,
 			 * maybe need to move reset_waker to btmtk_dev for common
 			 */
+
+			btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
+
 			schedule_work(&bdev->reset_waker);
 			continue;
 		}
@@ -2341,6 +2516,8 @@ void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 	BTMTK_INFO("%s", __func__);
 
 	if (bdev->hdev) {
+		/* TODO: need to find out a method to make sure is registered or not */
+		/* ex: hdev->id */
 		hci_unregister_dev(bdev->hdev);
 		hci_free_dev(bdev->hdev);
 	}
@@ -2353,10 +2530,6 @@ void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 		if (bdev->subsys_reset == HW_ERR_NONE)
 			bdev->subsys_reset = HW_ERR_CODE_USB_DISC;
 	}
-
-	CHIP_STATE_MUTEX_LOCK();
-	btmtk_set_chip_state(bdev, BTMTK_STATE_DISCONNECT);
-	CHIP_STATE_MUTEX_UNLOCK();
 
 	BTMTK_INFO("%s done", __func__);
 }
@@ -2507,15 +2680,24 @@ exit:
 static int __init main_driver_init(void)
 {
 	int ret = 0;
+	int i;
 
 	BTMTK_INFO("%s", __func__);
 	ret = main_init();
 	if (ret < 0)
 		return ret;
 
+	for (i = 0; i < btmtk_intf_num; i++) {
+		btmtk_set_chip_state(g_bdev[i], BTMTK_STATE_DISCONNECT);
+	}
+
 	ret = btmtk_cif_register();
 	if (ret < 0)
+	{
 		BTMTK_ERR("*** USB registration failed(%d)! ***", ret);
+		main_exit();
+		return ret;
+	}
 
 	BTMTK_INFO("%s: Done", __func__);
 	return ret;
@@ -2536,3 +2718,4 @@ module_exit(main_driver_exit);
 MODULE_DESCRIPTION("Mediatek Bluetooth Driver");
 MODULE_VERSION(VERSION SUBVER);
 MODULE_LICENSE("GPL");
+module_param(btmtk_intf_num, int, 0444);

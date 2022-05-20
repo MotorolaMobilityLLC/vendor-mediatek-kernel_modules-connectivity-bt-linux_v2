@@ -63,6 +63,26 @@ MODULE_DEVICE_TABLE(usb, btusb_table);
 #define DEVICE_CLASS_REQUEST_OUT	0x20
 #define USB_CTRL_IO_TIMO		100
 
+#define BTMTK_IS_BT_0_INTF(ifnum_base) \
+	(ifnum_base == BT0_MCU_INTERFACE_NUM)
+
+#define BTMTK_IS_BT_1_INTF(ifnum_base) \
+	(ifnum_base == BT1_MCU_INTERFACE_NUM)
+
+#define BTMTK_CIF_GET_DEV_PRIV(bdev, intf, ifnum_base) \
+	do { \
+		bdev = usb_get_intfdata(intf); \
+		ifnum_base = intf->cur_altsetting->desc.bInterfaceNumber; \
+	} while (0);
+
+#define BTMTK_CIF_IS_NULL(bdev, cif_event) \
+		(!bdev || !(&bdev->cif_state[cif_event]))
+
+#define BTMTK_CIF_ASSIGN_STATE(bdev, cif_event, cif_state) \
+	do { \
+		cif_state = &bdev->cif_state[cif_event]; \
+	} while (0);
+
 #ifdef SUPPORT_STPBTFWLOG
 /* fwlog_queue for picus and firmware dump */
 struct usb_device *udev_0;
@@ -519,6 +539,7 @@ static void btusb_intr_complete(struct urb *urb)
 		BTMTK_DBG_RAW(bdev->urb_transfer_buf, urb->actual_length + 1, "%s, recv evt", __func__);
 		BTMTK_DBG_RAW(urb->transfer_buffer, urb->actual_length, "%s, recv evt", __func__);
 		if(bdev->urb_transfer_buf[1] == 0xFF && urb->actual_length == 1) {
+			btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
 			schedule_work(&bdev->reset_waker);
 			goto intr_resub;
 		}
@@ -670,6 +691,7 @@ static int btusb_submit_wmt_urb(struct hci_dev *hdev, gfp_t mem_flags)
 	unsigned char *buf;
 	unsigned int pipe;
 	int err, size;
+	unsigned int ifnum_base;
 
 	BTMTK_DBG("%s : %s", __func__, hdev->name);
 
@@ -685,13 +707,15 @@ static int btusb_submit_wmt_urb(struct hci_dev *hdev, gfp_t mem_flags)
 		return -ENOMEM;
 	}
 
-	if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM) {
+	ifnum_base = bdev->intf->cur_altsetting->desc.bInterfaceNumber;
+
+	if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
 		dr->bRequestType = 0xC0;
 		dr->bRequest     = 0x01;
 		dr->wIndex       = 0;
 		dr->wValue       = 0x30;
 		dr->wLength      = __cpu_to_le16(size);
-	} else if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT1_MCU_INTERFACE_NUM) {
+	} else if (BTMTK_IS_BT_1_INTF(ifnum_base)) {
 		dr->bRequestType = 0xA1;
 		dr->bRequest     = 0x01;
 		dr->wIndex       = 0x03;
@@ -1141,6 +1165,7 @@ static int btusb_open(struct hci_dev *hdev)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	int err;
+	unsigned int ifnum_base;
 
 	BT_DBG("%s", hdev->name);
 
@@ -1153,9 +1178,11 @@ static int btusb_open(struct hci_dev *hdev)
 	if (test_and_set_bit(BTUSB_INTR_RUNNING, &bdev->flags))
 		goto done;
 
+	ifnum_base = bdev->intf->cur_altsetting->desc.bInterfaceNumber;
+
 	if (is_mt7961(bdev->chip_id)) {
 		BT_INFO("%s 7961 submit urb\n", __func__);
-		if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM) {
+		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
 			err = btusb_submit_intr_reset_urb(hdev, GFP_KERNEL);
 			if (err < 0)
 				goto failed;
@@ -1164,7 +1191,7 @@ static int btusb_open(struct hci_dev *hdev)
 				usb_kill_anchored_urbs(&bdev->intr_anchor);
 				goto failed;
 			}
-		} else if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT1_MCU_INTERFACE_NUM) {
+		} else if (BTMTK_IS_BT_1_INTF(ifnum_base)) {
 			/*need to do in bt_open in btmtk_main.c */
 			/* btmtk_usb_send_power_on_cmd_7668(hdev); */
 		}
@@ -1458,6 +1485,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 {
 	struct urb *urb = NULL;
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	unsigned int ifnum_base;
 #ifdef SUPPORT_HW_DVT
 	struct sk_buff *evt_skb;
 	uint8_t notify_alt_evt[] = {0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00};
@@ -1472,8 +1500,10 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 
 	if (skb->len <= 0) {
 		ret = -EFAULT;
-		BTMTK_ERR("%s: target packet length:%zu is not allowed", __func__, skb->len);
+		BTMTK_ERR("%s: target packet length:%zu is not allowed", __func__, (size_t)skb->len);
 	}
+
+	ifnum_base = bdev->intf->cur_altsetting->desc.bInterfaceNumber;
 
 	skb_pull(skb, 1);
 	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send_frame", __func__);
@@ -1567,7 +1597,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		return 0;
 	}
 
-		if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM) {
+		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
 			if (is_mt7961(bdev->chip_id))
 #ifdef BGF0_CMD_BULK
 				urb = alloc_bulk_cmd_urb(hdev, skb);
@@ -1577,7 +1607,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			else if (is_mt7663(bdev->chip_id))
 				urb = alloc_ctrl_urb(hdev, skb);
 
-		} else if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT1_MCU_INTERFACE_NUM) {
+		} else if (BTMTK_IS_BT_1_INTF(ifnum_base)) {
 			if (is_mt7961(bdev->chip_id)) {
 #ifdef BGF1_CMD_BULK
 				UNUSED(alloc_ctrl_bgf1_urb);
@@ -1646,14 +1676,16 @@ static inline int __set_isoc_interface(struct hci_dev *hdev, int altsetting)
 	struct usb_interface *intf = bdev->isoc;
 	struct usb_endpoint_descriptor *ep_desc;
 	int i, err;
+	unsigned int ifnum_base;
 
 	if (!bdev->isoc)
 		return -ENODEV;
 
 #ifdef SUPPORT_HW_DVT
-	if(bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM)
+	ifnum_base = bdev->intf->cur_altsetting->desc.bInterfaceNumber;
+	if (BTMTK_IS_BT_0_INTF(ifnum_base))
 		bdev->new_isoc_altsetting_interface = 1;
-	else if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT1_MCU_INTERFACE_NUM)
+	else if (BTMTK_IS_BT_1_INTF(ifnum_base))
 		bdev->new_isoc_altsetting_interface = 4;
 	err = usb_set_interface(bdev->udev, bdev->new_isoc_altsetting_interface, altsetting);
 #else
@@ -1829,21 +1861,16 @@ static int btusb_probe(struct usb_interface *intf,
 		       const struct usb_device_id *id)
 {
 	struct usb_endpoint_descriptor *ep_desc;
-	struct btmtk_dev *bdev;
+	struct btmtk_dev *bdev = NULL;
 	unsigned int ifnum_base;
 	int i, err;
 	struct usb_interface *tmp_intf;
 
-	BTMTK_DBG("intf %p id %p, interfacenum = %d", intf, id, intf->cur_altsetting->desc.bInterfaceNumber);
-
-	/* interface numbers are hardcoded in the spec */
-	if (intf->cur_altsetting->desc.bInterfaceNumber != BT0_MCU_INTERFACE_NUM &&
-		intf->cur_altsetting->desc.bInterfaceNumber != BT1_MCU_INTERFACE_NUM)
-		return -ENODEV;
-
 	ifnum_base = intf->cur_altsetting->desc.bInterfaceNumber;
+	BTMTK_DBG("intf %p id %p, interfacenum = %d", intf, id, ifnum_base);
 
-	bdev = devm_kzalloc(&intf->dev, sizeof(*bdev), GFP_KERNEL);
+	bdev = usb_get_intfdata(intf);
+
 	if (!bdev)
 		return -ENOMEM;
 
@@ -1935,15 +1962,13 @@ static int btusb_probe(struct usb_interface *intf,
 	BTMTK_INFO("MTK BT Driver Version : %s", VERSION);
 
 	btmtk_cap_init(bdev);
-	if(bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM)
+	if(BTMTK_IS_BT_0_INTF(ifnum_base))
 		err = btmtk_load_rom_patch(bdev);
-	else {
-		BTMTK_INFO("interface = %d, don't download patch", bdev->intf->cur_altsetting->desc.bInterfaceNumber);
-		bdev->interface_state = BTMTK_STATE_WORKING;
-	}
+	else
+		BTMTK_INFO("interface = %d, don't download patch", ifnum_base);
 
 	/* Interface numbers are hardcoded in the specification */
-	if (intf->cur_altsetting->desc.bInterfaceNumber == 0) {
+	if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
 		bdev->isoc = usb_ifnum_to_if(bdev->udev, 1);
 
 		BT_INFO("set interface number 2 for iso ");
@@ -1968,7 +1993,7 @@ static int btusb_probe(struct usb_interface *intf,
 				continue;
 			}
 		}
-	} else if (intf->cur_altsetting->desc.bInterfaceNumber == 3) {
+	} else if (BTMTK_IS_BT_1_INTF(ifnum_base)) {
 		BT_INFO("interface number = 3, set interface number 4");
 		bdev->isoc = usb_ifnum_to_if(bdev->udev, 4);
 	}
@@ -1983,8 +2008,8 @@ static int btusb_probe(struct usb_interface *intf,
 		}
 	}
 
-	btmtk_register_hci_device(bdev);
 	usb_set_intfdata(intf, bdev);
+	btmtk_register_hci_device(bdev);
 
 	memset(bdev->bdaddr, 0, BD_ADDRESS_SIZE);
 	//if (is_support_unify_woble(bdev)) {
@@ -2007,6 +2032,12 @@ static void btusb_disconnect(struct usb_interface *intf)
 	if (!bdev)
 		return;
 
+	/* TODO */
+	/* Need to check BTMTK_FOPS_STATE_OPENED, to notify restart */
+	if (bdev->subsys_reset == HW_ERR_NONE) {
+		bdev->subsys_reset = HW_ERR_CODE_USB_DISC;
+	}
+
 	hdev = bdev->hdev;
 	usb_set_intfdata(bdev->intf, NULL);
 
@@ -2027,7 +2058,7 @@ static void btusb_disconnect(struct usb_interface *intf)
 	btusb_exit();
 #endif
 
-	devm_kfree(&intf->dev, bdev);
+	btmtk_release_dev(bdev);
 }
 
 #ifdef CONFIG_PM
@@ -2040,6 +2071,10 @@ static int btusb_suspend(struct usb_interface *intf, pm_message_t message)
 
 	if (bdev->suspend_count++)
 		return 0;
+
+	/* TODO */
+	/* Need to check BTMTK_FOPS_STATE_OPENED
+	 * Send Power_On cmd if not opened */
 
 	spin_lock_irq(&bdev->txlock);
 	if (!(PMSG_IS_AUTO(message) && bdev->tx_in_flight)) {
@@ -2126,13 +2161,169 @@ done:
 }
 #endif
 
+static int btmtk_cif_probe(struct usb_interface *intf,
+		       const struct usb_device_id *id)
+{
+	int ret = -1;
+	int cif_event = 0;
+	unsigned int ifnum_base;
+	struct btmtk_cif_state *cif_state = NULL;
+	struct btmtk_dev *bdev = NULL;
+
+	/* USB interface only.
+	 * USB will need to identify thru descriptor's interface numbering.
+	 */
+	ifnum_base = intf->cur_altsetting->desc.bInterfaceNumber;
+	BTMTK_DBG("intf %p id %p, interfacenum = %d", intf, id, ifnum_base);
+
+	/* interface numbers are hardcoded in the spec */
+	if (ifnum_base != BT0_MCU_INTERFACE_NUM && \
+		ifnum_base != BT1_MCU_INTERFACE_NUM)
+		return -ENODEV;
+
+	/* Retrieve priv data and set to interface structure */
+	bdev = btmtk_get_dev();
+	usb_set_intfdata(intf, bdev);
+
+	/* Retrieve current HIF event state */
+	cif_event = HIF_EVENT_PROBE;
+	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
+		/* Error */
+		BTMTK_WARN("%s intf[%d] priv setting is NULL", __func__, ifnum_base);
+		return -ENODEV;
+	}
+
+	BTMTK_CIF_ASSIGN_STATE(bdev, cif_event, cif_state);
+
+	/* Set Entering state */
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+	/* Do HIF events */
+	ret = btusb_probe(intf, id);
+
+	/* Set End/Error state */
+	if (ret == 0) {
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	}
+	else {
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+	}
+
+	return ret;
+}
+
+static void btmtk_cif_disconnect(struct usb_interface *intf)
+{
+	int cif_event = 0;
+	unsigned int ifnum_base;
+	struct btmtk_cif_state *cif_state = NULL;
+	struct btmtk_dev *bdev = NULL;
+
+	BTMTK_CIF_GET_DEV_PRIV(bdev, intf, ifnum_base);
+
+	/* Retrieve current HIF event state */
+	cif_event = HIF_EVENT_DISCONNECT;
+	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
+		/* Error */
+		BTMTK_WARN("%s intf[%d] priv setting is NULL", __func__, ifnum_base);
+		return;
+	}
+
+	BTMTK_CIF_ASSIGN_STATE(bdev, cif_event, cif_state);
+
+	/* Set Entering state */
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+	/* Do HIF events */
+	btusb_disconnect(intf);
+
+	/* Set End/Error state */
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+}
+
+#ifdef CONFIG_PM
+static int btmtk_cif_suspend(struct usb_interface *intf, pm_message_t message)
+{
+	int ret = -1;
+	unsigned int ifnum_base;
+	int cif_event = 0;
+	struct btmtk_cif_state *cif_state = NULL;
+	struct btmtk_dev *bdev = NULL;
+
+	BTMTK_CIF_GET_DEV_PRIV(bdev, intf, ifnum_base);
+
+	/* Retrieve current HIF event state */
+	cif_event = HIF_EVENT_SUSPEND;
+	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
+		/* Error */
+		BTMTK_WARN("%s intf[%d] priv setting is NULL", __func__, ifnum_base);
+		return -ENODEV;
+	}
+
+	BTMTK_CIF_ASSIGN_STATE(bdev, cif_event, cif_state);
+
+	/* Set Entering state */
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+	/* Do HIF events */
+	ret = btusb_suspend(intf, message);
+
+	/* Set End/Error state */
+	if (ret == 0) {
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	}
+	else {
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+	}
+
+	return ret;
+}
+
+static int btmtk_cif_resume(struct usb_interface *intf)
+{
+	int ret = -1;
+	unsigned int ifnum_base;
+	int cif_event = 0;
+	struct btmtk_cif_state *cif_state = NULL;
+	struct btmtk_dev *bdev = NULL;
+
+	BTMTK_CIF_GET_DEV_PRIV(bdev, intf, ifnum_base);
+
+	/* Retrieve current HIF event state */
+	cif_event = HIF_EVENT_RESUME;
+	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
+		/* Error */
+		BTMTK_WARN("%s intf[%d] priv setting is NULL", __func__, ifnum_base);
+		return -ENODEV;
+	}
+
+	BTMTK_CIF_ASSIGN_STATE(bdev, cif_event, cif_state);
+
+	/* Set Entering state */
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+	/* Do HIF events */
+	ret = btusb_resume(intf);
+
+	/* Set End/Error state */
+	if (ret == 0) {
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	}
+	else {
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+	}
+
+	return ret;
+}
+#endif	// CONFIG_PM //
+
 static struct usb_driver btusb_driver = {
 	.name		= "btusb",
-	.probe		= btusb_probe,
-	.disconnect	= btusb_disconnect,
+	.probe		= btmtk_cif_probe,
+	.disconnect	= btmtk_cif_disconnect,
 #ifdef CONFIG_PM
-	.suspend	= btusb_suspend,
-	.resume		= btusb_resume,
+	.suspend	= btmtk_cif_suspend,
+	.resume		= btmtk_cif_resume,
 #endif
 	.id_table	= btusb_table,
 	.supports_autosuspend = 1,
@@ -2383,6 +2574,7 @@ int btmtk_cif_send_control_out(struct btmtk_dev *bdev, const uint8_t *cmd,
 		const int cmd_len, int delay, int retry, bool wmt_cmd)
 {
 	int ret = 0;
+	unsigned int ifnum_base;
 
 	if (bdev == NULL || bdev->udev == NULL || bdev->hdev == NULL || bdev->io_buf == NULL ||
 		bdev->o_usb_buf == NULL || cmd == NULL ||
@@ -2392,14 +2584,23 @@ int btmtk_cif_send_control_out(struct btmtk_dev *bdev, const uint8_t *cmd,
 		goto exit;
 	}
 
+	if (bdev->power_state == BTMTK_DONGLE_STATE_POWER_OFF) {
+		BT_ERR("%s: chip power isn't on, ignore this command, state is %d",
+		__func__, bdev->power_state);
+		ret = -1;
+		goto exit;
+	}
+
+	ifnum_base = bdev->intf->cur_altsetting->desc.bInterfaceNumber;
+
 	/* send hci or wmt command */
 	memcpy(bdev->o_usb_buf, cmd, cmd_len);
 	BTMTK_INFO_RAW(cmd, cmd_len, "%s: cmd:", __func__);
-	if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM)
+	if (BTMTK_IS_BT_0_INTF(ifnum_base))
 		ret = usb_control_msg(bdev->udev, usb_sndctrlpipe(bdev->udev, 0),
 				0x01, DEVICE_CLASS_REQUEST_OUT, 0x30, 0x00, (void *)bdev->o_usb_buf,
 				cmd_len, USB_CTRL_IO_TIMO);
-	else if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT1_MCU_INTERFACE_NUM)
+	else if (BTMTK_IS_BT_1_INTF(ifnum_base))
 		ret = usb_control_msg(bdev->udev, usb_sndctrlpipe(bdev->udev, 0),
 				0x00, 0x21, 0x00, 0x03, (void *)bdev->o_usb_buf, cmd_len, USB_CTRL_IO_TIMO);
 
@@ -2487,6 +2688,7 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 int btmtk_cif_recv_evt(struct btmtk_dev *bdev, int delay, int retry)
 {
 	int ret = -1;	/* if successful, 0 */
+	unsigned int ifnum_base;
 
 	if (bdev == NULL) {
 		BT_ERR("%s: bdev == NULL!\n", __func__);
@@ -2498,17 +2700,18 @@ int btmtk_cif_recv_evt(struct btmtk_dev *bdev, int delay, int retry)
 		return ret;
 	}
 
+	ifnum_base = bdev->intf->cur_altsetting->desc.bInterfaceNumber;
 get_response_again:
 	/* ms delay */
 	mdelay(delay);
 
 	/* check WMT event */
 	memset(bdev->io_buf, 0, USB_IO_BUF_SIZE);
-	if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM)
+	if (BTMTK_IS_BT_0_INTF(ifnum_base))
 		ret = usb_control_msg(bdev->udev, usb_rcvctrlpipe(bdev->udev, 0),
 				0x01, DEVICE_VENDOR_REQUEST_IN, 0x30, 0x00, bdev->io_buf,
 				HCI_USB_IO_BUF_SIZE, USB_CTRL_IO_TIMO);
-	else if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT1_MCU_INTERFACE_NUM)
+	else if (BTMTK_IS_BT_1_INTF(ifnum_base))
 		ret = usb_control_msg(bdev->udev, usb_rcvctrlpipe(bdev->udev, 0),
 				0x01, 0xA1, 0x30, 0x03, bdev->io_buf, HCI_USB_IO_BUF_SIZE,
 				USB_CTRL_IO_TIMO);

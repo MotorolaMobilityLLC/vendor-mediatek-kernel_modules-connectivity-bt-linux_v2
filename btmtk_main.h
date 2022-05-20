@@ -15,6 +15,8 @@
 #include "btmtk_define.h"
 #include "btmtk_chip_if.h"
 
+int btmtk_get_chip_state(struct btmtk_dev *bdev);
+void btmtk_set_chip_state(struct btmtk_dev *bdev, int new_state);
 int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
 int btmtk_register_hci_device(struct btmtk_dev *bdev);
 void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
@@ -41,6 +43,11 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev);
 int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev);
 void btmtk_cap_init(struct btmtk_dev *bdev);
 int btmtk_load_rom_patch(struct btmtk_dev *bdev);
+struct btmtk_dev *btmtk_get_dev(void);
+void btmtk_release_dev(struct btmtk_dev *bdev);
+struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev);
+void btmtk_free_dev_memory(struct device *dev, struct btmtk_dev *bdev);
+
 
 
 //static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb);
@@ -102,14 +109,27 @@ int btmtk_load_rom_patch(struct btmtk_dev *bdev);
 #define PATCH_DOWNLOAD_PHASE3_DELAY_TIME 500
 #define PATCH_DOWNLOAD_PHASE3_RETRY 2
 
+/* Expected minimum supported interface */
+#define BT_MCU_MINIMUM_INTERFACE_NUM	4
+
+/* Bus event */
+#define HIF_EVENT_PROBE		0
+#define HIF_EVENT_DISCONNECT	1
+#define HIF_EVENT_SUSPEND	2
+#define HIF_EVENT_RESUME	3
+
+struct btmtk_cif_state {
+	unsigned char ops_enter;
+	unsigned char ops_end;
+	unsigned char ops_error;
+};
+
+
 enum {
 	BTMTK_DONGLE_STATE_UNKNOWN,
-	BTMTK_DONGLE_STATE_POWERING_ON,
 	BTMTK_DONGLE_STATE_POWER_ON,
-	BTMTK_DONGLE_STATE_WOBLE,
-	BTMTK_DONGLE_STATE_POWERING_OFF,
 	BTMTK_DONGLE_STATE_POWER_OFF,
-	BTMTK_DONGLE_STATE_ERROR
+	BTMTK_DONGLE_STATE_ERROR,
 };
 
 enum {
@@ -126,7 +146,8 @@ enum {
 
 /* Please keep sync with btmtk_set_state function */
 enum {
-	BTMTK_STATE_INIT,
+	/* BTMTK_STATE_UNKNOWN = 0, */
+	BTMTK_STATE_INIT = 1,
 	BTMTK_STATE_DISCONNECT,
 	BTMTK_STATE_PROBE,
 	BTMTK_STATE_WORKING,
@@ -138,7 +159,9 @@ enum {
 
 /* Please keep sync with btmtk_fops_set_state function */
 enum {
-	BTMTK_FOPS_STATE_INIT,
+	/* BTMTK_FOPS_STATE_UNKNOWN = 0, */
+	BTMTK_FOPS_STATE_INIT = 1,
+	BTMTK_FOPS_STATE_OPENING,	/* during opening */
 	BTMTK_FOPS_STATE_OPENED,	/* open in fops_open */
 	BTMTK_FOPS_STATE_CLOSING,	/* during closing */
 	BTMTK_FOPS_STATE_CLOSED,	/* closed */
