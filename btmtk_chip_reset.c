@@ -81,9 +81,9 @@ void btmtk_reset_waker(struct work_struct *work)
 		return;
 	}
 
-	while (!bdev->bt_cfg.support_dongle_reset) {
+	if (!bdev->bt_cfg.support_dongle_reset) {
 		BTMTK_ERR("%s chip_reset is not support", __func__);
-		msleep(2000);
+		return;
 	}
 
 	cif_state = &bdev->cif_state[cif_event];

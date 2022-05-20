@@ -47,14 +47,6 @@ static DEFINE_MUTEX(btmtk_sdio_debug_mutex);
 #define SDIO_DEBUG_MUTEX_LOCK()	mutex_lock(&btmtk_sdio_debug_mutex)
 #define SDIO_DEBUG_MUTEX_UNLOCK()	mutex_unlock(&btmtk_sdio_debug_mutex)
 
-/* static const struct btmtksdio_data btmtk_sdio_7663 = {
- *	.fwname = FIRMWARE_MT7663,
- * };
- *
- * static const struct btmtksdio_data btmtk_sdio_7961 = {
- *	.fwname = FIRMWARE_MT7668,
- * };
- */
 static int btmtk_sdio_readl(u32 offset,  u32 *val, struct sdio_func *func);
 static int btmtk_sdio_writel(u32 offset, u32 val, struct sdio_func *func);
 
@@ -70,18 +62,7 @@ do {							\
 static struct btmtk_sdio_dev g_sdio_dev;
 
 static const struct sdio_device_id btmtk_sdio_tabls[] = {
-	/* Mediatek SD8688 Bluetooth device */
-	{ SDIO_DEVICE(SDIO_VENDOR_ID_MEDIATEK, 0x7663)
-		/*,
-		 *.driver_data = (unsigned long) &btmtk_sdio_7663
-		 */ },
-
-	/* Bring-up only */
-	{ SDIO_DEVICE(SDIO_VENDOR_ID_MEDIATEK, 0x7668)
-		/*,
-		 *.driver_data = (unsigned long) &btmtk_sdio_7663
-		 */ },
-
+	/* Mediatek MT7961 Bluetooth device */
 	{ SDIO_DEVICE(SDIO_VENDOR_ID_MEDIATEK, 0x7961)
 		/*,
 		 *.driver_data = (unsigned long) &btmtk_sdio_7961
@@ -1296,16 +1277,12 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 	if (bdev == NULL) {
 		BTMTK_ERR("bdev is NULL");
 		ret = -1;
-		kfree_skb(skb);
-		skb = NULL;
 		goto exit;
 	}
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 	if (cif_dev == NULL) {
 		BTMTK_ERR("cif_dev is NULL, bdev=%p", bdev);
 		ret = -1;
-		kfree_skb(skb);
-		skb = NULL;
 		goto exit;
 	}
 
@@ -1373,12 +1350,10 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 		}
 	}
 
-	/* error handle*/
+	/* error handle, can't do free skb at this point, it will be released at hci_send_frame when failed */
 	if (!atomic_read(&cif_dev->sdio_thread.thread_status)) {
 		BTMTK_WARN("%s main thread already stopped, don't send cmd anymore!!", __func__);
 		ret = -1;
-		kfree_skb(skb);
-		skb = NULL;
 		goto exit;
 	}
 
@@ -1613,7 +1588,7 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 		/* error handle*/
 		if (!atomic_read(&cif_dev->sdio_thread.thread_status)) {
 			BTMTK_WARN("%s main thread already stopped, don't wait evt anymore!!", __func__);
-			ret = -1;
+			ret = -ERRNUM;
 			goto exit;
 		}
 
@@ -1623,7 +1598,7 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		atomic_read(&cif_dev->sdio_thread.thread_status)) {
 		BTMTK_ERR("%s wait expect event timeout!!", __func__);
-		ret = -1;
+		ret = -ERRNUM;
 		goto fw_assert;
 	}
 
@@ -2098,17 +2073,22 @@ static int btmtk_sdio_main_thread(void *data)
 
 static void btmtk_sdio_stop_main_thread(struct btmtk_sdio_dev *cif_dev)
 {
-	skb_queue_purge(&cif_dev->tx_queue);
+	u8 i = 0;
+
 	if (!IS_ERR(cif_dev->sdio_thread.task) && atomic_read(&cif_dev->sdio_thread.thread_status)) {
 		kthread_stop(cif_dev->sdio_thread.task);
 		wake_up_interruptible(&cif_dev->sdio_thread.wait_q);
 
-		while (atomic_read(&cif_dev->sdio_thread.thread_status)) {
+		while (atomic_read(&cif_dev->sdio_thread.thread_status) && i < RETRY_TIMES) {
 			BTMTK_INFO("wait btmtk_sdio_main_thread stop");
 			msleep(100);
+			i++;
+			if (i == RETRY_TIMES - 1) {
+				BTMTK_INFO("wait btmtk_sdio_main_thread stop failed");
+				break;
+			}
 		}
-
-		BTMTK_INFO("btmtk_sdio_main_thread stop success!");
+		BTMTK_INFO("btmtk_sdio_stop_main_thread end!");
 	}
 }
 
@@ -2268,6 +2248,7 @@ static void btmtk_sdio_disconnect(struct sdio_func *func)
 	btmtk_woble_uninitialize(&cif_dev->bt_woble);
 	btmtk_cif_free_memory(cif_dev);
 	btmtk_sdio_unregister_dev(cif_dev);
+	skb_queue_purge(&cif_dev->tx_queue);
 
 }
 
@@ -2662,11 +2643,16 @@ static int btmtk_sdio_whole_reset(struct btmtk_dev *bdev)
 {
 	int ret = -1;
 	int cur = 0;
-	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
-	struct mmc_card *card = cif_dev->func->card;
+	struct mmc_card *card = NULL;
 	struct mmc_host *host = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
+	if (g_sdio_dev.func == NULL) {
+		BTMTK_ERR("g_sdio_dev.func is NULL");
+		return ret;
+	}
+
+	card = g_sdio_dev.func->card;
 	if ((card == NULL) || (card->host  == NULL)) {
 		BTMTK_ERR("mmc structs are NULL");
 		return ret;
@@ -2683,7 +2669,7 @@ static int btmtk_sdio_whole_reset(struct btmtk_dev *bdev)
 		host->rescan_entered = 0;
 		BTMTK_INFO("%s, set mmc_host rescan to 0", __func__);
 	}
-	cif_dev->patched = 0;
+	g_sdio_dev.patched = 0;
 	btmtk_sdio_set_wifi_driver_own(0);
 
 	BTMTK_INFO("%s, mmc_remove_host", __func__);

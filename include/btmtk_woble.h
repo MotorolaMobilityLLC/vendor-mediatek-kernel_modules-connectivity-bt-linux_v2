@@ -17,7 +17,6 @@
 
 /* Define for WoBLE */
 #define WOBLE_SETTING_COUNT 10
-#define WOBLE_SETTING_FILE_NAME_7663 "woble_setting_7663.bin"
 #define WOBLE_SETTING_FILE_NAME_7961 "woble_setting_7961.bin"
 #define WOBLE_EVENT_INTERVAL_TIMO	500
 #define WOBLE_COMP_EVENT_TIMO		5000

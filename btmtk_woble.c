@@ -23,7 +23,7 @@ static int is_support_unify_woble(struct btmtk_dev *bdev)
 {
 	if (bdev->bt_cfg.support_unify_woble) {
 		if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) ||
-				is_mt7961(bdev->chip_id) || is_mt7663(bdev->chip_id))
+				is_mt7961(bdev->chip_id))
 			return 1;
 		else
 			return 0;
@@ -863,7 +863,10 @@ static void btmtk_woble_input_deinit(struct btmtk_woble *bt_woble)
 {
 	if (bt_woble->WoBLEInputDev) {
 		input_unregister_device(bt_woble->WoBLEInputDev);
-		input_free_device(bt_woble->WoBLEInputDev);
+		/* Do not need to free WOBLE_INPUT_DEVICE, because after unregister it,
+		 * kernel will free it by itself.
+		 */
+		/* input_free_device(bt_woble->WoBLEInputDev); */
 		bt_woble->WoBLEInputDev = NULL;
 	}
 }
@@ -904,10 +907,6 @@ int btmtk_woble_initialize(struct btmtk_dev *bdev, struct btmtk_woble *bt_woble)
 				goto end;
 			}
 		}
-
-		if (is_mt7663(bdev->chip_id))
-			memcpy(bt_woble->woble_setting_file_name, WOBLE_SETTING_FILE_NAME_7663,
-				sizeof(WOBLE_SETTING_FILE_NAME_7663));
 
 		if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 			memcpy(bt_woble->woble_setting_file_name, WOBLE_SETTING_FILE_NAME_7961,

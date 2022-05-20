@@ -475,8 +475,9 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 
 	/* fw received dl command is abnormal if sending after dma
 	 * download patch done right away and this will cause fw dump
-	 * Workaround: wait 10ms to prevent sending dl cmd immadiately */
-	msleep(10);
+	 * Workaround: wait 10ms to prevent sending dl cmd immadiately
+	 */
+	usleep_range(10, 20);
 	BTMTK_INFO("%s: send dl cmd", __func__);
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, LD_PATCH_CMD_LEN,

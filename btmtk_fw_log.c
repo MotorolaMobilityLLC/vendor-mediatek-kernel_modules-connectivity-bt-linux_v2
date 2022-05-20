@@ -49,9 +49,9 @@ static const struct file_operations BT_proc_fops = {
 };
 
 static const struct file_operations BT_proc_chip_reset_count_fops = {
-    .open = btmtk_proc_chip_reset_count_open,
-    .read = seq_read,
-    .release = single_release,
+	.open = btmtk_proc_chip_reset_count_open,
+	.read = seq_read,
+	.release = single_release,
 };
 
 __weak int32_t btmtk_intcmd_wmt_utc_sync(void)
@@ -582,7 +582,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	ret = bmain_info->hif_hook.send_cmd(pp_bdev[hci_idx], skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST);
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
-		goto exit;
+		goto free_skb;
 	} else
 		BTMTK_INFO("%s: OK", __func__);
 

@@ -41,8 +41,6 @@ static const struct usb_device_id btusb_table[] = {
 	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x7961, 0xe0, 0x01, 0x01) },
 	/* Mediatek MT7915 */
 	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x7915, 0xe0, 0x01, 0x01) },
-	/* Mediatek MT7663 */
-	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x7663, 0xe0, 0x01, 0x01) },
 	/* Mediatek MT7922 */
 	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x7922, 0xe0, 0x01, 0x01) },
 	/* Mediatek MT7902 */
@@ -526,7 +524,7 @@ static int btusb_submit_intr_reset_urb(struct hci_dev *hdev, gfp_t mem_flags)
 		return -ENOMEM;
 	/* Default size is 16 */
 	/* size = le16_to_cpu(data->intr_ep->wMaxPacketSize); */
-	/* 7663 & 7668 & Buzzard Endpoint description.
+	/* Buzzard Endpoint description.
 	 * bEndpointAddress     0x8f  EP 15 IN
 	 * wMaxPacketSize     0x0001  1x 1 bytes
 	 */
@@ -734,7 +732,7 @@ static int btusb_submit_intr_urb(struct hci_dev *hdev, gfp_t mem_flags)
 		return -ENOMEM;
 
 	/* size = le16_to_cpu(data->intr_ep->wMaxPacketSize); */
-	/* 7663 & 7668 & Buzzard Endpoint description.
+	/* Buzzard Endpoint description.
 	 * bEndpointAddress     0x81  EP 1 IN
 	 * wMaxPacketSize     0x0010  1x 16 bytes
 	 */
@@ -1784,14 +1782,20 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			BTMTK_DBG_RAW(skb->data, skb->len, "%s, 6ffc send_frame", __func__);
 			/* No event for wmt trigger assert command */
 			if (memcmp(skb->data, wmt_trigger_assert, WMT_TRIGGER_ASSERT_LEN)) {
-				btmtk_usb_send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+				ret = btmtk_usb_send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES,
+					BTMTK_TX_CMD_FROM_DRV);
+				if (ret < 0) {
+					BTMTK_ERR("%s: send wmt cmd failed", __func__);
+					return ret;
+				}
 				set_bit(BTUSB_WMT_RUNNING, &bdev->flags);
-				btusb_submit_wmt_urb(hdev, GFP_KERNEL);
+				ret = btusb_submit_wmt_urb(hdev, GFP_KERNEL);
 			} else {
 				BTMTK_INFO("%s: Trigger FW assert by WMT command", __func__);
-				btmtk_usb_send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+				ret = btmtk_usb_send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES,
+					BTMTK_TX_CMD_FROM_DRV);
 			}
-			return 0;
+			return ret;
 		}
 
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
@@ -1807,8 +1811,6 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					urb = alloc_bulk_cmd_urb(hdev, skb);
 				} else
 					urb = alloc_ctrl_bgf1_urb(hdev, skb);
-			} else if (is_mt7663(bdev->chip_id)) {
-				urb = alloc_ctrl_urb(hdev, skb);
 			} else {
 				BTMTK_ERR("%s: chip_id(%d) is invalid", __func__, bdev->chip_id);
 				return -ENODEV;
@@ -1819,8 +1821,6 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		}
 
 		if (IS_ERR(urb)) {
-			kfree_skb(skb);
-			skb = NULL;
 			return PTR_ERR(urb);
 		}
 
@@ -1837,13 +1837,19 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				isoc_pkt_len = skb->data[2] + (skb->data[3] << 8) + HCI_ISO_PKT_HEADER_SIZE;
 				isoc_pkt_padding = bdev->iso_threshold - isoc_pkt_len;
 
-				if (skb_tailroom(skb) < isoc_pkt_padding) {
-					/* hci driver alllocate the size of skb that is to samll, need re-allocate */
+				if (skb_tailroom(skb) >= isoc_pkt_padding) {
+					memset(skb_put(skb, isoc_pkt_padding), 0, isoc_pkt_padding);
+					urb = alloc_intr_iso_urb(hdev, skb);
+					BTMTK_DBG_RAW(skb->data, skb->len, "%s, it's ble iso packet",
+						__func__);
+					if (IS_ERR(urb)) {
+						return PTR_ERR(urb);
+					}
+				} else {
+					/* hci driver alllocate the size of skb that is to small, need re-allocate */
 					iso_skb = alloc_skb(HCI_MAX_ISO_SIZE + BT_SKB_RESERVE, GFP_ATOMIC);
 					if (!iso_skb) {
 						BTMTK_ERR("%s allocate skb failed!!", __func__);
-						kfree_skb(skb);
-						skb = NULL;
 						return -ENOMEM;
 					}
 					/* copy skb data into iso_skb */
@@ -1854,24 +1860,29 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					urb = alloc_intr_iso_urb(hdev, iso_skb);
 					BTMTK_DBG_RAW(iso_skb->data, iso_skb->len, "%s, it's ble iso packet",
 						__func__);
-					/* It's alloc by hci drver, bt driver must be free it. */
-					kfree_skb(skb);
-					skb = NULL;
+
 					if (IS_ERR(urb)) {
 						kfree_skb(iso_skb);
 						iso_skb = NULL;
 						return PTR_ERR(urb);
 					}
-				} else {
-					memset(skb_put(skb, isoc_pkt_padding), 0, isoc_pkt_padding);
-					urb = alloc_intr_iso_urb(hdev, skb);
-					BTMTK_DBG_RAW(skb->data, skb->len, "%s, it's ble iso packet",
-						__func__);
-					if (IS_ERR(urb)) {
-						kfree_skb(skb);
-						skb = NULL;
-						return PTR_ERR(urb);
+
+					hdev->stat.acl_tx++;
+					ret = submit_or_queue_tx_urb(hdev, urb);
+					if (ret < 0) {
+						/* when ret < 0, skb will be free in hci_send_frame,
+						 * but need to free iso_skb, because iso_skb alloc in bt driver
+						 */
+						kfree_skb(iso_skb);
+						iso_skb = NULL;
+						goto exit;
 					}
+
+					/* It's alloc by hci drver, bt driver must free it when ret >=0. */
+					kfree_skb(skb);
+					skb = NULL;
+exit:
+					return ret;
 				}
 			} else {
 				BTMTK_WARN("btusb_send_frame send iso data, but iso channel not exit");
@@ -1883,8 +1894,6 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		} else {
 			urb = alloc_bulk_urb(hdev, skb);
 			if (IS_ERR(urb)) {
-				kfree_skb(skb);
-				skb = NULL;
 				return PTR_ERR(urb);
 			}
 		}
@@ -1896,16 +1905,12 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			BTMTK_INFO("btusb_send_frame hci_conn sco link = %d", hci_conn_num(hdev, SCO_LINK));
 			/* We need to study how to solve this in hw_dvt case.*/
 #ifndef CFG_SUPPORT_HW_DVT
-			kfree_skb(skb);
-			skb = NULL;
 			return -ENODEV;
 #endif
 		}
 
 		urb = alloc_isoc_urb(hdev, skb);
 		if (IS_ERR(urb)) {
-			kfree_skb(skb);
-			skb = NULL;
 			return PTR_ERR(urb);
 		}
 
@@ -1913,8 +1918,6 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		return submit_tx_urb(hdev, urb);
 	}
 
-	kfree_skb(skb);
-	skb = NULL;
 	return -EILSEQ;
 }
 
@@ -3311,9 +3314,12 @@ int btmtk_cif_send_control_out(struct btmtk_dev *bdev, struct sk_buff *skb, int 
 		BTMTK_ERR("%s: command send failed(%d)", __func__, ret);
 		goto exit;
 	}
-exit:
+
+	/* only when  ret = 0 need to free skb; when ret < 0, it will be free in btmtk_main_send_cmd */
 	kfree_skb(skb);
 	skb = NULL;
+
+exit:
 	return ret;
 }
 
@@ -3336,7 +3342,7 @@ static int btmtk_cif_send_bulk_out(struct btmtk_dev *bdev, struct sk_buff *skb)
 	buf = usb_alloc_coherent(cif_dev->udev, UPLOAD_PATCH_UNIT, GFP_KERNEL, &urb->transfer_dma);
 	if (!buf) {
 		ret = -ENOMEM;
-		goto exit;
+		goto error1;
 	}
 	init_completion(&sent_to_mcu_done);
 
@@ -3356,7 +3362,7 @@ static int btmtk_cif_send_bulk_out(struct btmtk_dev *bdev, struct sk_buff *skb)
 	ret = usb_submit_urb(urb, GFP_KERNEL);
 	if (ret < 0) {
 		BTMTK_ERR("%s: submit urb failed (%d)", __func__, ret);
-		goto error;
+		goto error0;
 	}
 
 	if (!wait_for_completion_timeout
@@ -3364,16 +3370,18 @@ static int btmtk_cif_send_bulk_out(struct btmtk_dev *bdev, struct sk_buff *skb)
 		usb_kill_urb(urb);
 		BTMTK_ERR("%s: upload rom_patch timeout", __func__);
 		ret = -ETIME;
-		goto error;
+		goto error0;
 	}
 
-error:
-	usb_free_coherent(cif_dev->udev, UPLOAD_PATCH_UNIT, buf, urb->transfer_dma);
-exit:
-	usb_free_urb(urb);
 	kfree_skb(skb);
 	skb = NULL;
+error0:
+	usb_free_coherent(cif_dev->udev, UPLOAD_PATCH_UNIT, buf, urb->transfer_dma);
+error1:
+	usb_free_urb(urb);
+exit:
 	return ret;
+
 }
 
 int btmtk_usb_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
@@ -3457,6 +3465,7 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev == NULL!\n", __func__);
+		ret = -1;
 		return ret;
 	}
 
@@ -3473,7 +3482,7 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 			bdev->recv_evt_len = btmtk_cif_recv_evt(bdev, delay, retry);
 			if (bdev->recv_evt_len < 0) {
 				BTMTK_ERR("%s btmtk_cif_recv_evt failed!!", __func__);
-				ret = -1;
+				ret = -ERRNUM;
 				goto fw_assert;
 			}
 
@@ -3486,7 +3495,7 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 			BTMTK_INFO("%s compare fail\n", __func__);
 			BTMTK_INFO_RAW(event, event_len, "%s: event_need_compare:", __func__);
 			BTMTK_INFO_RAW(bdev->io_buf, bdev->recv_evt_len, "%s: RCV:", __func__);
-			ret = -1;
+			ret = -ERRNUM;
 		} else {
 			ret = 0;
 		}
@@ -3532,7 +3541,7 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 
 		if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE) {
 			BTMTK_ERR("%s wait expect event timeout!!", __func__);
-			ret = -1;
+			ret = -ERRNUM;
 			goto fw_assert;
 		}
 

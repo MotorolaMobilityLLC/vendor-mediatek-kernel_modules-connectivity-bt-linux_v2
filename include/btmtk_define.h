@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2021062402"
+#define VERSION "7.0.2021070501"
 #define SUBVER ":turnkey"
 
 #define ENABLESTP FALSE
@@ -326,6 +326,8 @@ struct bt_cfg_struct {
 #ifndef DEBUG_DUMP_TIME
 #define DEBUG_DUMP_TIME 0
 #endif
+
+#define ERRNUM 0xFF
 
 #if DEBUG_DUMP_TIME
 void btmtk_getUTCtime(struct rtc_time *tm, u32 *usec);

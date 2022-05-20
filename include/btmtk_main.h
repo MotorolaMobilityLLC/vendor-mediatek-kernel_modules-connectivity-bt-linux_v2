@@ -39,18 +39,6 @@
 
 #define HCI_TYPE_SIZE	1
 
-/* this for 7663 need download patch staus
- * 0:
- * patch download is not complete/BT get patch semaphore fail (WiFi get semaphore success)
- * 1:
- * patch download is complete
- * 2:
- * patch download is not complete/BT get patch semaphore success
- */
-#define MT766X_PATCH_IS_DOWNLOAD_BY_OTHER 0
-#define MT766X_PATCH_READY 1
-#define MT766X_PATCH_NEED_DOWNLOAD 2
-
 /* this for 79XX need download patch staus
  * 0:
  * patch download is not complete, BT driver need to download patch
@@ -655,14 +643,6 @@ static inline int is_mt7961(u32 chip_id)
 	return 0;
 }
 
-static inline int is_mt7663(u32 chip_id)
-{
-	chip_id &= 0xFFFF;
-	if (chip_id == 0x7663)
-		return 1;
-	return 0;
-}
-
 static inline int is_mt66xx(u32 chip_id)
 {
 	chip_id &= 0xFFFF;
@@ -683,8 +663,6 @@ int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_recv_iso(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_send_init_cmds(struct btmtk_dev *hdev);
 int btmtk_send_deinit_cmds(struct btmtk_dev *hdev);
-int btmtk_send_wmt_reset(struct btmtk_dev *hdev);
-int btmtk_load_rom_patch_766x(struct btmtk_dev *hdev);
 int btmtk_load_rom_patch(struct btmtk_dev *bdev);
 struct btmtk_dev *btmtk_get_dev(void);
 int btmtk_cap_init(struct btmtk_dev *bdev);
