@@ -39,7 +39,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.2000073101"
+#define VERSION "7.0.2000081001"
 #define SUBVER ":turnkey"
 
 
@@ -193,7 +193,7 @@ extern uint8_t btmtk_log_lvl;
 /* Define for WoBLE */
 #define BD_ADDRESS_SIZE 6
 #define WOBLE_SETTING_COUNT 10
-#define WMT_CMD_COUNT 255
+#define PHASE1_WMT_CMD_COUNT 255
 #define VENDOR_CMD_COUNT 255
 #define WOBLE_SETTING_FILE_NAME_7663 "woble_setting_7663.bin"
 #define WOBLE_SETTING_FILE_NAME_7961 "woble_setting_7961.bin"
@@ -214,7 +214,7 @@ extern uint8_t btmtk_log_lvl;
 #define BT_AUTO_PICUS_FILTER "PICUS_FILTER_COMMAND"
 #define BT_AUTO_PICUS_ENABLE "PICUS_ENABLE_COMMAND"
 #define BT_PICUS_TO_HOST "SUPPORT_PICUS_TO_HOST"
-#define BT_WMT_CMD "WMT_CMD"
+#define BT_PHASE1_WMT_CMD "PHASE1_WMT_CMD"
 #define BT_VENDOR_CMD "VENDOR_CMD"
 
 
@@ -252,7 +252,7 @@ struct bt_cfg_struct {
 	bool	support_picus_to_host;			/* support picus log to host (boots/bluedroid) */
 	int	dongle_reset_gpio_pin;		/* BT_DONGLE_RESET_GPIO_PIN number */
 	unsigned int	unify_woble_type;	/* 0: legacy. 1: waveform. 2: IR */
-	struct fw_cfg_struct wmt_cmd[WMT_CMD_COUNT];
+	struct fw_cfg_struct phase1_wmt_cmd[PHASE1_WMT_CMD_COUNT];
 	struct fw_cfg_struct vendor_cmd[VENDOR_CMD_COUNT];
 };
 

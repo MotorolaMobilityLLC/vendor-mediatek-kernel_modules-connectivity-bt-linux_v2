@@ -2861,7 +2861,7 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 				goto exit;
 			}
 		} else
-			BTMTK_ERR("%s invalid parameter!\n", __func__);
+			BTMTK_INFO("%s event maybe NULL, no need to compare event!\n", __func__);
 	} else {
 		if (event) {
 			if (event_len > EVENT_COMPARE_SIZE) {

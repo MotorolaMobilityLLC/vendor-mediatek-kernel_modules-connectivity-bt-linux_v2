@@ -118,7 +118,6 @@ static const struct btmtk_cif_state g_cif_state[] = {
 	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_FW_DUMP, BTMTK_STATE_FW_DUMP},
 };
 
-#if 1
 __weak int btmtk_cif_register(void)
 {
 	BTMTK_ERR("No cif register function");
@@ -136,7 +135,6 @@ __weak int btmtk_cif_send_calibration(struct btmtk_dev *bdev)
 	BTMTK_ERR("No cif btmtk_cif_send_calibration function");
 	return -1;
 }
-#endif
 
 static int btmtk_enter_standby(void);
 static int btmtk_send_hci_tci_set_sleep_cmd_766x(struct btmtk_dev *bdev);
@@ -542,7 +540,7 @@ void btmtk_free_setting_file(struct btmtk_dev *bdev)
 
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_filter, 1);
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_enable, 1);
-	btmtk_free_fw_cfg_struct(bdev->bt_cfg.wmt_cmd, WMT_CMD_COUNT);
+	btmtk_free_fw_cfg_struct(bdev->bt_cfg.phase1_wmt_cmd, PHASE1_WMT_CMD_COUNT);
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.vendor_cmd, VENDOR_CMD_COUNT);
 
 	if (bdev->bt_cfg.support_woble_by_eint) {
@@ -583,7 +581,7 @@ void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	bdev->bt_cfg.support_picus_to_host = 0;
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_filter, 1);
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_enable, 1);
-	btmtk_free_fw_cfg_struct(bdev->bt_cfg.wmt_cmd, WMT_CMD_COUNT);
+	btmtk_free_fw_cfg_struct(bdev->bt_cfg.phase1_wmt_cmd, PHASE1_WMT_CMD_COUNT);
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.vendor_cmd, VENDOR_CMD_COUNT);
 
 	BTMTK_INFO("%s end", __func__);
@@ -1997,32 +1995,15 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 
 		/*FW Download finished */
 		if (loop_count == section_num - 1) {
-/* need to remove check wifi dl patch success or not according to Jyun-ji's
- * comment, because bt driver do nothing when wifi dl patch failed
- */
-#if 1
-			if (patch_flag) {
-				mdelay(500);
-				patch_status = btmtk_send_wmt_download_cmd(bdev, pos, 0, event,
-							sizeof(event) - 1, sectionMap, 0, dma_flag, patch_flag);
-				if (patch_status == PATCH_READY)
-					BTMTK_INFO("%s: Wifi patch already download %d", __func__, patch_status);
-				else
-					BTMTK_ERR("%s: Wifi patch download failed!", __func__);
-			} else {
-#endif
-				if (dma_flag == PATCH_DOWNLOAD_USING_DMA) {
-					ret = btmtk_send_wmt_download_cmd(bdev, pos, 0, event,
-						sizeof(event) - 1, sectionMap, 3, dma_flag, patch_flag);
-					if (ret < 0) {
-						BTMTK_ERR("%s: send wmd dl cmd state 3 failed, terminate!", __func__);
-						goto err;
-					}
+			if (dma_flag == PATCH_DOWNLOAD_USING_DMA) {
+				ret = btmtk_send_wmt_download_cmd(bdev, pos, 0, event,
+					sizeof(event) - 1, sectionMap, 3, dma_flag, patch_flag);
+				if (ret < 0) {
+					BTMTK_ERR("%s: send wmd dl cmd state 3 failed, terminate!", __func__);
+					goto err;
 				}
-				BTMTK_INFO("%s: loading rom patch... Done", __func__);
-#if 1
 			}
-#endif
+			BTMTK_INFO("%s: loading rom patch... Done", __func__);
 		}
 next_section:
 		continue;
@@ -2907,7 +2888,8 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 				!memcmp(block_name, "RADIOOFF", sizeof("RADIOOFF")) ||
 				!memcmp(block_name, "RADIOON", sizeof("RADIOON")) ||
 				!memcmp(block_name, "APCF_RESUME", sizeof("APCF_RESUME")) ||
-				!memcmp(block_name, "VENDOR_CMD", sizeof("VENDOR_CMD"))) {
+				!memcmp(block_name, "VENDOR_CMD", sizeof("VENDOR_CMD")) ||
+				!memcmp(block_name, "PHASE1_WMT_CMD", sizeof("PHASE1_WMT_CMD"))) {
 				temp[0] = 0x01;
 				temp_len++;
 			} else if (!memcmp(block_name, "RADIOOFF_STATUS_EVENT", sizeof("RADIOOFF_STATUS_EVENT")) ||
@@ -3630,10 +3612,10 @@ static bool btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_PICUS_TO_HOST);
 	}
 
-	ret = btmtk_load_fw_cfg_setting(BT_WMT_CMD, bt_cfg_content->wmt_cmd,
-				WMT_CMD_COUNT, searchcontent, FW_CFG_INX_LEN_3);
+	ret = btmtk_load_fw_cfg_setting(BT_PHASE1_WMT_CMD, bt_cfg_content->phase1_wmt_cmd,
+				PHASE1_WMT_CMD_COUNT, searchcontent, FW_CFG_INX_LEN_3);
 	if (ret)
-		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_WMT_CMD);
+		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_PHASE1_WMT_CMD);
 
 	ret = btmtk_load_fw_cfg_setting(BT_VENDOR_CMD, bt_cfg_content->vendor_cmd,
 				VENDOR_CMD_COUNT, searchcontent, FW_CFG_INX_LEN_3);
@@ -3837,6 +3819,36 @@ exit:
 	return ret;
 }
 
+static int btmtk_send_phase1_wmt_cfg(struct btmtk_dev *bdev)
+{
+	int ret = 0;
+	int index = 0;
+
+	BTMTK_INFO("%s", __func__);
+
+	for (index = 0; index < PHASE1_WMT_CMD_COUNT; index++) {
+		if (bdev->bt_cfg.phase1_wmt_cmd[index].content &&
+			bdev->bt_cfg.phase1_wmt_cmd[index].length) {
+			ret = btmtk_main_send_cmd(bdev, bdev->bt_cfg.phase1_wmt_cmd[index].content,
+					bdev->bt_cfg.phase1_wmt_cmd[index].length,
+					NULL, 0,
+					20, 20, BTMTK_TX_CMD_FROM_DRV);
+			if (ret < 0) {
+				BTMTK_ERR("%s: Send phase1 wmt cmd failed(%d)! Index: %d",
+					__func__, ret, index);
+				goto exit;
+			}
+
+			BTMTK_INFO_RAW(bdev->bt_cfg.phase1_wmt_cmd[index].content,
+				bdev->bt_cfg.phase1_wmt_cmd[index].length, "send wmt cmd");
+		}
+	}
+
+exit:
+	BTMTK_INFO("%s exit", __func__);
+	return ret;
+}
+
 int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 {
 	int ret = -1;
@@ -3866,6 +3878,13 @@ int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 			/* TODO */
 			/* btmtk_usb_toggle_rst_pin(); */
 		}
+		goto exit;
+	}
+
+	ret = btmtk_send_phase1_wmt_cfg(bdev);
+	if (ret < 0) {
+		BTMTK_ERR("btmtk_send_wmt_cfg failed");
+		btmtk_send_assert_cmd(bdev);
 		goto exit;
 	}
 
