@@ -334,6 +334,14 @@ struct _Section_Map {
 	.maxlen = HCI_MAX_EVENT_SIZE
 
 
+static inline int is_mt7922(u32 chip_id)
+{
+	chip_id &= 0xFFFF;
+	if (chip_id == 0x7922)
+		return 1;
+	return 0;
+}
+
 static inline int is_mt7961(u32 chip_id)
 {
 	chip_id &= 0xFFFF;
@@ -353,7 +361,7 @@ static inline int is_mt7663(u32 chip_id)
 static inline int is_support_unify_woble(struct btmtk_dev *bdev)
 {
 	if (bdev->bt_cfg.support_unify_woble) {
-		if (is_mt7961(bdev->chip_id) || is_mt7663(bdev->chip_id))
+		if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id) || is_mt7663(bdev->chip_id))
 			return 1;
 		else
 			return 0;

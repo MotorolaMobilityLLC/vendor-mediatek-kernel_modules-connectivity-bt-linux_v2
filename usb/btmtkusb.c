@@ -41,6 +41,8 @@ static const struct usb_device_id btusb_table[] = {
 	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x7915, 0xe0, 0x01, 0x01) },
 	/* Mediatek MT7663 */
 	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x7663, 0xe0, 0x01, 0x01) },
+	/* Mediatek MT7922 */
+	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x7922, 0xe0, 0x01, 0x01) },
 
 	{ }	/* Terminating entry */
 };
@@ -962,7 +964,7 @@ static int btusb_open(struct hci_dev *hdev)
 
 	ifnum_base = bdev->intf->cur_altsetting->desc.bInterfaceNumber;
 
-	if (is_mt7961(bdev->chip_id)) {
+	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
 		BTMTK_INFO("%s 7961 submit urb\n", __func__);
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
 			if (bdev->reset_intr_ep) {
@@ -1388,12 +1390,13 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		}
 
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
-			if (is_mt7961(bdev->chip_id) && bdev->bulk_cmd_tx_ep)
+			if ((is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) &&
+					bdev->bulk_cmd_tx_ep)
 				urb = alloc_bulk_cmd_urb(hdev, skb);
 			else
 				urb = alloc_ctrl_urb(hdev, skb);
 		} else if (BTMTK_IS_BT_1_INTF(ifnum_base)) {
-			if (is_mt7961(bdev->chip_id)) {
+			if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
 				if (bdev->bulk_cmd_tx_ep) {
 					UNUSED(alloc_ctrl_bgf1_urb);
 					urb = alloc_bulk_cmd_urb(hdev, skb);
@@ -1886,7 +1889,7 @@ static int btusb_probe(struct usb_interface *intf,
 
 	btmtk_load_bt_cfg(bdev->bt_cfg_file_name, &bdev->udev->dev, bdev);
 
-	if (BTMTK_IS_BT_0_INTF(ifnum_base))
+	if (BTMTK_IS_BT_0_INTF(ifnum_base) && !(is_mt7922(bdev->chip_id)))
 		err = btmtk_load_rom_patch(bdev);
 	else
 		BTMTK_INFO("interface = %d, don't download patch", ifnum_base);

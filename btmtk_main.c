@@ -1670,7 +1670,7 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
 
 	patchHdr = (struct _PATCH_HEADER *)fwbuf;
 
-	if (is_mt7961(bdev->chip_id))
+	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		globalDesrc = (struct _Global_Descr *)(fwbuf + FW_ROM_PATCH_HEADER_SIZE);
 
 	BTMTK_INFO("[btmtk] =============== Patch Info ==============");
@@ -1708,7 +1708,7 @@ static void btmtk_print_wifi_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
 
 	patchHdr = (struct _PATCH_HEADER *)fwbuf;
 
-	if (is_mt7961(bdev->chip_id))
+	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		globalDesrc = (struct _Global_Descr *)(fwbuf + FW_ROM_PATCH_HEADER_SIZE);
 
 	BTMTK_INFO("[btmtk] =============== Wifi Patch Info ==============");
@@ -2251,7 +2251,7 @@ int btmtk_load_rom_patch(struct btmtk_dev *bdev)
 
 	if (is_mt7663(bdev->chip_id))
 		err = btmtk_load_rom_patch_766x(bdev);
-	else if (is_mt7961(bdev->chip_id)) {
+	else if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
 		err = btmtk_load_rom_patch_79xx(bdev, BT_DOWNLOAD);
 		if (err < 0) {
 			BTMTK_ERR("%s: btmtk_load_rom_patch_79xx bt patch failed!", __func__);
@@ -2547,7 +2547,7 @@ int btmtk_picus_enable(struct btmtk_dev *bdev)
 	}
 	BTMTK_INFO_RAW(enable_cmd, enable_len, "%s: Send CMD:", __func__);
 
-	if (is_mt7961(bdev->chip_id))
+	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		ret = btmtk_main_send_cmd(bdev, enable_cmd, enable_len,
 			enable_event, sizeof(enable_event), 10, 10,
 			BTMTK_EP_TYPE_OUT_OTHER);
@@ -2567,7 +2567,7 @@ int btmtk_picus_disable(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s\n", __func__);
 
-	if (is_mt7961(bdev->chip_id))
+	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		ret = btmtk_main_send_cmd(bdev, dft_disable_cmd, sizeof(dft_disable_cmd),
 			dft_disable_event, sizeof(dft_disable_event), 10, 10,
 			BTMTK_EP_TYPE_OUT_OTHER);
@@ -2590,7 +2590,7 @@ static int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 		return ret;
 	}
 
-	if (is_mt7961(bdev->chip_id))
+	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		ret = btmtk_main_send_cmd(bdev, reserve_apcf_cmd, sizeof(reserve_apcf_cmd),
 			reserve_apcf_event, sizeof(reserve_apcf_event), 0, 0,
 			BTMTK_EP_TYPE_OUT_OTHER);
@@ -4510,7 +4510,7 @@ void btmtk_cap_init(struct btmtk_dev *bdev)
 	 */
 
 	btmtk_cif_read_register(bdev, CHIP_ID, &bdev->chip_id);
-	if (is_mt7961(bdev->chip_id)) {
+	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
 		btmtk_cif_read_register(bdev, FLAVOR, &bdev->flavor);
 		btmtk_cif_read_register(bdev, FW_VERSION, &bdev->fw_version);
 		goto exit;
@@ -4553,7 +4553,7 @@ exit:
 		BTMTK_INFO("%s: woble setting file name is %s", __func__, WOBLE_SETTING_FILE_NAME_7663);
 	}
 
-	if (is_mt7961(bdev->chip_id)) {
+	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
 		memcpy(bdev->woble_setting_file_name, WOBLE_SETTING_FILE_NAME_7961,
 			sizeof(WOBLE_SETTING_FILE_NAME_7961));
 		BTMTK_INFO("%s: woble setting file name is %s", __func__, WOBLE_SETTING_FILE_NAME_7961);
