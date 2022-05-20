@@ -242,6 +242,17 @@
 #define HCI_RESET_CMD_LEN 4
 #define READ_ISO_PACKET_SIZE_CMD_HDR_LEN 4
 
+#define AUDIO_SETTING_CMD_LEN 8
+#define AUDIO_SETTING_EVT_LEN 7
+
+#define READ_PINMUX_CMD_LEN 8
+#define READ_PINMUX_EVT_CMP_LEN 6
+#define READ_PINMUX_EVT_REAL_LEN 11
+
+#define WRITE_PINMUX_CMD_LEN 12
+#define WRITE_PINMUX_EVT_LEN 7
+
+#define PINMUX_REG_NUM 2
 enum {
 	RES_1 = 0,
 	RES_DOT_5,
@@ -510,6 +521,7 @@ struct btmtk_dev {
 	unsigned char		*country_file_name;
 	u8 opcode_usr[2];
 	u8 debug_type;
+	int get_hci_reset;
 };
 
 typedef int (*cif_bt_init_ptr)(void);

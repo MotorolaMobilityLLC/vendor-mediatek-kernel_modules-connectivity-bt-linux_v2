@@ -1522,10 +1522,8 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			}
 			return 0;
 		}
-
 		return 1;
 	}
-
 	return 0;
 }
 
@@ -2335,8 +2333,7 @@ static void btmtk_sdio_stop_main_thread(struct btmtk_sdio_dev *cif_dev)
 		kthread_stop(cif_dev->sdio_thread.task);
 		wake_up_interruptible(&cif_dev->sdio_thread.wait_q);
 
-		while (atomic_read(&cif_dev->sdio_thread.thread_status))
-		{
+		while (atomic_read(&cif_dev->sdio_thread.thread_status)) {
 			BTMTK_INFO("wait btmtk_sdio_main_thread stop");
 			msleep(100);
 		}

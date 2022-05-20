@@ -693,6 +693,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 	static u8 fwlog_picus_blocking_warn;
 	static u8 fwlog_fwdump_blocking_warn;
 	int state = BTMTK_STATE_INIT;
+	u8 hci_reset_event[HCI_RESET_EVT_LEN] = { 0x04, 0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00 };
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
@@ -783,6 +784,9 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		bdev->opcode_usr[0] = 0;
 		bdev->opcode_usr[1] = 0;
 		return 1;
+	} else if (memcmp(skb->data, &hci_reset_event[1], HCI_RESET_EVT_LEN - 1) == 0) {
+		BTMTK_INFO("%s: Get RESET_EVENT", __func__);
+		bdev->get_hci_reset = 1;
 	}
 	return 0;
 }

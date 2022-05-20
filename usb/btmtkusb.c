@@ -3546,6 +3546,12 @@ int btmtk_usb_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			if (skb->data[0] == WOBLE_DEBUG_EVT_TYPE)
 				BTMTK_INFO_RAW(skb->data, skb->len, "%s: wobx debug log:", __func__);
 
+			/* If driver need to check result from skb, it can get from io_buf
+			 * Such as chip_id, fw_version, etc.
+			 */
+			bdev->io_buf[0] = bt_cb(skb)->pkt_type;
+			memcpy(&bdev->io_buf[1], skb->data, skb->len);
+
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 			BTMTK_INFO("%s, compare success", __func__);
 		} else {

@@ -339,8 +339,15 @@ void *btmtk_kallsyms_lookup_name(const char *name)
 {
 	void *addr = __symbol_get(name);
 
-	if (addr)
+	if (addr) {
+#ifdef CONFIG_ARM
+#ifdef CONFIG_THUMB2_KERNEL
+		/* set bit 0 in address for thumb mode */
+		addr |= 1;
+#endif
+#endif
 		__symbol_put(name);
+	}
 	return addr;
 }
 
@@ -1020,6 +1027,140 @@ int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count)
 	return 0;
 }
 
+static int btmtk_set_audio_slave(struct btmtk_dev *bdev)
+{
+	int ret = 0;
+	u8 audio_cmd[AUDIO_SETTING_CMD_LEN] = { 0x01, 0x72, 0xFC, 0x04, 0x49, 0x00, 0x80, 0x00 };
+	u8 audio_event[AUDIO_SETTING_EVT_LEN] = { 0x04, 0x0E, 0x04, 0x01, 0x72, 0xFC, 0x00 };
+
+	BTMTK_INFO("%s enter", __func__);
+	ret = btmtk_main_send_cmd(bdev, audio_cmd, AUDIO_SETTING_CMD_LEN,
+			audio_event, AUDIO_SETTING_EVT_LEN, 0, 0, BTMTK_TX_PKT_FROM_HOST);
+	if (ret < 0)
+		BTMTK_ERR("%s: failed(%d)", __func__, ret);
+
+	BTMTK_INFO("%s exit", __func__);
+	return ret;
+}
+
+static int btmtk_read_pin_mux_setting(struct btmtk_dev *bdev, const uint8_t *cmd,
+		const int cmd_len, const uint8_t *event, const int event_len, u32 *value)
+{
+	int ret = 0;
+
+	BTMTK_INFO("%s enter", __func__);
+	ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
+			event, event_len, 0, 0, BTMTK_TX_PKT_FROM_HOST);
+	if (ret < 0)
+		BTMTK_ERR("%s: failed(%d)", __func__, ret);
+
+	*value = (bdev->io_buf[READ_PINMUX_EVT_REAL_LEN - 1] << 24) +
+			(bdev->io_buf[READ_PINMUX_EVT_REAL_LEN - 2] << 16) +
+			(bdev->io_buf[READ_PINMUX_EVT_REAL_LEN - 3] << 8) +
+			bdev->io_buf[READ_PINMUX_EVT_REAL_LEN - 4];
+	BTMTK_INFO("%s, value=0x%08x", __func__, *value);
+	return ret;
+}
+
+static int btmtk_write_pin_mux_setting(struct btmtk_dev *bdev, uint8_t *cmd,
+		int cmd_len, const uint8_t *event, const int event_len, u32 value)
+{
+	int ret = 0;
+
+	BTMTK_INFO("%s begin, value = 0x%08x", __func__, value);
+
+	cmd[cmd_len - 4] = (value & 0x000000FF);
+	cmd[cmd_len - 3] = ((value & 0x0000FF00) >> 8);
+	cmd[cmd_len - 2] = ((value & 0x00FF0000) >> 16);
+	cmd[cmd_len - 1] = ((value & 0xFF000000) >> 24);
+
+	ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
+			event, event_len, 0, 0, BTMTK_TX_PKT_FROM_HOST);
+	if (ret < 0)
+		BTMTK_ERR("%s: failed(%d)", __func__, ret);
+
+	BTMTK_INFO("%s exit", __func__);
+	return ret;
+}
+
+static int btmtk_set_audio_pin_mux(struct btmtk_dev *bdev)
+{
+	int ret = 0;
+	unsigned int i = 0;
+	u32 pinmux = 0;
+	u8 read_pinmux_cmd[READ_PINMUX_CMD_LEN] = { 0x01, 0xD1, 0xFC, 0x04, 0x50, 0x50, 0x00, 0x70 };
+	u8 read_pinmux_event[READ_PINMUX_EVT_CMP_LEN] = { 0x04, 0x0E, 0x08, 0x01, 0xD1, 0xFC };
+	u8 write_pinmux_cmd[WRITE_PINMUX_CMD_LEN] = { 0x01, 0xD0, 0xFC, 0x08, 0x50, 0x50, 0x00, 0x70,
+							0x00, 0x10, 0x11, 0x01 };
+	u8 write_pinmux_event[WRITE_PINMUX_EVT_LEN] = { 0x04, 0x0E, 0x04, 0x01, 0xD0, 0xFC, 0x00 };
+
+	for (i = 0; i < PINMUX_REG_NUM; i++) {
+		pinmux = 0;
+		if (i == PINMUX_REG_NUM - 1) {
+			read_pinmux_cmd[READ_PINMUX_CMD_LEN - 4] = 0x54;
+			write_pinmux_cmd[WRITE_PINMUX_CMD_LEN - 8] = 0x54;
+		}
+		ret = btmtk_read_pin_mux_setting(bdev, read_pinmux_cmd, READ_PINMUX_CMD_LEN,
+			read_pinmux_event, READ_PINMUX_EVT_CMP_LEN, &pinmux);
+		if (ret) {
+			BTMTK_ERR("%s, btmtk_read_pin_mux_setting error(%d)", __func__, ret);
+			goto exit;
+		}
+		if (write_pinmux_cmd[WRITE_PINMUX_CMD_LEN - 8] == 0x50) {
+			pinmux &= 0x00FFFFFF;
+			pinmux |= 0x11000000;
+		} else if (write_pinmux_cmd[WRITE_PINMUX_CMD_LEN - 8] == 0x54) {
+			pinmux &= 0xFFFFF0F0;
+			pinmux |= 0x00000101;
+		} else {
+			BTMTK_ERR("%s, pinmux register is error, write_pinmux_cmd[%d] = 0x%02x",
+					__func__, WRITE_PINMUX_CMD_LEN - 8,
+					write_pinmux_cmd[WRITE_PINMUX_CMD_LEN - 8]);
+			ret = -1;
+			goto exit;
+		}
+
+		ret = btmtk_write_pin_mux_setting(bdev, write_pinmux_cmd, WRITE_PINMUX_CMD_LEN,
+			write_pinmux_event, WRITE_PINMUX_EVT_LEN, pinmux);
+
+		if (ret) {
+			BTMTK_ERR("%s, btmtk_write_pin_mux_setting error(%d)", __func__, ret);
+			goto exit;
+		}
+
+		pinmux = 0;
+		ret = btmtk_read_pin_mux_setting(bdev, read_pinmux_cmd, READ_PINMUX_CMD_LEN,
+			read_pinmux_event, READ_PINMUX_EVT_CMP_LEN, &pinmux);
+		if (ret) {
+			BTMTK_ERR("%s, btmtk_read_pin_mux_setting error(%d)", __func__, ret);
+			goto exit;
+		}
+		BTMTK_INFO("%s, confirm pinmux register 0x%02x pinmux 0x%08x", __func__,
+				write_pinmux_cmd[4], pinmux);
+	}
+
+exit:
+	return ret;
+}
+
+static int btmtk_set_audio_setting(struct btmtk_dev *bdev)
+{
+	int ret = 0;
+
+	ret = btmtk_set_audio_slave(bdev);
+	if (ret) {
+		BTMTK_ERR("%s, btmtk_sdio_set_audio_slave error(%d)", __func__, ret);
+		return ret;
+	}
+
+	ret = btmtk_set_audio_pin_mux(bdev);
+	if (ret) {
+		BTMTK_ERR("%s, btmtk_sdio_set_audio_pin_mux error(%d)", __func__, ret);
+		return ret;
+	}
+
+	return ret;
+}
 
 int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb)
 {
@@ -3389,6 +3530,7 @@ exit:
 err:
 	main_info.reset_stack_flag = HW_ERR_NONE;
 	bdev->debug_type = DEBUG_SOP_NONE;
+	bdev->get_hci_reset = 0;
 
 	BTMTK_INFO("%s: end, reset_stack_flag = %d", __func__, main_info.reset_stack_flag);
 	return 0;
@@ -3591,6 +3733,10 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		}
 
 		if (hci_skb_pkt_type(skb) == HCI_COMMAND_PKT) {
+			if (bdev->get_hci_reset == 1) {
+				btmtk_set_audio_setting(bdev);
+				bdev->get_hci_reset = 0;
+			}
 			/* save hci cmd pkt for debug */
 			btmtk_hci_snoop_save_cmd(skb->len, skb->data);
 			if (skb->len == FW_COREDUMP_CMD_LEN &&
@@ -3718,6 +3864,7 @@ void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 	}
 
 	bdev->chip_reset = 0;
+	bdev->get_hci_reset = 0;
 	BTMTK_INFO("%s End", __func__);
 }
 
@@ -3768,6 +3915,8 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 		err = -ENOMEM;
 		goto err0;
 	}
+
+	bdev->get_hci_reset = 0;
 
 	BTMTK_INFO("%s done", __func__);
 	return 0;
