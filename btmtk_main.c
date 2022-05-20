@@ -3151,6 +3151,11 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 	memset(temp, 0, TEMP_LEN);
 	memset(number, 0, CHAR2HEX_SIZE + 1);
 
+	if (searchcontent == NULL) {
+		BTMTK_ERR("%s: Searchcontent is NULL", __func__);
+		return -1;
+	}
+
 	/* search block name */
 	for (i = 0; i < counter; i++) {
 		temp_len = 0;
@@ -3166,6 +3171,10 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 			memset(temp, 0, TEMP_LEN);
 			search_result = strstr(search_result, "0x");
 			/* find next line as end of this command line, if NULL means last line */
+			if (search_result == NULL) {
+				BTMTK_ERR("%s: Search_result is NULL", __func__);
+				continue;
+			}
 			next_block = strstr(search_result, ":");
 
 			/* Add HCI packet type to front of each command/event */
@@ -3187,6 +3196,11 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 
 			do {
 				search_end = strstr(search_result, ",");
+				if (search_end == NULL) {
+					BTMTK_ERR("%s: Search_end is NULL", __func__);
+					break;
+				}
+
 				if (search_end - search_result != CHAR2HEX_SIZE) {
 					BTMTK_ERR("%s: Incorrect Format in %s", __func__, search);
 					break;
@@ -5385,6 +5399,7 @@ int btmtk_register_hci_device(struct btmtk_dev *bdev)
 {
 	struct hci_dev *hdev;
 	int err = 0;
+	int ret = 0;
 
 	hdev = bdev->hdev;
 
@@ -5403,10 +5418,15 @@ int btmtk_register_hci_device(struct btmtk_dev *bdev)
 
 #else
 #if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
-		test_and_clear_bit(HCI_SETUP, &hdev->dev_flags);
+		ret = test_and_clear_bit(HCI_SETUP, &hdev->dev_flags);
 #else
-		hci_dev_test_and_clear_flag(hdev, HCI_SETUP);
+		ret = hci_dev_test_and_clear_flag(hdev, HCI_SETUP);
 #endif
+		if (ret)
+			BTMTK_INFO("%s, the bit value returned is %d", __func__, ret);
+		else
+			BTMTK_INFO("%s, the bit value returned is %d", __func__, ret);
+
 #endif /* CFG_SUPPORT_BLUEZ */
 
 exit:
