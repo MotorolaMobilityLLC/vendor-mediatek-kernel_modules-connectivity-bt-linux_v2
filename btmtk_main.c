@@ -55,10 +55,7 @@ static struct btmtk_dev **g_bdev;
 /* For fwlog dev node setting */
 static struct btmtk_fops_fwlog *g_fwlog;
 
-const u8 RESET_EVENT[] = { 0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00 };
-const u8 READ_ISO_PACKET_SIZE_CMD[] = { 0x01, 0x98, 0xFD, 0x02 };
-
-u8 wmt_over_hci_header[] = { 0x01, 0x6F, 0xFC};
+u8 wmt_over_hci_header[WMT_OVER_HCI_HEADER_SIZE] = {0x01, 0x6F, 0xFC};
 
 /*btmtk main information*/
 static struct btmtk_main_info main_info;
@@ -182,12 +179,12 @@ void btmtk_fwdump_wake_unlock(struct btmtk_dev *bdev)
 /*get 1 byte only*/
 int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value)
 {
-	uint8_t efuse_r[] = {0x01, 0x6F, 0xFC, 0x0E,
+	uint8_t efuse_r[READ_EFUSE_CMD_LEN] = {0x01, 0x6F, 0xFC, 0x0E,
 				0x01, 0x0D, 0x0A, 0x00, 0x02, 0x04,
 				0x00, 0x00, 0x00, 0x00,
 				0x00, 0x00, 0x00, 0x00};/*4 sub block number(sub block 0~3)*/
 
-	uint8_t efuse_r_event[] = {0x04, 0xE4, 0x1E, 0x02, 0x0D, 0x1A, 0x00, 02, 04};
+	uint8_t efuse_r_event[READ_EFUSE_EVT_HDR_LEN] = {0x04, 0xE4, 0x1E, 0x02, 0x0D, 0x1A, 0x00, 02, 04};
 	/*check event
 	 *04 E4 LEN(1B) 02 0D LEN(2Byte) 02 04 ADDR(2Byte) VALUE(4B) ADDR(2Byte) VALUE(4Byte)
 	 *ADDR(2Byte) VALUE(4B)  ADDR(2Byte) VALUE(4Byte)
@@ -197,35 +194,35 @@ int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value)
 	uint16_t sub_block = (addr / 16) * 4;
 	uint8_t temp = 0;
 
-	efuse_r[10] = sub_block & 0xFF;
-	efuse_r[11] = (sub_block & 0xFF00) >> 8;
-	efuse_r[12] = (sub_block + 1) & 0xFF;
-	efuse_r[13] = ((sub_block + 1) & 0xFF00) >> 8;
-	efuse_r[14] = (sub_block + 2) & 0xFF;
-	efuse_r[15] = ((sub_block + 2) & 0xFF00) >> 8;
-	efuse_r[16] = (sub_block + 3) & 0xFF;
-	efuse_r[17] = ((sub_block + 3) & 0xFF00) >> 8;
+	efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET] = sub_block & 0xFF;
+	efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET + 1] = (sub_block & 0xFF00) >> 8;
+	efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET + 2] = (sub_block + 1) & 0xFF;
+	efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET + 3] = ((sub_block + 1) & 0xFF00) >> 8;
+	efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET + 4] = (sub_block + 2) & 0xFF;
+	efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET + 5] = ((sub_block + 2) & 0xFF00) >> 8;
+	efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET + 6] = (sub_block + 3) & 0xFF;
+	efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET + 7] = ((sub_block + 3) & 0xFF00) >> 8;
 
 	ret = btmtk_main_send_cmd(bdev,
-			efuse_r, sizeof(efuse_r),
-			efuse_r_event, sizeof(efuse_r_event),
+			efuse_r, READ_EFUSE_CMD_LEN,
+			efuse_r_event, READ_EFUSE_EVT_HDR_LEN,
 			0, 0, BTMTK_TX_CMD_FROM_DRV);
 	if (ret) {
 		BTMTK_WARN("btmtk_main_send_cmd error");
 		return ret;
 	}
 
-	if (memcmp(bdev->io_buf, efuse_r_event, sizeof(efuse_r_event)) == 0) {
+	if (memcmp(bdev->io_buf, efuse_r_event, READ_EFUSE_EVT_HDR_LEN) == 0) {
 		/*compare rxbuf format ok, compare addr*/
 		BTMTK_DBG("compare rxbuf format ok");
-		if (efuse_r[10] == bdev->io_buf[9] &&
-			efuse_r[11] == bdev->io_buf[10] &&
-			efuse_r[12] == bdev->io_buf[15] &&
-			efuse_r[13] == bdev->io_buf[16] &&
-			efuse_r[14] == bdev->io_buf[21] &&
-			efuse_r[15] == bdev->io_buf[22] &&
-			efuse_r[16] == bdev->io_buf[27] &&
-			efuse_r[17] == bdev->io_buf[28]) {
+		if (efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET] == bdev->io_buf[9] &&
+			efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET + 1] == bdev->io_buf[10] &&
+			efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET + 2] == bdev->io_buf[15] &&
+			efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET + 3] == bdev->io_buf[16] &&
+			efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET + 4] == bdev->io_buf[21] &&
+			efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET + 5] == bdev->io_buf[22] &&
+			efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET + 6] == bdev->io_buf[27] &&
+			efuse_r[READ_EFUSE_CMD_BLOCK_OFFSET + 7] == bdev->io_buf[28]) {
 
 			BTMTK_DBG("address compare ok");
 			/*Get value*/
@@ -432,7 +429,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 	/* For log level, EX: echo log_lvl=1 > /dev/stpbtfwlog */
 	if (strncmp(i_fwlog_buf, "log_lvl=", strlen("log_lvl=")) == 0) {
-		u8 val = *(i_fwlog_buf + strlen("log_lvl=")) - 48;
+		u8 val = *(i_fwlog_buf + strlen("log_lvl=")) - '0';
 
 		if (val > BTMTK_LOG_LVL_MAX || val <= 0) {
 			BTMTK_ERR("Got incorrect value for log level(%d)", val);
@@ -461,7 +458,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 	/* For bperf, EX: echo bperf=1 > /dev/stpbtfwlog */
 	if (strncmp(i_fwlog_buf, "bperf=", strlen("bperf=")) == 0) {
-		u8 val = *(i_fwlog_buf + strlen("bperf=")) - 48;
+		u8 val = *(i_fwlog_buf + strlen("bperf=")) - '0';
 
 		btmtk_bluetooth_kpi = val;
 		BT_INFO("%s: set bluetooth KPI feature(bperf) to %d", __func__, btmtk_bluetooth_kpi);
@@ -509,7 +506,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
-	skb = alloc_skb(sizeof(buf) + BT_SKB_RESERVE, GFP_ATOMIC);
+	skb = alloc_skb(count + BT_SKB_RESERVE, GFP_ATOMIC);
 	if (!skb) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		ret = -ENOMEM;
@@ -865,7 +862,7 @@ void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
 	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
-	u8 separator_char[] = {0xA5, 0xA5};
+	u8 separator_char[SEPARATOR_LEN] = {0xA5, 0xA5};
 	u8 *copy_tail_buf;
 
 	if (buf && len > 0) {
@@ -886,10 +883,10 @@ void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf)
 		if (copy_tail_len > 0) {
 			copy_tail_buf = buf + len - copy_tail_len;
 			hci_cmd_len[hci_cmd_index] +=
-				(copy_tail_len + sizeof(separator_char)) & 0xff;
+				(copy_tail_len + SEPARATOR_LEN) & 0xff;
 			memcpy(hci_cmd_buf[hci_cmd_index] + copy_len, separator_char,
-				sizeof(separator_char));
-			memcpy(hci_cmd_buf[hci_cmd_index] + copy_len + sizeof(separator_char),
+				SEPARATOR_LEN);
+			memcpy(hci_cmd_buf[hci_cmd_index] + copy_len + SEPARATOR_LEN,
 				copy_tail_buf, copy_tail_len);
 		}
 
@@ -903,7 +900,7 @@ void btmtk_hci_snoop_save_adv_event(u32 len, u8 *buf)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
 	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
-	u8 separator_char[] = {0xA5, 0xA5};
+	u8 separator_char[SEPARATOR_LEN] = {0xA5, 0xA5};
 	u8 *copy_tail_buf;
 
 	if (buf && len > 0) {
@@ -924,10 +921,10 @@ void btmtk_hci_snoop_save_adv_event(u32 len, u8 *buf)
 		if (copy_tail_len > 0) {
 			copy_tail_buf = buf + len - copy_tail_len;
 			hci_adv_event_len[hci_adv_event_index] +=
-				(copy_tail_len + sizeof(separator_char)) & 0xff;
+				(copy_tail_len + SEPARATOR_LEN) & 0xff;
 			memcpy(hci_adv_event_buf[hci_adv_event_index] + copy_len, separator_char,
-				sizeof(separator_char));
-			memcpy(hci_adv_event_buf[hci_adv_event_index] + copy_len + sizeof(separator_char),
+				SEPARATOR_LEN);
+			memcpy(hci_adv_event_buf[hci_adv_event_index] + copy_len + SEPARATOR_LEN,
 				copy_tail_buf, copy_tail_len);
 		}
 
@@ -941,7 +938,7 @@ void btmtk_hci_snoop_save_event(u32 len, u8 *buf)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
 	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
-	u8 separator_char[] = {0xA5, 0xA5};
+	u8 separator_char[SEPARATOR_LEN] = {0xA5, 0xA5};
 	u8 *copy_tail_buf;
 
 	if (buf && len > 0) {
@@ -962,10 +959,10 @@ void btmtk_hci_snoop_save_event(u32 len, u8 *buf)
 		if (copy_tail_len > 0) {
 			copy_tail_buf = buf + len - copy_tail_len;
 			hci_event_len[hci_event_index] +=
-				(copy_tail_len + sizeof(separator_char)) & 0xff;
+				(copy_tail_len + SEPARATOR_LEN) & 0xff;
 			memcpy(hci_event_buf[hci_event_index] + copy_len, separator_char,
-				sizeof(separator_char));
-			memcpy(hci_event_buf[hci_event_index] + copy_len + sizeof(separator_char),
+				SEPARATOR_LEN);
+			memcpy(hci_event_buf[hci_event_index] + copy_len + SEPARATOR_LEN,
 				copy_tail_buf, copy_tail_len);
 		}
 
@@ -979,7 +976,7 @@ void btmtk_hci_snoop_save_acl(u32 len, u8 *buf)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
 	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
-	u8 separator_char[] = {0xA5, 0xA5};
+	u8 separator_char[SEPARATOR_LEN] = {0xA5, 0xA5};
 	u8 *copy_tail_buf;
 
 	if (buf && len > 0) {
@@ -999,10 +996,12 @@ void btmtk_hci_snoop_save_acl(u32 len, u8 *buf)
 		 */
 		if (copy_tail_len > 0) {
 			copy_tail_buf = buf + len - copy_tail_len;
-			hci_acl_len[hci_acl_index] += (copy_tail_len + sizeof(separator_char)) & 0xff;
-			memcpy(hci_acl_buf[hci_acl_index] + copy_len, separator_char,
-				sizeof(separator_char));
-			memcpy(hci_acl_buf[hci_acl_index] + copy_len + sizeof(separator_char),
+			hci_acl_len[hci_acl_index] +=
+				(copy_tail_len + SEPARATOR_LEN) & 0xff;
+			memcpy(hci_acl_buf[hci_acl_index] + copy_len,
+				separator_char,
+				SEPARATOR_LEN);
+			memcpy(hci_acl_buf[hci_acl_index] + copy_len + SEPARATOR_LEN,
 				copy_tail_buf, copy_tail_len);
 		}
 
@@ -1016,7 +1015,7 @@ void btmtk_hci_snoop_print(u32 len, const u8 *buf)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
 	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
-	u8 separator_char[] = {0xA5, 0xA5};
+	u8 separator_char[SEPARATOR_LEN] = {0xA5, 0xA5};
 	const u8 *copy_tail_buf;
 	u8 hci_snoop_buf[HCI_SNOOP_MAX_BUF_SIZE] = {0};
 	u16 hci_snoop_len = 0;
@@ -1036,9 +1035,10 @@ void btmtk_hci_snoop_print(u32 len, const u8 *buf)
 		 */
 		if (copy_tail_len > 0) {
 			copy_tail_buf = buf + len - copy_tail_len;
-			hci_snoop_len += (copy_tail_len + sizeof(separator_char)) & 0xff;
-			memcpy(hci_snoop_buf + copy_len, separator_char, sizeof(separator_char));
-			memcpy(hci_snoop_buf + copy_len + sizeof(separator_char),
+			hci_snoop_len += (copy_tail_len + SEPARATOR_LEN) & 0xff;
+			memcpy(hci_snoop_buf + copy_len,
+				separator_char, SEPARATOR_LEN);
+			memcpy(hci_snoop_buf + copy_len + SEPARATOR_LEN,
 				copy_tail_buf, copy_tail_len);
 		}
 
@@ -1097,9 +1097,8 @@ static int btmtk_reboot_notify(struct notifier_block *nb,
 					main_info.hif_hook.cif_mutex_lock(bdev);
 
 				ret = btmtk_send_deinit_cmds(bdev);
-				if (ret < 0) {
+				if (ret < 0)
 					BTMTK_ERR("%s, btmtk_send_deinit_cmds failed", __func__);
-				}
 #if 0
 				/* Flush RX works */
 				flush_work(&bdev->rx_work);
@@ -1392,7 +1391,7 @@ static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff
 {
 	struct mtk_stp_hdr *shdr;
 	int dlen, err = 0, type = 0;
-	u8 stp_crc[] = {0x00, 0x00};
+	u8 stp_crc[STP_CRC_LEN] = {0x00, 0x00};
 
 	if (unlikely(skb_headroom(skb) < sizeof(*shdr)) ||
 		(skb_tailroom(skb) < MTK_STP_TLR_SIZE)) {
@@ -1407,11 +1406,12 @@ static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff
 	shdr->prefix = 0x80;
 	shdr->dlen = cpu_to_be16((dlen & 0x0fff) | (type << 12));
 	shdr->cs = 0;
-	// Add the STP trailer
-	// kernel version > 4.20
-	// skb_put_zero(skb, MTK_STP_TLR_SIZE);
-	// kernel version < 4.20
-	skb_put(skb, sizeof(stp_crc));
+/*	Add the STP trailer
+ *	kernel version > 4.20
+ *	skb_put_zero(skb, MTK_STP_TLR_SIZE);
+ *	kernel version < 4.20
+ */
+	skb_put(skb, STP_CRC_LEN);
 
 	return skb;
 }
@@ -1552,6 +1552,7 @@ static int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 	static u8 fwlog_picus_blocking_warn;
 	static u8 fwlog_fwdump_blocking_warn;
 	int state = BTMTK_STATE_INIT;
+	u8 hci_reset_event[HCI_RESET_EVT_LEN] = { 0x04, 0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00 };
 
 	if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 			skb->data[0] == 0x6f &&
@@ -1639,7 +1640,7 @@ static int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 		bdev->opcode_usr[0] = 0;
 		bdev->opcode_usr[1] = 0;
 		return 1;
-	} else if (memcmp(skb->data, RESET_EVENT, sizeof(RESET_EVENT)) == 0) {
+	} else if (memcmp(skb->data, &hci_reset_event[1], HCI_RESET_EVT_LEN - 1) == 0) {
 		BTMTK_INFO("%s: Get RESET_EVENT", __func__);
 		/* Need confirm with Shawn */
 		/* if (bdev->bt_cfg.support_auto_picus == true) {
@@ -1695,7 +1696,7 @@ int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb)
 int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb)
 {
 	struct btmtk_dev *bdev = NULL;
-	//struct hci_event_hdr *hdr = (void *)skb->data;
+	/* struct hci_event_hdr *hdr = (void *)skb->data; */
 
 	if (hdev == NULL || skb == NULL) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
@@ -1753,7 +1754,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		goto exit;
 	}
 
-	if (memcmp(cmd, wmt_over_hci_header, sizeof(wmt_over_hci_header)) &&
+	if (memcmp(cmd, wmt_over_hci_header, WMT_OVER_HCI_HEADER_SIZE) &&
 		pkt_type != BTMTK_TX_ACL_FROM_DRV &&
 		bdev->power_state != BTMTK_DONGLE_STATE_POWER_ON) {
 		BTMTK_WARN("%s: chip power isn't on, ignore this command, state is %d",
@@ -1802,8 +1803,8 @@ exit:
 
 static int btmtk_check_need_load_rom_patch(struct btmtk_dev *bdev)
 {
-	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x17, 0x01, 0x00, 0x01 };
-	u8 event[] = { 0x04, 0xE4, 0x05, 0x02, 0x17, 0x01, 0x00, /* 0x02 */ };	/* event[6] is key */
+	u8 cmd[CHECK_LD_PATCH_CMD_LEN] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x17, 0x01, 0x00, 0x01 };
+	u8 event[CHECK_LD_PATCH_EVT_HDR_LEN] = { 0x04, 0xE4, 0x05, 0x02, 0x17, 0x01, 0x00, /* 0x02 */ };
 	int ret = -1;
 
 	if (!bdev) {
@@ -1812,14 +1813,16 @@ static int btmtk_check_need_load_rom_patch(struct btmtk_dev *bdev)
 		return ret;
 	}
 
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), DELAY_TIMES,
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+	ret = btmtk_main_send_cmd(bdev,
+			cmd, CHECK_LD_PATCH_CMD_LEN,
+			event, CHECK_LD_PATCH_EVT_HDR_LEN,
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 	/* can't get correct event */
 	if (ret < 0)
 		return PATCH_ERR;
 
-	if (bdev->recv_evt_len == sizeof(event))
-		return bdev->io_buf[6];
+	if (bdev->recv_evt_len == CHECK_LD_PATCH_EVT_HDR_LEN)
+		return bdev->io_buf[CHECK_LD_PATCH_EVT_RESULT_OFFSET];
 
 	return PATCH_ERR;
 }
@@ -1990,9 +1993,9 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 			return bdev->io_buf[PATCH_STATUS];
 
 		return PATCH_ERR;
-	} else
-		BTMTK_ERR("%s: fw state is error!", __func__);
+	}
 
+	BTMTK_ERR("%s: fw state is error!", __func__);
 	return ret;
 }
 
@@ -2077,11 +2080,11 @@ exit:
 void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev)
 {
 	struct sk_buff *skb = NULL;
-	u8 hwerr_event[] = { 0x04, 0x10, 0x01, 0xff };
+	u8 hwerr_event[HWERR_EVT_LEN] = { 0x04, 0x10, 0x01, 0xff };
 
 	BTMTK_ERR("%s reset_stack_flag = %d!!", __func__, main_info.reset_stack_flag);
 	if (main_info.reset_stack_flag) {
-		skb = alloc_skb(sizeof(hwerr_event) + BT_SKB_RESERVE, GFP_ATOMIC);
+		skb = alloc_skb(HWERR_EVT_LEN + BT_SKB_RESERVE, GFP_ATOMIC);
 		if (skb == NULL) {
 			BTMTK_ERR("%s allocate skb failed!!", __func__);
 		} else {
@@ -2089,7 +2092,7 @@ void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev)
 			skb->data[0] = hwerr_event[1];
 			skb->data[1] = hwerr_event[2];
 			skb->data[2] = main_info.reset_stack_flag;
-			skb->len = sizeof(hwerr_event) - 1;
+			skb->len = HWERR_EVT_LEN - 1;
 			BTMTK_DBG_RAW(skb->data, skb->len, "%s: hw err event:", __func__);
 			hci_recv_frame(bdev->hdev, skb);
 		}
@@ -2110,10 +2113,10 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 	u8 dma_flag = PATCH_DOWNLOAD_USING_WMT;
 	struct _Section_Map *sectionMap;
 	struct _Global_Descr *globalDescr;
-	u8 event[] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
+	u8 event[LD_PATCH_EVT_LEN] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
 #if LD_PATCH_TIME
 	struct timeval tv_start, tv_bgf, tv_ilm;
-	long sub_dma = 0, sub_all = 0;
+	long dlt_dma = 0, dlt_all = 0;
 
 	memset(&tv_start, 0, sizeof(tv_start));
 	memset(&tv_bgf, 0, sizeof(tv_bgf));
@@ -2168,7 +2171,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 			retry = 20;
 			do {
 				patch_status = btmtk_send_wmt_download_cmd(bdev, pos, 0,
-						event, sizeof(event) - 1, sectionMap, 0, dma_flag, patch_flag);
+						event, LD_PATCH_EVT_LEN - 1, sectionMap, 0, dma_flag, patch_flag);
 				BTMTK_INFO("%s: patch_status %d", __func__, patch_status);
 
 				if (patch_status > PATCH_READY || patch_status == PATCH_ERR) {
@@ -2204,7 +2207,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 			} else {
 				/* using legacy wmt cmd to download fw patch */
 				ret = btmtk_load_fw_patch_using_wmt_cmd(bdev, pos, fwbuf, event,
-						sizeof(event) - 1, dl_size, section_offset);
+						LD_PATCH_EVT_LEN - 1, dl_size, section_offset);
 				if (ret < 0) {
 					BTMTK_ERR("%s: btmtk_load_fw_patch_using_wmt_cmd failed!", __func__);
 					goto err;
@@ -2228,18 +2231,18 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 				do_gettimeofday(&tv_ilm);
 				if (tv_bgf.tv_sec != 0 || tv_bgf.tv_usec != 0) {
 					if (tv_ilm.tv_sec >= tv_bgf.tv_sec)
-						sub_dma = (tv_ilm.tv_sec - tv_bgf.tv_sec) * 1000;
+						dlt_dma = (tv_ilm.tv_sec - tv_bgf.tv_sec) * 1000;
 					else
-						sub_dma = (~(tv_bgf.tv_sec - tv_ilm.tv_sec) + 1) * 1000;
+						dlt_dma = (~(tv_bgf.tv_sec - tv_ilm.tv_sec) + 1) * 1000;
 
-					sub_dma += (tv_ilm.tv_usec - tv_bgf.tv_usec) / 1000;
+					dlt_dma += (tv_ilm.tv_usec - tv_bgf.tv_usec) / 1000;
 				}
 				if (tv_ilm.tv_sec >= tv_start.tv_sec)
-					sub_all = (tv_ilm.tv_sec - tv_start.tv_sec) * 1000;
+					dlt_all = (tv_ilm.tv_sec - tv_start.tv_sec) * 1000;
 				else
-					sub_all = (~(tv_start.tv_sec - tv_ilm.tv_sec) + 1) * 1000;
+					dlt_all = (~(tv_start.tv_sec - tv_ilm.tv_sec) + 1) * 1000;
 
-				sub_all += (tv_ilm.tv_usec - tv_start.tv_usec) / 1000;
+				dlt_all += (tv_ilm.tv_usec - tv_start.tv_usec) / 1000;
 
 				BTMTK_INFO("LD PATCH 1 tv_start: tv_sec:%d, tv_usec:%d.",
 					tv_start.tv_sec, tv_start.tv_usec);
@@ -2248,12 +2251,12 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 				BTMTK_INFO("LD PATCH 3 tv_ilm: tv_sec:%d, tv_usec:%d.",
 					tv_ilm.tv_sec, tv_ilm.tv_usec);
 
-				if (sub_dma != 0)
+				if (dlt_dma != 0)
 					BTMTK_INFO("LD PATCH time: ILM_DMA:%dms, ALL:%dms.",
-						sub_dma, sub_all);
+						dlt_dma, dlt_all);
 				else
-					BTMTK_INFO("LD PATCH time: ALL:%dms.",
-						sub_all);
+					BTMTK_INFO("LD PATCH time: ILM_DMA:%dms.",
+						dlt_all);
 			}
 		}
 #endif
@@ -2334,7 +2337,7 @@ int btmtk_load_rom_patch_766x(struct btmtk_dev *bdev)
 	int patch_status = 0;
 	int retry = 20;
 	u8 *pos = NULL;
-	u8 event[] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00};
+	u8 event[LD_PATCH_EVT_LEN] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00};
 	const struct firmware *fw_firmware = NULL;
 	u8 *rom_patch = NULL;
 	unsigned int rom_patch_len = 0;
@@ -2396,7 +2399,7 @@ int btmtk_load_rom_patch_766x(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: loading rom patch...\n", __func__);
 	BTMTK_INFO("%s: patch_len = %d\n", __func__, patch_len);
 	ret = btmtk_load_fw_patch_using_wmt_cmd(bdev, pos, rom_patch, event,
-			sizeof(event) - 1, patch_len, PATCH_INFO_SIZE);
+			LD_PATCH_EVT_LEN - 1, patch_len, PATCH_INFO_SIZE);
 	if (ret < 0) {
 		BTMTK_ERR("%s, btmtk_send_fw_rom_patch_766x failed!", __func__);
 		goto err0;
@@ -2564,8 +2567,8 @@ static int btmtk_calibration_flow(struct btmtk_dev *bdev)
 
 static int btmtk_send_hci_reset_cmd(struct btmtk_dev *bdev)
 {
-	u8 cmd[] = { 0x01, 0x03, 0x0C, 0x00 };
-	u8 event[] = { 0x04, 0x0E, 0x04, 0x01, 0x03, 0x0C, 0x00 };
+	u8 cmd[HCI_RESET_CMD_LEN] = { 0x01, 0x03, 0x0C, 0x00 };
+	u8 event[HCI_RESET_EVT_LEN] = { 0x04, 0x0E, 0x04, 0x01, 0x03, 0x0C, 0x00 };
 	int ret = -1;	/* if successful, 0 */
 
 	if (!bdev) {
@@ -2573,8 +2576,10 @@ static int btmtk_send_hci_reset_cmd(struct btmtk_dev *bdev)
 		return ret;
 	}
 
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 0, 0,
-			BTMTK_TX_PKT_FROM_HOST);
+	ret = btmtk_main_send_cmd(bdev,
+			cmd, HCI_RESET_CMD_LEN,
+			event, HCI_RESET_EVT_LEN,
+			0, 0, BTMTK_TX_PKT_FROM_HOST);
 
 	BTMTK_INFO("%s done", __func__);
 
@@ -2611,9 +2616,9 @@ int btmtk_reset_power_on(struct btmtk_dev *bdev)
 int btmtk_send_wmt_reset(struct btmtk_dev *bdev)
 {
 	/* Support 7668 and 7663 */
-	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x07, 0x01, 0x00, 0x04 };
+	u8 cmd[WMT_RESET_CMD_LEN] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x07, 0x01, 0x00, 0x04 };
 	/* To-Do, for event check */
-	u8 event[] = { 0x04, 0xE4, 0x05, 0x02, 0x07, 0x01, 0x00, 0x00 };
+	u8 event[WMT_RESET_EVT_LEN] = { 0x04, 0xE4, 0x05, 0x02, 0x07, 0x01, 0x00, 0x00 };
 	int ret = -1;
 
 	if (!bdev) {
@@ -2621,8 +2626,10 @@ int btmtk_send_wmt_reset(struct btmtk_dev *bdev)
 		return ret;
 	}
 	if (bdev->power_state == BTMTK_DONGLE_STATE_POWER_OFF) {
-		ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 20,
-			0, BTMTK_TX_CMD_FROM_DRV);
+		ret = btmtk_main_send_cmd(bdev,
+			cmd, WMT_RESET_CMD_LEN,
+			event, WMT_RESET_EVT_LEN,
+			DELAY_TIMES, 0, BTMTK_TX_CMD_FROM_DRV);
 
 		if (ret >= 0)
 			bdev->power_state = BTMTK_DONGLE_STATE_POWER_ON;
@@ -2642,9 +2649,8 @@ int btmtk_send_wmt_reset(struct btmtk_dev *bdev)
 int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *bdev)
 {
 	/* Support 7668 and 7663 and 7961 */
-	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x06, 0x02, 0x00, 0x00, 0x01 };
-	/* To-Do, for event check */
-	u8 event[] = { 0x04, 0xE4, 0x05, 0x02, 0x06, 0x01, 0x00 };	/* event[6] is key */
+	u8 cmd[WMT_POWER_ON_CMD_LEN] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x06, 0x02, 0x00, 0x00, 0x01 };
+	u8 event[WMT_POWER_ON_EVT_HDR_LEN] = { 0x04, 0xE4, 0x05, 0x02, 0x06, 0x01, 0x00 };	/* event[7] is key */
 	int ret = -1, retry = RETRY_TIMES;
 
 	if (!bdev) {
@@ -2654,14 +2660,16 @@ int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *bdev)
 
 retry_again:
 
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), WMT_DELAY_TIMES,
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+	ret = btmtk_main_send_cmd(bdev,
+			cmd, WMT_POWER_ON_CMD_LEN,
+			event, WMT_POWER_ON_EVT_HDR_LEN,
+			WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 	if (ret < 0) {
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 		bdev->power_state = BTMTK_DONGLE_STATE_ERROR;
 		ret = -1;
 	} else if (ret == 0 && bdev->recv_evt_len > 0) {
-		switch (bdev->io_buf[6]) {
+		switch (bdev->io_buf[WMT_POWER_ON_EVT_RESULT_OFFSET]) {
 		case 0:			 /* successful */
 			BTMTK_INFO("%s: OK", __func__);
 			bdev->power_state = BTMTK_DONGLE_STATE_POWER_ON;
@@ -2676,7 +2684,7 @@ retry_again:
 			}
 			break;
 		default:
-			BTMTK_WARN("%s: Unknown result: %02X", __func__, bdev->io_buf[6]);
+			BTMTK_WARN("%s: Unknown result: %02X", __func__, bdev->io_buf[WMT_POWER_ON_EVT_RESULT_OFFSET]);
 			bdev->power_state = BTMTK_DONGLE_STATE_ERROR;
 			ret = -1;
 			break;
@@ -2689,9 +2697,9 @@ retry_again:
 int btmtk_send_wmt_power_off_cmd(struct btmtk_dev *bdev)
 {
 	/* Support 7668 and 7663 and 7961 */
-	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x06, 0x02, 0x00, 0x00, 0x00 };
+	u8 cmd[WMT_POWER_OFF_CMD_LEN] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x06, 0x02, 0x00, 0x00, 0x00 };
 	/* To-Do, for event check */
-	u8 event[] = { 0x04, 0xE4, 0x05, 0x02, 0x06, 0x01, 0x00 };
+	u8 event[WMT_POWER_OFF_EVT_HDR_LEN] = { 0x04, 0xE4, 0x05, 0x02, 0x06, 0x01, 0x00 };
 	int ret = -1;
 
 	if (!bdev) {
@@ -2704,8 +2712,10 @@ int btmtk_send_wmt_power_off_cmd(struct btmtk_dev *bdev)
 		return 0;
 	}
 
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), DELAY_TIMES,
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+	ret = btmtk_main_send_cmd(bdev,
+			cmd, WMT_POWER_OFF_CMD_LEN,
+			event, WMT_POWER_OFF_EVT_HDR_LEN,
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 	if (ret < 0) {
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 		bdev->power_state = BTMTK_DONGLE_STATE_ERROR;
@@ -2719,9 +2729,9 @@ int btmtk_send_wmt_power_off_cmd(struct btmtk_dev *bdev)
 
 int btmtk_picus_enable(struct btmtk_dev *bdev)
 {
-	u8 dft_enable_cmd[] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x02 };
+	u8 dft_enable_cmd[PICUS_ENABLE_CMD_LEN] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x02 };
 	u8 *enable_cmd = NULL;
-	u8 enable_event[] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
+	u8 enable_event[PICUS_ENABLE_EVT_HDR_LEN] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
 	int enable_len = 0;
 	int ret = -1;	/* if successful, 0 */
 
@@ -2735,14 +2745,14 @@ int btmtk_picus_enable(struct btmtk_dev *bdev)
 		enable_len = picus_setting->length;
 	} else {
 		enable_cmd = dft_enable_cmd;
-		enable_len = sizeof(dft_enable_cmd);
+		enable_len = PICUS_ENABLE_CMD_LEN;
 	}
 	BTMTK_INFO_RAW(enable_cmd, enable_len, "%s: Send CMD:", __func__);
 
 	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		ret = btmtk_main_send_cmd(bdev,
 			enable_cmd, enable_len,
-			enable_event, sizeof(enable_event),
+			enable_event, PICUS_ENABLE_EVT_HDR_LEN,
 			DELAY_TIMES, RETRY_TIMES,
 			BTMTK_TX_PKT_FROM_HOST);
 	else
@@ -2754,16 +2764,16 @@ int btmtk_picus_enable(struct btmtk_dev *bdev)
 
 int btmtk_picus_disable(struct btmtk_dev *bdev)
 {
-	u8 dft_disable_cmd[] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x00 };
-	u8 dft_disable_event[] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
+	u8 dft_disable_cmd[PICUS_DISABLE_CMD_LEN] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x00 };
+	u8 dft_disable_event[PICUS_DISABLE_EVT_HDR_LEN] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
 	int ret = -1;	/* if successful, 0 */
 
 	BTMTK_INFO("%s\n", __func__);
 
 	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		ret = btmtk_main_send_cmd(bdev,
-			dft_disable_cmd, sizeof(dft_disable_cmd),
-			dft_disable_event, sizeof(dft_disable_event),
+			dft_disable_cmd, PICUS_DISABLE_CMD_LEN,
+			dft_disable_event, PICUS_DISABLE_EVT_HDR_LEN,
 			DELAY_TIMES, RETRY_TIMES,
 			BTMTK_TX_PKT_FROM_HOST);
 	else
@@ -2775,10 +2785,9 @@ int btmtk_picus_disable(struct btmtk_dev *bdev)
 
 static int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 {
+	u8 reserve_apcf_cmd[RES_APCF_CMD_LEN] = { 0x01, 0xC9, 0xFC, 0x05, 0x01, 0x30, 0x02, 0x61, 0x02 };
+	u8 reserve_apcf_event[RES_APCF_EVT_LEN] = { 0x04, 0xE6, 0x02, 0x08, 0x11 };
 	int ret = -1;
-
-	u8 reserve_apcf_cmd[] = { 0x01, 0xC9, 0xFC, 0x05, 0x01, 0x30, 0x02, 0x61, 0x02 };
-	u8 reserve_apcf_event[] = { 0x04, 0xE6, 0x02, 0x08, 0x11 };
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: Incorrect bdev", __func__);
@@ -2786,8 +2795,8 @@ static int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 	}
 
 	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
-		ret = btmtk_main_send_cmd(bdev, reserve_apcf_cmd, sizeof(reserve_apcf_cmd),
-			reserve_apcf_event, sizeof(reserve_apcf_event), 0, 0,
+		ret = btmtk_main_send_cmd(bdev, reserve_apcf_cmd, RES_APCF_CMD_LEN,
+			reserve_apcf_event, RES_APCF_EVT_LEN, 0, 0,
 			BTMTK_TX_PKT_FROM_HOST);
 	else
 		BTMTK_WARN("%s: not support for 0x%x", __func__, bdev->chip_id);
@@ -2798,8 +2807,8 @@ static int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 
 int btmtk_send_read_BDADDR_cmd(struct btmtk_dev *bdev)
 {
-	u8 cmd[] = { 0x01, 0x09, 0x10, 0x00 };
-	u8 event[] = { 0x04, 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00, /* AA, BB, CC, DD, EE, FF */ };
+	u8 cmd[READ_ADDRESS_CMD_LEN] = { 0x01, 0x09, 0x10, 0x00 };
+	u8 event[READ_ADDRESS_EVT_HDR_LEN] = { 0x04, 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00, /* AA, BB, CC, DD, EE, FF */ };
 	int i;
 	int ret = -1;
 
@@ -2816,8 +2825,10 @@ int btmtk_send_read_BDADDR_cmd(struct btmtk_dev *bdev)
 		}
 	}
 
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 0, 0,
-			BTMTK_TX_PKT_FROM_HOST);
+	ret = btmtk_main_send_cmd(bdev,
+			cmd, READ_ADDRESS_CMD_LEN,
+			event, READ_ADDRESS_EVT_HDR_LEN,
+			0, 0, BTMTK_TX_PKT_FROM_HOST);
 	/*BD address will get in btmtk_rx_work*/
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
@@ -2829,17 +2840,18 @@ done:
 
 static int btmtk_send_unify_woble_suspend_default_cmd(struct btmtk_dev *bdev)
 {
-	int ret = 0;	/* if successful, 0 */
-	u8 cmd[] = { 0x01, 0xC9, 0xFC, 0x24, 0x01, 0x20, 0x02, 0x00, 0x01,
+	u8 cmd[WOBLE_ENABLE_DEFAULT_CMD_LEN] = { 0x01, 0xC9, 0xFC, 0x24, 0x01, 0x20, 0x02, 0x00, 0x01,
 		0x02, 0x01, 0x00, 0x05, 0x10, 0x00, 0x00, 0x40, 0x06,
 		0x02, 0x40, 0x0A, 0x02, 0x41, 0x0F, 0x05, 0x24, 0x20,
 		0x04, 0x32, 0x00, 0x09, 0x26, 0xC0, 0x12, 0x00, 0x00,
 		0x12, 0x00, 0x00, 0x00};
-	/*u8 status[] = { 0x0F, 0x04, 0x00, 0x01, 0xC9, 0xFC }; */
-	u8 comp_event[] = { 0x04, 0xE6, 0x02, 0x08, 0x00 };
+	u8 event[WOBLE_ENABLE_DEFAULT_EVT_LEN] = { 0x04, 0xE6, 0x02, 0x08, 0x00 };
+	int ret = 0;	/* if successful, 0 */
 
 	BTMTK_INFO("%s: begin", __func__);
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), comp_event, sizeof(comp_event),
+	ret = btmtk_main_send_cmd(bdev,
+			cmd, WOBLE_ENABLE_DEFAULT_CMD_LEN,
+			event, WOBLE_ENABLE_DEFAULT_EVT_LEN,
 			0, 0, BTMTK_TX_PKT_FROM_HOST);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
@@ -2850,13 +2862,14 @@ static int btmtk_send_unify_woble_suspend_default_cmd(struct btmtk_dev *bdev)
 
 static int btmtk_send_unify_woble_resume_default_cmd(struct btmtk_dev *bdev)
 {
+	u8 cmd[WOBLE_DISABLE_DEFAULT_CMD_LEN] = { 0x01, 0xC9, 0xFC, 0x05, 0x01, 0x21, 0x02, 0x00, 0x00 };
+	u8 event[WOBLE_DISABLE_DEFAULT_EVT_LEN] = { 0x04, 0xE6, 0x02, 0x08, 0x01 };
 	int ret = 0;	/* if successful, 0 */
-	u8 cmd[] = { 0x01, 0xC9, 0xFC, 0x05, 0x01, 0x21, 0x02, 0x00, 0x00 };
-	/*u8 status[] = { 0x0F, 0x04, 0x00, 0x01, 0xC9, 0xFC };*/
-	u8 comp_event[] = { 0x04, 0xE6, 0x02, 0x08, 0x01 };
 
 	BTMTK_INFO("%s: begin", __func__);
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), comp_event, sizeof(comp_event),
+	ret = btmtk_main_send_cmd(bdev,
+			cmd, WOBLE_DISABLE_DEFAULT_CMD_LEN,
+			event, WOBLE_DISABLE_DEFAULT_EVT_LEN,
 			0, 0, BTMTK_TX_PKT_FROM_HOST);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
@@ -2867,15 +2880,16 @@ static int btmtk_send_unify_woble_resume_default_cmd(struct btmtk_dev *bdev)
 
 static int btmtk_send_woble_suspend_cmd(struct btmtk_dev *bdev)
 {
-	int ret = 0;	/* if successful, 0 */
 	/* radio off cmd with wobx_mode_disable, used when unify woble off */
-	u8 radio_off_cmd[] = { 0x01, 0xC9, 0xFC, 0x05, 0x01, 0x20, 0x02, 0x00, 0x00 };
-	/*u8 status_event[] = { 0x0F, 0x04, 0x00, 0x01, 0xC9, 0xFC };*/
-	u8 comp_event[] = { 0x04, 0xE6, 0x02, 0x08, 0x00 };
+	u8 radio_off_cmd[RADIO_OFF_CMD_LEN] = { 0x01, 0xC9, 0xFC, 0x05, 0x01, 0x20, 0x02, 0x00, 0x00 };
+	u8 event[RADIO_OFF_EVT_LEN] = { 0x04, 0xE6, 0x02, 0x08, 0x00 };
+	int ret = 0;	/* if successful, 0 */
 
 	BTMTK_INFO("%s: not support woble, send radio off cmd", __func__);
-	ret = btmtk_main_send_cmd(bdev, radio_off_cmd, sizeof(radio_off_cmd),
-			comp_event, sizeof(comp_event), 0, 0, BTMTK_TX_PKT_FROM_HOST);
+	ret = btmtk_main_send_cmd(bdev,
+			radio_off_cmd, RADIO_OFF_CMD_LEN,
+			event, RADIO_OFF_EVT_LEN,
+			0, 0, BTMTK_TX_PKT_FROM_HOST);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 
@@ -2884,15 +2898,16 @@ static int btmtk_send_woble_suspend_cmd(struct btmtk_dev *bdev)
 
 static int btmtk_send_woble_resume_cmd(struct btmtk_dev *bdev)
 {
-	int ret = 0;	/* if successful, 0 */
 	/* radio on cmd with wobx_mode_disable, used when unify woble off */
-	u8 radio_on_cmd[] = { 0x01, 0xC9, 0xFC, 0x05, 0x01, 0x21, 0x02, 0x00, 0x00 };
-	/*u8 status[] = { 0x0F, 0x04, 0x00, 0x01, 0xC9, 0xFC };*/
-	u8 comp_event[] = { 0x04, 0xE6, 0x02, 0x08, 0x01 };
+	u8 radio_on_cmd[RADIO_ON_CMD_LEN] = { 0x01, 0xC9, 0xFC, 0x05, 0x01, 0x21, 0x02, 0x00, 0x00 };
+	u8 event[RADIO_ON_EVT_LEN] = { 0x04, 0xE6, 0x02, 0x08, 0x01 };
+	int ret = 0;	/* if successful, 0 */
 
 	BTMTK_INFO("%s: begin", __func__);
-	ret = btmtk_main_send_cmd(bdev, radio_on_cmd, sizeof(radio_on_cmd),
-			comp_event, sizeof(comp_event), 0, 0, BTMTK_TX_PKT_FROM_HOST);
+	ret = btmtk_main_send_cmd(bdev,
+			radio_on_cmd, RADIO_ON_CMD_LEN,
+			event, RADIO_ON_EVT_LEN,
+			0, 0, BTMTK_TX_PKT_FROM_HOST);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 
@@ -2902,13 +2917,15 @@ static int btmtk_send_woble_resume_cmd(struct btmtk_dev *bdev)
 
 int btmtk_set_Woble_APCF_filter_parameter(struct btmtk_dev *bdev)
 {
+	u8 cmd[APCF_FILTER_CMD_LEN] = { 0x01, 0x57, 0xFD, 0x0A,
+		0x01, 0x00, 0x0A, 0x20, 0x00, 0x20, 0x00, 0x01, 0x80, 0x00 };
+	u8 event[APCF_FILTER_EVT_HDR_LEN] = { 0x04, 0x0E, 0x07,
+		0x01, 0x57, 0xFD, 0x00, 0x01/*, 00, 63*/ };
 	int ret = -1;
-	u8 cmd[] = { 0x01, 0x57, 0xFD, 0x0A, 0x01, 0x00, 0x0A, 0x20, 0x00, 0x20, 0x00, 0x01, 0x80, 0x00 };
-	u8 event_complete[] = { 0x04, 0x0E, 0x07, 0x01, 0x57, 0xFD, 0x00, 0x01/*, 00, 63*/ };
 
 	BTMTK_INFO("%s: begin", __func__);
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd),
-		event_complete, sizeof(event_complete), 0, 0, BTMTK_TX_PKT_FROM_HOST);
+	ret = btmtk_main_send_cmd(bdev, cmd, APCF_FILTER_CMD_LEN,
+		event, APCF_FILTER_EVT_HDR_LEN, 0, 0, BTMTK_TX_PKT_FROM_HOST);
 	if (ret < 0)
 		BTMTK_ERR("%s: end ret %d", __func__, ret);
 	else
@@ -2924,14 +2941,14 @@ int btmtk_set_Woble_APCF_filter_parameter(struct btmtk_dev *bdev)
  */
 int btmtk_set_Woble_APCF(struct btmtk_dev *bdev)
 {
-	int ret = -1;
-	int i = 0;
-	u8 manufactur_data[] = { 0x01, 0x57, 0xFD, 0x27, 0x06, 0x00, 0x0A,
+	u8 manufactur_data[APCF_CMD_LEN] = { 0x01, 0x57, 0xFD, 0x27, 0x06, 0x00, 0x0A,
 		0x46, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x43, 0x52, 0x4B, 0x54, 0x4D,
 		0xFF, 0xFF, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 		0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-	u8 event[] = { 0x04, 0x0E, 0x07, 0x01, 0x57, 0xFD, 0x00, /* 0x06 00 63 */ };
+	u8 event[APCF_EVT_HDR_LEN] = { 0x04, 0x0E, 0x07, 0x01, 0x57, 0xFD, 0x00, /* 0x06 00 63 */ };
+	int ret = -1;
+	int i = 0;
 
 	BTMTK_INFO("%s: woble_setting_apcf[0].length %d",
 			__func__, bdev->woble_setting_apcf[0].length);
@@ -2959,9 +2976,11 @@ int btmtk_set_Woble_APCF(struct btmtk_dev *bdev)
 
 			BTMTK_INFO_RAW(bdev->woble_setting_apcf[i].content, bdev->woble_setting_apcf[i].length,
 				"Send woble_setting_apcf[%d] ", i);
-			ret = btmtk_main_send_cmd(bdev, bdev->woble_setting_apcf[i].content,
-				bdev->woble_setting_apcf[i].length, event, sizeof(event), 0, 0,
-				BTMTK_TX_PKT_FROM_HOST);
+			ret = btmtk_main_send_cmd(bdev,
+				bdev->woble_setting_apcf[i].content,
+				bdev->woble_setting_apcf[i].length,
+				event, APCF_EVT_HDR_LEN,
+				0, 0, BTMTK_TX_PKT_FROM_HOST);
 			if (ret < 0) {
 				BTMTK_ERR("%s: manufactur_data error ret %d", __func__, ret);
 				return ret;
@@ -2970,8 +2989,10 @@ int btmtk_set_Woble_APCF(struct btmtk_dev *bdev)
 	} else { /* use default */
 		BTMTK_INFO("%s: use default manufactur data", __func__);
 		memcpy(manufactur_data + 10, bdev->bdaddr, BD_ADDRESS_SIZE);
-		ret = btmtk_main_send_cmd(bdev, manufactur_data, sizeof(manufactur_data),
-			event, sizeof(event), 0, 0, BTMTK_TX_PKT_FROM_HOST);
+		ret = btmtk_main_send_cmd(bdev,
+			manufactur_data, APCF_CMD_LEN,
+			event, APCF_EVT_HDR_LEN,
+			0, 0, BTMTK_TX_PKT_FROM_HOST);
 		if (ret < 0) {
 			BTMTK_ERR("%s: manufactur_data error ret %d", __func__, ret);
 			return ret;
@@ -3059,12 +3080,14 @@ static int btmtk_set_Woble_Radio_On(struct btmtk_dev *bdev)
 
 static int btmtk_del_Woble_APCF_index(struct btmtk_dev *bdev)
 {
+	u8 cmd[APCF_DELETE_CMD_LEN] = { 0x01, 0x57, 0xFD, 0x03, 0x01, 0x01, 0x0A };
+	u8 event[APCF_DELETE_EVT_HDR_LEN] = { 0x04, 0x0e, 0x07, 0x01, 0x57, 0xfd, 0x00, 0x01, /* 00, 63 */ };
 	int ret = -1;
-	u8 cmd[] = { 0x01, 0x57, 0xFD, 0x03, 0x01, 0x01, 0x0A };
-	u8 event[] = { 0x04, 0x0e, 0x07, 0x01, 0x57, 0xfd, 0x00, 0x01, /* 00, 63 */ };
 
 	BTMTK_INFO("%s, enter", __func__);
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event),
+	ret = btmtk_main_send_cmd(bdev,
+			cmd, APCF_DELETE_CMD_LEN,
+			event, APCF_DELETE_EVT_HDR_LEN,
 			0, 0, BTMTK_TX_PKT_FROM_HOST);
 	if (ret < 0)
 		BTMTK_ERR("%s: got error %d", __func__, ret);
@@ -3075,9 +3098,9 @@ static int btmtk_del_Woble_APCF_index(struct btmtk_dev *bdev)
 
 static int btmtk_set_Woble_APCF_Resume(struct btmtk_dev *bdev)
 {
+	u8 event[APCF_RESUME_EVT_HDR_LEN] = { 0x04, 0x0e, 0x07, 0x01, 0x57, 0xfd, 0x00 };
 	int i = 0;
 	int ret = -1;
-	u8 event_complete[] = { 0x04, 0x0e, 0x07, 0x01, 0x57, 0xfd, 0x00 };
 
 	BTMTK_INFO("%s, enter, bdev->woble_setting_apcf_resume[0].length= %d",
 			__func__, bdev->woble_setting_apcf_resume[0].length);
@@ -3094,7 +3117,7 @@ static int btmtk_set_Woble_APCF_Resume(struct btmtk_dev *bdev)
 			ret = btmtk_main_send_cmd(bdev,
 				bdev->woble_setting_apcf_resume[i].content,
 				bdev->woble_setting_apcf_resume[i].length,
-				event_complete, sizeof(event_complete),
+				event, APCF_RESUME_EVT_HDR_LEN,
 				0, 0, BTMTK_TX_PKT_FROM_HOST);
 			if (ret < 0) {
 				BTMTK_ERR("%s: Send apcf resume fail %d", __func__, ret);
@@ -3116,31 +3139,31 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 {
 	int ret = 0, i = 0;
 	int temp_len = 0;
-	u8 temp[260]; /* save for total hex number */
+	u8 temp[TEMP_LEN]; /* save for total hex number */
 	unsigned long parsing_result = 0;
 	char *search_result = NULL;
 	char *search_end = NULL;
-	char search[32];
+	char search[SEARCH_LEN];
 	char *next_block = NULL;
 	char number[CHAR2HEX_SIZE + 1];	/* 1 is for '\0' */
 
-	memset(search, 0, sizeof(search));
-	memset(temp, 0, sizeof(temp));
-	memset(number, 0, sizeof(number));
+	memset(search, 0, SEARCH_LEN);
+	memset(temp, 0, TEMP_LEN);
+	memset(number, 0, CHAR2HEX_SIZE + 1);
 
 	/* search block name */
 	for (i = 0; i < counter; i++) {
 		temp_len = 0;
 		if (index_length == FW_CFG_INX_LEN_2) /* EX: APCF01 */
-			snprintf(search, sizeof(search), "%s%02d:", block_name, i);
+			snprintf(search, SEARCH_LEN, "%s%02d:", block_name, i);
 		else if (index_length == FW_CFG_INX_LEN_3) /* EX: APCF001 */
-			snprintf(search, sizeof(search), "%s%03d:", block_name, i);
+			snprintf(search, SEARCH_LEN, "%s%03d:", block_name, i);
 		else
-			snprintf(search, sizeof(search), "%s:", block_name);
+			snprintf(search, SEARCH_LEN, "%s:", block_name);
 		search_result = strstr((char *)searchcontent, search);
 
 		if (search_result) {
-			memset(temp, 0, sizeof(temp));
+			memset(temp, 0, TEMP_LEN);
 			search_result = strstr(search_result, "0x");
 			/* find next line as end of this command line, if NULL means last line */
 			next_block = strstr(search_result, ":");
@@ -3169,12 +3192,12 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 					break;
 				}
 
-				memset(number, 0, sizeof(number));
+				memset(number, 0, CHAR2HEX_SIZE + 1);
 				memcpy(number, search_result, CHAR2HEX_SIZE);
 				ret = kstrtoul(number, 0, &parsing_result);
 				if (ret == 0) {
-					if (temp_len >= sizeof(temp)) {
-						BTMTK_ERR("%s: %s data over %zu", __func__, search, sizeof(temp));
+					if (temp_len >= TEMP_LEN) {
+						BTMTK_ERR("%s: %s data over %d", __func__, search, TEMP_LEN);
 						break;
 					}
 					temp[temp_len++] = parsing_result;
@@ -3187,7 +3210,7 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 		} else
 			BTMTK_DBG("%s: %s is not found in %d", __func__, search, i);
 
-		if (temp_len && temp_len < sizeof(temp)) {
+		if (temp_len && temp_len < TEMP_LEN) {
 			BTMTK_INFO("%s: %s found & stored in %d", __func__, search, i);
 			save_content[i].content = kzalloc(temp_len, GFP_KERNEL);
 			if (save_content[i].content == NULL) {
@@ -3345,14 +3368,16 @@ LOAD_END:
 static void btmtk_check_wobx_debug_log(struct btmtk_dev *bdev)
 {
 	/* 0xFF, 0xFF, 0xFF, 0xFF is log level */
-	u8 cmd[] = { 0X01, 0xCE, 0xFC, 0x04, 0xFF, 0xFF, 0xFF, 0xFF };
-	u8 event[] = { 0x04, 0xE8 };
+	u8 cmd[CHECK_WOBX_DEBUG_CMD_LEN] = { 0X01, 0xCE, 0xFC, 0x04, 0xFF, 0xFF, 0xFF, 0xFF };
+	u8 event[CHECK_WOBX_DEBUG_EVT_HDR_LEN] = { 0x04, 0xE8 };
 	int ret = -1;
 
 	BTMTK_INFO("%s: begin", __func__);
 
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 0, 0,
-		BTMTK_TX_PKT_FROM_HOST);
+	ret = btmtk_main_send_cmd(bdev,
+		cmd, CHECK_WOBX_DEBUG_CMD_LEN,
+		event, CHECK_WOBX_DEBUG_EVT_HDR_LEN,
+		0, 0, BTMTK_TX_PKT_FROM_HOST);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 
@@ -3680,7 +3705,7 @@ static bool btmtk_parse_bt_cfg_file(char *item_name,
 {
 	bool ret = true;
 	int temp_len = 0;
-	char search[32];
+	char search[SEARCH_LEN];
 	char *ptr = NULL, *p = NULL;
 	char *temp = text;
 
@@ -3690,8 +3715,8 @@ static bool btmtk_parse_bt_cfg_file(char *item_name,
 		goto out;
 	}
 
-	memset(search, 0, sizeof(search));
-	snprintf(search, sizeof(search), "%s", item_name); /* EX: SUPPORT_UNIFY_WOBLE */
+	memset(search, 0, SEARCH_LEN);
+	snprintf(search, SEARCH_LEN, "%s", item_name); /* EX: SUPPORT_UNIFY_WOBLE */
 	p = ptr = strstr((char *)searchcontent, search);
 
 	if (!ptr) {
@@ -3755,10 +3780,10 @@ static bool btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 		u8 *searchcontent, struct btmtk_dev *bdev)
 {
 	bool ret = true;
-	char text[128]; /* save for search text */
+	char text[TEXT_LEN]; /* save for search text */
 	unsigned long text_value = 0;
 
-	memset(text, 0, sizeof(text));
+	memset(text, 0, TEXT_LEN);
 	ret = btmtk_parse_bt_cfg_file(BT_UNIFY_WOBLE, text, searchcontent);
 	if (ret) {
 		btmtk_bt_cfg_item_value_to_bool(text, &bt_cfg_content->support_unify_woble);
@@ -3922,40 +3947,17 @@ exit:
 	return err;
 }
 
-#if 0
-int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
-{
-	u8 cmd[] = { 0xFF };
-	/* To-Do, for event check */
-	/* u8 event[] = { 0x04, 0xE4, 0x06, 0x02, 0x03, 0x02, 0x00, 0x00, 0x03}; */
-
-	btmtk_main_send_cmd(hdev, cmd, sizeof(cmd), BTMTKUART_TX_WAIT_VND_EVT);
-	return 0;
-}
-
-
-int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev)
-{
-	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x09, 0x01, 0x04, 0x05, 0x00, 0x01, 0x00, 0x10, 0x0E, 0x00};
-	/* To-Do, for event check */
-	/* u8 event[] = {0x04, 0xE4, 0x06, 0x02, 0x04, 0x02, 0x00, 0x00, 0x01}; */
-	btmtk_main_send_cmd(hdev, cmd, sizeof(cmd), BTMTKUART_TX_WAIT_VND_EVT);
-
-	return 0;
-}
-
-#endif
-
 #if ENABLESTP
 static int btmtk_send_set_stp_cmd(struct btmtk_dev *bdev)
 {
-	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x09, 0x01, 0x04, 0x05, 0x00, 0x03, 0x11, 0x0E, 0x00, 0x00};
-	/* To-Do, for event check */
-	u8 event[] = { 0x04, 0xE4, 0x06, 0x02, 0x04, 0x02, 0x00, 0x00, 0x03};
+	u8 cmd[SET_STP_CMD_LEN] = { 0x01, 0x6F, 0xFC, 0x09, 0x01, 0x04, 0x05, 0x00, 0x03, 0x11, 0x0E, 0x00, 0x00};
+	u8 event[SET_STP_EVT_LEN] = { 0x04, 0xE4, 0x06, 0x02, 0x04, 0x02, 0x00, 0x00, 0x03};
 	int ret = 0;
 
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 0, 0,
-			BTMTK_TX_CMD_FROM_DRV);
+	ret = btmtk_main_send_cmd(bdev,
+			cmd, SET_STP_CMD_LEN,
+			event, SET_STP_EVT_LEN,
+			0, 0, BTMTK_TX_CMD_FROM_DRV);
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -3963,13 +3965,15 @@ static int btmtk_send_set_stp_cmd(struct btmtk_dev *bdev)
 
 static int btmtk_send_set_stp1_cmd(struct btmtk_dev *bdev)
 {
-	u8 cmd[] = {0x01, 0x6F, 0xFC, 0x0C, 0x01, 0x08, 0x08, 0x00, 0x02, 0x01, 0x00, 0x01, 0x08, 0x00, 0x00, 0x80};
-	/* To-Do, for event check */
-	u8 event[] = {0x04, 0xE4, 0x10, 0x02, 0x08,
-			0x0C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x08, 0x00, 0x00, 0x80, 0x63, 0x76, 0x00, 0x00};
+	u8 cmd[SET_STP1_CMD_LEN] = {0x01, 0x6F, 0xFC, 0x0C,
+		0x01, 0x08, 0x08, 0x00, 0x02, 0x01, 0x00, 0x01, 0x08, 0x00, 0x00, 0x80};
+	u8 event[SET_STP1_EVT_LEN] = {0x04, 0xE4, 0x10, 0x02, 0x08,
+		0x0C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x08, 0x00, 0x00, 0x80, 0x63, 0x76, 0x00, 0x00};
 	int ret = 0;
 
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 0, 0,
+	ret = btmtk_main_send_cmd(bdev,
+			cmd, SET_STP1_CMD_LEN,
+			event, SET_STP1_EVT_LEN, 0, 0,
 			BTMTK_TX_CMD_FROM_DRV);
 
 	BTMTK_INFO("%s done", __func__);
@@ -3979,9 +3983,8 @@ static int btmtk_send_set_stp1_cmd(struct btmtk_dev *bdev)
 
 static int btmtk_send_hci_tci_set_sleep_cmd_766x(struct btmtk_dev *bdev)
 {
-	u8 cmd[] = { 0x01, 0x7A, 0xFC, 0x07, 0x05, 0x40, 0x06, 0x40, 0x06, 0x00, 0x00 };
-	/* To-Do, for event check */
-	u8 event[] = { 0x04, 0x0E, 0x04, 0x01, 0x7A, 0xFC, 0x00 };
+	u8 cmd[SET_SLEEP_CMD_LEN] = { 0x01, 0x7A, 0xFC, 0x07, 0x05, 0x40, 0x06, 0x40, 0x06, 0x00, 0x00 };
+	u8 event[SET_SLEEP_EVT_LEN] = { 0x04, 0x0E, 0x04, 0x01, 0x7A, 0xFC, 0x00 };
 	int ret = -1;
 
 	if (!bdev) {
@@ -3989,8 +3992,10 @@ static int btmtk_send_hci_tci_set_sleep_cmd_766x(struct btmtk_dev *bdev)
 		return ret;
 	}
 
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 0, 0,
-			BTMTK_TX_PKT_FROM_HOST);
+	ret = btmtk_main_send_cmd(bdev,
+		cmd, SET_SLEEP_CMD_LEN,
+		event, SET_SLEEP_EVT_LEN,
+		0, 0, BTMTK_TX_PKT_FROM_HOST);
 
 	BTMTK_INFO("%s done", __func__);
 
@@ -4068,16 +4073,17 @@ static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	int index = 0;
-	uint8_t event[2] = { 0x04, 0x0E };
+	uint8_t event[EVT_HDR_LEN] = { 0x04, 0x0E };
 
 	BTMTK_INFO("%s enter", __func__);
 
 	for (index = 0; index < VENDOR_CMD_COUNT; index++) {
 		if (bdev->bt_cfg.vendor_cmd[index].content &&
 			bdev->bt_cfg.vendor_cmd[index].length) {
-			ret = btmtk_main_send_cmd(bdev, bdev->bt_cfg.vendor_cmd[index].content,
+			ret = btmtk_main_send_cmd(bdev,
+				bdev->bt_cfg.vendor_cmd[index].content,
 				bdev->bt_cfg.vendor_cmd[index].length,
-				event, sizeof(event),
+				event, EVT_HDR_LEN,
 				0, 0, BTMTK_TX_PKT_FROM_HOST);
 			if (ret < 0) {
 				BTMTK_ERR("%s: Send vendor cmd failed(%d)! Index: %d",
@@ -4099,17 +4105,18 @@ static int btmtk_send_phase1_wmt_cfg(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	int index = 0;
-	uint8_t event[2] = { 0x04, 0xE4 };
+	uint8_t event[EVT_HDR_LEN] = { 0x04, 0xE4 };
 
 	BTMTK_INFO("%s", __func__);
 
 	for (index = 0; index < PHASE1_WMT_CMD_COUNT; index++) {
 		if (bdev->bt_cfg.phase1_wmt_cmd[index].content &&
 			bdev->bt_cfg.phase1_wmt_cmd[index].length) {
-			ret = btmtk_main_send_cmd(bdev, bdev->bt_cfg.phase1_wmt_cmd[index].content,
+			ret = btmtk_main_send_cmd(bdev,
+					bdev->bt_cfg.phase1_wmt_cmd[index].content,
 					bdev->bt_cfg.phase1_wmt_cmd[index].length,
-					event, sizeof(event),
-					20, 20, BTMTK_TX_CMD_FROM_DRV);
+					event, EVT_HDR_LEN,
+					DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 			if (ret < 0) {
 				BTMTK_ERR("%s: Send phase1 wmt cmd failed(%d)! Index: %d",
 					__func__, ret, index);
@@ -4223,7 +4230,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	int state;
-	u8 buf[] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x02, 0x01, 0x00, 0x08 };
+	u8 cmd[ASSERT_CMD_LEN] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x02, 0x01, 0x00, 0x08 };
 	struct sk_buff *skb = NULL;
 
 	if (!bdev) {
@@ -4240,16 +4247,16 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s: send assert cmd", __func__);
 
-	skb = alloc_skb(sizeof(buf) + BT_SKB_RESERVE, GFP_ATOMIC);
+	skb = alloc_skb(ASSERT_CMD_LEN + BT_SKB_RESERVE, GFP_ATOMIC);
 	if (!skb) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		goto exit;
 	}
 	bt_cb(skb)->pkt_type = HCI_COMMAND_PKT;
-	memcpy(skb->data, buf, sizeof(buf));
-	skb->len = sizeof(buf);
+	memcpy(skb->data, cmd, ASSERT_CMD_LEN);
+	skb->len = ASSERT_CMD_LEN;
 
-	ret = main_info.hif_hook.send_cmd(bdev, skb, 100, 20, (int)BTMTK_TX_CMD_FROM_DRV);
+	ret = main_info.hif_hook.send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES, (int)BTMTK_TX_CMD_FROM_DRV);
 	if (ret < 0)
 		BTMTK_ERR("%s failed!!", __func__);
 	else
@@ -4276,8 +4283,9 @@ static int btmtk_send_txpower_cmd(struct btmtk_dev *bdev)
 	 *  DD: BLE S8
 	 */
 
-	u8 cmd[] = { 0x01, 0x2C, 0xFC, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-	u8 event[] = { 0x04, 0x0E, 0x04, 0x01, 0x2C, 0xFC, 0x00 };
+	u8 cmd[TXPOWER_CMD_LEN] = { 0x01, 0x2C, 0xFC, 0x0C,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	u8 event[TXPOWER_EVT_LEN] = { 0x04, 0x0E, 0x04, 0x01, 0x2C, 0xFC, 0x00 };
 	int ret = 0;
 
 	cmd[4] = (u8)main_info.PWS.EDR_Max;
@@ -4290,8 +4298,10 @@ static int btmtk_send_txpower_cmd(struct btmtk_dev *bdev)
 	cmd[14] = (u8)main_info.PWS.BLE_LR_S2;
 	cmd[15] = (u8)main_info.PWS.BLE_LR_S8;
 
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 0, 0,
-			BTMTK_TX_CMD_FROM_DRV);
+	ret = btmtk_main_send_cmd(bdev,
+			cmd, TXPOWER_CMD_LEN,
+			event, TXPOWER_EVT_LEN,
+			0, 0, BTMTK_TX_CMD_FROM_DRV);
 
 	if (ret < 0)
 		BTMTK_ERR("%s failed!!", __func__);
@@ -4303,21 +4313,26 @@ static int btmtk_send_txpower_cmd(struct btmtk_dev *bdev)
 
 static int btmtk_set_power_value(char *str, int resolution, int is_edr)
 {
-	int power = ERR_PWR, integer = 0, decimal = 0;
+	int power = ERR_PWR, integer = 0, decimal = 0, ret = 0;
 
 	if (resolution == RES_DOT_25) {
 		/* XX.YY => XX.YY/0.25 = XX*4 + YY/25 */
 		if (strstr(str, ".")) {
-			sscanf(str, "%d.%d", &integer, &decimal);
+			ret = sscanf(str, "%d.%d", &integer, &decimal);
+			if (ret < 0)
+				return ret;
 			if (decimal != 25 && decimal != 75 && decimal != 5 && decimal != 50)
 				return ERR_PWR;
-			if (decimal == 5) decimal = 50;
+			if (decimal == 5)
+				decimal = 50;
 			if (integer >= 0)
 				power = integer * 4 + decimal / 25;
 			else
 				power = integer * 4 - decimal / 25;
 		} else {
-			sscanf(str, "%d", &integer);
+			ret = sscanf(str, "%d", &integer);
+			if (ret < 0)
+				return ret;
 			power = integer * 4;
 		}
 
@@ -4333,7 +4348,9 @@ static int btmtk_set_power_value(char *str, int resolution, int is_edr)
 	} else if (resolution == RES_DOT_5) {
 		/* XX.YY => XX.YY/0.5 = XX*2 + YY/5 */
 		if (strstr(str, ".")) {
-			sscanf(str, "%d.%d", &integer, &decimal);
+			ret = sscanf(str, "%d.%d", &integer, &decimal);
+			if (ret < 0)
+				return ret;
 			if (decimal != 5)
 				return ERR_PWR;
 			if (integer >= 0)
@@ -4341,7 +4358,9 @@ static int btmtk_set_power_value(char *str, int resolution, int is_edr)
 			if (integer < 0)
 				power = integer * 2 - decimal / 5;
 		} else {
-			sscanf(str, "%d", &integer);
+			ret = sscanf(str, "%d", &integer);
+			if (ret < 0)
+				return ret;
 			power = integer * 2;
 		}
 
@@ -4355,7 +4374,9 @@ static int btmtk_set_power_value(char *str, int resolution, int is_edr)
 		} else if (!is_edr && (power > BLE_MAX_R1 || power < BLE_MIN_R1))
 			return ERR_PWR;
 	} else if (resolution == RES_1) {
-		sscanf(str, "%d", &power);
+		ret = sscanf(str, "%d", &power);
+		if (ret < 0)
+			return ret;
 
 		BTMTK_DBG("%s: power = %d", __func__, power);
 
@@ -4439,75 +4460,75 @@ static int btmtk_parse_power_table(char *context)
 			ptr++;
 
 		switch (step) {
-			/* BR_EDR_PWR_MODE */
-			case CHECK_SINGLE_SKU_PWR_MODE:
-				if (kstrtoint(ptr, 0, &temp) == 0) {
-					if (temp == 0 || temp == 1) {
-						main_info.PWS.DM = temp;
-						step++;
-						continue;
-					} else {
-						BTMTK_ERR("PWR MODE value wrong");
-						return -1;
-					}
+		/* BR_EDR_PWR_MODE */
+		case CHECK_SINGLE_SKU_PWR_MODE:
+			if (kstrtoint(ptr, 0, &temp) == 0) {
+				if (temp == 0 || temp == 1) {
+					main_info.PWS.DM = temp;
+					step++;
+					continue;
 				} else {
-					BTMTK_ERR("Read PWR MODE Fail");
+					BTMTK_ERR("PWR MODE value wrong");
 					return -1;
 				}
-				break;
-			/* Parse EDR MAX */
-			case CHECK_SINGLE_SKU_EDR_MAX:
-				power = btmtk_set_power_value(ptr, resolution, 1);
-				if (power == ERR_PWR) {
-					BTMTK_ERR("EDR MAX value wrong");
-					return -1;
-				}
-				main_info.PWS.EDR_Max = power;
-				step++;
-				break;
-			/* Parse BLE Default */
-			case CHECK_SINGLE_SKU_BLE:
-				power = btmtk_set_power_value(ptr, resolution, 0);
-				if (power == ERR_PWR) {
-					BTMTK_ERR("BLE value wrong");
-					return -1;
-				}
-				main_info.PWS.BLE_1M = power;
-				step++;
-				break;
-			/* Parse BLE 2M */
-			case CHECK_SINGLE_SKU_BLE_2M:
-				power = btmtk_set_power_value(ptr, resolution, 0);
-				if (power == ERR_PWR) {
-					BTMTK_ERR("BLE 2M value wrong");
-					return -1;
-				}
-				main_info.PWS.BLE_2M = power;
-				step++;
-				break;
-			/* Parse BLE long range S2 */
-			case CHECK_SINGLE_SKU_BLE_LR_S2:
-				power = btmtk_set_power_value(ptr, resolution, 0);
-				if (power == ERR_PWR) {
-					BTMTK_ERR("BLE LR S2 value wrong");
-					return -1;
-				}
-				main_info.PWS.BLE_LR_S2 = power;
-				step++;
-				break;
-			/* Parse BLE long range S8 */
-			case CHECK_SINGLE_SKU_BLE_LR_S8:
-				power = btmtk_set_power_value(ptr, resolution, 0);
-				if (power == ERR_PWR) {
-					BTMTK_ERR("BLE LR S8 value wrong");
-					return -1;
-				}
-				main_info.PWS.BLE_LR_S8 = power;
-				step++;
-				break;
-			default:
-				BTMTK_ERR("%s step is wrong: %d", __func__, step);
-				break;
+			} else {
+				BTMTK_ERR("Read PWR MODE Fail");
+				return -1;
+			}
+			break;
+		/* Parse EDR MAX */
+		case CHECK_SINGLE_SKU_EDR_MAX:
+			power = btmtk_set_power_value(ptr, resolution, 1);
+			if (power == ERR_PWR) {
+				BTMTK_ERR("EDR MAX value wrong");
+				return -1;
+			}
+			main_info.PWS.EDR_Max = power;
+			step++;
+			break;
+		/* Parse BLE Default */
+		case CHECK_SINGLE_SKU_BLE:
+			power = btmtk_set_power_value(ptr, resolution, 0);
+			if (power == ERR_PWR) {
+				BTMTK_ERR("BLE value wrong");
+				return -1;
+			}
+			main_info.PWS.BLE_1M = power;
+			step++;
+			break;
+		/* Parse BLE 2M */
+		case CHECK_SINGLE_SKU_BLE_2M:
+			power = btmtk_set_power_value(ptr, resolution, 0);
+			if (power == ERR_PWR) {
+				BTMTK_ERR("BLE 2M value wrong");
+				return -1;
+			}
+			main_info.PWS.BLE_2M = power;
+			step++;
+			break;
+		/* Parse BLE long range S2 */
+		case CHECK_SINGLE_SKU_BLE_LR_S2:
+			power = btmtk_set_power_value(ptr, resolution, 0);
+			if (power == ERR_PWR) {
+				BTMTK_ERR("BLE LR S2 value wrong");
+				return -1;
+			}
+			main_info.PWS.BLE_LR_S2 = power;
+			step++;
+			break;
+		/* Parse BLE long range S8 */
+		case CHECK_SINGLE_SKU_BLE_LR_S8:
+			power = btmtk_set_power_value(ptr, resolution, 0);
+			if (power == ERR_PWR) {
+				BTMTK_ERR("BLE LR S8 value wrong");
+				return -1;
+			}
+			main_info.PWS.BLE_LR_S8 = power;
+			step++;
+			break;
+		default:
+			BTMTK_ERR("%s step is wrong: %d", __func__, step);
+			break;
 		}
 		continue;
 	}
@@ -4539,7 +4560,7 @@ static void btmtk_requset_country_cb(const struct firmware *fw, void *context)
 	bool find_country = false;
 	bool read_next = false;
 
-	if(fw == NULL) {
+	if (fw == NULL) {
 		BTMTK_ERR("fw is NULL");
 		return;
 	}
@@ -4597,14 +4618,11 @@ static void btmtk_requset_country_cb(const struct firmware *fw, void *context)
 	}
 	kfree(data);
 
-	if (find_country == false) {
+	if (find_country == false)
 		BTMTK_ERR("Can't find country in the table");
-	}
 
 exit:
 	release_firmware(fw);
-
-	return;
 }
 
 static int btmtk_load_country_table(void)
@@ -4628,10 +4646,10 @@ void btmtk_set_country_code_from_wifi(char *code)
 	if (strlen(code) == COUNTRY_CODE_LEN) {
 		BTMTK_INFO("%s country code is %s", __func__, code);
 		memcpy(main_info.PWS.country_code, code, sizeof(main_info.PWS.country_code));
-		for(i = 0; i < btmtk_intf_num; i++) {
+		for (i = 0; i < btmtk_intf_num; i++) {
 			if (g_bdev[i]->hdev != NULL) {
 				bdev = g_bdev[i];
-				if(bdev->bt_cfg.support_bt_single_sku) {
+				if (bdev->bt_cfg.support_bt_single_sku) {
 					btmtk_load_country_table();
 					break;
 				}
@@ -4926,8 +4944,9 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	int state = BTMTK_STATE_INIT;
 	int fstate = BTMTK_FOPS_STATE_INIT;
 	/* parsing commands */
-	u8 fw_assert_cmd[] = { 0x01, 0x5B, 0xFD, 0x00 };
-	u8 reset_cmd[] = { 0x01, 0x03, 0x0C, 0x00 };
+	u8 fw_coredump_cmd[FW_COREDUMP_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
+	u8 reset_cmd[HCI_RESET_CMD_LEN] = { 0x01, 0x03, 0x0C, 0x00 };
+	u8 read_iso_packet_size_cmd[READ_ISO_PACKET_SIZE_CMD_HDR_LEN] = { 0x01, 0x98, 0xFD, 0x02 };
 	struct btmtk_dev *bdev = NULL;
 
 	if (hdev == NULL || skb == NULL) {
@@ -4979,21 +4998,21 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 #endif
 
 	/* For Ble ISO packet size */
-	if (memcmp(skb->data, READ_ISO_PACKET_SIZE_CMD, sizeof(READ_ISO_PACKET_SIZE_CMD)) == 0) {
-		bdev->iso_threshold = skb->data[sizeof(READ_ISO_PACKET_SIZE_CMD)] +
-							(skb->data[sizeof(READ_ISO_PACKET_SIZE_CMD) + 1]  << 8);
+	if (memcmp(skb->data, read_iso_packet_size_cmd, READ_ISO_PACKET_SIZE_CMD_HDR_LEN) == 0) {
+		bdev->iso_threshold = skb->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN] +
+							(skb->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN + 1]  << 8);
 		BTMTK_INFO("%s: Ble iso pkt size is %d", __func__, bdev->iso_threshold);
 	}
 
 	if (hci_skb_pkt_type(skb) == HCI_COMMAND_PKT) {
 		/* save hci cmd pkt for debug */
 		btmtk_hci_snoop_save_cmd(skb->len, skb->data);
-		if (skb->len == sizeof(fw_assert_cmd) &&
-			!memcmp(skb->data, fw_assert_cmd, sizeof(fw_assert_cmd))) {
+		if (skb->len == FW_COREDUMP_CMD_LEN &&
+			!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
 			BTMTK_INFO("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
 			btmtk_hci_snoop_print_to_log();
-		} else if (skb->len == sizeof(reset_cmd) &&
-				!memcmp(skb->data, reset_cmd, sizeof(reset_cmd)))
+		} else if (skb->len == HCI_RESET_CMD_LEN &&
+				!memcmp(skb->data, reset_cmd, HCI_RESET_CMD_LEN))
 			BTMTK_INFO("%s: got command: 0x03 0C 00 (HCI_RESET)", __func__);
 	}
 
@@ -5064,7 +5083,7 @@ void btmtk_reset_waker(struct work_struct *work)
 		 * chip has usb3.0 port, we will use Mstar platform to do comparison
 		 * test, then found the final solution.
 		 */
-		//msleep(2000);
+		/* msleep(2000); */
 		if (main_info.hif_hook.whole_reset)
 			main_info.hif_hook.whole_reset(bdev);
 		else
@@ -5091,10 +5110,10 @@ void btmtk_reset_waker(struct work_struct *work)
 		 * chip has usb3.0 port, we will use Mstar platform to do comparison
 		 * test, then found the final solution.
 		 */
-		//msleep(2000);
+		/* msleep(2000); */
 		if (main_info.hif_hook->whole_reset)
 			main_info.hif_hook.whole_reset(bdev);
-		//btmtk_send_hw_err_to_host(bdev);
+		/* btmtk_send_hw_err_to_host(bdev); */
 		goto Finish;
 	}
 #endif
@@ -5190,7 +5209,6 @@ static void btmtk_rx_work(struct work_struct *work)
 
 static irqreturn_t btmtk_woble_isr(int irq, struct btmtk_dev *bdev)
 {
-#define WAIT_POWERKEY_TIMEOUT 5000
 	BTMTK_DBG("%s begin", __func__);
 	disable_irq_nosync(bdev->wobt_irq);
 	atomic_dec(&(bdev->irq_enable_count));
@@ -5374,7 +5392,7 @@ int btmtk_register_hci_device(struct btmtk_dev *bdev)
 #if CFG_SUPPORT_BLUEZ
 
 #else
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 0))
+#if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
 		test_and_clear_bit(HCI_SETUP, &hdev->dev_flags);
 #else
 		hci_dev_test_and_clear_flag(hdev, HCI_SETUP);

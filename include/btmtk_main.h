@@ -18,7 +18,7 @@
 #define DEFAULT_COUNTRY_TABLE_NAME "btPowerTable.dat"
 
 
-//static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb);
+/* static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb); */
 
 #define hci_dev_test_and_clear_flag(hdev, nr)  test_and_clear_bit((nr), (hdev)->dev_flags)
 
@@ -152,6 +152,106 @@
 #define BLE_MAX_R2	80
 
 #define ERR_PWR		-9999
+
+extern u8 wmt_over_hci_header[];
+#define WMT_OVER_HCI_HEADER_SIZE	3
+
+#define WAIT_POWERKEY_TIMEOUT 5000
+
+#define SEPARATOR_LEN 2
+#define STP_CRC_LEN 2
+#define TEMP_LEN 260
+#define SEARCH_LEN 32
+#define TEXT_LEN 128
+
+/* CMD&Event sent by driver */
+#define READ_EFUSE_CMD_LEN 18
+#define READ_EFUSE_EVT_HDR_LEN 9
+#define READ_EFUSE_CMD_BLOCK_OFFSET 10
+
+#define CHECK_LD_PATCH_CMD_LEN 9
+#define CHECK_LD_PATCH_EVT_HDR_LEN 7
+#define CHECK_LD_PATCH_EVT_RESULT_OFFSET 6	/* need confirm later */
+
+#define HWERR_EVT_LEN 4
+
+#define LD_PATCH_EVT_LEN 8
+
+#define HCI_RESET_CMD_LEN 4
+#define HCI_RESET_EVT_LEN 7
+
+#define WMT_RESET_CMD_LEN 9
+#define WMT_RESET_EVT_LEN 8
+
+#define WMT_POWER_ON_CMD_LEN 10
+#define WMT_POWER_ON_EVT_HDR_LEN 7
+#define WMT_POWER_ON_EVT_RESULT_OFFSET 7
+
+#define WMT_POWER_OFF_CMD_LEN 10
+#define WMT_POWER_OFF_EVT_HDR_LEN 7
+#define WMT_POWER_OFF_EVT_RESULT_OFFSET 7
+
+#define PICUS_ENABLE_CMD_LEN 8
+#define PICUS_ENABLE_EVT_HDR_LEN 9
+
+#define PICUS_DISABLE_CMD_LEN 8
+#define PICUS_DISABLE_EVT_HDR_LEN 9
+
+#define RES_APCF_CMD_LEN 9
+#define RES_APCF_EVT_LEN 5
+
+#define READ_ADDRESS_CMD_LEN 4
+#define READ_ADDRESS_EVT_HDR_LEN 7
+
+#define WOBLE_ENABLE_DEFAULT_CMD_LEN 40
+#define WOBLE_ENABLE_DEFAULT_EVT_LEN 5
+
+#define WOBLE_DISABLE_DEFAULT_CMD_LEN 9
+#define WOBLE_DISABLE_DEFAULT_EVT_LEN 5
+
+#define RADIO_OFF_CMD_LEN 9
+#define RADIO_OFF_EVT_LEN 5
+
+#define RADIO_ON_CMD_LEN 9
+#define RADIO_ON_EVT_LEN 5
+
+#define APCF_FILTER_CMD_LEN 14
+#define APCF_FILTER_EVT_HDR_LEN 8
+
+#define APCF_CMD_LEN 43
+#define APCF_EVT_HDR_LEN 7
+
+#define APCF_DELETE_CMD_LEN 7
+#define APCF_DELETE_EVT_HDR_LEN 8
+
+#define APCF_RESUME_EVT_HDR_LEN 7
+
+#define CHECK_WOBX_DEBUG_CMD_LEN 8
+#define CHECK_WOBX_DEBUG_EVT_HDR_LEN 2
+
+#define SET_STP_CMD_LEN 13
+#define SET_STP_EVT_LEN 9
+
+#define SET_STP1_CMD_LEN 16
+#define SET_STP1_EVT_LEN 19
+
+#define SET_SLEEP_CMD_LEN 11
+#define SET_SLEEP_EVT_LEN 7
+
+#define EVT_HDR_LEN 2
+
+#define ASSERT_CMD_LEN 9
+
+#define TXPOWER_CMD_LEN 16
+#define TXPOWER_EVT_LEN 7
+
+#define FW_COREDUMP_CMD_LEN 4
+#define HCI_RESET_CMD_LEN 4
+#define READ_ISO_PACKET_SIZE_CMD_HDR_LEN 4
+
+#ifndef LD_PATCH_TIME
+#define LD_PATCH_TIME 0
+#endif
 
 enum {
 	RES_1 = 0,

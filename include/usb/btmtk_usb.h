@@ -46,7 +46,15 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define EP_RST_OPT 0x74011890
 #define EP_RST_IN_OUT_OPT 0x00010001
 
-extern u8 wmt_over_hci_header[];
+/* CMD&Event sent by driver */
+#define NOTIFY_ALT_EVT_LEN 7
+
+#define LD_PATCH_CMD_LEN 9
+#define LD_PATCH_EVT_LEN 8
+
+#define READ_ADDRESS_EVT_HDR_LEN 7
+#define READ_ADDRESS_EVT_PAYLOAD_OFFSET 7
+#define WOBLE_DEBUG_EVT_TYPE 0xE8
 
 struct btmtk_cif_chip_reset {
 	/* For Whole chip reset */

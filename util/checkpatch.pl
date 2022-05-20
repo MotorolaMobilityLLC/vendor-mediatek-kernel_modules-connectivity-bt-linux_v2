@@ -929,7 +929,7 @@ for my $filename (@ARGV) {
 	}
 
 	if (!process($filename)) {
-		$exit = 1;
+#		$exit = 1;
 	}
 	@rawlines = ();
 	@lines = ();

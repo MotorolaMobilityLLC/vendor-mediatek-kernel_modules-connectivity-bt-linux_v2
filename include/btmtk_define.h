@@ -41,7 +41,7 @@
 #include <linux/freezer.h>
 
 /** Driver version */
-#define VERSION "7.0.2020110901"
+#define VERSION "7.0.2020111101"
 #define SUBVER ":turnkey"
 
 
@@ -93,8 +93,6 @@
 #define HCI_SNOOP_ENTRY_NUM	30
 #define HCI_SNOOP_BUF_SIZE	32
 #define HCI_SNOOP_MAX_BUF_SIZE	66
-#define WMT_OVER_HCI_HEADER_SIZE	3
-
 
 extern uint8_t btmtk_log_lvl;
 
@@ -174,7 +172,7 @@ extern uint8_t btmtk_log_lvl;
  */
 #define UPLOAD_PATCH_UNIT	2048
 #define PATCH_INFO_SIZE		30
-//#endif
+/*#endif*/
 #define PATCH_PHASE1		1
 #define PATCH_PHASE2		2
 #define PATCH_PHASE3		3

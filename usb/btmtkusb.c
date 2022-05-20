@@ -53,7 +53,6 @@ static const struct usb_device_id btusb_table[] = {
 static char event_need_compare[EVENT_COMPARE_SIZE] = {0};
 static char event_need_compare_len;
 static char event_compare_status;
-const u8 READ_ADDRESS_EVENT[] = { 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00 };
 
 static DEFINE_MUTEX(btmtk_usb_ops_mutex);
 #define USB_OPS_MUTEX_LOCK()	mutex_lock(&btmtk_usb_ops_mutex)
@@ -1431,7 +1430,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	struct sk_buff *iso_skb = NULL;
 #ifdef CFG_SUPPORT_HW_DVT
 	struct sk_buff *evt_skb;
-	uint8_t notify_alt_evt[] = {0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00};
+	uint8_t notify_alt_evt[NOTIFY_ALT_EVT_LEN] = {0x04, 0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00};
 	u16 crBaseAddr = 0, crRegOffset = 0;
 #endif
 
@@ -1455,9 +1454,9 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					skb->data[6] == 0x00 && skb->data[7] == 0x00) {
 				/* return evt to upper layered */
 				evt_skb = skb_copy(skb, GFP_KERNEL);
-				bt_cb(evt_skb)->pkt_type = HCI_EVENT_PKT;
-				memcpy(evt_skb->data, &notify_alt_evt, sizeof(notify_alt_evt));
-				evt_skb->len = sizeof(notify_alt_evt);
+				bt_cb(evt_skb)->pkt_type = notify_alt_evt[0];
+				memcpy(evt_skb->data, &notify_alt_evt[1], NOTIFY_ALT_EVT_LEN - 1);
+				evt_skb->len = NOTIFY_ALT_EVT_LEN - 1;
 				/* After set alternate setting, we will return evt to boots */
 				hci_recv_frame(hdev, evt_skb);
 				hdev->conn_hash.sco_num++;
@@ -1475,9 +1474,9 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					skb->data[4] == 0xff && skb->data[5] == 0x03 &&
 					skb->data[6] == 0x00 && skb->data[7] == 0x00 && skb->data[9] == 0x00) {
 				evt_skb = skb_copy(skb, GFP_KERNEL);
-				bt_cb(evt_skb)->pkt_type = HCI_EVENT_PKT;
-				memcpy(evt_skb->data, &notify_alt_evt, sizeof(notify_alt_evt));
-				evt_skb->len = sizeof(notify_alt_evt);
+				bt_cb(evt_skb)->pkt_type = notify_alt_evt[0];
+				memcpy(evt_skb->data, &notify_alt_evt[1], NOTIFY_ALT_EVT_LEN - 1);
+				evt_skb->len = NOTIFY_ALT_EVT_LEN - 1;
 				/* After set alternate setting, we will return evt to boots */
 				hci_recv_frame(hdev, evt_skb);
 				/* if sco_num == 0, btusb_work will set alternate setting to zero */
@@ -1547,9 +1546,9 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		/* For wmt cmd/evt */
 		if (!memcmp(skb->data, &wmt_over_hci_header[1], WMT_OVER_HCI_HEADER_SIZE - 1)) {
 			skb_push(skb, 1);
-			skb->data[0] = 0x01;
+			skb->data[0] = MTK_HCI_COMMAND_PKT;
 			BTMTK_DBG_RAW(skb->data, skb->len, "%s, 6ffc send_frame", __func__);
-			btmtk_usb_send_cmd(bdev, skb, 100, 20, BTMTK_TX_CMD_FROM_DRV);
+			btmtk_usb_send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 			btusb_submit_wmt_urb(hdev, GFP_KERNEL);
 			return 0;
 		}
@@ -1684,8 +1683,8 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	int cur_len = 0;
 	int ret = 0;
 	s32 sent_len;
-	u8 dl_done_cmd[] = {0x01, 0x6F, 0xFC, 0x05, 0x01, 0x01, 0x01, 0x00, PATCH_PHASE3};
-	u8 event[] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
+	u8 dl_done_cmd[LD_PATCH_CMD_LEN] = {0x01, 0x6F, 0xFC, 0x05, 0x01, 0x01, 0x01, 0x00, PATCH_PHASE3};
+	u8 event[LD_PATCH_EVT_LEN] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
 
 	if (bdev == NULL || image == NULL || fwbuf == NULL) {
 		BTMTK_ERR("%s: invalid parameters!", __func__);
@@ -1719,9 +1718,9 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			break;
 	}
 
-	BTMTK_INFO_RAW(dl_done_cmd, sizeof(dl_done_cmd), "%s: send dl cmd - ", __func__);
-	ret = btmtk_main_send_cmd(bdev, dl_done_cmd, sizeof(dl_done_cmd),
-			event, sizeof(event),
+	BTMTK_INFO_RAW(dl_done_cmd, LD_PATCH_CMD_LEN, "%s: send dl cmd - ", __func__);
+	ret = btmtk_main_send_cmd(bdev, dl_done_cmd, LD_PATCH_CMD_LEN,
+			event, LD_PATCH_EVT_LEN,
 			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 	if (ret < 0)
 		BTMTK_ERR("%s: send wmd dl cmd failed, terminate!", __func__);
@@ -1730,7 +1729,6 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 exit:
 	return ret;
 }
-
 
 static void btusb_notify(struct hci_dev *hdev, unsigned int evt)
 {
@@ -2179,15 +2177,19 @@ static int btusb_probe(struct usb_interface *intf,
 
 				if (!cif_dev->intr_iso_tx_ep && usb_endpoint_is_int_out(ep_desc)) {
 					cif_dev->intr_iso_tx_ep = ep_desc;
-					BTMTK_INFO("intr_iso_tx_ep i = %d	Endpoints 0x%02X, number_of_endpoints=%d",
-						i, ep_desc->bEndpointAddress, intf->cur_altsetting->desc.bNumEndpoints);
+					BTMTK_INFO("intr_iso_tx_ep i = %d\t"
+						"Endpoints 0x%02X, number_of_endpoints=%d",
+						i, ep_desc->bEndpointAddress,
+						intf->cur_altsetting->desc.bNumEndpoints);
 					continue;
 				}
 
 				if (!cif_dev->intr_iso_rx_ep && usb_endpoint_is_int_in(ep_desc)) {
 					cif_dev->intr_iso_rx_ep = ep_desc;
-					BTMTK_INFO("intr_iso_rx_ep i = %d	Endpoints 0x%02X, number_of_endpoints=%d",
-						i, ep_desc->bEndpointAddress, intf->cur_altsetting->desc.bNumEndpoints);
+					BTMTK_INFO("intr_iso_rx_ep i = %d\t"
+						"Endpoints 0x%02X, number_of_endpoints=%d",
+						i, ep_desc->bEndpointAddress,
+						intf->cur_altsetting->desc.bNumEndpoints);
 					continue;
 				}
 			}
@@ -2615,7 +2617,7 @@ static int btmtk_cif_resume(struct usb_interface *intf)
 	BTMTK_INFO("%s, end. ret = %d", __func__, ret);
 	return ret;
 }
-#endif	// CONFIG_PM //
+#endif	/* CONFIG_PM */
 
 #if !BT_DISABLE_RESET_RESUME
 static int btmtk_cif_reset_resume(struct usb_interface *intf)
@@ -3162,11 +3164,13 @@ void btmtk_usb_chip_reset_notify(struct btmtk_dev *bdev)
 
 int btmtk_usb_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
+	u8 read_address_event[READ_ADDRESS_EVT_HDR_LEN] = {0x04, 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00 };
+
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		skb->len >= event_need_compare_len) {
-		if (memcmp(skb->data, READ_ADDRESS_EVENT,
-			sizeof(READ_ADDRESS_EVENT)) == 0 && (skb->len == 12)) {
-			memcpy(bdev->bdaddr, &skb->data[6], BD_ADDRESS_SIZE);
+		if (memcmp(skb->data, &read_address_event[1], READ_ADDRESS_EVT_HDR_LEN - 1) == 0
+			&& (skb->len == (READ_ADDRESS_EVT_HDR_LEN - 1 + BD_ADDRESS_SIZE))) {
+			memcpy(bdev->bdaddr, &skb->data[READ_ADDRESS_EVT_PAYLOAD_OFFSET - 1], BD_ADDRESS_SIZE);
 			BTMTK_INFO("GET BDADDR = %02X:%02X:%02X:%02X:%02X:%02X",
 				bdev->bdaddr[0], bdev->bdaddr[1], bdev->bdaddr[2],
 				bdev->bdaddr[3], bdev->bdaddr[4], bdev->bdaddr[5]);
@@ -3177,7 +3181,7 @@ int btmtk_usb_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			/* if it is wobx debug event, just print in kernel log, drop it
 			 * by driver, don't send to stack
 			 */
-			if (skb->data[0] == 0xE8)
+			if (skb->data[0] == WOBLE_DEBUG_EVT_TYPE)
 				BTMTK_INFO_RAW(skb->data, skb->len, "%s: wobx debug log:", __func__);
 
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;

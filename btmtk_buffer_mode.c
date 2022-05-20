@@ -94,21 +94,22 @@ out:
 
 static int btmtk_buffer_mode_set_addr(struct btmtk_buffer_mode_struct *buffer_mode)
 {
-	u8 cmd[] = {0x01, 0x1A, 0xFC, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-	/* To-Do, for event check */
-	u8 event[] = {0x04, 0x0E, 0x04, 0x01, 0x1A, 0xFC, 0x00};
+	u8 cmd[SET_ADDRESS_CMD_LEN] = {0x01, 0x1A, 0xFC, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+	u8 event[SET_ADDRESS_EVT_LEN] = {0x04, 0x0E, 0x04, 0x01, 0x1A, 0xFC, 0x00};
 	int ret = 0;
 
-	cmd[9] = buffer_mode->bt0_mac[0];
-	cmd[8] = buffer_mode->bt0_mac[1];
-	cmd[7] = buffer_mode->bt0_mac[2];
-	cmd[6] = buffer_mode->bt0_mac[3];
-	cmd[5] = buffer_mode->bt0_mac[4];
-	cmd[4] = buffer_mode->bt0_mac[5];
+	cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 5] = buffer_mode->bt0_mac[0];
+	cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 4] = buffer_mode->bt0_mac[1];
+	cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 3] = buffer_mode->bt0_mac[2];
+	cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 2] = buffer_mode->bt0_mac[3];
+	cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET + 1] = buffer_mode->bt0_mac[4];
+	cmd[SET_ADDRESS_CMD_PAYLOAD_OFFSET] = buffer_mode->bt0_mac[5];
 
-	BTMTK_INFO_RAW(cmd, sizeof(cmd), "%s: Send", __func__);
-	ret = btmtk_main_send_cmd(buffer_mode->bdev, cmd, sizeof(cmd), event, sizeof(event), 0, 0,
-			BTMTK_TX_CMD_FROM_DRV);
+	BTMTK_INFO_RAW(cmd, SET_ADDRESS_CMD_LEN, "%s: Send", __func__);
+	ret = btmtk_main_send_cmd(buffer_mode->bdev,
+			cmd, SET_ADDRESS_CMD_LEN,
+			event, SET_ADDRESS_EVT_LEN,
+			0, 0, BTMTK_TX_CMD_FROM_DRV);
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -116,19 +117,20 @@ static int btmtk_buffer_mode_set_addr(struct btmtk_buffer_mode_struct *buffer_mo
 
 static int btmtk_buffer_mode_set_radio(struct btmtk_buffer_mode_struct *buffer_mode)
 {
-	u8 cmd[] = {0x01, 0x2C, 0xFC, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-	/* To-Do, for event check */
-	u8 event[] = {0x04, 0x0E, 0x04, 0x01, 0x2C, 0xFC, 0x00};
+	u8 cmd[SET_RADIO_CMD_LEN] = {0x01, 0x2C, 0xFC, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+	u8 event[SET_RADIO_EVT_LEN] = {0x04, 0x0E, 0x04, 0x01, 0x2C, 0xFC, 0x00};
 	int ret = 0;
 
-	cmd[4] = buffer_mode->bt0_radio.radio_0 & 0x3F;		/* edr_init_pwr */
-	cmd[8] = buffer_mode->bt0_radio.radio_2 & 0x3F;		/* ble_default_pwr */
-	cmd[9] = buffer_mode->bt0_radio.radio_1 & 0x3F;		/* edr_max_pwr */
-	cmd[11] = (buffer_mode->bt0_radio.radio_0 & 0xC0) >> 6;	/* edr_pwr_mode */
+	cmd[SET_RADIO_CMD_EDR_DEF_OFFSET] = buffer_mode->bt0_radio.radio_0 & 0x3F;		/* edr_init_pwr */
+	cmd[SET_RADIO_CMD_BLE_OFFSET] = buffer_mode->bt0_radio.radio_2 & 0x3F;		/* ble_default_pwr */
+	cmd[SET_RADIO_CMD_EDR_MAX_OFFSET] = buffer_mode->bt0_radio.radio_1 & 0x3F;		/* edr_max_pwr */
+	cmd[SET_RADIO_CMD_EDR_MODE_OFFSET] = (buffer_mode->bt0_radio.radio_0 & 0xC0) >> 6;	/* edr_pwr_mode */
 
-	BTMTK_INFO_RAW(cmd, sizeof(cmd), "%s: Send", __func__);
-	ret = btmtk_main_send_cmd(buffer_mode->bdev, cmd, sizeof(cmd), event, sizeof(event), 0, 0,
-			BTMTK_TX_CMD_FROM_DRV);
+	BTMTK_INFO_RAW(cmd, SET_RADIO_CMD_LEN, "%s: Send", __func__);
+	ret = btmtk_main_send_cmd(buffer_mode->bdev,
+			cmd, SET_RADIO_CMD_LEN,
+			event, SET_RADIO_EVT_LEN,
+			0, 0, BTMTK_TX_CMD_FROM_DRV);
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -136,16 +138,17 @@ static int btmtk_buffer_mode_set_radio(struct btmtk_buffer_mode_struct *buffer_m
 
 static int btmtk_buffer_mode_set_group_boundary(struct btmtk_buffer_mode_struct *buffer_mode)
 {
-	u8 cmd[] = {0x01, 0xEA, 0xFC, 0x09, 0x02, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-	/* To-Do, for event check */
-	u8 event[] = {0x04, 0x0E, 0x04, 0x01, 0xEA, 0xFC, 0x00};
+	u8 cmd[SET_GRP_CMD_LEN] = {0x01, 0xEA, 0xFC, 0x09, 0x02, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+	u8 event[SET_GRP_EVT_LEN] = {0x04, 0x0E, 0x04, 0x01, 0xEA, 0xFC, 0x00};
 	int ret = 0;
 
-	memcpy(&cmd[8], buffer_mode->bt0_ant0_grp_boundary, sizeof(buffer_mode->bt0_ant0_grp_boundary));
+	memcpy(&cmd[SET_GRP_CMD_PAYLOAD_OFFSET], buffer_mode->bt0_ant0_grp_boundary, BUFFER_MODE_GROUP_LENGTH);
 
-	BTMTK_INFO_RAW(cmd, sizeof(cmd), "%s: Send", __func__);
-	ret = btmtk_main_send_cmd(buffer_mode->bdev, cmd, sizeof(cmd), event, sizeof(event), 0, 0,
-			BTMTK_TX_CMD_FROM_DRV);
+	BTMTK_INFO_RAW(cmd, SET_GRP_CMD_LEN, "%s: Send", __func__);
+	ret = btmtk_main_send_cmd(buffer_mode->bdev,
+			cmd, SET_GRP_CMD_LEN,
+			event, SET_GRP_EVT_LEN,
+			0, 0, BTMTK_TX_CMD_FROM_DRV);
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -153,16 +156,18 @@ static int btmtk_buffer_mode_set_group_boundary(struct btmtk_buffer_mode_struct 
 
 static int btmtk_buffer_mode_set_power_offset(struct btmtk_buffer_mode_struct *buffer_mode)
 {
-	u8 cmd[] = {0x01, 0xEA, 0xFC, 0x0A, 0x02, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-	/* To-Do, for event check */
-	u8 event[] = {0x04, 0x0E, 0x04, 0x01, 0xEA, 0xFC, 0x00};
+	u8 cmd[SET_PWR_OFFSET_CMD_LEN] = {0x01, 0xEA, 0xFC, 0x0A,
+		0x02, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+	u8 event[SET_PWR_OFFSET_EVT_LEN] = {0x04, 0x0E, 0x04, 0x01, 0xEA, 0xFC, 0x00};
 	int ret = 0;
 
-	memcpy(&cmd[8], buffer_mode->bt0_ant0_pwr_offset, sizeof(buffer_mode->bt0_ant0_pwr_offset));
+	memcpy(&cmd[SET_PWR_OFFSET_CMD_PAYLOAD_OFFSET], buffer_mode->bt0_ant0_pwr_offset, BUFFER_MODE_CAL_LENGTH);
 
-	BTMTK_INFO_RAW(cmd, sizeof(cmd), "%s: Send", __func__);
-	ret = btmtk_main_send_cmd(buffer_mode->bdev, cmd, sizeof(cmd), event, sizeof(event), 0, 0,
-			BTMTK_TX_CMD_FROM_DRV);
+	BTMTK_INFO_RAW(cmd, SET_PWR_OFFSET_CMD_LEN, "%s: Send", __func__);
+	ret = btmtk_main_send_cmd(buffer_mode->bdev,
+			cmd, SET_PWR_OFFSET_CMD_LEN,
+			event, SET_PWR_OFFSET_EVT_LEN,
+			0, 0, BTMTK_TX_CMD_FROM_DRV);
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -171,6 +176,7 @@ static int btmtk_buffer_mode_set_power_offset(struct btmtk_buffer_mode_struct *b
 int btmtk_buffer_mode_send(struct btmtk_buffer_mode_struct *buffer_mode)
 {
 	int ret = 0;
+
 	if (buffer_mode == NULL) {
 		BTMTK_INFO("buffer_mode is NULL, not support");
 		return -EIO;
@@ -226,18 +232,30 @@ void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev, struct btmtk_buffer_mo
 		return;
 	}
 
-	memcpy(btmtk_buffer_mode.bt0_mac, &bdev->setting_file[BT0_MAC_OFFSET], BUFFER_MODE_MAC_LENGTH);
-	memcpy(btmtk_buffer_mode.bt1_mac, &bdev->setting_file[BT1_MAC_OFFSET], BUFFER_MODE_MAC_LENGTH);
-	memcpy(&btmtk_buffer_mode.bt0_radio, &bdev->setting_file[BT0_RADIO_OFFSET], BUFFER_MODE_RADIO_LENGTH);
-	memcpy(&btmtk_buffer_mode.bt1_radio, &bdev->setting_file[BT1_RADIO_OFFSET], BUFFER_MODE_RADIO_LENGTH);
-	memcpy(btmtk_buffer_mode.bt0_ant0_grp_boundary, &bdev->setting_file[BT0_GROUP_ANT0_OFFSET], BUFFER_MODE_GROUP_LENGTH);
-	memcpy(btmtk_buffer_mode.bt0_ant1_grp_boundary, &bdev->setting_file[BT0_GROUP_ANT1_OFFSET], BUFFER_MODE_GROUP_LENGTH);
-	memcpy(btmtk_buffer_mode.bt1_ant0_grp_boundary, &bdev->setting_file[BT1_GROUP_ANT0_OFFSET], BUFFER_MODE_GROUP_LENGTH);
-	memcpy(btmtk_buffer_mode.bt1_ant1_grp_boundary, &bdev->setting_file[BT1_GROUP_ANT1_OFFSET], BUFFER_MODE_GROUP_LENGTH);
-	memcpy(btmtk_buffer_mode.bt0_ant0_pwr_offset, &bdev->setting_file[BT0_CAL_ANT0_OFFSET], BUFFER_MODE_CAL_LENGTH);
-	memcpy(btmtk_buffer_mode.bt0_ant1_pwr_offset, &bdev->setting_file[BT0_CAL_ANT1_OFFSET], BUFFER_MODE_CAL_LENGTH);
-	memcpy(btmtk_buffer_mode.bt1_ant0_pwr_offset, &bdev->setting_file[BT1_CAL_ANT0_OFFSET], BUFFER_MODE_CAL_LENGTH);
-	memcpy(btmtk_buffer_mode.bt1_ant1_pwr_offset, &bdev->setting_file[BT1_CAL_ANT1_OFFSET], BUFFER_MODE_CAL_LENGTH);
+	memcpy(btmtk_buffer_mode.bt0_mac, &bdev->setting_file[BT0_MAC_OFFSET],
+			BUFFER_MODE_MAC_LENGTH);
+	memcpy(btmtk_buffer_mode.bt1_mac, &bdev->setting_file[BT1_MAC_OFFSET],
+			BUFFER_MODE_MAC_LENGTH);
+	memcpy(&btmtk_buffer_mode.bt0_radio, &bdev->setting_file[BT0_RADIO_OFFSET],
+			BUFFER_MODE_RADIO_LENGTH);
+	memcpy(&btmtk_buffer_mode.bt1_radio, &bdev->setting_file[BT1_RADIO_OFFSET],
+			BUFFER_MODE_RADIO_LENGTH);
+	memcpy(btmtk_buffer_mode.bt0_ant0_grp_boundary, &bdev->setting_file[BT0_GROUP_ANT0_OFFSET],
+			BUFFER_MODE_GROUP_LENGTH);
+	memcpy(btmtk_buffer_mode.bt0_ant1_grp_boundary, &bdev->setting_file[BT0_GROUP_ANT1_OFFSET],
+			BUFFER_MODE_GROUP_LENGTH);
+	memcpy(btmtk_buffer_mode.bt1_ant0_grp_boundary, &bdev->setting_file[BT1_GROUP_ANT0_OFFSET],
+			BUFFER_MODE_GROUP_LENGTH);
+	memcpy(btmtk_buffer_mode.bt1_ant1_grp_boundary, &bdev->setting_file[BT1_GROUP_ANT1_OFFSET],
+			BUFFER_MODE_GROUP_LENGTH);
+	memcpy(btmtk_buffer_mode.bt0_ant0_pwr_offset, &bdev->setting_file[BT0_CAL_ANT0_OFFSET],
+			BUFFER_MODE_CAL_LENGTH);
+	memcpy(btmtk_buffer_mode.bt0_ant1_pwr_offset, &bdev->setting_file[BT0_CAL_ANT1_OFFSET],
+			BUFFER_MODE_CAL_LENGTH);
+	memcpy(btmtk_buffer_mode.bt1_ant0_pwr_offset, &bdev->setting_file[BT1_CAL_ANT0_OFFSET],
+			BUFFER_MODE_CAL_LENGTH);
+	memcpy(btmtk_buffer_mode.bt1_ant1_pwr_offset, &bdev->setting_file[BT1_CAL_ANT1_OFFSET],
+			BUFFER_MODE_CAL_LENGTH);
 
 	*buffer_mode = &btmtk_buffer_mode;
 }

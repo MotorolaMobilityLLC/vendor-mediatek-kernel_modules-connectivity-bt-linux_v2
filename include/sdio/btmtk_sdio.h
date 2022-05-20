@@ -46,7 +46,6 @@
 #define URB_MAX_BUFFER_SIZE	(4*1024)
 #define BTMTK_SDIO_FUNC 2
 
-
 /* common register address */
 #define CCIR		0x0000
 #define CHLPCR		0x0004
@@ -95,7 +94,6 @@ typedef int (*reset_func_ptr2) (unsigned int gpio, int init_value);
 typedef int (*set_gpio_low)(u8 gpio);
 typedef int (*set_gpio_high)(u8 gpio);
 
-
 /**
  * Send cmd dispatch evt
  */
@@ -108,6 +106,22 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define DRIVER_OWN 0
 #define FW_OWN 1
 #define SET_OWN_LOOP_COUNT 20
+
+/* CMD&Event sent by driver */
+#define READ_REGISTER_CMD_LEN		16
+#define READ_REGISTER_EVT_HDR_LEN		11
+
+#define FW_ASSERT_CMD_LEN 4
+#define FW_ASSERT_CMD1_LEN 9
+#define NOTIFY_ALT_EVT_LEN 7
+
+#define READ_ADDRESS_EVT_HDR_LEN 7
+#define READ_ADDRESS_EVT_PAYLOAD_OFFSET 7
+#define WOBLE_DEBUG_EVT_TYPE 0xE8
+
+#define LD_PATCH_CMD_LEN 10
+#define LD_PATCH_EVT_LEN 8
+
 
 struct btmtk_sdio_hdr {
 	/* For SDIO Header */

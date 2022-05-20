@@ -55,7 +55,7 @@ int btmtk_cif_send_cmd(struct hci_dev *hdev, const uint8_t *cmd,
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 
 	BTMTK_DBG_RAW(cmd, cmd_len, "%s, len = %d Send CMD : ", __func__, cmd_len);
-	//BTMTK_INFO("%s: tty %p\n", __func__, bdev->tty);
+	/* BTMTK_INFO("%s: tty %p\n", __func__, bdev->tty); */
 	while (len != cmd_len) {
 		ret = bdev->tty->ops->write(bdev->tty, cmd, cmd_len);
 		len += ret;
@@ -208,7 +208,7 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 		btmtk_load_rom_patch_766x(g_bdev->hdev);
 		return 1;
 	default:
-		//pr_info("<!!> n_tty_ioctl_helper <!!>\n");
+		/* pr_info("<!!> n_tty_ioctl_helper <!!>\n"); */
 		err = n_tty_ioctl_helper(tty, file, cmd, arg);
 		break;
 	};
