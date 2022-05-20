@@ -2912,7 +2912,7 @@ static void btusb_work(struct work_struct *work)
 			set_bit(BTUSB_DID_ISO_RESUME, &bdev->flags);
 		}
 
-#if CFG_SUPPORT_DVT
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
 		new_alts = cif_dev->new_isoc_altsetting;
 #else
 		if (hdev->voice_setting & 0x0020) {
@@ -2922,7 +2922,7 @@ static void btusb_work(struct work_struct *work)
 		} else {
 			new_alts = bdev->sco_num;
 		}
-#endif /* CFG_SUPPORT_DVT */
+#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
 		clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
 		usb_kill_anchored_urbs(&cif_dev->isoc_anchor);
