@@ -179,13 +179,13 @@ int btmtk_fops_initfwlog(void)
 	BTMTK_INFO("%s: BT_majorfwlog %d, devIDfwlog %d", __func__, BT_majorfwlog, devIDfwlog);
 
 	g_fwlog->g_devIDfwlog = devIDfwlog;
+	sema_init(&ioctl_mtx, 1);
 
 	//if (is_mt66xx(g_sbdev->chip_id)) {
 	if (bmain_info->hif_hook.log_init) {
 		bmain_info->hif_hook.log_init();
 		bmain_info->hif_hook.log_register_cb(fw_log_bt_event_cb);
 		init_waitqueue_head(&BT_log_wq);
-		sema_init(&ioctl_mtx, 1);
 	} else {
 		spin_lock_init(&g_fwlog->fwlog_lock);
 		skb_queue_head_init(&g_fwlog->fwlog_queue);

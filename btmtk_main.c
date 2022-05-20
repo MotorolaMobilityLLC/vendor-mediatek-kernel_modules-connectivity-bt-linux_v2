@@ -2912,17 +2912,21 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: flavor1 = 0x%x", __func__, bdev->flavor);
 
 	/* if flavor equals 1, it represent 7920, else it represent 7921 */
-	if (bdev->flavor)
+	if (bdev->flavor) {
 		(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_1a_%x_hdr.bin",
 				bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
-	else
+		(void)snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s%x_1a_%x.%s", BT_CFG_NAME_PREFIX,
+				bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
+	} else {
 		(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_1_%x_hdr.bin",
 				bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
+		(void)snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s%x_1_%x.%s", BT_CFG_NAME_PREFIX,
+				bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
+	}
 
-	BTMTK_INFO("%s: rom patch file name is %s", __func__, bdev->rom_patch_bin_file_name);
+	BTMTK_INFO("%s: rom patch file name is %s, bt_cfg_file_name is %s", __func__,
+		bdev->rom_patch_bin_file_name, bdev->bt_cfg_file_name);
 
-	snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s_%x.%s", BT_CFG_NAME_PREFIX,
-		bdev->chip_id, BT_CFG_NAME_SUFFIX);
 	memset(bdev->bdaddr, 0, BD_ADDRESS_SIZE);
 
 exit:
@@ -4086,7 +4090,7 @@ int btmtk_deregister_hci_device(struct btmtk_dev *bdev)
 	int err = 0;
 
 	/* when not do hci_register_dev action, we do hci_unregister_dev will crash,
-	 * so we add test_flag to decide whether hci_register_dev has been 
+	 * so we add test_flag to decide whether hci_register_dev has been
 	 * successful or failed, if  hci_register_dev success, it will set flag to
 	 * HCI_BREDR_ENABLED, After this flag has been set to HCI_BREDR_ENABLED, we
 	 * can be able to do hci_unregister_dev.
