@@ -931,8 +931,9 @@ int btmtk_woble_initialize(struct btmtk_dev *bdev, struct btmtk_woble *bt_woble)
 			}
 		}
 
-		(void)snprintf(bt_woble->woble_setting_file_name, MAX_BIN_FILE_NAME_LEN, "%s_%x.%s", WOBLE_CFG_NAME_PREFIX,
-				bdev->chip_id & 0xffff, WOBLE_CFG_NAME_SUFFIX);
+		(void)snprintf(bt_woble->woble_setting_file_name, MAX_BIN_FILE_NAME_LEN,
+				"%s_%x.%s", WOBLE_CFG_NAME_PREFIX, bdev->chip_id & 0xffff,
+				WOBLE_CFG_NAME_SUFFIX);
 
 		BTMTK_INFO("%s: woble setting file name is %s", __func__, bt_woble->woble_setting_file_name);
 

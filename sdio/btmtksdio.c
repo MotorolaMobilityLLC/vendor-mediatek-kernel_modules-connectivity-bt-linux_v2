@@ -1955,6 +1955,7 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_sdio_dev *cif_dev = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	u8 i = 0;
 
 	bdev = sdio_get_drvdata(func);
 	if (!bdev) {
@@ -2034,6 +2035,23 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 		goto free_thread;
 	}
 
+	/* temp solution for fix when do read chip id, main thread don't start at the time,
+	 * then read chip id will be failed. The final solution maybe need move all
+	 * cmd to the new tx thread.
+	 */
+	while (!atomic_read(&cif_dev->sdio_thread.thread_status) && i < CHECK_THREAD_RETRY_TIMES) {
+		BTMTK_INFO("wait btmtk_sdio_main_thread start");
+		usleep_range(5*1000, 10*1000);
+		i++;
+		if (i == RETRY_TIMES - 1) {
+			BTMTK_WARN("wait btmtk_sdio_main_thread start failed, do chip reset!!!");
+			bdev->bt_cfg.support_dongle_reset = 1;
+			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+			btmtk_reset_trigger(bdev);
+			goto exit;
+		}
+	}
+
 	err = btmtk_main_cif_initialize(bdev, HCI_SDIO);
 	if (err < 0) {
 		if (err == -EIO) {
@@ -2057,7 +2075,7 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 #endif /* CFG_SUPPORT_HW_DVT */
 
 	/* It's HW workaround for mt7921 */
-	if(is_mt7961(bdev->chip_id))
+	if (is_mt7961(bdev->chip_id))
 		cif_dev->patched = 1;
 
 	err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
@@ -2412,7 +2430,7 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 		 * 1: Driver own. 0: FW own
 		 */
 		btmtk_sdio_keep_driver_own(cif_dev, 1);
-		if(!is_mt7961(bdev->chip_id))
+		if (!is_mt7961(bdev->chip_id))
 			break;
 		ret = btmtk_sdio_readl(PD2HRM0R, &u32ReadCRValue, cif_dev->func);
 		msleep(DELAY_TIMES);
@@ -2619,7 +2637,7 @@ static void btmtk_sdio_chip_reset_notify(struct btmtk_dev *bdev)
 	}
 	btmtk_sdio_keep_driver_own(cif_dev, 0);
 	/* It's HW workaround for mt7921 */
-	if(is_mt7961(bdev->chip_id))
+	if (is_mt7961(bdev->chip_id))
 		cif_dev->patched = 1;
 	atomic_set(&cif_dev->tx_rdy, 1);
 

@@ -311,7 +311,7 @@ void btmtk_set_chip_state(struct btmtk_dev *bdev, u8 new_state)
 {
 	static const char * const state_msg[BTMTK_STATE_MSG_NUM] = {
 		"UNKNOWN", "INIT", "DISCONNECT", "PROBE", "WORKING", "SUSPEND", "RESUME",
-		"FW_DUMP", "STANDBY", "SUBSYS_RESET","SEND_ASSERT",
+		"FW_DUMP", "STANDBY", "SUBSYS_RESET", "SEND_ASSERT",
 	};
 
 	if (new_state >= BTMTK_STATE_MSG_NUM) {
@@ -377,7 +377,7 @@ static void btmtk_main_info_initialize(void)
 	u32 snoop_idx = 0;
 
 	memset(&main_info, 0, sizeof(main_info));
-	for (snoop_idx = 0; snoop_idx < HCI_SNOOP_TYPE_MAX; snoop_idx ++)
+	for (snoop_idx = 0; snoop_idx < HCI_SNOOP_TYPE_MAX; snoop_idx++)
 		main_info.snoop[snoop_idx].index = HCI_SNOOP_ENTRY_NUM - 1;
 	atomic_set(&main_info.chip_reset, BTMTK_RESET_DONE);
 	atomic_set(&main_info.subsys_reset, BTMTK_RESET_DONE);
@@ -447,16 +447,19 @@ void btmtk_hci_snoop_print_to_log(void)
 		"RX ISO From FW"};
 
 	for (snoop_index = 0; snoop_index < HCI_SNOOP_TYPE_MAX; snoop_index++) {
-		BTMTK_INFO("HCI %s Dump: Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data", snoop_str[snoop_index]);
+		BTMTK_INFO("HCI %s Dump: Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data",
+			snoop_str[snoop_index]);
 		if (main_info.snoop[snoop_index].index >= (HCI_SNOOP_ENTRY_NUM - 1))
 			index = 0;
 		else
 			index = main_info.snoop[snoop_index].index + 1;
 		for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
 			if (main_info.snoop[snoop_index].len[index] > 0)
-				BTMTK_INFO_RAW(main_info.snoop[snoop_index].buf[index], main_info.snoop[snoop_index].len[index],
+				BTMTK_INFO_RAW(main_info.snoop[snoop_index].buf[index],
+					main_info.snoop[snoop_index].len[index],
 					"time(%s)-act_len(%d)-len(%d):", main_info.snoop[snoop_index].timestamp[index],
-					main_info.snoop[snoop_index].actual_len[index], main_info.snoop[snoop_index].len[index]);
+					main_info.snoop[snoop_index].actual_len[index],
+					main_info.snoop[snoop_index].len[index]);
 			index++;
 			if (index >= HCI_SNOOP_ENTRY_NUM)
 				index = 0;
@@ -2813,7 +2816,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 		btmtk_reset_trigger(bdev);
 	} else {
 		bdev->debug_type = DEBUG_SOP_NO_RESPONSE;
-		btmtk_reset_timer_add(bdev);
+		btmtk_reset_timer_update(bdev);
 		BTMTK_INFO("%s: OK", __func__);
 		btmtk_set_chip_state(bdev, BTMTK_STATE_SEND_ASSERT);
 	}
@@ -3551,7 +3554,7 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
 				BTMTK_INFO("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
 				bdev->debug_type = DEBUG_SOP_NO_RESPONSE;
-				btmtk_reset_timer_add(bdev);
+				btmtk_reset_timer_update(bdev);
 				btmtk_hci_snoop_print_to_log();
 			} else if (skb->len == HCI_RESET_CMD_LEN &&
 					!memcmp(skb->data, reset_cmd, HCI_RESET_CMD_LEN))
@@ -3678,8 +3681,10 @@ void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 	/* Flush RX works */
 	flush_work(&bdev->rx_work);
 
-	/* Drop queues */
-	skb_queue_purge(&bdev->rx_q);
+	if (skb_queue_len(&bdev->rx_q) != 0) {
+		/* Drop queues */
+		skb_queue_purge(&bdev->rx_q);
+	}
 	if (bdev->workqueue) {
 		destroy_workqueue(bdev->workqueue);
 		bdev->workqueue = NULL;
@@ -3896,6 +3901,8 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 {
 	int err = 0;
 
+	btmtk_reset_timer_add(bdev);
+
 	err = btmtk_main_allocate_memory(bdev);
 	if (err < 0) {
 		BTMTK_ERR("btmtk_main_allocate_memory failed!");
@@ -3941,6 +3948,7 @@ void btmtk_main_cif_uninitialize(struct btmtk_dev *bdev, int hci_bus)
 	btmtk_free_setting_file(bdev);
 	btmtk_free_hci_device(bdev, hci_bus);
 	btmtk_main_free_memory(bdev);
+	btmtk_reset_timer_del(bdev);
 }
 
 int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus)

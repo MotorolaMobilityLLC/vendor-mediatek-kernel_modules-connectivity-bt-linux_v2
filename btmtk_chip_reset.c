@@ -40,16 +40,22 @@ void btmtk_reset_timer_add(struct btmtk_dev *bdev)
 	init_timer(&bdev->chip_reset_timer);
 	bdev->chip_reset_timer.function = btmtk_reset_timer;
 	bdev->chip_reset_timer.data = (unsigned long)bdev;
-	mod_timer(&bdev->chip_reset_timer, jiffies + CHIP_RESET_TIMEOUT * HZ);
 #else
 	timer_setup(&bdev->chip_reset_timer, btmtk_reset_timer, 0);
-	mod_timer(&bdev->chip_reset_timer, jiffies + CHIP_RESET_TIMEOUT * HZ);
 #endif
 }
 
-static void btmtk_reset_timer_del(struct btmtk_dev *bdev)
+void btmtk_reset_timer_update(struct btmtk_dev *bdev)
 {
-	del_timer_sync(&bdev->chip_reset_timer);
+	mod_timer(&bdev->chip_reset_timer, jiffies + CHIP_RESET_TIMEOUT * HZ);
+}
+
+void btmtk_reset_timer_del(struct btmtk_dev *bdev)
+{
+	if (timer_pending(&bdev->chip_reset_timer)) {
+		del_timer_sync(&bdev->chip_reset_timer);
+		BTMTK_INFO("%s exit", __func__);
+	}
 }
 
 void btmtk_reset_waker(struct work_struct *work)

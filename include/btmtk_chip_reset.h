@@ -23,6 +23,8 @@
 #define CHIP_RESET_TIMEOUT 20
 
 void btmtk_reset_timer_add(struct btmtk_dev *bdev);
+void btmtk_reset_timer_update(struct btmtk_dev *bdev);
+void btmtk_reset_timer_del(struct btmtk_dev *bdev);
 void btmtk_reset_trigger(struct btmtk_dev *bdev);
 void btmtk_reset_waker(struct work_struct *work);
 
