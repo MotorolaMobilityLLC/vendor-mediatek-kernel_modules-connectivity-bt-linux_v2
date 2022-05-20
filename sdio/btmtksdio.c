@@ -21,6 +21,13 @@
  *
  */
 
+#include <linux/version.h>
+#if (KERNEL_VERSION(4, 14, 0) > LINUX_VERSION_CODE)
+#include <linux/sched.h>
+#else
+#include <uapi/linux/sched/types.h>
+#endif
+
 #include "btmtk_sdio.h"
 
 static char event_need_compare[EVENT_COMPARE_SIZE] = {0};
@@ -913,9 +920,23 @@ int btmtk_sdio_read_wifi_mcu_pc(u8 PcLogSel, u32 *val)
 {
 	int ret = 0;
 	unsigned int value = 0;
+	int state = BTMTK_STATE_INIT;
 
-	if (!g_sdio_dev.func)
+	if (!g_sdio_dev.func) {
+		BTMTK_ERR("%s g_sdio_dev.func is NULL!", __func__);
 		return -EINVAL;
+	}
+
+	if (!g_sdio_dev.bdev) {
+		BTMTK_ERR("%s bdev is NULL!", __func__);
+		return -EINVAL;
+	}
+
+	state = btmtk_get_chip_state(g_sdio_dev.bdev);
+	if (state != BTMTK_STATE_WORKING) {
+		BTMTK_WARN("%s state is invalid, state = %d!", __func__, state);
+		return -ENODEV;
+	}
 
 	SDIO_DEBUG_MUTEX_LOCK();
 
@@ -2120,11 +2141,11 @@ static int btmtk_sdio_main_thread(void *data)
 	int ret = 0;
 	ulong flags;
 	u32 thread_flag = 0;
-/*	struct sched_param param = { .sched_priority = 90 }; RR 90 is the same as audio*/
+	struct sched_param param = { .sched_priority = 90 }; /* RR 90 is the same as audio*/
 
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
-/*	sched_setscheduler(current, SCHED_RR, &param); */
+	sched_setscheduler(current, SCHED_RR, &param);
 
 	BTMTK_INFO("btmtk_sdio_main_thread start running...");
 	atomic_set(&cif_dev->sdio_thread.thread_status, 1);
@@ -2207,7 +2228,7 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 
 	cif_dev->func = func;
 	cif_dev->bdev = bdev;
-	BTMTK_INFO("%s func device %p", __func__, func);
+	BTMTK_INFO("%s, func device %p", __func__, func);
 	cif_dev->patched = 0;
 
 	/* it's for L0/L0.5 reset */

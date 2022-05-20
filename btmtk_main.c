@@ -4126,11 +4126,16 @@ void btmtk_main_cif_uninitialize(struct btmtk_dev *bdev, int hci_bus)
 
 int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus)
 {
+	/* need to rewirte when add txqueue, because usb need to add more clear action
+	 * when do whole chip reset, usb need to do clear action in usb_close when disconnect,
+	 * because usb_close will not execute when do chip reset
+	 */
+	cancel_work_sync(&bdev->rx_work);
 	btmtk_deregister_hci_device(bdev);
 	btmtk_main_cif_uninitialize(bdev, hci_bus);
 
 	bdev->power_state = BTMTK_DONGLE_STATE_POWER_OFF;
-	btmtk_release_dev(bdev);
+	/* btmtk_release_dev(bdev); */
 
 	return 0;
 }

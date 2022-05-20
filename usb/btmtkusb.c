@@ -634,6 +634,8 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 			usb_unanchor_urb(urb);
 	}
 
+	return;
+
 exit:
 	kfree(urb->setup_packet);
 }
