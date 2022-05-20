@@ -3219,6 +3219,7 @@ static void btmtk_rx_work(struct work_struct *work)
 					BTMTK_INFO_RAW(event_need_compare, event_need_compare_len,
 						"%s: event_need_compare:", __func__);
 					BTMTK_INFO_RAW(skb->data, skb->len, "%s: skb->data:", __func__);
+					goto EVT_PROCESS;
 				}
 
 				/* Drop by driver, don't send to stack */
@@ -3228,6 +3229,7 @@ static void btmtk_rx_work(struct work_struct *work)
 			/* if it is wobx debug event, just print in kernel log, drop it
 			 * by driver, don't send to stack
 			 */
+EVT_PROCESS:
 			if (skb->data[0] == 0xE8) {
 				BTMTK_INFO_RAW(skb->data, skb->len, "%s: wobx debug log:", __func__);
 				kfree_skb(skb);
