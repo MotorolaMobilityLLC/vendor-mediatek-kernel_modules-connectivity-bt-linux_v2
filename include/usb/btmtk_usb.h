@@ -160,7 +160,9 @@ struct btmtk_dev {
 	 * this urb_transfer_buf
 	 */
 	unsigned char	*urb_transfer_buf;
+};
 
+struct btmtk_cif_chip_reset {
 	/* For Whole chip reset */
 	pdwnc_func pf_pdwndFunc;
 	reset_func_ptr2 pf_resetFunc2;

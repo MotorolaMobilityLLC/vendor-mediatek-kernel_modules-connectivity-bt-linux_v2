@@ -89,7 +89,7 @@
 #define BTMTK_LOG_LVL_MAX	BTMTK_LOG_LVL_DBG
 #define BTMTK_LOG_LVL_DEF	BTMTK_LOG_LVL_INFO	/* default setting */
 
-#define HCI_SNOOP_ENTRY_NUM	60
+#define HCI_SNOOP_ENTRY_NUM	30
 #define HCI_SNOOP_BUF_SIZE	32
 #define HCI_SNOOP_MAX_BUF_SIZE	66
 #define WMT_OVER_HCI_HEADER_SIZE	3
@@ -222,6 +222,12 @@ extern u8 wmt_over_hci_header[];
 
 #define PM_KEY_BTW (0x0015) /* Notify PM the unify woble type */
 
+/**
+ * Disable RESUME_RESUME
+ */
+#ifndef BT_DISABLE_RESET_RESUME
+#define BT_DISABLE_RESET_RESUME 0
+#endif
 
 enum fw_cfg_index_len {
 	FW_CFG_INX_LEN_NONE = 0,

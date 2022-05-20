@@ -157,7 +157,7 @@ void btmtk_woble_wake_unlock(struct btmtk_dev *bdev);
 /**
  * For chip reset pin
  */
-#define RESET_PIN_SET_LOW_TIME		500
+#define RESET_PIN_SET_LOW_TIME		100
 
 /* stpbtfwlog setting */
 #define FWLOG_QUEUE_COUNT			(400 * BT_MCU_MINIMUM_INTERFACE_NUM)

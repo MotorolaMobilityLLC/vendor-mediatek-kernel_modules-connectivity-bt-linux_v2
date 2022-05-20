@@ -3336,10 +3336,7 @@ STOP_TRAFFIC:
 Finish:
 	if (ret) {
 		bdev->power_state = BTMTK_DONGLE_STATE_ERROR;
-		if (bdev->bt_cfg.support_woble_wakelock) {
-			btmtk_cif_toggle_rst_pin(bdev);
-			btmtk_woble_wake_lock(bdev);
-		}
+		btmtk_woble_wake_lock(bdev);
 	}
 
 	BTMTK_INFO("%s: end ret = %d, power_state =%d", __func__, ret, bdev->power_state);
@@ -4227,7 +4224,6 @@ void btmtk_reset_waker(struct work_struct *work)
 	/* read interrupt EP15 CR */
 
 	bdev->subsys_reset = 1;
-	mdelay(500); /* Need to improve */
 	cancel_work_sync(&bdev->work);
 	cancel_work_sync(&bdev->waker);
 
@@ -4238,6 +4234,13 @@ void btmtk_reset_waker(struct work_struct *work)
 		/* L0.5 reset failed, do whole chip reset */
 		/* We will add support dongle reset flag, reading from bt.cfg */
 		bdev->subsys_reset = 0;
+		/* TODO: need to confirm with usb host when suspend fail, to do chip reset,
+		 * because usb3.0 need to toggle reset pin after hub_event unfreeze,
+		 * otherwise, it will not occur disconnect on Capy Platform. When Mstar
+		 * chip has usb3.0 port, we will use Mstar platform to do comparison
+		 * test, then found the final solution.
+		 */
+		//msleep(2000);
 		btmtk_cif_toggle_rst_pin(bdev);
 		goto Finish;
 	}
@@ -4253,6 +4256,13 @@ void btmtk_reset_waker(struct work_struct *work)
 		}
 	} else {
 		/* L0.5 reset failed, do whole chip reset */
+		/* TODO: need to confirm with usb host when suspend fail, to do chip reset,
+		 * because usb3.0 need to toggle reset pin after hub_event unfreeze,
+		 * otherwise, it will not occur disconnect on Capy Platform. When Mstar
+		 * chip has usb3.0 port, we will use Mstar platform to do comparison
+		 * test, then found the final solution.
+		 */
+		//msleep(2000);
 		btmtk_cif_toggle_rst_pin(bdev);
 		//btmtk_send_hw_err_to_host(bdev);
 		goto Finish;
@@ -4276,6 +4286,7 @@ Finish:
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 	else
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+
 }
 
 static void btmtk_rx_work(struct work_struct *work)

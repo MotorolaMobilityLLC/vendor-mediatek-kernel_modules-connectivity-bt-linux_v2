@@ -202,14 +202,7 @@ struct btmtk_dev {
 	 * We must be remove it
 	 */
 	unsigned char	*urb_transfer_buf;
-
-	/* For Whole chip reset */
-	pdwnc_func pf_pdwndFunc;
-	reset_func_ptr2 pf_resetFunc2;
-	set_gpio_low pf_lowFunc;
-	set_gpio_high pf_highFunc;
 };
-
 
 int btmtk_cif_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 		int delay, int retry, int endpoint);

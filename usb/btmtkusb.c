@@ -33,6 +33,8 @@
 #include "btmtk_main.h"
 
 static struct usb_driver btusb_driver;
+static struct btmtk_cif_chip_reset reset_func;
+
 
 static const struct usb_device_id btusb_table[] = {
 	/* Mediatek MT7961 */
@@ -211,12 +213,13 @@ static void btusb_intr_complete(struct urb *urb)
 			goto intr_resub;
 		}
 
+#if 0
 		/* need to remove after SQC done*/
 		if (buf[0] == 0x3E)
 			btmtk_hci_snoop_save_adv_event(urb->actual_length, urb->transfer_buffer);
 		else
 			btmtk_hci_snoop_save_event(urb->actual_length, urb->transfer_buffer);
-
+#endif
 		err = btmtk_recv(hdev, bdev->urb_transfer_buf, urb->actual_length + 1);
 		if (err) {
 			BT_ERR("%s corrupted event packet, urb_transfer_buf = %p, transfer_buffer = %p",
@@ -542,7 +545,10 @@ static void btusb_bulk_complete(struct urb *urb)
 		memcpy(bdev->urb_transfer_buf + 1, urb->transfer_buffer, urb->actual_length);
 
 		/* BTMTK_DBG_RAW(bdev->urb_transfer_buf, urb->actual_length + 1, "%s, recv from bulk", __func__); */
+#if 0
+		/* need to remove after SQC done*/
 		btmtk_hci_snoop_save_acl(urb->actual_length, urb->transfer_buffer);
+#endif
 		err = btmtk_recv(hdev, bdev->urb_transfer_buf, urb->actual_length + 1);
 		if (err) {
 			BT_ERR("%s corrupted ACL packet, urb_transfer_buf = %p, transfer_buffer = %p",
@@ -1639,62 +1645,62 @@ void btmtk_cif_toggle_rst_pin(struct btmtk_dev *bdev)
 
 	bdev->chip_reset = 1;
 	/* Initialize the interface specific function pointers */
-	bdev->pf_pdwndFunc = (pdwnc_func) btmtk_kallsyms_lookup_name("PDWNC_SetBTInResetState");
-	if (bdev->pf_pdwndFunc)
+	reset_func.pf_pdwndFunc = (pdwnc_func) btmtk_kallsyms_lookup_name("PDWNC_SetBTInResetState");
+	if (reset_func.pf_pdwndFunc)
 		BTMTK_INFO("%s: Found PDWNC_SetBTInResetState", __func__);
 	else
 		BTMTK_WARN("%s: No Exported Func Found PDWNC_SetBTInResetState", __func__);
 
-	bdev->pf_resetFunc2 = (reset_func_ptr2) btmtk_kallsyms_lookup_name("mtk_gpio_set_value");
-	if (!bdev->pf_resetFunc2)
+	reset_func.pf_resetFunc2 = (reset_func_ptr2) btmtk_kallsyms_lookup_name("mtk_gpio_set_value");
+	if (!reset_func.pf_resetFunc2)
 		BTMTK_ERR("%s: No Exported Func Found mtk_gpio_set_value", __func__);
 	else
 		BTMTK_INFO("%s: Found mtk_gpio_set_value", __func__);
 
-	bdev->pf_lowFunc = (set_gpio_low) btmtk_kallsyms_lookup_name("MDrv_GPIO_Set_Low");
-	bdev->pf_highFunc = (set_gpio_high) btmtk_kallsyms_lookup_name("MDrv_GPIO_Set_High");
-	if (!bdev->pf_lowFunc || !bdev->pf_highFunc)
+	reset_func.pf_lowFunc = (set_gpio_low) btmtk_kallsyms_lookup_name("MDrv_GPIO_Set_Low");
+	reset_func.pf_highFunc = (set_gpio_high) btmtk_kallsyms_lookup_name("MDrv_GPIO_Set_High");
+	if (!reset_func.pf_lowFunc || !reset_func.pf_highFunc)
 		BTMTK_WARN("%s: No Exported Func Found MDrv_GPIO_Set_Low or High", __func__);
 	else
 		BTMTK_INFO("%s: Found MDrv_GPIO_Set_Low & MDrv_GPIO_Set_High", __func__);
 
-	if (bdev->pf_pdwndFunc) {
+	if (reset_func.pf_pdwndFunc) {
 		BTMTK_INFO("%s: Invoke PDWNC_SetBTInResetState(%d)", __func__, 1);
-		bdev->pf_pdwndFunc(1);
+		reset_func.pf_pdwndFunc(1);
 	} else
 		BTMTK_INFO("%s: No Exported Func Found PDWNC_SetBTInResetState", __func__);
 
-	if (bdev->pf_resetFunc2) {
+	if (reset_func.pf_resetFunc2) {
 		rst_pin_num = bdev->bt_cfg.dongle_reset_gpio_pin;
 		BTMTK_INFO("%s: Invoke bdev->pf_resetFunc2(%d,%d)", __func__, rst_pin_num, 0);
-		bdev->pf_resetFunc2(rst_pin_num, 0);
-		mdelay(RESET_PIN_SET_LOW_TIME);
+		reset_func.pf_resetFunc2(rst_pin_num, 0);
+		msleep(RESET_PIN_SET_LOW_TIME);
 		BTMTK_INFO("%s: Invoke bdev->pf_resetFunc2(%d,%d)", __func__, rst_pin_num, 1);
-		bdev->pf_resetFunc2(rst_pin_num, 1);
+		reset_func.pf_resetFunc2(rst_pin_num, 1);
 		goto exit;
 	}
 
 	node = of_find_compatible_node(NULL, NULL, "mstar,gpio-wifi-ctl");
 	if (node) {
 		if (of_property_read_u32(node, "wifi-ctl-gpio", &rst_pin_num) == 0) {
-			if (bdev->pf_lowFunc && bdev->pf_highFunc) {
+			if (reset_func.pf_lowFunc && reset_func.pf_highFunc) {
 				BTMTK_INFO("%s: Invoke bdev->pf_lowFunc(%d)", __func__, rst_pin_num);
-				bdev->pf_lowFunc(rst_pin_num);
-				mdelay(RESET_PIN_SET_LOW_TIME);
+				reset_func.pf_lowFunc(rst_pin_num);
+				msleep(RESET_PIN_SET_LOW_TIME);
 				BTMTK_INFO("%s: Invoke bdev->pf_highFunc(%d)", __func__, rst_pin_num);
-				bdev->pf_highFunc(rst_pin_num);
+				reset_func.pf_highFunc(rst_pin_num);
 				goto exit;
 			}
 		} else
 			BTMTK_WARN("%s, failed to obtain wifi control gpio\n", __func__);
 	} else {
-		if (bdev->pf_lowFunc && bdev->pf_highFunc) {
+		if (reset_func.pf_lowFunc && reset_func.pf_highFunc) {
 			rst_pin_num = bdev->bt_cfg.dongle_reset_gpio_pin;
 			BTMTK_INFO("%s: Invoke bdev->pf_lowFunc(%d)", __func__, rst_pin_num);
-			bdev->pf_lowFunc(rst_pin_num);
-			mdelay(RESET_PIN_SET_LOW_TIME);
+			reset_func.pf_lowFunc(rst_pin_num);
+			msleep(RESET_PIN_SET_LOW_TIME);
 			BTMTK_INFO("%s: Invoke bdev->pf_highFunc(%d)", __func__, rst_pin_num);
-			bdev->pf_highFunc(rst_pin_num);
+			reset_func.pf_highFunc(rst_pin_num);
 			goto exit;
 		}
 	}
@@ -1715,7 +1721,7 @@ void btmtk_cif_toggle_rst_pin(struct btmtk_dev *bdev)
 
 		BTMTK_INFO("%s: Invoke Low(%d)", __func__, mt76xx_reset_gpio);
 		gpio_direction_output(mt76xx_reset_gpio, 0);
-		mdelay(RESET_PIN_SET_LOW_TIME);
+		msleep(RESET_PIN_SET_LOW_TIME);
 		BTMTK_INFO("%s: Invoke High(%d)", __func__, mt76xx_reset_gpio);
 		gpio_direction_output(mt76xx_reset_gpio, 1);
 		goto exit;
@@ -1738,7 +1744,6 @@ int btmtk_cif_subsys_reset(struct btmtk_dev *bdev)
 	bdev->sco_num = 0;
 
 	btusb_stop_traffic(bdev);
-	mdelay(500);
 
 	/* For reset */
 	btmtk_cif_write_uhw_register(bdev, EP_RST_OPT, EP_RST_IN_OUT_OPT);
@@ -2345,6 +2350,14 @@ static int btmtk_cif_resume(struct usb_interface *intf)
 }
 #endif	// CONFIG_PM //
 
+#if !BT_DISABLE_RESET_RESUME
+static int btmtk_cif_reset_resume(struct usb_interface *intf)
+{
+	BTMTK_INFO("%s: Call resume directly", __func__);
+	return btmtk_cif_resume(intf);
+}
+#endif
+
 static struct usb_driver btusb_driver = {
 	.name		= "btusb",
 	.probe		= btmtk_cif_probe,
@@ -2352,6 +2365,9 @@ static struct usb_driver btusb_driver = {
 #ifdef CONFIG_PM
 	.suspend	= btmtk_cif_suspend,
 	.resume		= btmtk_cif_resume,
+#endif
+#if !BT_DISABLE_RESET_RESUME
+	.reset_resume = btmtk_cif_reset_resume,
 #endif
 	.id_table	= btusb_table,
 	.supports_autosuspend = 1,
