@@ -3716,6 +3716,10 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 
 	/* Retrieve priv data and set to interface structure */
 	bdev = btmtk_get_dev();
+	if (!bdev) {
+		BTMTK_WARN("%s: bdev is NULL!", __func__);
+		return -ENODEV;
+	}
 	usb_set_intfdata(intf, bdev);
 	bdev->cif_dev = &g_usb_dev[bdev->dongle_index][intf_to_idx[ifnum_base]];
 
