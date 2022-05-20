@@ -4197,12 +4197,16 @@ exit:
 	release_firmware(fw);
 }
 
-static int btmtk_load_country_table(void)
+static int btmtk_load_country_table(struct btmtk_dev *bdev)
 {
 	int err = 0;
 
-	err = request_firmware_nowait(THIS_MODULE, true, DEFAULT_COUNTRY_TABLE_NAME,
-		NULL, GFP_KERNEL, NULL, btmtk_requset_country_cb);
+	if (bdev->country_file_name)
+		err = request_firmware_nowait(THIS_MODULE, true,
+			bdev->country_file_name, NULL, GFP_KERNEL, NULL,
+			btmtk_requset_country_cb);
+	else
+		BTMTK_WARN("%s country_file_name is null", __func__);
 
 	return err;
 }
@@ -4222,7 +4226,7 @@ void btmtk_set_country_code_from_wifi(char *code)
 			if (g_bdev[i]->hdev != NULL) {
 				bdev = g_bdev[i];
 				if (bdev->bt_cfg.support_bt_single_sku) {
-					btmtk_load_country_table();
+					btmtk_load_country_table(bdev);
 					break;
 				}
 			}
@@ -4803,7 +4807,7 @@ static int bt_open(struct hci_dev *hdev)
 
 		main_info.PWS.country_code[COUNTRY_CODE_LEN] = '\0';
 		if (strcmp(main_info.PWS.country_code, "") != 0)
-			btmtk_load_country_table();
+			btmtk_load_country_table(bdev);
 	}
 
 	return 0;
@@ -5331,6 +5335,14 @@ static int btmtk_main_allocate_memory(struct btmtk_dev *bdev)
 		}
 	}
 
+	if (bdev->country_file_name == NULL) {
+		bdev->country_file_name = kzalloc(MAX_BIN_FILE_NAME_LEN, GFP_KERNEL);
+		if (!bdev->country_file_name) {
+			BTMTK_ERR("%s: alloc memory fail (bdev->country_file_name)", __func__);
+			return -1;
+		}
+	}
+
 	BTMTK_INFO("%s: Done", __func__);
 	return 0;
 }
@@ -5345,6 +5357,9 @@ static void btmtk_main_free_memory(struct btmtk_dev *bdev)
 
 	kfree(bdev->bt_cfg_file_name);
 	bdev->bt_cfg_file_name = NULL;
+
+	kfree(bdev->country_file_name);
+	bdev->country_file_name = NULL;
 
 	kfree(bdev->io_buf);
 	bdev->io_buf = NULL;
@@ -5377,6 +5392,11 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 	}
 
 	btmtk_load_bt_cfg(bdev->bt_cfg_file_name, bdev->intf_dev, bdev);
+
+	err = snprintf(bdev->country_file_name, MAX_BIN_FILE_NAME_LEN,
+			DEFAULT_COUNTRY_TABLE_NAME);
+	if (err < 0)
+		BTMTK_ERR("set country_file_name failed!");
 
 	return 0;
 

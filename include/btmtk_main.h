@@ -521,6 +521,9 @@ struct btmtk_dev {
 	unsigned char		*bt_cfg_file_name;
 	struct bt_cfg_struct	bt_cfg;
 
+	/* single sku */
+	unsigned char		*country_file_name;
+
 	/* Foe Woble eint */
 	unsigned int wobt_irq;
 	int wobt_irqlevel;
