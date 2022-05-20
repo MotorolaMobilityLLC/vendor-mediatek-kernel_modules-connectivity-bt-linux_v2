@@ -194,6 +194,7 @@ int btmtk_fops_initfwlog(void)
 
 	btmtk_proc_create_new_entry();
 
+	atomic_set(&bmain_info->fwlog_ref_cnt, 0);
 	BTMTK_INFO("%s: End", __func__);
 	return 0;
 
@@ -565,6 +566,9 @@ exit:
 
 int btmtk_fops_openfwlog(struct inode *inode, struct file *file)
 {
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	atomic_inc(&bmain_info->fwlog_ref_cnt);
 	BTMTK_INFO("%s: Start.", __func__);
 
 	return 0;
@@ -572,6 +576,9 @@ int btmtk_fops_openfwlog(struct inode *inode, struct file *file)
 
 int btmtk_fops_closefwlog(struct inode *inode, struct file *file)
 {
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	atomic_dec(&bmain_info->fwlog_ref_cnt);
 	BTMTK_INFO("%s: Start.", __func__);
 
 	return 0;

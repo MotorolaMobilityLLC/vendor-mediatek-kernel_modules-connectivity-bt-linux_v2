@@ -627,6 +627,8 @@ struct btmtk_main_info {
 	/* record firmware version */
 	struct proc_dir_entry *proc_dir;
 	char fw_version_str[FW_VERSION_BUF_SIZE];
+
+	atomic_t fwlog_ref_cnt;
 };
 
 static inline int is_mt7902(u32 chip_id)

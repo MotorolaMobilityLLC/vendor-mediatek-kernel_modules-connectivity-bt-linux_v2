@@ -193,20 +193,20 @@ int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value)
 			case 5:
 			case 6:
 			case 7:
-				*value = bdev->io_buf[17 + temp];
+				*value = bdev->io_buf[17 + temp - 4];
 				break;
 			case 8:
 			case 9:
 			case 10:
 			case 11:
-				*value = bdev->io_buf[22 + temp];
+				*value = bdev->io_buf[23 + temp - 8];
 				break;
 
 			case 12:
 			case 13:
 			case 14:
 			case 15:
-				*value = bdev->io_buf[34 + temp];
+				*value = bdev->io_buf[29 + temp - 12];
 				break;
 			}
 		} else {
@@ -2996,6 +2996,7 @@ exit:
 int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 {
 	int ret = -1;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (!bdev) {
 		BTMTK_ERR("%s: bdev is NULL !", __func__);
@@ -3029,7 +3030,8 @@ int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 		goto exit;
 	}
 
-	if (bdev->bt_cfg.support_auto_picus == true) {
+	if (bdev->bt_cfg.support_auto_picus == true &&
+		(bdev->bt_cfg.support_picus_to_host == true || atomic_read(&bmain_info->fwlog_ref_cnt) != 0)) {
 		if (btmtk_picus_enable(bdev) < 0) {
 			BTMTK_ERR("send picus filter param failed");
 			ret = -1;
@@ -3054,6 +3056,7 @@ exit:
 int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 {
 	int ret = -1;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (!bdev) {
 		BTMTK_ERR("%s: bdev is NULL !", __func__);
@@ -3062,7 +3065,8 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s", __func__);
 
-	if (bdev->bt_cfg.support_auto_picus == true) {
+	if (bdev->bt_cfg.support_auto_picus == true &&
+		(bdev->bt_cfg.support_picus_to_host == true || atomic_read(&bmain_info->fwlog_ref_cnt) != 0)) {
 		if (btmtk_picus_disable(bdev) < 0) {
 			BTMTK_ERR("send picus filter param failed");
 			btmtk_send_assert_cmd(bdev);
@@ -3782,6 +3786,9 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		return -ENODEV;
 	}
 
+	if (main_info.hif_hook.cif_mutex_lock)
+		main_info.hif_hook.cif_mutex_lock(bdev);
+
 	fstate = btmtk_fops_get_state(bdev);
 	if (fstate != BTMTK_FOPS_STATE_OPENED) {
 		BTMTK_WARN("%s: fops is not open yet(%d)!", __func__, fstate);
@@ -3816,7 +3823,8 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	skb_tmp = skb_push(skb, 1);
 	if (!skb_tmp) {
 		BTMTK_ERR("%s, skb_put failed!", __func__);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto exit;
 	}
 	memcpy(skb_tmp, &hci_skb_pkt_type(skb), 1);
 #if ENABLESTP
@@ -3858,6 +3866,9 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	}
 
 exit:
+	if (main_info.hif_hook.cif_mutex_unlock)
+		main_info.hif_hook.cif_mutex_unlock(bdev);
+
 	return ret;
 }
 
