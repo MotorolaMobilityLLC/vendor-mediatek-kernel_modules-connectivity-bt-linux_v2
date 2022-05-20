@@ -106,7 +106,9 @@ static int btmtk_proc_chip_reset_count_show(struct seq_file *m, void *v)
 {
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	(void)seq_printf(m, "whole_reset_count=%d subsys_reset_count=%d\n", bmain_info->whole_reset_count, bmain_info->subsys_reset_count);
+	(void)seq_printf(m, "whole_reset_count=%d subsys_reset_count=%d\n",
+		atomic_read(&bmain_info->whole_reset_count),
+		atomic_read(&bmain_info->subsys_reset_count));
 	return 0;
 }
 
@@ -580,7 +582,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	ret = bmain_info->hif_hook.send_cmd(pp_bdev[hci_idx], skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST);
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
-		goto free_skb;
+		goto exit;
 	} else
 		BTMTK_INFO("%s: OK", __func__);
 

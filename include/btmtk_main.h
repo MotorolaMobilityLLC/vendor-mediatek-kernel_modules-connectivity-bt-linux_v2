@@ -500,8 +500,6 @@ struct btmtk_dev {
 
 	wait_queue_head_t	p_wait_event_q;
 
-	unsigned int	subsys_reset;
-	unsigned int	chip_reset;
 	unsigned char	*rom_patch_bin_file_name;
 	unsigned int	chip_id;
 	unsigned int	flavor;
@@ -587,6 +585,8 @@ struct hif_hook_ptr {
 
 struct btmtk_main_info {
 	int chip_reset_flag;
+	atomic_t subsys_reset;
+	atomic_t chip_reset;
 	atomic_t subsys_reset_count;
 	atomic_t whole_reset_count;
 

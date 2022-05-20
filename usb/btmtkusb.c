@@ -1391,7 +1391,6 @@ static int btmtk_usb_close(struct hci_dev *hdev)
 
 	cancel_work_sync(&bdev->work);
 	cancel_work_sync(&bdev->waker);
-	cancel_work_sync(&bdev->reset_waker);
 
 	clear_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
@@ -2143,6 +2142,15 @@ static int btmtk_usb_toggle_rst_pin(struct btmtk_dev *bdev)
 {
 	struct device_node *node;
 	int rst_pin_num = 0;
+	int cur = 0;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+
+	cur = atomic_cmpxchg(&bmain_info->chip_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
+	if (cur == BTMTK_RESET_DOING) {
+		BTMTK_INFO("%s: reset in progress, return", __func__);
+		return -1;
+	}
 
 	if (!bdev) {
 		BTMTK_WARN("%s: bdev is NULL!", __func__);
@@ -2155,7 +2163,6 @@ static int btmtk_usb_toggle_rst_pin(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s: begin", __func__);
 
-	bdev->chip_reset = 1;
 	/* Initialize the interface specific function pointers */
 	reset_func.pf_pdwndFunc = (pdwnc_func) btmtk_kallsyms_lookup_name("PDWNC_SetBTInResetState");
 	if (reset_func.pf_pdwndFunc)
@@ -2243,6 +2250,7 @@ exit:
 	BTMTK_INFO("%s: end", __func__);
 	return 0;
 }
+EXPORT_SYMBOL(btmtk_usb_toggle_rst_pin);
 
 static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 {
@@ -2367,15 +2375,16 @@ static int btusb_probe(struct usb_interface *intf,
 	struct btmtk_usb_dev *cif_dev = NULL;
 	unsigned int ifnum_base;
 	int i, err = 0;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	ifnum_base = intf->cur_altsetting->desc.bInterfaceNumber;
-	BTMTK_DBG("intf %p id %p, interfacenum = %d", intf, id, ifnum_base);
+	BTMTK_INFO("intf %p id %p, interfacenum = %d", intf, id, ifnum_base);
 
 	bdev = usb_get_intfdata(intf);
 	if (!bdev) {
 		BTMTK_ERR("[ERR] bdev is NULL");
 		err = -ENOMEM;
-		goto error;
+		goto end;
 	}
 	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 
@@ -2429,7 +2438,7 @@ static int btusb_probe(struct usb_interface *intf,
 	if (!cif_dev->intr_ep || !cif_dev->bulk_tx_ep || !cif_dev->bulk_rx_ep) {
 		BTMTK_ERR("[ERR] intr_ep or bulk_tx_ep or bulk_rx_ep is NULL");
 		err = -ENODEV;
-		goto error;
+		goto end;
 	}
 
 	cif_dev->cmdreq_type = USB_TYPE_CLASS;
@@ -2457,7 +2466,7 @@ static int btusb_probe(struct usb_interface *intf,
 	err = btmtk_cif_allocate_memory(cif_dev);
 	if (err < 0) {
 		BTMTK_ERR("[ERR] btmtk_cif_allocate_memory failed!");
-		goto error;
+		goto end;
 	}
 
 	err = btmtk_main_cif_initialize(bdev, HCI_USB);
@@ -2567,8 +2576,7 @@ static int btusb_probe(struct usb_interface *intf,
 		goto free_setting;
 	}
 
-end:
-	return 0;
+	goto end;
 
 free_setting:
 	btmtk_woble_uninitialize(&cif_dev->bt_woble);
@@ -2576,8 +2584,9 @@ deinit1:
 	btmtk_main_cif_uninitialize(bdev, HCI_USB);
 free_mem:
 	btmtk_cif_free_memory(cif_dev);
-error:
-	return err;
+end:
+	atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+	return 0;
 }
 
 static void btusb_disconnect(struct usb_interface *intf)
@@ -2619,10 +2628,10 @@ static void btusb_disconnect(struct usb_interface *intf)
 		usb_driver_release_interface(&btusb_driver, cif_dev->intf);
 	}
 
+	btmtk_main_cif_disconnect_notify(bdev, HCI_USB);
 	btmtk_woble_uninitialize(&cif_dev->bt_woble);
 	btmtk_cif_free_memory(cif_dev);
 
-	btmtk_main_cif_disconnect_notify(bdev, HCI_USB);
 }
 
 #ifdef CONFIG_PM
@@ -2869,7 +2878,6 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 
 	btusb_stop_traffic(cif_dev);
 
-	btmtk_usb_cif_mutex_lock(bdev);
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
@@ -2878,7 +2886,6 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 
 	/* Set End/Error state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
-	btmtk_usb_cif_mutex_unlock(bdev);
 }
 
 #ifdef CONFIG_PM

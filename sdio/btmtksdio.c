@@ -1051,10 +1051,6 @@ static int btmtk_sdio_open(struct hci_dev *hdev)
 
 static int btmtk_sdio_close(struct hci_dev *hdev)
 {
-	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
-
-	BTMTK_INFO("%s enter!", __func__);
-	cancel_work_sync(&bdev->reset_waker);
 	return 0;
 }
 
@@ -1697,7 +1693,7 @@ static int btmtk_sdio_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 				BTMTK_ERR("%s: delay_count > 1000", __func__);
 				goto enable_intr;
 			} else {
-				udelay(200);
+				usleep_range(100, 200);
 				++delay_count;
 				continue;
 			}
@@ -2122,6 +2118,7 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 	int err = -1;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_sdio_dev *cif_dev = NULL;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	bdev = sdio_get_drvdata(func);
 	if (!bdev) {
@@ -2253,6 +2250,7 @@ end:
 	btmtk_woble_wake_unlock(bdev);
 
 exit:
+	atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
 	return 0;
 }
 
@@ -2266,11 +2264,11 @@ static void btmtk_sdio_disconnect(struct sdio_func *func)
 
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 	btmtk_sdio_stop_main_thread(cif_dev);
+	btmtk_main_cif_disconnect_notify(bdev, HCI_SDIO);
 	btmtk_woble_uninitialize(&cif_dev->bt_woble);
 	btmtk_cif_free_memory(cif_dev);
 	btmtk_sdio_unregister_dev(cif_dev);
 
-	btmtk_main_cif_disconnect_notify(bdev, HCI_SDIO);
 }
 
 static int btmtk_cif_probe(struct sdio_func *func,
@@ -2350,7 +2348,6 @@ static void btmtk_cif_disconnect(struct sdio_func *func)
 
 	cif_state = &bdev->cif_state[cif_event];
 
-	btmtk_sdio_cif_mutex_lock(bdev);
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
@@ -2359,7 +2356,6 @@ static void btmtk_cif_disconnect(struct sdio_func *func)
 
 	/* Set End/Error state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
-	btmtk_sdio_cif_mutex_unlock(bdev);
 }
 
 #ifdef CONFIG_PM
@@ -2665,24 +2661,32 @@ exit:
 static int btmtk_sdio_whole_reset(struct btmtk_dev *bdev)
 {
 	int ret = -1;
+	int cur = 0;
 	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 	struct mmc_card *card = cif_dev->func->card;
 	struct mmc_host *host = NULL;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if ((card == NULL) || (card->host  == NULL)) {
 		BTMTK_ERR("mmc structs are NULL");
 		return ret;
 	}
 
+	cur = atomic_cmpxchg(&bmain_info->chip_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
+	if (cur == BTMTK_RESET_DOING) {
+		BTMTK_INFO("%s: reset in progress, return", __func__);
+		return ret;
+	}
+
 	host = card->host;
 	if (host->rescan_entered != 0) {
 		host->rescan_entered = 0;
-		BTMTK_INFO("set mmc_host rescan to 0");
+		BTMTK_INFO("%s, set mmc_host rescan to 0", __func__);
 	}
 	cif_dev->patched = 0;
 	btmtk_sdio_set_wifi_driver_own(0);
 
-	BTMTK_INFO("mmc_remove_host");
+	BTMTK_INFO("%s, mmc_remove_host", __func__);
 	mmc_remove_host(host);
 
 	/* Replace hooked SDIO driver probe to new API;
@@ -2690,12 +2694,13 @@ static int btmtk_sdio_whole_reset(struct btmtk_dev *bdev)
 	 * 2. Extend flexibility to notify us that HW reset was triggered,
 	 * more flexiable on reviving in exchanging old/new kthread(state).
 	 */
-	BTMTK_INFO("mmc_add_host");
+	BTMTK_INFO("%s, mmc_add_host", __func__);
 	ret = mmc_add_host(host);
 
-	BTMTK_INFO("mmc_add_host return %d", ret);
+	BTMTK_INFO("%s, mmc_add_host return %d", __func__, ret);
 	return ret;
 }
+EXPORT_SYMBOL(btmtk_sdio_whole_reset);
 
 #ifdef CONFIG_PM
 static const struct dev_pm_ops btmtk_sdio_pm_ops = {

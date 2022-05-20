@@ -366,6 +366,8 @@ static void btmtk_main_info_initialize(void)
 	main_info.hci_event_index = HCI_SNOOP_ENTRY_NUM - 1;
 	main_info.hci_adv_event_index = HCI_SNOOP_ENTRY_NUM - 1;
 	main_info.hci_acl_index = HCI_SNOOP_ENTRY_NUM - 1;
+	atomic_set(&main_info.chip_reset, BTMTK_RESET_DONE);
+	atomic_set(&main_info.subsys_reset, BTMTK_RESET_DONE);
 
 #ifdef CONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT
 	main_info.fwdump_ws = wakeup_source_register(NULL, "btmtk_fwdump_wakelock");
@@ -3073,7 +3075,6 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 		(bdev->bt_cfg.support_picus_to_host == true || atomic_read(&bmain_info->fwlog_ref_cnt) != 0)) {
 		if (btmtk_picus_disable(bdev) < 0) {
 			BTMTK_ERR("send picus filter param failed");
-			btmtk_send_assert_cmd(bdev);
 			return -1;
 		}
 	}
@@ -3083,7 +3084,6 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 		BTMTK_WARN("Power off failed, reset it");
 		if (main_info.reset_stack_flag == HW_ERR_NONE)
 			main_info.reset_stack_flag = HW_ERR_CODE_POWER_OFF;
-		btmtk_send_assert_cmd(bdev);
 	}
 
 	return ret;
@@ -3778,6 +3778,7 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	u8 reset_cmd[HCI_RESET_CMD_LEN] = { 0x01, 0x03, 0x0C, 0x00 };
 	struct btmtk_dev *bdev = NULL;
 	unsigned char *skb_tmp = NULL;
+	struct sk_buff *skb_buf = NULL;
 
 	if (hdev == NULL || skb == NULL) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
@@ -3787,7 +3788,8 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	bdev = hci_get_drvdata(hdev);
 	if (bdev == NULL) {
 		BTMTK_ERR("%s, bdev is invalid!", __func__);
-		return -ENODEV;
+		ret = -ENODEV;
+		goto exit;
 	}
 
 	if (main_info.hif_hook.cif_mutex_lock)
@@ -3822,53 +3824,73 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		goto exit;
 	}
 
+	skb_buf = skb_copy(skb, GFP_KERNEL);
+	if (skb_buf == NULL) {
+		BTMTK_ERR("%s skb_copy failed!!", __func__);
+		ret = -ENOMEM;
+		goto exit;
+	}
+
 	if (!is_mt66xx(bdev->chip_id))
-		btmtk_dispatch_fwlog_bluetooth_kpi(bdev, skb->data, skb->len, hci_skb_pkt_type(skb));
-	skb_tmp = skb_push(skb, 1);
+		btmtk_dispatch_fwlog_bluetooth_kpi(bdev, skb_buf->data, skb_buf->len, hci_skb_pkt_type(skb_buf));
+
+	skb_tmp = skb_push(skb_buf, 1);
 	if (!skb_tmp) {
 		BTMTK_ERR("%s, skb_put failed!", __func__);
 		ret = -ENOMEM;
 		goto exit;
 	}
-	memcpy(skb_tmp, &hci_skb_pkt_type(skb), 1);
+	memcpy(skb_tmp, &hci_skb_pkt_type(skb_buf), 1);
 #if ENABLESTP
-	skb = mtk_add_stp(bdev, skb);
+	skb_buf = mtk_add_stp(bdev, skb_buf);
 #endif
 
 	if (!is_mt66xx(bdev->chip_id)) {
 		/* For Ble ISO packet size */
-		if (memcmp(skb->data, main_info.read_iso_packet_size_cmd,
+		if (memcmp(skb_buf->data, main_info.read_iso_packet_size_cmd,
 			READ_ISO_PACKET_SIZE_CMD_HDR_LEN) == 0) {
-			bdev->iso_threshold = skb->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN] +
-						(skb->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN + 1]  << 8);
+			bdev->iso_threshold = skb_buf->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN] +
+						(skb_buf->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN + 1]  << 8);
 			BTMTK_INFO("%s: Ble iso pkt size is %d", __func__, bdev->iso_threshold);
 		}
 
-		if (hci_skb_pkt_type(skb) == HCI_COMMAND_PKT) {
+		if (hci_skb_pkt_type(skb_buf) == HCI_COMMAND_PKT) {
 			if (bdev->get_hci_reset == 1) {
-				btmtk_set_audio_setting(bdev);
+				ret = btmtk_set_audio_setting(bdev);
 				bdev->get_hci_reset = 0;
+				if (ret < 0) {
+					BTMTK_ERR("%s btmtk_set_audio_setting failed!!", __func__);
+					goto exit;
+				}
 			}
 			/* save hci cmd pkt for debug */
-			btmtk_hci_snoop_save_cmd(skb->len, skb->data);
-			if (skb->len == FW_COREDUMP_CMD_LEN &&
-				!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
+			btmtk_hci_snoop_save_cmd(skb_buf->len, skb_buf->data);
+			if (skb_buf->len == FW_COREDUMP_CMD_LEN &&
+				!memcmp(skb_buf->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
 				BTMTK_INFO("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
 				bdev->debug_type = DEBUG_SOP_NO_RESPONSE;
 				btmtk_reset_timer_add(bdev);
 				btmtk_hci_snoop_print_to_log();
-			} else if (skb->len == HCI_RESET_CMD_LEN &&
-					!memcmp(skb->data, reset_cmd, HCI_RESET_CMD_LEN))
+			} else if (skb_buf->len == HCI_RESET_CMD_LEN &&
+					!memcmp(skb_buf->data, reset_cmd, HCI_RESET_CMD_LEN))
 				BTMTK_INFO("%s: got command: 0x03 0C 00 (HCI_RESET)", __func__);
 			}
 
-		ret = main_info.hif_hook.send_cmd(bdev, skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST);
-		if (ret < 0)
+		ret = main_info.hif_hook.send_cmd(bdev, skb_buf, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST);
+		if (ret < 0) {
 			BTMTK_ERR("%s failed!!", __func__);
+			goto exit;
+		}
 	} else {
-		ret = main_info.hif_hook.send_cmd(bdev, skb, 0, 5, (int)BTMTK_TX_PKT_FROM_HOST);
+		ret = main_info.hif_hook.send_cmd(bdev, skb_buf, 0, 5, (int)BTMTK_TX_PKT_FROM_HOST);
+		if (ret < 0) {
+			BTMTK_ERR("%s failed!!", __func__);
+			goto exit;
+		}
 	}
 
+	kfree_skb(skb);
+	skb = NULL;
 exit:
 	if (main_info.hif_hook.cif_mutex_unlock)
 		main_info.hif_hook.cif_mutex_unlock(bdev);
@@ -3982,7 +4004,6 @@ void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 			main_info.reset_stack_flag = HW_ERR_CODE_USB_DISC;
 	}
 
-	bdev->chip_reset = 0;
 	bdev->get_hci_reset = 0;
 	BTMTK_INFO("%s End", __func__);
 }

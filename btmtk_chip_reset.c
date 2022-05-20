@@ -58,14 +58,14 @@ void btmtk_reset_waker(struct work_struct *work)
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	int cif_event = 0, err = 0;
-	int state = BTMTK_STATE_INIT;
+	int cur = 0;
 
 	btmtk_reset_timer_del(bdev);
 
-	state = btmtk_get_chip_state(bdev);
-	if (state == BTMTK_STATE_SUBSYS_RESET || bdev->subsys_reset || bdev->chip_reset) {
-		BTMTK_INFO("%s: reset is ongoing, state = %d, subsys_rst = %d, chip_rst = %d",
-			__func__, state, bdev->subsys_reset, bdev->chip_reset);
+	if (atomic_read(&bmain_info->chip_reset) ||
+		atomic_read(&bmain_info->subsys_reset)) {
+		BTMTK_INFO("%s return, chip_reset = %d, subsys_reset = %d!", __func__,
+			atomic_read(&bmain_info->chip_reset), atomic_read(&bmain_info->subsys_reset));
 		return;
 	}
 
@@ -98,10 +98,14 @@ void btmtk_reset_waker(struct work_struct *work)
 
 	if (bmain_info->chip_reset_flag == 0) {
 		if (bmain_info->hif_hook.subsys_reset) {
+			cur = atomic_cmpxchg(&bmain_info->subsys_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
+			if (cur == BTMTK_RESET_DOING) {
+				BTMTK_INFO("%s: subsys reset in progress, return", __func__);
+				return;
+			}
 			DUMP_TIME_STAMP("subsys_chip_reset_start");
-			bdev->subsys_reset = 1;
 			err = bmain_info->hif_hook.subsys_reset(bdev);
-			bdev->subsys_reset = 0;
+			atomic_set(&bmain_info->subsys_reset , BTMTK_RESET_DONE);
 			if (err < 0) {
 				BTMTK_INFO("subsys reset failed, do whole chip reset!");
 			} else {
@@ -165,6 +169,13 @@ void btmtk_reset_trigger(struct btmtk_dev *bdev)
 {
 	int state = BTMTK_STATE_INIT;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	if (atomic_read(&bmain_info->chip_reset) ||
+		atomic_read(&bmain_info->subsys_reset)) {
+		BTMTK_INFO("%s return, chip_reset = %d, subsys_reset = %d!", __func__,
+			atomic_read(&bmain_info->chip_reset), atomic_read(&bmain_info->subsys_reset));
+		return;
+	}
 
 	state = btmtk_get_chip_state(bdev);
 	if (state == BTMTK_STATE_SUSPEND) {

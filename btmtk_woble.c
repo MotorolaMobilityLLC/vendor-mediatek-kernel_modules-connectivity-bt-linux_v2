@@ -628,9 +628,9 @@ static int btmtk_handle_entering_WoBLE_state(struct btmtk_woble *bt_woble)
 		goto Finish;
 	}
 
-	if (bdev->chip_reset || bdev->subsys_reset) {
+	if (atomic_read(&bmain_info->chip_reset) || atomic_read(&bmain_info->subsys_reset)) {
 		BTMTK_ERR("%s chip_reset is %d, subsys_reset is %d", __func__,
-			bdev->chip_reset, bdev->subsys_reset);
+			atomic_read(&bmain_info->chip_reset), atomic_read(&bmain_info->subsys_reset));
 		goto Finish;
 	}
 
@@ -961,8 +961,10 @@ void btmtk_woble_uninitialize(struct btmtk_woble *bt_woble)
 			disable_irq_nosync(bt_woble->wobt_irq);
 		} else
 			BTMTK_INFO("irq_enable count:%d", atomic_read(&(bt_woble->irq_enable_count)));
-		if (bt_woble->wobt_irq)
+		if (bt_woble->wobt_irq) {
 			free_irq(bt_woble->wobt_irq, bt_woble);
+			bt_woble->wobt_irq = 0;
+		}
 
 		btmtk_woble_input_deinit(bt_woble);
 	}

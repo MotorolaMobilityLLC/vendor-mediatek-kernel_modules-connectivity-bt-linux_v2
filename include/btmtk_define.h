@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2021060701"
+#define VERSION "7.0.20210601101"
 #define SUBVER ":turnkey"
 
 #define ENABLESTP FALSE
@@ -250,6 +250,9 @@ extern uint8_t btmtk_log_lvl;
 
 
 #define PM_KEY_BTW (0x0015) /* Notify PM the unify woble type */
+
+#define BTMTK_RESET_DOING 1
+#define BTMTK_RESET_DONE 0
 
 /**
  * Disable RESUME_RESUME
