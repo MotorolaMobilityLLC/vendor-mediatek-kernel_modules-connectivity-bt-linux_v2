@@ -65,6 +65,9 @@
 /* CHISR */
 #define RX_PKT_LEN				0xFFFF0000
 #define FIRMWARE_INT			0x0000FE00
+/* PD2HRM0R */
+#define PD2HRM0R_DRIVER_OWN		0x00000001
+#define PD2HRM0R_FW_OWN		0x00000000
 /* MCU notify host dirver for L0.5 reset */
 #define FIRMWARE_INT_BIT31		0x80000000
 /* MCU notify host driver for coredump */

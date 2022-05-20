@@ -1365,10 +1365,23 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 {
 	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 	u32 u32ReadCRValue = 0;
+	int retry = RETRY_TIMES;
 	u32 ret = 0;
 
 	btmtk_sdio_set_no_fwn_own(cif_dev, 1);
-	btmtk_sdio_set_own_back(cif_dev, DRIVER_OWN, RETRY_TIMES);
+	do {
+		/* After WDT, CHLPCR maybe can't show driver/fw own status
+		 * BT SW should check PD2HRM0R bit 0
+		 * 1: Driver own. 0: FW own
+		 */
+		btmtk_sdio_set_own_back(cif_dev, DRIVER_OWN, RETRY_TIMES);
+		ret = btmtk_sdio_readl(PD2HRM0R, &u32ReadCRValue, cif_dev->func);
+		msleep(DELAY_TIMES);
+		retry--;
+	} while (((u32ReadCRValue & PD2HRM0R_DRIVER_OWN) != PD2HRM0R_DRIVER_OWN)
+			&& retry > 0);
+
+	BTMTK_INFO("%s read PD2HRM0R 0x%08X", __func__, u32ReadCRValue);
 
 	/* write CHCR[3] 0 */
 	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
