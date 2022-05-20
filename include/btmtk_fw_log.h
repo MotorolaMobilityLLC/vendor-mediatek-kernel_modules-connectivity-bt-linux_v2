@@ -34,6 +34,9 @@
 	#define BT_FWLOG_DEV_NODE	"stpbtfwlog"
 #endif
 
+#define PROC_ROOT_DIR "stpbt"
+#define PROC_BT_CHIP_RESET_COUNT "bt_chip_reset_count"
+
 struct btmtk_fops_fwlog {
 	dev_t g_devIDfwlog;
 	struct cdev BT_cdevfwlog;

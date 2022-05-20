@@ -39,11 +39,19 @@ const struct file_operations BT_fopsfwlog = {
 /** read_write for proc */
 static int btmtk_proc_show(struct seq_file *m, void *v);
 static int btmtk_proc_open(struct inode *inode, struct  file *file);
+static int btmtk_proc_chip_reset_count_open(struct inode *inode, struct  file *file);
+static int btmtk_proc_chip_reset_count_show(struct seq_file *m, void *v);
 
 static const struct file_operations BT_proc_fops = {
 	.open = btmtk_proc_open,
 	.read = seq_read,
 	.release = single_release,
+};
+
+static const struct file_operations BT_proc_chip_reset_count_fops = {
+    .open = btmtk_proc_chip_reset_count_open,
+    .read = seq_read,
+    .release = single_release,
 };
 
 __weak int32_t btmtk_intcmd_wmt_utc_sync(void)
@@ -90,7 +98,15 @@ static int btmtk_proc_show(struct seq_file *m, void *v)
 {
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	seq_printf(m, "patch version:%s driver version:%s\n", bmain_info->fw_version_str, VERSION);
+	(void)seq_printf(m, "patch version:%s driver version:%s\n", bmain_info->fw_version_str, VERSION);
+	return 0;
+}
+
+static int btmtk_proc_chip_reset_count_show(struct seq_file *m, void *v)
+{
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	(void)seq_printf(m, "whole_reset_count=%d subsys_reset_count=%d\n", bmain_info->whole_reset_count, bmain_info->subsys_reset_count);
 	return 0;
 }
 
@@ -99,9 +115,15 @@ static int btmtk_proc_open(struct inode *inode, struct  file *file)
 	return single_open(file, btmtk_proc_show, NULL);
 }
 
+static int btmtk_proc_chip_reset_count_open(struct inode *inode, struct  file *file)
+{
+	return single_open(file, btmtk_proc_chip_reset_count_show, NULL);
+}
+
 static void btmtk_proc_create_new_entry(void)
 {
 	struct proc_dir_entry *proc_show_entry = NULL;
+	struct proc_dir_entry *proc_show_chip_reset_count_entry = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	BTMTK_INFO("%s, proc initialized", __func__);
@@ -116,18 +138,30 @@ static void btmtk_proc_create_new_entry(void)
 		BTMTK_ERR("Unable to creat bt_fw_version node");
 		remove_proc_entry("stpbt", NULL);
 	}
+
+	proc_show_chip_reset_count_entry = proc_create(PROC_BT_CHIP_RESET_COUNT, 0666,
+			bmain_info->proc_dir, &BT_proc_chip_reset_count_fops);
+	if (proc_show_chip_reset_count_entry == NULL) {
+		BTMTK_ERR("Unable to creat %s node", PROC_BT_CHIP_RESET_COUNT);
+		remove_proc_entry(PROC_ROOT_DIR, NULL);
+	}
+
 }
 
 static void btmtk_proc_delete_entry(void)
 {
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	if (bmain_info->proc_dir != NULL) {
-		remove_proc_entry("bt_fw_version", bmain_info->proc_dir);
-		remove_proc_entry("stpbt", NULL);
-		bmain_info->proc_dir = NULL;
-		BTMTK_INFO("%s, proc device node and folder removed!!", __func__);
-	}
+	if (bmain_info->proc_dir == NULL)
+		return;
+
+	remove_proc_entry("bt_fw_version", bmain_info->proc_dir);
+	BTMTK_INFO("%s, proc device node and folder removed!!", __func__);
+	remove_proc_entry(PROC_BT_CHIP_RESET_COUNT, bmain_info->proc_dir);
+	BTMTK_INFO("%s, proc device node and folder %s removed!!", __func__, PROC_BT_CHIP_RESET_COUNT);
+
+	remove_proc_entry(PROC_ROOT_DIR, NULL);
+	bmain_info->proc_dir = NULL;
 }
 
 int btmtk_fops_initfwlog(void)
@@ -656,12 +690,14 @@ unsigned int btmtk_fops_pollfwlog(struct file *file, poll_table *wait)
 	//if (is_mt66xx(g_sbdev->chip_id)) {
 	if (bmain_info->hif_hook.log_get_buf_size) {
 		poll_wait(file, &BT_log_wq, wait);
-		if (bmain_info->hif_hook.log_get_buf_size() > 0)
+		if (bmain_info->hif_hook.log_get_buf_size() > 0) {
 			mask = (POLLIN | POLLRDNORM);
+		}
 	} else {
 		poll_wait(file, &g_fwlog->fw_log_inq, wait);
-		if (skb_queue_len(&g_fwlog->fwlog_queue) > 0)
+		if (skb_queue_len(&g_fwlog->fwlog_queue) > 0) {
 			mask |= POLLIN | POLLRDNORM;			/* readable */
+		}
 	}
 	return mask;
 }
