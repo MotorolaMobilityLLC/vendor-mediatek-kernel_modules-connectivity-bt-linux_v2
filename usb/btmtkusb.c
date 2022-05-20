@@ -1964,8 +1964,8 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			break;
 	}
 
-	/* Need find solution for 7922, it's workaround for LPDVT */
-	if (is_mt7961(bdev->chip_id)) {
+	/* Poll the register until dma dl is completed */
+	if (is_mt7961(bdev->chip_id) || is_mt7922(bdev->chip_id)) {
 		do {
 			btmtk_cif_write_uhw_register(bdev, BT_GDMA_DONE_ADDR_W, BT_GDMA_DONE_VALUE_W);
 			btmtk_cif_read_uhw_register(bdev, BT_GDMA_DONE_ADDR_R, &value);
