@@ -1585,6 +1585,13 @@ static int bt_close(struct hci_dev *hdev)
 	btmtk_cif_close(hdev);
 
 	BTMTK_INFO("%s", __func__);
+
+#if CFG_SUPPORT_DVT
+	/* Don't send init cmd for DVT
+	 * Such as Lowpower DVT
+	 */
+ 	bdev->power_state = BTMTK_DONGLE_STATE_POWER_OFF;
+#else
 	ret = btmtk_send_deinit_cmds(bdev);
 	if (ret < 0) {
 		BTMTK_ERR("%s, btmtk_send_deinit_cmds failed", __func__);
@@ -1596,6 +1603,7 @@ static int bt_close(struct hci_dev *hdev)
 		}
 		return ret;
 	}
+#endif /* CFG_SUPPORT_DVT */
 
 	FOPS_MUTEX_LOCK();
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
@@ -1646,11 +1654,18 @@ static int bt_open(struct hci_dev *hdev)
 		goto failed;
 	}
 
+#if CFG_SUPPORT_DVT
+	/* Don't send init cmd for DVT
+	 * Such as Lowpower DVT
+	 */
+ 	bdev->power_state = BTMTK_DONGLE_STATE_POWER_ON;
+#else
 	ret = btmtk_send_init_cmds(bdev);
 	if (ret < 0) {
 		BTMTK_ERR("%s, btmtk_send_init_cmds failed", __func__);
 		goto failed;
 	}
+#endif /* CFG_SUPPORT_DVT */
 
 	BTMTK_INFO("%s", __func__);
 	ret = btmtk_cif_open(hdev);
