@@ -1724,14 +1724,15 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	}
 
 	do {
-		btmtk_usb_read_register(bdev, BT_GDMA_DONE_ADDR, &value);
-		if ((value & BT_GDMA_DONE_VALUE) == BT_GDMA_DONE_VALUE)
+		btmtk_cif_write_uhw_register(bdev, BT_GDMA_DONE_ADDR_W, BT_GDMA_DONE_VALUE_W);
+		btmtk_cif_read_uhw_register(bdev, BT_GDMA_DONE_ADDR_R, &value);
+		if ((value & BT_GDMA_DONE_VALUE_R) == value)
 			break;
 		msleep(DELAY_TIMES);
 	} while(retry-- > 0);
 
-	if ((value & BT_GDMA_DONE_VALUE) != BT_GDMA_DONE_VALUE) {
-		BTMTK_INFO("%s: DL Failed 0x81021130=%08X", __func__, value);
+	if ((value & BT_GDMA_DONE_VALUE_R) != value) {
+		BTMTK_INFO("%s: DL Failed cr=%08X", __func__, value);
 		ret = -1;
 		goto exit;
 	}

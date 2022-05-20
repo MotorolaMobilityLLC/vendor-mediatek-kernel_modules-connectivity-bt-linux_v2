@@ -47,8 +47,10 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define EP_RST_OPT 0x74011890
 #define EP_RST_IN_OUT_OPT 0x00010001
 
-#define BT_GDMA_DONE_ADDR 0x81021130
-#define BT_GDMA_DONE_VALUE 0x00EE0000
+#define BT_GDMA_DONE_ADDR_W 0x74000A0C
+#define BT_GDMA_DONE_VALUE_W 0x00403FA9
+#define BT_GDMA_DONE_ADDR_R 0x74000A08
+#define BT_GDMA_DONE_VALUE_R 0xFFFFFFFB /* bit2: 0 - dma done, 1 - dma doing */
 
 /* CMD&Event sent by driver */
 #define NOTIFY_ALT_EVT_LEN 7
