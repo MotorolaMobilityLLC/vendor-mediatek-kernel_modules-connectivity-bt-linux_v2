@@ -611,7 +611,7 @@ static unsigned int btmtk_hci_snoop_get_microseconds(void)
 	return now.tv_sec * 1000000 + now.tv_usec;
 }
 
-static void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf)
+void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
 
@@ -629,7 +629,7 @@ static void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf)
 	}
 }
 
-static void btmtk_hci_snoop_save_event(u32 len, u8 *buf)
+void btmtk_hci_snoop_save_event(u32 len, u8 *buf)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
 
@@ -647,7 +647,7 @@ static void btmtk_hci_snoop_save_event(u32 len, u8 *buf)
 	}
 }
 
-static void btmtk_hci_snoop_save_acl(u32 len, u8 *buf)
+void btmtk_hci_snoop_save_acl(u32 len, u8 *buf)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
 
@@ -789,6 +789,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 					buffer[0]);
 				BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
 						count_dbg, buffer_dbg);
+				BTMTK_INFO_RAW(buffer, count, "count:%d, buffer:%p",
+						count, buffer);
 				btmtk_hci_snoop_print_to_log();
 				return ERR_PTR(-EILSEQ);
 			}
@@ -820,6 +822,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 			BTMTK_ERR("%s, pkt type is invalid!", __func__);
 			BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
 				count_dbg, buffer_dbg);
+			BTMTK_INFO_RAW(buffer, count, "count:%d, buffer:%p", count, buffer);
 			btmtk_hci_snoop_print_to_log();
 			kfree_skb(skb);
 			return ERR_PTR(-EILSEQ);
@@ -845,6 +848,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 					BTMTK_INFO_RAW(skb->data, skb->len, "dlen:%d", dlen);
 					BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
 						count_dbg, buffer_dbg);
+					BTMTK_INFO_RAW(buffer, count, "count:%d, buffer:%p", count, buffer);
 					btmtk_hci_snoop_print_to_log();
 					kfree_skb(skb);
 					return ERR_PTR(-EMSGSIZE);
@@ -861,6 +865,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 					BTMTK_INFO_RAW(skb->data, skb->len, "dlen:%d", dlen);
 					BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
 						count_dbg, buffer_dbg);
+					BTMTK_INFO_RAW(buffer, count, "count:%d, buffer:%p", count, buffer);
 					btmtk_hci_snoop_print_to_log();
 					kfree_skb(skb);
 					return ERR_PTR(-EMSGSIZE);
@@ -871,6 +876,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				BTMTK_ERR("%s, Unsupported variable length!", __func__);
 				BTMTK_INFO_RAW(buffer_dbg, count_dbg, "count_dbg:%d, buffer_dbg:%p",
 					count_dbg, buffer_dbg);
+				BTMTK_INFO_RAW(buffer, count, "count:%d, buffer:%p", count, buffer);
 				btmtk_hci_snoop_print_to_log();
 				kfree_skb(skb);
 				return ERR_PTR(-EILSEQ);

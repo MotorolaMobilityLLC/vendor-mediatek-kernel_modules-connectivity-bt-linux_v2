@@ -68,6 +68,12 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 int btmtk_picus_enable(struct btmtk_dev *bdev);
 int btmtk_picus_disable(struct btmtk_dev *bdev);
 
+void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf);
+void btmtk_hci_snoop_save_event(u32 len, u8 *buf);
+void btmtk_hci_snoop_save_acl(u32 len, u8 *buf);
+
+
+
 //static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb);
 
 #define hci_dev_test_and_clear_flag(hdev, nr)  test_and_clear_bit((nr), (hdev)->dev_flags)

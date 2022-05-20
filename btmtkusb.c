@@ -198,6 +198,8 @@ static void btusb_intr_complete(struct urb *urb)
 			schedule_work(&bdev->reset_waker);
 			goto intr_resub;
 		}
+
+		btmtk_hci_snoop_save_event(urb->actual_length, urb->transfer_buffer);
 		err = btmtk_recv(hdev, bdev->urb_transfer_buf, urb->actual_length + 1);
 		if (err) {
 			BT_ERR("%s corrupted event packet, urb_transfer_buf = %p, transfer_buffer = %p",
@@ -517,6 +519,7 @@ static void btusb_bulk_complete(struct urb *urb)
 		memcpy(bdev->urb_transfer_buf + 1, urb->transfer_buffer, urb->actual_length);
 
 		/* BTMTK_DBG_RAW(bdev->urb_transfer_buf, urb->actual_length + 1, "%s, recv from bulk", __func__); */
+		btmtk_hci_snoop_save_acl(urb->actual_length, urb->transfer_buffer);
 		err = btmtk_recv(hdev, bdev->urb_transfer_buf, urb->actual_length + 1);
 		if (err) {
 			BT_ERR("%s corrupted ACL packet, urb_transfer_buf = %p, transfer_buffer = %p",
