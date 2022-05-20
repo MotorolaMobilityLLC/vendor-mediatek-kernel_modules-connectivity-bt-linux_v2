@@ -74,7 +74,7 @@
 /* Local Configuration */
 /*============================================================================*/
 
-#define LD_VERSION "4.0.21012701"
+#define LD_VERSION "4.0.21031601"
 
 #define BUFFER_SIZE  (1024 * 4)	/* Size of RX Queue */
 #define BT_SEND_HCI_CMD_BEFORE_SUSPEND 1
@@ -1810,7 +1810,7 @@ exit:
 
 static int btmtk_send_fw_rom_patch_79xx(struct LD_btmtk_usb_data *data)
 {
-	u8 *pos;
+	u8 *pos = NULL;
 	int loop_count = 0;
 	int ret = 0;
 	u32 section_num = 0;
