@@ -79,6 +79,10 @@ void btmtk_reset_waker(struct work_struct *work)
 	}
 
 	btmtk_reset_timer_del(bdev);
+	//pin-hao added for test
+	//BTMTK_INFO("%s sleep start", __func__);
+	//msleep(10000);
+	//BTMTK_INFO("%s sleep end", __func__);
 
 	if (atomic_read(&bmain_info->chip_reset) ||
 		atomic_read(&bmain_info->subsys_reset)) {
@@ -98,10 +102,12 @@ void btmtk_reset_waker(struct work_struct *work)
 		return;
 	}
 
+#if (USE_DEVICE_NODE == 0) //pinhao for subsys reset test
 	if (!bdev->bt_cfg.support_dongle_reset) {
 		BTMTK_ERR("%s chip_reset is not support", __func__);
 		return;
 	}
+#endif
 
 	cif_state = &bdev->cif_state[cif_event];
 
@@ -122,6 +128,12 @@ void btmtk_reset_waker(struct work_struct *work)
 				return;
 			}
 			DUMP_TIME_STAMP("subsys_chip_reset_start");
+			/*
+			 * Discard this part for SP platform since Consys power is off after BT off,
+			 * Nothing is remain on memory after BT off, so leave do this at BT on
+			 * for SP platform
+			 */
+#if (USE_DEVICE_NODE == 0)
 			err = bmain_info->hif_hook.subsys_reset(bdev);
 			atomic_set(&bmain_info->subsys_reset, BTMTK_RESET_DONE);
 			if (err < 0) {
@@ -144,6 +156,12 @@ void btmtk_reset_waker(struct work_struct *work)
 				BTMTK_INFO("btmtk load rom patch failed!");
 				goto L0RESET;
 			}
+#else
+			atomic_inc(&bmain_info->subsys_reset_count);
+			atomic_inc(&bmain_info->subsys_reset_conti_count);
+			DUMP_TIME_STAMP("subsys_chip_reset_end");
+			bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
+#endif
 			btmtk_send_hw_err_to_host(bdev);
 			btmtk_woble_wake_unlock(bdev);
 			if (bmain_info->hif_hook.chip_reset_notify)
