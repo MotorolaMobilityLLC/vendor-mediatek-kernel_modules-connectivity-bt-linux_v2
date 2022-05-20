@@ -543,6 +543,7 @@ typedef int (*cif_dl_dma_ptr)(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset);
 typedef void (*cif_dump_debug_sop_ptr)(struct btmtk_dev *bdev, int type);
 typedef void (*cif_waker_notify_ptr)(struct btmtk_dev *bdev);
+typedef int (*cif_enter_standby_ptr)(void);
 
 struct hif_hook_ptr {
 	cif_bt_init_ptr			init;
@@ -569,6 +570,7 @@ struct hif_hook_ptr {
 	cif_dl_dma_ptr			dl_dma;
 	cif_dump_debug_sop_ptr		dump_debug_sop;
 	cif_waker_notify_ptr		waker_notify;
+	cif_enter_standby_ptr		enter_standby;
 };
 
 struct btmtk_main_info {
