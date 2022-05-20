@@ -37,7 +37,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.200030202"
+#define VERSION "7.0.200030401"
 #define SUBVER ":turnkey"
 
 
@@ -85,7 +85,7 @@
 #define BTMTK_LOG_LVL_INFO	3
 #define BTMTK_LOG_LVL_DBG	4
 #define BTMTK_LOG_LVL_MAX	BTMTK_LOG_LVL_DBG
-#define BTMTK_LOG_LVL_DEF	BTMTK_LOG_LVL_DBG	/* default setting */
+#define BTMTK_LOG_LVL_DEF	BTMTK_LOG_LVL_INFO	/* default setting */
 
 extern uint8_t btmtk_log_lvl;
 
