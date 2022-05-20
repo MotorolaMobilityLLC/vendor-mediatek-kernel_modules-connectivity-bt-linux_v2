@@ -416,7 +416,7 @@ int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb)
 int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
-	struct hci_event_hdr *hdr = (void *)skb->data;
+	//struct hci_event_hdr *hdr = (void *)skb->data;
 	int err = 0;
 
 	if (bdev == NULL || bdev->workqueue == NULL || hdev == NULL || skb == NULL) {
@@ -428,10 +428,10 @@ int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb)
 	 * of 0xe4 so that event send via monitoring socket can be parsed
 	 * properly.
 	 */
-	if (hdr->evt == 0xe4) {
+	/*if (hdr->evt == 0xe4) {
 		BTMTK_DBG("%s hdr->evt is %02x", __func__, hdr->evt);
 		hdr->evt = HCI_EV_VENDOR;
-	}
+	}*/
 
 	/* When someone waits for the WMT event, the skb is being cloned
 	 * and being processed the events from there then.
@@ -1582,6 +1582,8 @@ static int bt_close(struct hci_dev *hdev)
 		return 0;
 	}
 
+	btmtk_cif_close(hdev);
+
 	BTMTK_INFO("%s", __func__);
 	ret = btmtk_send_deinit_cmds(bdev);
 	if (ret < 0) {
@@ -1594,8 +1596,6 @@ static int bt_close(struct hci_dev *hdev)
 		}
 		return ret;
 	}
-
-	btmtk_cif_close(hdev);
 
 	FOPS_MUTEX_LOCK();
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
@@ -1646,16 +1646,16 @@ static int bt_open(struct hci_dev *hdev)
 		goto failed;
 	}
 
+	ret = btmtk_send_init_cmds(bdev);
+	if (ret < 0) {
+		BTMTK_ERR("%s, btmtk_send_init_cmds failed", __func__);
+		goto failed;
+	}
+
 	BTMTK_INFO("%s", __func__);
 	ret = btmtk_cif_open(hdev);
 	if (ret < 0) {
 		BTMTK_ERR("%s, btmtk_cif_open failed", __func__);
-		goto failed;
-	}
-
-	ret = btmtk_send_init_cmds(bdev);
-	if (ret < 0) {
-		BTMTK_ERR("%s, btmtk_send_init_cmds failed", __func__);
 		goto failed;
 	}
 

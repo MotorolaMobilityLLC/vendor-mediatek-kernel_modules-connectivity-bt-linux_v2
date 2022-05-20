@@ -252,6 +252,114 @@ static int btusb_submit_intr_reset_urb(struct hci_dev *hdev, gfp_t mem_flags)
 	return err;
 }
 
+static void btusb_mtk_wmt_recv(struct urb *urb)
+{
+	struct hci_dev *hdev = urb->context;
+	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	struct sk_buff *skb;
+	int err;
+
+	BTMTK_DBG("%s : %s urb %p status %d count %d", __func__, hdev->name, urb, urb->status,
+	       urb->actual_length);
+
+	if (urb->status == 0 && urb->actual_length > 0) {
+		BTMTK_DBG_RAW(urb->transfer_buffer, urb->actual_length, "%s, recv evt", __func__);
+		hdev->stat.byte_rx += urb->actual_length;
+		skb = bt_skb_alloc(HCI_MAX_EVENT_SIZE, GFP_ATOMIC);
+		if (!skb) {
+			hdev->stat.err_rx++;
+		}
+
+		hci_skb_pkt_type(skb) = HCI_EVENT_PKT;
+		memcpy(skb_put(skb, urb->actual_length), urb->transfer_buffer, urb->actual_length);
+		BTMTK_DBG_RAW(skb->data, skb->len, "%s, skb recv evt", __func__);
+
+		hci_recv_frame(hdev, skb);
+		return;
+	} else if (urb->status == -ENOENT) {
+		/* Avoid suspend failed when usb_kill_urb */
+			return;
+	}
+
+	usb_mark_last_busy(bdev->udev);
+
+	/* The URB complete handler is still called with urb->actual_length = 0
+	 * when the event is not available, so we should keep re-submitting
+	 * URB until WMT event returns, Also, It's necessary to wait some time
+	 * between the two consecutive control URBs to relax the target device
+	 * to generate the event. Otherwise, the WMT event cannot return from
+	 * the device successfully.
+	 */
+	udelay(100);
+
+	usb_anchor_urb(urb, &bdev->ctrl_anchor);
+	err = usb_submit_urb(urb, GFP_ATOMIC);
+	if (err < 0) {
+		/* -EPERM: urb is being killed;
+		 * -ENODEV: device got disconnected
+		 */
+		if (err != -EPERM && err != -ENODEV)
+			usb_unanchor_urb(urb);
+	}
+}
+
+static int btusb_submit_wmt_urb(struct hci_dev *hdev, gfp_t mem_flags)
+{
+	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	struct usb_ctrlrequest *dr;
+	struct urb *urb;
+	unsigned char *buf;
+	unsigned int pipe;
+	int err, size;
+
+	BTMTK_DBG("%s : %s", __func__, hdev->name);
+
+	urb = usb_alloc_urb(0, mem_flags);
+	if (!urb)
+		return -ENOMEM;
+
+	size = le16_to_cpu(HCI_MAX_EVENT_SIZE);
+
+	dr = kmalloc(sizeof(*dr), GFP_KERNEL);
+	if (!dr) {
+		usb_free_urb(urb);
+		return -ENOMEM;
+	}
+
+	dr->bRequestType = 0xC0;
+	dr->bRequest     = 0x01;
+	dr->wIndex       = 0;
+	dr->wValue       = 0x30;
+	dr->wLength      = __cpu_to_le16(size);
+
+	pipe = usb_rcvctrlpipe(bdev->udev, 0);
+
+	buf = kmalloc(size, GFP_KERNEL);
+	if (!buf) {
+		kfree(dr);
+		return -ENOMEM;
+	}
+
+	usb_fill_control_urb(urb, bdev->udev, pipe, (void *)dr,
+			     buf, size, btusb_mtk_wmt_recv, hdev);
+
+	urb->transfer_flags |= URB_FREE_BUFFER;
+
+	usb_anchor_urb(urb, &bdev->ctrl_anchor);
+
+	err = usb_submit_urb(urb, mem_flags);
+	if (err < 0) {
+		if (err != -EPERM && err != -ENODEV)
+			BT_ERR("%s urb %p submission failed (%d)",
+					hdev->name, urb, -err);
+		usb_unanchor_urb(urb);
+	}
+
+	usb_free_urb(urb);
+
+	return err;
+}
+
 static int btusb_submit_intr_urb(struct hci_dev *hdev, gfp_t mem_flags)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
@@ -670,6 +778,7 @@ static int btusb_open(struct hci_dev *hdev)
 		goto failed;
 	}
 
+
 	set_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 
 done:
@@ -687,6 +796,7 @@ static void btusb_stop_traffic(struct btmtk_dev *bdev)
 	usb_kill_anchored_urbs(&bdev->intr_anchor);
 	usb_kill_anchored_urbs(&bdev->bulk_anchor);
 	usb_kill_anchored_urbs(&bdev->isoc_anchor);
+	usb_kill_anchored_urbs(&bdev->ctrl_anchor);
 }
 
 static int btusb_close(struct hci_dev *hdev)
@@ -959,6 +1069,11 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	/* TODO */
 	/* btmtk_usb_dispatch_data_bluetooth_kpi(skb->data, skb->len, bt_cb(skb)->pkt_type); */
 
+	if (skb->len <= 0) {
+		ret = -EFAULT;
+		BTMTK_ERR("%s: target packet length:%zu is not allowed", __func__, skb->len);
+	}
+
 	skb_pull(skb, 1);
 	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send_frame", __func__);
 	switch (hci_skb_pkt_type(skb)) {
@@ -1041,6 +1156,15 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			}
 		}
 #endif
+
+	if (skb->data[0] == 0x6f && skb->data[1] == 0xfc) {
+		btusb_submit_wmt_urb(hdev, GFP_KERNEL);
+		skb_push(skb, 1);
+		skb->data[0] = 0x01;
+		btmtk_cif_send_cmd(bdev, skb, 100, 20, BTMTK_EP_TYPE_OUT_CMD, 1);
+		BTMTK_DBG_RAW(skb->data, skb->len, "%s, 6ffc send_frame", __func__);
+		return 0;
+	}
 
 		if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM) {
 			if (is_mt7961(bdev->chip_id))
@@ -1256,6 +1380,12 @@ static void btusb_reset_waker(struct work_struct *work)
 	int val;
 
 	BT_INFO("%s: Receive a byte (0xFF)", __func__);
+	/* read interrupt EP15 CR */
+
+	bdev->interface_state = BTMTK_STATE_FW_DUMP;
+	clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
+	clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
+	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
 
 	ret = btmtk_send_deinit_cmds(bdev);
 	btusb_stop_traffic(bdev);
@@ -1382,6 +1512,7 @@ static int btusb_probe(struct usb_interface *intf,
 	init_usb_anchor(&bdev->intr_anchor);
 	init_usb_anchor(&bdev->bulk_anchor);
 	init_usb_anchor(&bdev->isoc_anchor);
+	init_usb_anchor(&bdev->ctrl_anchor);
 	spin_lock_init(&bdev->rxlock);
 
 	btmtk_cif_allocate_memory(bdev);
@@ -1391,7 +1522,7 @@ static int btusb_probe(struct usb_interface *intf,
 	SET_HCIDEV_DEV(bdev->hdev, &bdev->intf->dev);
 
 	/* Mediatek load fw rom patch */
-	BT_INFO("MTK BT Driver Version : %s", VERSION);
+	BTMTK_INFO("MTK BT Driver Version : %s", VERSION);
 
 	btmtk_cap_init(bdev);
 	if(bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM)
@@ -1472,6 +1603,8 @@ static void btusb_disconnect(struct usb_interface *intf)
 
 	bdev->power_state = BTMTK_DONGLE_STATE_POWER_OFF;
 	btmtk_cif_free_memory(bdev);
+
+	devm_kfree(&intf->dev, bdev);
 }
 
 #ifdef CONFIG_PM

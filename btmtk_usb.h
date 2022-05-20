@@ -63,6 +63,7 @@ struct btmtk_dev {
 	struct usb_anchor	intr_anchor;
 	struct usb_anchor	bulk_anchor;
 	struct usb_anchor	isoc_anchor;
+	struct usb_anchor	ctrl_anchor;
 	spinlock_t	rxlock;
 
 	struct sk_buff	*evt_skb;
