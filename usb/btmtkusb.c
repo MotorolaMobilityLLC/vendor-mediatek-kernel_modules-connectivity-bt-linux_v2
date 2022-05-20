@@ -3339,7 +3339,7 @@ static int btmtk_cif_send_bulk_out(struct btmtk_dev *bdev, struct sk_buff *skb)
 	}
 
 	if (!wait_for_completion_timeout
-			(&sent_to_mcu_done, msecs_to_jiffies(1000))) {
+			(&sent_to_mcu_done, msecs_to_jiffies(3000))) {
 		usb_kill_urb(urb);
 		BTMTK_ERR("%s: upload rom_patch timeout", __func__);
 		ret = -ETIME;

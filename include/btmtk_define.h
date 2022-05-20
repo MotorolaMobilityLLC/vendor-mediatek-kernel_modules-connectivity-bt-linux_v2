@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2021022201"
+#define VERSION "7.0.2021030301"
 #define SUBVER ":turnkey"
 
 #define ENABLESTP FALSE
