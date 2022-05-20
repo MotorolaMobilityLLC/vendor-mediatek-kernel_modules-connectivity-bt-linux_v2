@@ -176,6 +176,7 @@
 #define PATCH_DOWNLOAD_PHASE3_DELAY_TIME 20
 #define PATCH_DOWNLOAD_PHASE3_RETRY 20
 
+#define PM_SOURCE_DISABLE               (0xFF)
 
 enum {
 	BTMTK_EP_TYPE_OUT_CMD = 0,	/*EP type out for hci cmd and wmt cmd */

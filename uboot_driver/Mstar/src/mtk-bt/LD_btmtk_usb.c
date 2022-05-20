@@ -68,7 +68,6 @@
 #include <mtk-bt/LD_usbbt.h>
 #include <mtk-bt/LD_btmtk_usb.h>
 #include <mtk-bt/errno.h>
-#include <drvPM.h>
 
 /*============================================================================*/
 /* Local Configuration */
