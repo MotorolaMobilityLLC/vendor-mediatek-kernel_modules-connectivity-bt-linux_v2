@@ -104,6 +104,8 @@ struct btmtk_dev {
 	unsigned int	subsys_reset;
 	unsigned char	*rom_patch_bin_file_name;
 	unsigned int	chip_id;
+	unsigned int	flavor;
+	unsigned int	fw_version;
 	unsigned char	power_state;
 	unsigned char	fops_state;
 	unsigned char	interface_state;

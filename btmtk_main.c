@@ -1057,10 +1057,17 @@ int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, bool patch_flag)
 		return -EINVAL;
 	}
 
-	if (patch_flag)
-		/* just for test, need to confirm with FW the naming rule*/
-		memcpy(bdev->rom_patch_bin_file_name, MT7961_WIFI_ROM_PATCH,
-			strlen(MT7961_WIFI_ROM_PATCH));
+	if (patch_flag) {
+		if (bdev->flavor) {
+			/* if flavor equals 1, it represent 7920, else it represent 7921*/
+			snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+					"WIFI_MT%04x_patch_mcu_%xa_%x_hdr.bin",
+					bdev->chip_id & 0xffff, bdev->flavor, (bdev->fw_version & 0xff) + 1);
+		} else
+			snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+					"WIFI_MT%04x_patch_mcu_%x_%x_hdr.bin",
+					bdev->chip_id & 0xffff, bdev->flavor, (bdev->fw_version & 0xff) + 1);
+	}
 
 	btmtk_load_code_from_bin(&fw_firmware, bdev->rom_patch_bin_file_name, NULL,
 			&rom_patch, &rom_patch_len);
@@ -1867,57 +1874,46 @@ exit:
 
 void btmtk_cap_init(struct btmtk_dev *bdev)
 {
-	unsigned int fw_version = 0;
-
 	if (!bdev) {
 		BTMTK_ERR("%s, bdev is NULL!", __func__);
 		return;
 	}
 
-	btmtk_cif_read_register(bdev, 0x80000008, &bdev->chip_id);
-	if (is_mt7663(bdev->chip_id)) {
-		btmtk_cif_read_register(bdev, 0x80000004, &fw_version);
+	btmtk_cif_read_register(bdev, CHIP_ID, &bdev->chip_id);
+	if (is_mt7961(bdev->chip_id)) {
+		btmtk_cif_read_register(bdev, FLAVOR, &bdev->flavor);
+		btmtk_cif_read_register(bdev, FW_VERSION, &bdev->fw_version);
 		goto exit;
-
-#if 0
-		if (is_mt7663(g_data)) {
-			memcpy(g_data->woble_setting_file_name,
-				WOBLE_SETTING_FILE_NAME_7663,
-				sizeof(WOBLE_SETTING_FILE_NAME_7663));
-			BTUSB_INFO("%s: woble setting file name is %s", __func__, WOBLE_SETTING_FILE_NAME_7663);
-		}
-#endif
 	} else {
-		btmtk_cif_read_register(bdev, 0x70010200, &bdev->chip_id);
-		if (is_mt7961(bdev->chip_id)) {
-			btmtk_cif_read_register(bdev, 0x80021004, &fw_version);
-			goto exit;
-		} else {
-			BTMTK_ERR("Unknown Mediatek device(%04X)\n", bdev->chip_id);
-			return;
-		}
+		BTMTK_ERR("Unknown Mediatek device(%04X)\n", bdev->chip_id);
+		return;
 	}
 
 exit:
 	BTMTK_INFO("%s: Chip ID = 0x%x", __func__, bdev->chip_id);
-	BTMTK_INFO("%s: FW Ver = 0x%x", __func__, fw_version);
+	BTMTK_INFO("%s: flavor = 0x%x", __func__, bdev->flavor);
+	BTMTK_INFO("%s: FW Ver = 0x%x", __func__, bdev->fw_version);
 
 	memset(bdev->rom_patch_bin_file_name, 0, MAX_BIN_FILE_NAME_LEN);
-	if ((fw_version & 0xff) == 0xff) {
-		BTMTK_ERR("%s: failed, wrong FW version : 0x%x !", __func__, fw_version);
+	if ((bdev->fw_version & 0xff) == 0xff) {
+		BTMTK_ERR("%s: failed, wrong FW version : 0x%x !", __func__, bdev->fw_version);
 		return;
 	}
 
-	/* Bin filename format : "mt$$$$_patch_e%.bin"
+	/* Bin filename format : "BT_RAM_CODE_MT%04x_%x_%x_hdr.bin"
 	 *  $$$$ : chip id
 	 *  % : fw version & 0xFF + 1 (in HEX)
 	 */
-	snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "mt%04x_patch_e%x_hdr.bin",
-			bdev->chip_id & 0xffff, (fw_version & 0x0ff) + 1);
+	 bdev->flavor = (bdev->flavor & 0x00000080) >> 7;
+	 BTMTK_INFO("%s: flavor1 = 0x%x", __func__, bdev->flavor);
+	if (bdev->flavor) {
+		/* if flavor equals 1, it represent 7920, else it represent 7921*/
+		snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_%xa_%x_hdr.bin",
+				bdev->chip_id & 0xffff, bdev->flavor, (bdev->fw_version & 0xff) + 1);
+	} else
+		snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_%x_%x_hdr.bin",
+				bdev->chip_id & 0xffff, bdev->flavor, (bdev->fw_version & 0xff) + 1);
 
-	/* just for test, need to confirm with FW the naming rule*/
-	if (is_mt7961(bdev->chip_id))
-		memcpy(bdev->rom_patch_bin_file_name, MT7961_BT_ROM_PATCH, strlen(MT7961_BT_ROM_PATCH));
 	BTMTK_INFO("%s: rom patch file name is %s", __func__, bdev->rom_patch_bin_file_name);
 }
 

@@ -28,7 +28,7 @@ static struct btmtk_dev *g_bdev;
 /*============================================================================*/
 static int btmtk_uart_allocate_memory(void);
 
-unsigned long flagss = 0;
+unsigned long flagss;
 
 /* Allocate Uart-Related memory */
 static int btmtk_uart_allocate_memory(void)
@@ -55,12 +55,13 @@ int btmtk_cif_send_cmd(struct hci_dev *hdev, const uint8_t *cmd,
 {
 	int ret = -1, len = 0;
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+
 	if (cmd_len > 30)
 	BTMTK_DBG_RAW(cmd, 30, "%s, len = %d Send CMD : ", __func__, cmd_len);
 	else
 	BTMTK_DBG_RAW(cmd, cmd_len, "%s, len = %d Send CMD : ", __func__, cmd_len);
 	//BTMTK_INFO("%s: tty %p\n", __func__, bdev->tty);
-	while(len != cmd_len) {
+	while (len != cmd_len) {
 		ret = bdev->tty->ops->write(bdev->tty, cmd, cmd_len);
 		len += ret;
 		BTMTK_DBG("%s, len = %d", __func__, len);
@@ -69,8 +70,9 @@ int btmtk_cif_send_cmd(struct hci_dev *hdev, const uint8_t *cmd,
 	return ret;
 }
 
-static int btmtk_uart_send_query_uart_cmd(struct hci_dev *hdev) {
-    u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x04, 0x01, 0x00, 0x02};
+static int btmtk_uart_send_query_uart_cmd(struct hci_dev *hdev)
+{
+	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x04, 0x01, 0x00, 0x02};
 	/* To-Do, for event check */
 	/* u8 event[] = { 0x04, 0xE4, 0x0a, 0x02, 0x04, 0x06, 0x00, 0x00, 0x02}; */
 
@@ -81,14 +83,7 @@ static int btmtk_uart_send_query_uart_cmd(struct hci_dev *hdev) {
 
 
 /* ------ LDISC part ------ */
-
 /* btmtk_uart_tty_open
-
- */
-
-
-/* btmtk_uart_tty_open
-
  *
  *     Called when line discipline changed to HCI_UART.
  *
@@ -113,7 +108,8 @@ static int btmtk_uart_tty_open(struct tty_struct *tty)
 	/* Flush any pending characters in the driver and line discipline. */
 
 	/* FIXME: why is this needed. Note don't use ldisc_ref here as the
-	   open path is before the ldisc is referencable */
+	 *  open path is before the ldisc is referencable
+	 */
 
 	btmtk_allocate_hci_device(g_bdev, HCI_UART);
 	g_bdev->stp_cursor = 2;
@@ -139,7 +135,6 @@ static void btmtk_uart_tty_close(struct tty_struct *tty)
 {
 	btmtk_free_hci_device(g_bdev, HCI_UART);
 	BTMTK_INFO("%s: tty %p", __func__, tty);
-	return;
 }
 
 /*
@@ -162,7 +157,8 @@ static ssize_t btmtk_uart_tty_write(struct tty_struct *tty, struct file *file,
 static unsigned int btmtk_uart_tty_poll(struct tty_struct *tty, struct file *filp, poll_table *wait)
 {
 	unsigned int mask = 0;
-	if (g_bdev->subsys_reset== 1) {
+
+	if (g_bdev->subsys_reset == 1) {
 		mask |= POLLIN | POLLRDNORM;                    /* readable */
 		BTMTK_INFO("%s: tty %p", __func__, tty);
 	}
@@ -186,6 +182,7 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 			      unsigned int cmd, unsigned long arg)
 {
 	u32 err = 0;
+
 	BTMTK_INFO("%s: tty %p", __func__, tty);
 
 	switch (cmd) {
@@ -260,6 +257,7 @@ static int uart_register(void)
 {
 	static struct tty_ldisc_ops btmtk_uart_ldisc;
 	u32 err = 0;
+
 	BTMTK_INFO("%s", __func__);
 
 	/* Register the tty discipline */
@@ -281,13 +279,14 @@ static int uart_register(void)
 		BTMTK_ERR("MTK line discipline registration failed. (%d)", err);
 		return err;
 	}
-	
+
 	BTMTK_INFO("%s done", __func__);
 	return err;
 }
 static int uart_deregister(void)
 {
 	u32 err = 0;
+
 	err = tty_unregister_ldisc(N_MTK);
 	if (err) {
 		BTMTK_ERR("line discipline registration failed. (%d)", err);

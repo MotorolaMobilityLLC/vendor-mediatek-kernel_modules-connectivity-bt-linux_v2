@@ -37,7 +37,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.200011401"
+#define VERSION "7.0.200011501"
 #define SUBVER ":turnkey"
 
 
@@ -196,5 +196,9 @@ extern uint8_t btmtk_log_lvl;
 #define cpu2be32(x) ((uint32_t)(x))
 #define be2cpu32(x) ((uint32_t)(x))
 #endif
+
+#define FW_VERSION	0x80000004
+#define CHIP_ID	0x70010200
+#define FLAVOR	0x70010020
 
 #endif /* __BTMTK_DEFINE_H__ */

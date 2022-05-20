@@ -314,7 +314,7 @@ static void btusb_bulk_complete(struct urb *urb)
 	 * Driver will remove it
 	 * if (!test_bit(HCI_RUNNING, &hdev->flags))
 	 * return;
-	*/
+	 */
 
 	if (urb->status == 0) {
 		hdev->stat.byte_rx += urb->actual_length;
@@ -945,7 +945,6 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 #ifdef SUPPORT_HW_DVT
 	struct sk_buff *evt_skb;
 	uint8_t notify_alt_evt[] = {0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00};
-	u8 *buf = kmalloc(HCI_MAX_COMMAND_SIZE, GFP_KERNEL);
 	u16 crBaseAddr = 0, crRegOffset = 0;
 	int ret = 0;
 #endif
@@ -971,7 +970,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				evt_skb->len = sizeof(notify_alt_evt);
 				/* After set alternate setting, we will return evt to boots */
 				hci_recv_frame(hdev, evt_skb);
-				hdev->conn_hash.sco_num ++;
+				hdev->conn_hash.sco_num++;
 				bdev->sco_num = hdev->conn_hash.sco_num;
 				bdev->new_isoc_altsetting = skb->data[9];
 				bdev->new_isoc_altsetting_interface = skb->data[8];
@@ -1004,14 +1003,17 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					skb->data[2] == 0x09 && skb->data[3] == 0x01 &&
 					skb->data[4] == 0xff && skb->data[5] == 0x05 &&
 					skb->data[6] == 0x00 && skb->data[7] == 0x01) {
-				BTMTK_INFO("read CR skb->data = %02x %02x %02x %02x\n", skb->data[8], skb->data[9], skb->data[10], skb->data[11]);
+				BTMTK_INFO("read CR skb->data = %02x %02x %02x %02x\n", skb->data[8],
+					skb->data[9], skb->data[10], skb->data[11]);
 				crBaseAddr = (skb->data[8]<<8) + skb->data[9];
 				crRegOffset = (skb->data[10]<<8) + skb->data[11];
-				BTMTK_INFO("base + offset = %04x %04x \n", crBaseAddr, crRegOffset);
+				BTMTK_INFO("base + offset = %04x %04x\n", crBaseAddr, crRegOffset);
+				memset(bdev->io_buf, 0, USB_IO_BUF_SIZE);
 				ret = usb_control_msg(bdev->udev, usb_rcvctrlpipe(bdev->udev, 0),
 						1, 0xDE, crBaseAddr, crRegOffset,
-						buf, 4, USB_CTRL_IO_TIMO);
-				BTMTK_INFO("read CR buf = %02x %02x %02x %02x\n", buf[0], buf[1], buf[2], buf[3]);
+						bdev->io_buf, 4, USB_CTRL_IO_TIMO);
+				BTMTK_INFO("read CR buf = %02x %02x %02x %02x\n", bdev->io_buf[0],
+					bdev->io_buf[1], bdev->io_buf[2], bdev->io_buf[3]);
 				return 0;
 			} else if (skb->data[0] == 0x6f && skb->data[1] == 0xfc &&
 					skb->data[2] == 0x0D && skb->data[3] == 0x01 &&
@@ -1019,15 +1021,17 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					skb->data[6] == 0x00 && skb->data[7] == 0x02) {
 				crBaseAddr = (skb->data[8] << 8) + skb->data[9];
 				crRegOffset = (skb->data[10] << 8) + skb->data[11];
-				BTMTK_INFO("base + offset = %04x %04x \n", crBaseAddr, crRegOffset);
-				buf[0] = skb->data[12];
-				buf[1] = skb->data[13];
-				buf[2] = skb->data[14];
-				buf[3] = skb->data[15];
+				BTMTK_INFO("base + offset = %04x %04x\n", crBaseAddr, crRegOffset);
+				memset(bdev->o_usb_buf, 0, HCI_MAX_COMMAND_SIZE);
+				bdev->o_usb_buf[0] = skb->data[12];
+				bdev->o_usb_buf[1] = skb->data[13];
+				bdev->o_usb_buf[2] = skb->data[14];
+				bdev->o_usb_buf[3] = skb->data[15];
 				ret = usb_control_msg(bdev->udev, usb_sndctrlpipe(bdev->udev, 0),
 						2, 0x5E, crBaseAddr, crRegOffset,
-						buf, 4, USB_CTRL_IO_TIMO);
-				BTMTK_INFO("write CR buf = %02x %02x %02x %02x\n", buf[0], buf[1], buf[2], buf[3]);
+						bdev->o_usb_buf, 4, USB_CTRL_IO_TIMO);
+				BTMTK_INFO("write CR buf = %02x %02x %02x %02x\n",
+					bdev->o_usb_buf[0], bdev->o_usb_buf[1], bdev->o_usb_buf[2], bdev->o_usb_buf[3]);
 				return 0;
 			}
 		}

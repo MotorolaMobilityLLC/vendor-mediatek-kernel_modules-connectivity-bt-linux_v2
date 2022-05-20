@@ -57,10 +57,16 @@ clean:
 # Check coding style
 # export IGNORE_CODING_STYLE_RULES := NEW_TYPEDEFS,LEADING_SPACE,CODE_INDENT,SUSPECT_CODE_INDENT
 ccs:
-	./util/checkpatch.pl --no-tree --show-types --max-line-length=120 --ignore $(IGNORE_CODING_STYLE_RULES) -f btmtk_main.c
-	./util/checkpatch.pl --no-tree --show-types --max-line-length=120 --ignore $(IGNORE_CODING_STYLE_RULES) -f btmtk_sdio.c
-	./util/checkpatch.pl --no-tree --show-types --max-line-length=120 --ignore $(IGNORE_CODING_STYLE_RULES) -f btmtk_sdio.h
-	./util/checkpatch.pl --no-tree --show-types --max-line-length=120 --ignore $(IGNORE_CODING_STYLE_RULES) -f btmtk_config.h
-	./util/checkpatch.pl --no-tree --show-types --max-line-length=120 --ignore $(IGNORE_CODING_STYLE_RULES) -f btmtk_define.h
-	./util/checkpatch.pl --no-tree --show-types --max-line-length=120 --ignore $(IGNORE_CODING_STYLE_RULES) -f btmtk_drv.h
+	./util/checkpatch.pl -f btmtk_main.c
+	./util/checkpatch.pl -f btmtk_sdio.c
+	./util/checkpatch.pl -f btmtk_sdio.h
+	./util/checkpatch.pl -f btmtk_config.h
+	./util/checkpatch.pl -f btmtk_define.h
+	./util/checkpatch.pl -f btmtk_drv.h
+	./util/checkpatch.pl -f btmtk_chip_if.h
+	./util/checkpatch.pl -f btmtk_main.h
+	./util/checkpatch.pl -f btmtk_uart.h
+	./util/checkpatch.pl -f btmtk_uart_main.c
+	./util/checkpatch.pl -f btmtk_usb.h
+	./util/checkpatch.pl -f btmtkusb.c
 

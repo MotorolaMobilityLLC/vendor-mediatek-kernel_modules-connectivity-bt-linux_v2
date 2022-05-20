@@ -45,7 +45,7 @@ struct btmtk_dev {
 	struct sk_buff		*rx_skb;
 	unsigned long		rx_state;
 
-	struct sk_buff 		*evt_skb;
+	struct sk_buff		*evt_skb;
 	wait_queue_head_t p_wait_event_q;
 
 	unsigned int		subsys_reset;
