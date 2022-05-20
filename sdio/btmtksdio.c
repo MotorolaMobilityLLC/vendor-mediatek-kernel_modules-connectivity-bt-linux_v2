@@ -106,14 +106,6 @@ static int intr_cnt;
 static int driver_own_cnt;
 static int fw_own_cnt;
 
-static unsigned int btmtk_sdio_hci_snoop_get_microseconds(void)
-{
-	struct timeval now;
-
-	btmtk_do_gettimeofday(&now);
-	return now.tv_sec * 1000000 + now.tv_usec;
-}
-
 void rx_debug_print(void)
 {
 	int i;
@@ -1513,6 +1505,7 @@ static int btmtk_sdio_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	int ret = -1;
 	s32 sent_len = 0;
 	s32 sdio_len = 0;
+	s32 next_len = 0;
 	u32 u32ReadCRValue = 0;
 	u32 block_count = 0;
 	u32 redundant = 0;
@@ -1552,12 +1545,17 @@ static int btmtk_sdio_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 
 		sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT - MTK_SDIO_PACKET_HEADER_SIZE) ?
 			(UPLOAD_PATCH_UNIT - MTK_SDIO_PACKET_HEADER_SIZE) : (section_dl_size - cur_len);
+		if (is_mt7902(bdev->chip_id)) {
+			next_len = section_dl_size - sent_len - cur_len;
+			if (next_len > 0 && next_len < 16)
+				sent_len = (sent_len + next_len) / 2;
+		}
 
-		BTMTK_DBG("%s: sent_len = %d, cur_len = %d, delay_count = %d",
-				__func__, sent_len, cur_len, delay_count);
+		BTMTK_DBG("%s: sent_len = %d, cur_len = %d, delay_count = %d, next_len = %d",
+				__func__, sent_len, cur_len, delay_count, next_len);
 
 		sdio_len = sent_len + MTK_SDIO_PACKET_HEADER_SIZE;
-		memset(image, 0, sdio_len);
+		memset(image, 0, UPLOAD_PATCH_UNIT);
 		image[0] = (sdio_len & 0x00FF);
 		image[1] = (sdio_len & 0xFF00) >> 8;
 		image[2] = 0;
@@ -1805,8 +1803,10 @@ static int btmtk_sdio_interrupt_process(struct btmtk_dev *bdev)
 #endif
 	BTMTK_DBG("%s CHISR 0x%08x", __func__, u32ReadCRValue);
 
-	if (u32ReadCRValue & FIRMWARE_INT_BIT15)
+	if (u32ReadCRValue & FIRMWARE_INT_BIT15) {
 		btmtk_sdio_set_no_fwn_own(cif_dev, 1);
+		btmtk_sdio_writel(PH2DSM0R, PH2DSM0R_DRIVER_OWN, cif_dev->func);
+	}
 
 	if (u32ReadCRValue & FIRMWARE_INT_BIT31) {
 		/* clean tx queue */
@@ -2405,7 +2405,6 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 	u32 u32ReadCRValue = 0;
 	int retry = RETRY_TIMES;
 	u32 ret = 0;
-
 
 	do {
 		/* After WDT, CHLPCR maybe can't show driver/fw own status

@@ -931,9 +931,8 @@ int btmtk_woble_initialize(struct btmtk_dev *bdev, struct btmtk_woble *bt_woble)
 			}
 		}
 
-		if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
-			memcpy(bt_woble->woble_setting_file_name, WOBLE_SETTING_FILE_NAME_7961,
-				sizeof(WOBLE_SETTING_FILE_NAME_7961));
+		(void)snprintf(bt_woble->woble_setting_file_name, MAX_BIN_FILE_NAME_LEN, "%s_%x.%s", WOBLE_CFG_NAME_PREFIX,
+				bdev->chip_id & 0xffff, WOBLE_CFG_NAME_SUFFIX);
 
 		BTMTK_INFO("%s: woble setting file name is %s", __func__, bt_woble->woble_setting_file_name);
 

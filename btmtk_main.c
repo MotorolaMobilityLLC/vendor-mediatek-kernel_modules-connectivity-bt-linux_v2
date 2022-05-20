@@ -127,7 +127,7 @@ void btmtk_getUTCtime(struct rtc_time *tm, u32 *usec)
 	*usec = tv.tv_usec;
 }
 
-static void btmtk_get_UTC_time_str(char *ts_str)
+void btmtk_get_UTC_time_str(char *ts_str)
 {
 	struct rtc_time tm;
 	u32 usec;
@@ -311,7 +311,7 @@ void btmtk_set_chip_state(struct btmtk_dev *bdev, u8 new_state)
 {
 	static const char * const state_msg[BTMTK_STATE_MSG_NUM] = {
 		"UNKNOWN", "INIT", "DISCONNECT", "PROBE", "WORKING", "SUSPEND", "RESUME",
-		"FW_DUMP", "STANDBY", "SUBSYS_RESET",
+		"FW_DUMP", "STANDBY", "SUBSYS_RESET","SEND_ASSERT",
 	};
 
 	if (new_state >= BTMTK_STATE_MSG_NUM) {
@@ -2788,7 +2788,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	}
 
 	state = btmtk_get_chip_state(bdev);
-	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SUSPEND) {
+	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SUSPEND || state == BTMTK_STATE_SEND_ASSERT) {
 		BTMTK_WARN("%s: FW dumping already or in suspend state don't send assert, state = %d!!!",
 			__func__, state);
 		return ret;
@@ -2815,6 +2815,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 		bdev->debug_type = DEBUG_SOP_NO_RESPONSE;
 		btmtk_reset_timer_add(bdev);
 		BTMTK_INFO("%s: OK", __func__);
+		btmtk_set_chip_state(bdev, BTMTK_STATE_SEND_ASSERT);
 	}
 
 exit:
@@ -3577,6 +3578,10 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 exit:
 	if (main_info.hif_hook.cif_mutex_unlock)
 		main_info.hif_hook.cif_mutex_unlock(bdev);
+
+	if (ret >= 0 && skb->len == FW_COREDUMP_CMD_LEN &&
+		!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN))
+		btmtk_set_chip_state(bdev, BTMTK_STATE_SEND_ASSERT);
 
 	return ret;
 }

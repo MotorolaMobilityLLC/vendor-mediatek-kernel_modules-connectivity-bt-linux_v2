@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2021092401"
+#define VERSION "7.0.2021102601"
 #define SUBVER ":turnkey"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -238,6 +238,8 @@ extern uint8_t btmtk_log_lvl;
 #define BT_CFG_NAME "bt.cfg"
 #define BT_CFG_NAME_PREFIX "bt_mt"
 #define BT_CFG_NAME_SUFFIX "cfg"
+#define WOBLE_CFG_NAME_PREFIX "woble_setting"
+#define WOBLE_CFG_NAME_SUFFIX "bin"
 #define BT_UNIFY_WOBLE "SUPPORT_UNIFY_WOBLE"
 #define BT_UNIFY_WOBLE_TYPE "UNIFY_WOBLE_TYPE"
 #define BT_WOBLE_BY_EINT "SUPPORT_WOBLE_BY_EINT"
