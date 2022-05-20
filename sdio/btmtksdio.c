@@ -114,7 +114,7 @@ static unsigned int btmtk_sdio_hci_snoop_get_microseconds(void)
 {
 	struct timeval now;
 
-	do_gettimeofday(&now);
+	btmtk_do_gettimeofday(&now);
 	return now.tv_sec * 1000000 + now.tv_usec;
 }
 

@@ -119,16 +119,18 @@ __weak int btmtk_cif_send_calibration(struct btmtk_dev *bdev)
 	return -1;
 }
 
-#if (KERNEL_VERSION(4, 19, 84) < LINUX_VERSION_CODE)
-__weak void do_gettimeofday(struct timeval *tv)
+void btmtk_do_gettimeofday(struct timeval *tv)
 {
+#if (KERNEL_VERSION(5, 0, 0) > LINUX_VERSION_CODE)
+	do_gettimeofday(tv);
+#else
 	struct timespec64 ts;
 
 	ktime_get_real_ts64(&ts);
 	tv->tv_sec = ts.tv_sec;
 	tv->tv_usec = ts.tv_nsec/1000;
-}
 #endif
+}
 
 static int btmtk_enter_standby(void);
 static int btmtk_send_hci_tci_set_sleep_cmd_766x(struct btmtk_dev *bdev);
@@ -575,7 +577,7 @@ static unsigned int btmtk_hci_snoop_get_microseconds(void)
 {
 	struct timeval now;
 
-	do_gettimeofday(&now);
+	btmtk_do_gettimeofday(&now);
 	return now.tv_sec * 1000000 + now.tv_usec;
 }
 
@@ -1667,7 +1669,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 	memset(&tv_start, 0, sizeof(tv_start));
 	memset(&tv_bgf, 0, sizeof(tv_bgf));
 	memset(&tv_ilm, 0, sizeof(tv_ilm));
-	do_gettimeofday(&tv_start);
+	btmtk_do_gettimeofday(&tv_start);
 #endif
 	if (fwbuf == NULL) {
 		BTMTK_WARN("%s, fwbuf is NULL!", __func__);
@@ -1772,9 +1774,9 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 #if LD_PATCH_TIME
 		else {
 			if (loop_count == 0) {
-				do_gettimeofday(&tv_bgf);
+				btmtk_do_gettimeofday(&tv_bgf);
 			} else if (loop_count == 1) {
-				do_gettimeofday(&tv_ilm);
+				btmtk_do_gettimeofday(&tv_ilm);
 				if (tv_bgf.tv_sec != 0 || tv_bgf.tv_usec != 0) {
 					if (tv_ilm.tv_sec >= tv_bgf.tv_sec)
 						dlt_dma = (tv_ilm.tv_sec - tv_bgf.tv_sec) * 1000;
