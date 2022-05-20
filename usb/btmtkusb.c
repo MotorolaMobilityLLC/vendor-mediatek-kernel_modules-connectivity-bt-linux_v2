@@ -2318,7 +2318,7 @@ static int btmtk_usb_enter_standby(void)
 		/* Find valid dev for already probe interface. */
 		if (pp_bdev[i]->hdev != NULL) {
 			bdev = pp_bdev[i];
-			cif_dev = (struct btmtk_usb_dev *)bdev;
+			cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 			bt_woble = &cif_dev->bt_woble;
 
 			/* Retrieve current HIF event state */
