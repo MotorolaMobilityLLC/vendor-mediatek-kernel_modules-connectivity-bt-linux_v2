@@ -4,6 +4,7 @@ export KERNEL_SRC := /lib/modules/$(shell uname -r)/build
 CONFIG_SUPPORT_BT_DL_WIFI_PATCH=y
 CONFIG_SUPPORT_BLUEZ=n
 CONFIG_SUPPORT_DVT=n
+CONFIG_SUPPORT_HW_DVT=n
 CONFIG_SUPPORT_MULTI_DEV_NODE=n
 
 ifeq ($(CONFIG_SUPPORT_BT_DL_WIFI_PATCH), y)
@@ -14,16 +15,14 @@ endif
 
 ifeq ($(CONFIG_SUPPORT_BLUEZ), y)
     ccflags-y += -DCFG_SUPPORT_BLUEZ=1
-    ccflags-y += -DCFG_SUPPORT_HW_DVT=0
 else
     ccflags-y += -DCFG_SUPPORT_BLUEZ=0
-    ccflags-y += -DCFG_SUPPORT_HW_DVT=1
 endif
 
-ifeq ($(CONFIG_SUPPORT_DVT), y)
-    ccflags-y += -DCFG_SUPPORT_DVT=1
+ifeq ($(CONFIG_SUPPORT_HW_DVT), y)
+    ccflags-y += -DCFG_SUPPORT_HW_DVT=1
 else
-    ccflags-y += -DCFG_SUPPORT_DVT=0
+    ccflags-y += -DCFG_SUPPORT_HW_DVT=0
 endif
 
 ifeq ($(CONFIG_SUPPORT_DVT), y)

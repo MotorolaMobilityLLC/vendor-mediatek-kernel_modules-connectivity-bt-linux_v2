@@ -1048,7 +1048,12 @@ static void btmtk_sdio_open_done(struct btmtk_dev *bdev)
 	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
 	BTMTK_INFO("%s enter!", __func__);
+#if CFG_SUPPORT_HW_DVT
+	/* We don't need to enable buffer mode during bring-up stage. */
+	BTMTK_INFO("SKIP buffer mode");
+#else
 	(void)btmtk_buffer_mode_send(cif_dev->buffer_mode);
+#endif /* CFG_SUPPORT_HW_DVT */
 }
 
 static int btmtk_sdio_writesb(u32 offset, u8 *val, int len, struct sdio_func *func)
@@ -2229,11 +2234,16 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 		}
 	}
 
+#if CFG_SUPPORT_HW_DVT
+	/* We don't need to download patch during bring-up stage. */
+	BTMTK_INFO("SKIP downlaod patch");
+#else
 	err = btmtk_load_rom_patch(bdev);
 	if (err < 0) {
 		BTMTK_ERR("btmtk load rom patch failed, do chip reset!!!");
 		goto exit;
 	}
+#endif /* CFG_SUPPORT_HW_DVT */
 
 	cif_dev->patched = 1;
 
@@ -2266,7 +2276,12 @@ unreg_sdio:
 	btmtk_sdio_unregister_dev(cif_dev);
 end:
 	BTMTK_INFO("%s normal end, ret = %d", __func__, err);
+#if CFG_SUPPORT_HW_DVT
+	/* We don't need to enable low_power faeture during HW bring-up stage. */
+	BTMTK_INFO("Keep driver own during bring-up stage");
+#else
 	btmtk_sdio_keep_driver_own(cif_dev, 0);
+#endif /* CFG_SUPPORT_HW_DVT */
 	btmtk_woble_wake_unlock(bdev);
 
 exit:
@@ -2429,13 +2444,13 @@ static int btmtk_cif_suspend(struct device *dev)
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
-#if CFG_SUPPORT_DVT
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
 	BTMTK_INFO("%s: SKIP Driver woble_suspend flow", __func__);
 #else
 	ret = btmtk_woble_suspend(bt_woble);
 	if (ret < 0)
 		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
-#endif
+#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
 	if (bdev->bt_cfg.support_woble_by_eint) {
 		if (bt_woble->wobt_irq != 0 && atomic_read(&(bt_woble->irq_enable_count)) == 0) {
@@ -2520,13 +2535,14 @@ static int btmtk_cif_resume(struct device *dev)
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
-#if CFG_SUPPORT_DVT
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
 	BTMTK_INFO("%s: SKIP Driver woble_resume flow", __func__);
 #else
 	ret = btmtk_woble_resume(bt_woble);
 	if (ret < 0)
 		BTMTK_ERR("%s: btmtk_woble_resume return fail %d", __func__, ret);
-#endif
+#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
+
 	/* Set End/Error state */
 	if (ret == 0)
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);

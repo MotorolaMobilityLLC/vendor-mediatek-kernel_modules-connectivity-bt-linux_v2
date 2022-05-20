@@ -2496,11 +2496,9 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	int ret = 0;
 	struct sk_buff *iso_skb = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-#ifdef CFG_SUPPORT_HW_DVT
 	struct sk_buff *evt_skb;
 	uint8_t notify_alt_evt[NOTIFY_ALT_EVT_LEN] = {0x04, 0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00};
 	u16 crBaseAddr = 0, crRegOffset = 0;
-#endif
 
 	if (skb->len <= 0) {
 		ret = -EFAULT;
@@ -2514,7 +2512,6 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		hci_skb_pkt_type(skb));
 	switch (hci_skb_pkt_type(skb)) {
 	case HCI_COMMAND_PKT:
-#ifdef CFG_SUPPORT_HW_DVT
 		if (skb->len > 7) {
 			if (skb->data[0] == 0x6f && skb->data[1] == 0xfc &&
 					skb->data[2] == 0x06 && skb->data[3] == 0x01 &&
@@ -2609,7 +2606,6 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				return 0;
 			}
 		}
-#endif
 
 		/* For wmt cmd/evt */
 		if (!memcmp(skb->data, &bmain_info->wmt_over_hci_header[1], WMT_OVER_HCI_HEADER_SIZE - 1)) {
@@ -2739,9 +2735,10 @@ exit:
 	case HCI_SCODATA_PKT:
 		if (hci_conn_num(hdev, SCO_LINK) < 1) {
 			BTMTK_INFO("btusb_send_frame hci_conn sco link = %d", hci_conn_num(hdev, SCO_LINK));
-			/* We need to study how to solve this in hw_dvt case.*/
-#ifndef CFG_SUPPORT_HW_DVT
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
 			return -ENODEV;
+#else
+			/* We need to study how to solve this in dvt case.*/
 #endif
 		}
 
@@ -2916,7 +2913,7 @@ static void btusb_work(struct work_struct *work)
 			set_bit(BTUSB_DID_ISO_RESUME, &bdev->flags);
 		}
 
-#ifdef CFG_SUPPORT_HW_DVT
+#if CFG_SUPPORT_DVT
 		new_alts = cif_dev->new_isoc_altsetting;
 #else
 		if (hdev->voice_setting & 0x0020) {
@@ -2926,7 +2923,7 @@ static void btusb_work(struct work_struct *work)
 		} else {
 			new_alts = bdev->sco_num;
 		}
-#endif
+#endif /* CFG_SUPPORT_DVT */
 
 		clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
 		usb_kill_anchored_urbs(&cif_dev->isoc_anchor);
@@ -3326,10 +3323,15 @@ static int btusb_probe(struct usb_interface *intf,
 
 	SET_HCIDEV_DEV(bdev->hdev, &cif_dev->intf->dev);
 
+#if CFG_SUPPORT_HW_DVT
+	/* We don't need to download patch during bring-up stage. */
+	BTMTK_INFO("SKIP downlaod patch");
+#else
 	if (BTMTK_IS_BT_0_INTF(ifnum_base))
 		err = btmtk_load_rom_patch(bdev);
 	else
 		BTMTK_INFO("interface = %d, don't download patch", ifnum_base);
+#endif /* CFG_SUPPORT_HW_DVT */
 
 	if (err < 0) {
 		BTMTK_ERR("btmtk load rom patch failed, do chip reset!!!");
@@ -3488,13 +3490,13 @@ static int btusb_suspend(struct usb_interface *intf, pm_message_t message)
 		return 0;
 	}
 
-#if CFG_SUPPORT_DVT
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
 	BTMTK_INFO("%s: SKIP Driver woble_suspend flow", __func__);
 #else
 	ret = btmtk_woble_suspend(bt_woble);
 	if (ret < 0)
 		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
-#endif
+#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
 	spin_lock_irq(&bdev->txlock);
 	if (!(PMSG_IS_AUTO(message) && bdev->tx_in_flight)) {
@@ -3604,7 +3606,7 @@ static int btusb_resume(struct usb_interface *intf)
 	spin_unlock_irq(&bdev->txlock);
 	schedule_work(&bdev->work);
 
-#if CFG_SUPPORT_DVT
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
 	BTMTK_INFO("%s: SKIP Driver woble_resume flow", __func__);
 #else
 	err = btmtk_woble_resume(bt_woble);
@@ -3612,7 +3614,7 @@ static int btusb_resume(struct usb_interface *intf)
 		BTMTK_ERR("%s: btmtk_woble_resume return fail %d", __func__, err);
 		goto done;
 	}
-#endif
+#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
 	BTMTK_INFO("%s end", __func__);
 
