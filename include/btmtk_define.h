@@ -41,7 +41,7 @@
 #include <linux/freezer.h>
 
 /** Driver version */
-#define VERSION "7.0.2020121501"
+#define VERSION "7.0.2020121701"
 #define SUBVER ":turnkey"
 
 

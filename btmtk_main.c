@@ -4258,9 +4258,21 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	int state = BTMTK_STATE_INIT;
 	int fstate = BTMTK_FOPS_STATE_INIT;
 	struct btmtk_dev *bdev = NULL;
+	u8 *i_fwlog_buf = NULL, *o_fwlog_buf = NULL;
 
-	u8 *i_fwlog_buf = kmalloc(HCI_MAX_COMMAND_BUF_SIZE, GFP_KERNEL);
-	u8 *o_fwlog_buf = kmalloc(HCI_MAX_COMMAND_SIZE, GFP_KERNEL);
+	i_fwlog_buf = kmalloc(HCI_MAX_COMMAND_BUF_SIZE, GFP_KERNEL);
+	if (!i_fwlog_buf) {
+		BTMTK_ERR("%s: alloc i_fwlog_buf failed", __func__);
+		ret = -ENOMEM;
+		goto exit;
+	}
+
+	o_fwlog_buf = kmalloc(HCI_MAX_COMMAND_SIZE, GFP_KERNEL);
+	if (!o_fwlog_buf) {
+		BTMTK_ERR("%s: alloc o_fwlog_buf failed", __func__);
+		ret = -ENOMEM;
+		goto exit;
+	}
 
 	for (i = 0; i < btmtk_intf_num; i++) {
 		/* Find valid dev for already probe interface. */
@@ -4461,8 +4473,10 @@ free_skb:
 	kfree_skb(skb);
 	skb = NULL;
 exit:
-	kfree(i_fwlog_buf);
-	kfree(o_fwlog_buf);
+	if (i_fwlog_buf)
+		kfree(i_fwlog_buf);
+	if (o_fwlog_buf)
+		kfree(o_fwlog_buf);
 
 	return ret;	/* If input is correct should return the same length */
 }
