@@ -1487,7 +1487,7 @@ static int btmtk_load_fw_patch_using_wmt_cmd(struct btmtk_dev *bdev,
 			image[9] = phase;
 			memcpy(&image[10], fwbuf + offset + cur_len, sent_len);
 			if (phase == PATCH_PHASE3) {
-				if (is_mt7922(bdev->chip_id)) {
+				if (is_mt7922(bdev->chip_id) || is_mt7902(bdev->chip_id)) {
 					/* if secure boot enable, it need take 76ms at less
 					 * for RSA check.
 					 */
