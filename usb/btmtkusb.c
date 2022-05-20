@@ -1233,14 +1233,20 @@ static int btmtk_usb_open(struct hci_dev *hdev)
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 	int err;
 	unsigned int ifnum_base;
+	unsigned char state = 0;
 
 	BTMTK_INFO("%s enter!", __func__);
 
 	BTMTK_DBG("%s", hdev->name);
 
-	err = usb_autopm_get_interface(cif_dev->intf);
-	if (err < 0)
-		return err;
+	state = btmtk_get_chip_state(bdev);
+	if (state != BTMTK_STATE_SUSPEND
+		&& state != BTMTK_STATE_RESUME
+		&& state != BTMTK_STATE_STANDBY) {
+		err = usb_autopm_get_interface(cif_dev->intf);
+		if (err < 0)
+			return err;
+	}
 
 	cif_dev->intf->needs_remote_wakeup = 1;
 
@@ -1289,12 +1295,18 @@ static int btmtk_usb_open(struct hci_dev *hdev)
 	set_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 
 done:
-	usb_autopm_put_interface(cif_dev->intf);
+	if (state != BTMTK_STATE_SUSPEND
+		&& state != BTMTK_STATE_RESUME
+		&& state != BTMTK_STATE_STANDBY)
+		usb_autopm_put_interface(cif_dev->intf);
 	return 0;
 
 failed:
 	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
-	usb_autopm_put_interface(cif_dev->intf);
+	if (state != BTMTK_STATE_SUSPEND
+		&& state != BTMTK_STATE_RESUME
+		&& state != BTMTK_STATE_STANDBY)
+		usb_autopm_put_interface(cif_dev->intf);
 	return err;
 }
 
@@ -1312,6 +1324,7 @@ static int btmtk_usb_close(struct hci_dev *hdev)
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 	int err;
+	unsigned char state = 0;
 
 	BTMTK_INFO("%s enter!", __func__);
 
@@ -1330,12 +1343,21 @@ static int btmtk_usb_close(struct hci_dev *hdev)
 	btusb_stop_traffic(cif_dev);
 	btusb_free_frags(bdev);
 
-	err = usb_autopm_get_interface(cif_dev->intf);
-	if (err < 0)
-		goto failed;
+	state = btmtk_get_chip_state(bdev);
+	if (state != BTMTK_STATE_SUSPEND
+		&& state != BTMTK_STATE_RESUME
+		&& state != BTMTK_STATE_STANDBY) {
+		err = usb_autopm_get_interface(cif_dev->intf);
+		if (err < 0)
+			goto failed;
+	}
 
 	cif_dev->intf->needs_remote_wakeup = 0;
-	usb_autopm_put_interface(cif_dev->intf);
+
+	if (state != BTMTK_STATE_SUSPEND
+		&& state != BTMTK_STATE_RESUME
+		&& state != BTMTK_STATE_STANDBY)
+		usb_autopm_put_interface(cif_dev->intf);
 
 failed:
 	return 0;
