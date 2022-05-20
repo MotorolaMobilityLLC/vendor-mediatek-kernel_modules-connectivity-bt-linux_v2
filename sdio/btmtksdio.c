@@ -162,6 +162,165 @@ void rx_debug_save(int type, u32 value, u8 *buf)
 }
 #endif
 
+static void btmtk_sdio_dump_power_status(struct btmtk_dev *bdev)
+{
+	struct btmtk_sdio_dev *cif_dev = NULL;
+	u32 value = 0;
+
+	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
+
+	btmtk_sdio_writel(BT_DUMP_POWER_STATUS_ADDR_W,
+		BT_DUMP_POWER_STATUS_VALUE_W, cif_dev->func);
+	btmtk_sdio_readl(BT_DUMP_POWER_STATUS_ADDR_R, &value, cif_dev->func);
+	BTMTK_INFO("%s W(0x%08X) = 0x%08X, R(0x%08X) = 0x%08X", __func__,
+		BT_DUMP_POWER_STATUS_ADDR_W, BT_DUMP_POWER_STATUS_VALUE_W,
+		BT_DUMP_POWER_STATUS_ADDR_R, value);
+}
+
+static void btmtk_sdio_dump_bgfsys_sleep_status(struct btmtk_dev *bdev)
+{
+	struct btmtk_sdio_dev *cif_dev = NULL;
+	u32 value = 0;
+
+	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
+
+	btmtk_sdio_writel(BT_DUMP_BGF_SLEEP_STATUS_ADDR_W_1,
+		BT_DUMP_BGF_SLEEP_STATUS_VALUE_W_1, cif_dev->func);
+	btmtk_sdio_writel(BT_DUMP_BGF_SLEEP_STATUS_ADDR_W_2,
+		BT_DUMP_BGF_SLEEP_STATUS_VALUE_W_2, cif_dev->func);
+	btmtk_sdio_readl(BT_DUMP_BGF_SLEEP_STATUS_ADDR_R, &value, cif_dev->func);
+	BTMTK_INFO("%s W(0x%08X) = 0x%08X, W(0x%08X) = 0x%08X, R(0x%08X) = 0x%08X",
+		__func__,
+		BT_DUMP_BGF_SLEEP_STATUS_ADDR_W_1, BT_DUMP_BGF_SLEEP_STATUS_VALUE_W_1,
+		BT_DUMP_BGF_SLEEP_STATUS_ADDR_W_2, BT_DUMP_BGF_SLEEP_STATUS_VALUE_W_2,
+		BT_DUMP_BGF_SLEEP_STATUS_ADDR_R, value);
+}
+
+static void btmtk_sdio_dump_bgf_bt_debug_log(struct btmtk_dev *bdev)
+{
+	struct dump_debug_sop dump_cr[BT_DUMP_BGF_BT_DEBUG_LOG_NUM] = {
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_1, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_2, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_3, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_4, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_5, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_6, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_7, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_8, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_9, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_10, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_11, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_12, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_13, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_14, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_15, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_16, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_17, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_18, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_19, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_20, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_21, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_22, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_23, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_24, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_25, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_26, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_27, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_28, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_29, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_30, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_31, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_32, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_33, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_34, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_35, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_36, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_37, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_38, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_39, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_40, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_41, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_42, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_43, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_44, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_45, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_46, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_47, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_48, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_49, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_50, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_51, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_52, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_53, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_54, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R},
+		{BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_2, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_2_55, BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_R}};
+	struct btmtk_sdio_dev *cif_dev = NULL;
+	u32 value = 0, i = 0;
+
+	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
+
+	btmtk_sdio_writel(BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_1, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_1, cif_dev->func);
+	for (i = 0; i < BT_DUMP_BGF_BT_DEBUG_LOG_NUM; i++) {
+		btmtk_sdio_writel(dump_cr[i].addr_w, dump_cr[i].value_w, cif_dev->func);
+		btmtk_sdio_readl(dump_cr[i].addr_r, &value, cif_dev->func);
+		BTMTK_INFO("%s W(0x%08X) = 0x%08X, W(0x%08X) = 0x%08X, R(0x%08X) = 0x%08X",
+			__func__,
+			BT_DUMP_BGF_BT_DEBUG_LOG_ADDR_W_1, BT_DUMP_BGF_BT_DEBUG_LOG_VALUE_W_1,
+			dump_cr[i].addr_w, dump_cr[i].value_w,
+			dump_cr[i].addr_r, value);
+	}
+}
+
+static void btmtk_sdio_dump_debug_sop_sleep(struct btmtk_dev *bdev)
+{
+	/* dump Power_Status(Power_check) */
+	btmtk_sdio_dump_power_status(bdev);
+
+	/* dump BGFSYS_Sleep_Status(Power_check) */
+	btmtk_sdio_dump_bgfsys_sleep_status(bdev);
+
+	/* dump BGF_BT_DEBUG_LOG(BGFSYS_status) */
+	btmtk_sdio_dump_bgf_bt_debug_log(bdev);
+
+	/* dump mcu_sleep_wakeup_debug(BGFSYS_status),
+	 * only for PCIE, USB/SDIO not support
+	 */
+}
+
+static void btmtk_sdio_dump_debug_sop_wakeup(struct btmtk_dev *bdev)
+{
+	/* dump Power_Status(Power_check) */
+	btmtk_sdio_dump_power_status(bdev);
+
+	/* dump bgf_bt_debug_log(BGFSYS_status) */
+	btmtk_sdio_dump_bgf_bt_debug_log(bdev);
+}
+
+static void btmtk_sdio_dump_debug_sop_no_response(struct btmtk_dev *bdev)
+{
+	/* dump all bus timeout CR, only for PCIE, USB/SDIO not support */
+
+	/* dump bgf_bt_debug_log(BGFSYS_status) */
+	btmtk_sdio_dump_bgf_bt_debug_log(bdev);
+}
+
+static void btmtk_sdio_dump_debug_sop(struct btmtk_dev *bdev, int type)
+{
+	switch (type) {
+	case DEBUG_SOP_SLEEP:
+		btmtk_sdio_dump_debug_sop_sleep(bdev);
+		break;
+	case DEBUG_SOP_WAKEUP:
+		btmtk_sdio_dump_debug_sop_wakeup(bdev);
+		break;
+	case DEBUG_SOP_NO_RESPONSE:
+		btmtk_sdio_dump_debug_sop_no_response(bdev);
+		break;
+	default:
+		BTMTK_INFO("%s type(%d) not support", __func__, type);
+	}
+}
+
 static void btmtk_sdio_cif_mutex_lock(struct btmtk_dev *bdev)
 {
 	SDIO_OPS_MUTEX_LOCK();
@@ -337,15 +496,17 @@ done:
 				DUMP_FW_PC(cif_dev);
 				msleep(200);
 			}
+			btmtk_sdio_dump_debug_sop(cif_dev->bdev, DEBUG_SOP_WAKEUP);
 		} else
 			BTMTK_DBG("%s set driver own success", __func__);
 	} else {
 #if BTMTK_SDIO_DEBUG
 		fw_own_cnt++;
 #endif
-		if (ret)
+		if (ret) {
 			BTMTK_ERR("%s set FW own fail", __func__);
-		else
+			btmtk_sdio_dump_debug_sop(cif_dev->bdev, DEBUG_SOP_SLEEP);
+		} else
 			BTMTK_DBG("%s set FW own success", __func__);
 	}
 
@@ -1735,6 +1896,7 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
 	cif_dev->func = func;
+	cif_dev->bdev = bdev;
 	BTMTK_INFO("%s func device %p", __func__, func);
 	cif_dev->patched = 0;
 
@@ -2182,6 +2344,7 @@ int btmtk_cif_register(void)
 	hook.cif_mutex_unlock = btmtk_sdio_cif_mutex_unlock;
 	hook.open_done = btmtk_sdio_open_done;
 	hook.dl_dma = btmtk_sdio_load_fw_patch_using_dma;
+	hook.dump_debug_sop = btmtk_sdio_dump_debug_sop;
 	btmtk_reg_hif_hook(&hook);
 
 	retval = sdio_register();
@@ -2207,5 +2370,4 @@ int btmtk_cif_deregister(void)
 	BTMTK_INFO("%s: Done", __func__);
 	return 0;
 }
-
 

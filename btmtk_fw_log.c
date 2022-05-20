@@ -326,6 +326,21 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
+	if (strncmp(i_fwlog_buf, "dump_debug=", strlen("dump_debug")) == 0) {
+		u8 val = *(i_fwlog_buf + strlen("dump_debug=")) - '0';
+		if (bmain_info->hif_hook.dump_debug_sop) {
+			BTMTK_INFO("%s: dump_debug(%s)", __func__,
+				(val == 0) ? "SLEEP" :
+				((val == 1) ? "WAKEUP" :
+				((val == 2) ? "NO_RESPONSE" : "ERROR")));
+			bmain_info->hif_hook.dump_debug_sop(pp_bdev[hci_idx], val);
+		} else {
+			BTMTK_INFO("%s: not support", __func__);
+		}
+		ret = count;
+		goto exit;
+	}
+
 	/* hci input command format : echo 01 be fc 01 05 > /dev/stpbtfwlog */
 	/* We take the data from index three to end. */
 	for (i = 0; i < count; i++) {

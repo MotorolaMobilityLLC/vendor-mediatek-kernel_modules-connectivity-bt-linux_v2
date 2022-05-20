@@ -354,6 +354,18 @@ enum {
 	BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS,
 };
 
+enum {
+	DEBUG_SOP_SLEEP,
+	DEBUG_SOP_WAKEUP,
+	DEBUG_SOP_NO_RESPONSE,
+};
+
+struct dump_debug_sop {
+	u32 addr_w;
+	u32 value_w;
+	u32 addr_r;
+};
+
 struct h4_recv_pkt {
 	u8  type;	/* Packet type */
 	u8  hlen;	/* Header length */
@@ -522,6 +534,7 @@ typedef void (*cif_log_deinit_ptr)(void);
 typedef void (*cif_open_done_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_dl_dma_ptr)(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset);
+typedef void (*cif_dump_debug_sop_ptr)(struct btmtk_dev *bdev, int type);
 
 struct hif_hook_ptr {
 	cif_bt_init_ptr			init;
@@ -546,6 +559,7 @@ struct hif_hook_ptr {
 	cif_log_deinit_ptr			log_deinit;
 	cif_open_done_ptr		open_done;
 	cif_dl_dma_ptr			dl_dma;
+	cif_dump_debug_sop_ptr		dump_debug_sop;
 };
 
 struct btmtk_main_info {

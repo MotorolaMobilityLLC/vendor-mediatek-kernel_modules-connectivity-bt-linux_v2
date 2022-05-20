@@ -3593,6 +3593,8 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			if (skb->len == FW_COREDUMP_CMD_LEN &&
 				!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
 				BTMTK_INFO("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
+				if (main_info.hif_hook.dump_debug_sop)
+					main_info.hif_hook.dump_debug_sop(bdev, DEBUG_SOP_NO_RESPONSE);
 				btmtk_hci_snoop_print_to_log();
 			} else if (skb->len == HCI_RESET_CMD_LEN &&
 					!memcmp(skb->data, reset_cmd, HCI_RESET_CMD_LEN))
