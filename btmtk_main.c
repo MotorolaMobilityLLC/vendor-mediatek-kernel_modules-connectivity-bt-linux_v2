@@ -1519,7 +1519,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 					ret = 0;
 					break;
 				}
-				msleep(50);
+				usleep_range(10,100);
 			} while (time_before(jiffies, comp_event_timo));
 
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
