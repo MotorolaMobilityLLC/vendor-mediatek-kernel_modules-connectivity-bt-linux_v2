@@ -135,7 +135,7 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 #define CHAR2HEX_SIZE	4
 
 /* stpbtfwlog setting */
-#define FWLOG_QUEUE_COUNT			200
+#define FWLOG_QUEUE_COUNT			400
 #define FWLOG_ASSERT_QUEUE_COUNT		6000
 #define FWLOG_BLUETOOTH_KPI_QUEUE_COUNT		200
 #define HCI_MAX_COMMAND_SIZE			255

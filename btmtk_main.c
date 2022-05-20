@@ -144,7 +144,7 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 	ulong flags = 0;
 	struct sk_buff *skb = NULL;
 
-	BTMTK_DBG("%s: Start.\n", __func__);
+	BTMTK_INFO("%s: Start.", __func__);
 	/* picus read a queue, it may occur performace issue */
 	spin_lock_irqsave(&g_fwlog->fwlog_lock, flags);
 	if (skb_queue_len(&g_fwlog->fwlog_queue))
@@ -245,6 +245,13 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	memcpy(skb->data, o_fwlog_buf, len);
 	skb->len = len;
 
+	/* clean fwlog queue before enable picus log */
+	if (skb_queue_len(&g_fwlog->fwlog_queue) && skb->data[0] == 0x01
+			&& skb->data[1] == 0x5d &&  skb->data[2] == 0xfc) {
+		skb_queue_purge(&g_fwlog->fwlog_queue);
+		BTMTK_INFO("clean fwlog_queue, skb_queue_len = %d", skb_queue_len(&g_fwlog->fwlog_queue));
+	}
+
 	ret = btmtk_cif_send_cmd(g_bdev[0], skb, 0, 0, BTMTK_EP_TYPE_OUT_OTHER);
 	if (ret < 0)
 		BTMTK_ERR("%s failed!!", __func__);
@@ -258,21 +265,21 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 int btmtk_fops_openfwlog(struct inode *inode, struct file *file)
 {
-	BTMTK_DBG("%s: Start.", __func__);
+	BTMTK_INFO("%s: Start.", __func__);
 
 	return 0;
 }
 
 int btmtk_fops_closefwlog(struct inode *inode, struct file *file)
 {
-	BTMTK_DBG("%s: Start.", __func__);
+	BTMTK_INFO("%s: Start.", __func__);
 
 	return 0;
 }
 
 long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-	BTMTK_DBG("%s: Start.", __func__);
+	BTMTK_INFO("%s: Start.", __func__);
 
 	return 0;
 }
@@ -803,7 +810,7 @@ int btmtk_dispatch_acl(struct hci_dev *hdev, struct sk_buff *skb)
 			print_dump_data_counter++;
 			BT_INFO("%s: FW dump data (%d): %s", __func__, print_dump_data_counter, &skb->data[4]);
 		}
-		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_QUEUE_COUNT) {
+		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_ASSERT_QUEUE_COUNT) {
 			/* sent picus data to queue, picus tool will log it */
 			if (btmtk_skb_enq_fwlog(skb->data, skb->len, 0, &g_fwlog->fwlog_queue) == 0) {
 				wake_up_interruptible(&g_fwlog->fw_log_inq);
@@ -812,7 +819,7 @@ int btmtk_dispatch_acl(struct hci_dev *hdev, struct sk_buff *skb)
 		} else {
 			if (fwlog_fwdump_blocking_warn == 0) {
 				fwlog_fwdump_blocking_warn = 1;
-				pr_warn("btmtk fwlog queue size is full(picus)");
+				pr_warn("btmtk fwlog queue size is full(coredump)");
 			}
 		}
 
@@ -832,7 +839,7 @@ int btmtk_dispatch_acl(struct hci_dev *hdev, struct sk_buff *skb)
                     && skb->data[1] == 0x05) {
 		BTMTK_DBG("%s correct picus log by ACL", __func__);
 		/* Coredump */
-		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_ASSERT_QUEUE_COUNT) {
+		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_QUEUE_COUNT) {
 			if (btmtk_skb_enq_fwlog(skb->data, skb->len, 0, &g_fwlog->fwlog_queue) == 0) {
 				wake_up_interruptible(&g_fwlog->fw_log_inq);
 				fwlog_picus_blocking_warn = 0;
@@ -840,7 +847,7 @@ int btmtk_dispatch_acl(struct hci_dev *hdev, struct sk_buff *skb)
 		} else {
 			if (fwlog_picus_blocking_warn == 0) {
 				fwlog_picus_blocking_warn = 1;
-				pr_warn("btmtk fwlog queue size is full(coredump)");
+				pr_warn("btmtk fwlog queue size is full(picus)");
 			}
 		}
 		return 1;
@@ -3277,7 +3284,6 @@ int btmtk_fops_init(void)
 	BT_INFO("%s: BT_majorfwlog %d, devIDfwlog %d", __func__, BT_majorfwlog, devIDfwlog);
 
 	g_fwlog->g_devIDfwlog = devIDfwlog;
-	init_waitqueue_head(&(g_fwlog->fw_log_inq));
 
 	return 0;
 
