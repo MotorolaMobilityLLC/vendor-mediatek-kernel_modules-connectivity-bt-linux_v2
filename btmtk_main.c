@@ -49,12 +49,13 @@ static int btmtk_intf_num = BT_MCU_MINIMUM_INTERFACE_NUM;
 /* To allow g_bdev being sized from btmtk_intf_num setting */
 static struct btmtk_dev **g_bdev;
 /* For fwlog dev node setting */
-static struct btmtk_fops_fwlog *g_fwlog = NULL;
+static struct btmtk_fops_fwlog *g_fwlog;
 
 static char event_need_compare[EVENT_COMPARE_SIZE] = {0};
 static char event_need_compare_len;
 static char event_compare_status;
 const u8 READ_ADDRESS_EVENT[] = { 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00 };
+const u8 READ_ISO_PACKET_SIZE_CMD[] = {0x01, 0x98, 0xFD, 0x02 };
 
 /*TODO, maybe need to support multiple dongle to do reset stack*/
 static u8 reset_stack_flag;
@@ -180,6 +181,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	skb = alloc_skb(sizeof(buf) + BT_SKB_RESERVE, GFP_ATOMIC);
 	if (!skb) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
+		return -ENOMEM;
 	}
 
 	if (count > HCI_MAX_COMMAND_BUF_SIZE) {
@@ -582,8 +584,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 		if (skb->len == (&pkts[i])->hlen) {
 			u16 dlen;
 
-			/* BTMTK_DBG("%s begin, skb->len = %d, %d, %d", __func__, skb->len,
-				(&pkts[i])->hlen, (&pkts[i])->lsize); */
+			/* BTMTK_DBG("%s begin, skb->len = %d, %d, %d", __func__, skb->len, */
+			/* (&pkts[i])->hlen, (&pkts[i])->lsize); */
 			switch ((&pkts[i])->lsize) {
 			case 0:
 				/* No variable data length */
@@ -803,6 +805,7 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 			skb->data[1] == 0xfc) {
 		static int dump_data_counter;
 		static int dump_data_length;
+
 		state = btmtk_get_chip_state(bdev);
 		if (state != BTMTK_STATE_FW_DUMP) {
 			BTMTK_INFO("%s: FW dump begin", __func__);
@@ -852,8 +855,9 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 			}
 		}
 		return 1;
-	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) && (skb->data[0] == 0xff || skb->data[0] == 0xfe)
-                    && skb->data[1] == 0x05) {
+	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
+				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
+				skb->data[1] == 0x05) {
 		/* Coredump */
 		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_QUEUE_COUNT) {
 			if (btmtk_skb_enq_fwlog(skb->data, skb->len, 0, &g_fwlog->fwlog_queue) == 0) {
@@ -3244,6 +3248,7 @@ int btmtk_fops_init(void)
 	int ret = 0;
 	int cdevErr = 0;
 	int majorfwlog = 0;
+
 	BTMTK_INFO("%s: Start", __func__);
 
 	if (g_fwlog == NULL) {
@@ -3503,6 +3508,13 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	skb = mtk_add_stp(bdev, skb);
 #endif
 
+	/* For Ble ISO packet size */
+	if (memcmp(skb->data, READ_ISO_PACKET_SIZE_CMD, sizeof(READ_ISO_PACKET_SIZE_CMD)) == 0) {
+		bdev->iso_threshold = skb->data[sizeof(READ_ISO_PACKET_SIZE_CMD)] +
+							(skb->data[sizeof(READ_ISO_PACKET_SIZE_CMD) + 1]  << 8);
+		BTMTK_INFO("%s: Ble iso pkt size is %d", __func__, bdev->iso_threshold);
+	}
+
 	ret = btmtk_cif_send_cmd(bdev, skb, 0, 0, BTMTK_EP_TYPE_OUT_OTHER);
 	if (ret < 0)
 		BTMTK_ERR("%s failed!!", __func__);
@@ -3539,17 +3551,15 @@ void btmtk_toggle_rst_pin(struct btmtk_dev *bdev)
 	bdev->pf_resetFunc2 = (reset_func_ptr2) btmtk_kallsyms_lookup_name("mtk_gpio_set_value");
 	if (!bdev->pf_resetFunc2)
 		BTMTK_ERR("%s: No Exported Func Found mtk_gpio_set_value", __func__);
-	else {
+	else
 		BTMTK_INFO("%s: Found mtk_gpio_set_value", __func__);
-	}
 
 	bdev->pf_lowFunc = (set_gpio_low) btmtk_kallsyms_lookup_name("MDrv_GPIO_Set_Low");
 	bdev->pf_highFunc = (set_gpio_high) btmtk_kallsyms_lookup_name("MDrv_GPIO_Set_High");
 	if (!bdev->pf_lowFunc || !bdev->pf_highFunc)
 		BTMTK_WARN("%s: No Exported Func Found MDrv_GPIO_Set_Low or High", __func__);
-	else {
+	else
 		BTMTK_INFO("%s: Found MDrv_GPIO_Set_Low & MDrv_GPIO_Set_High", __func__);
-	}
 
 	if (bdev->pf_pdwndFunc) {
 		BTMTK_INFO("%s: Invoke PDWNC_SetBTInResetState(%d)", __func__, 1);
@@ -3623,6 +3633,7 @@ void btmtk_reset_waker(struct work_struct *work)
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, reset_waker);
 	struct btmtk_cif_state *cif_state = NULL;
 	int cif_event = 0, err = 0;
+
 	cif_event = HIF_EVENT_SUBSYS_RESET;
 	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
 		/* Error */
@@ -3655,7 +3666,7 @@ void btmtk_reset_waker(struct work_struct *work)
 
 	/* It's a test code for stress test (whole chip reset & L0.5 reset) */
 #if 0
-	if(bdev->bt_cfg.dongle_reset_gpio_pin == 0) {
+	if (bdev->bt_cfg.dongle_reset_gpio_pin == 0) {
 		err = btmtk_cif_subsys_reset(bdev);
 		if (err) {
 			/* L0.5 reset failed, do whole chip reset */
@@ -3973,8 +3984,7 @@ static int __init main_driver_init(void)
 	}
 
 	ret = btmtk_fops_init();
-	if (ret < 0)
-	{
+	if (ret < 0) {
 		BTMTK_ERR("*** STPBTFWLOG registration failed(%d)! ***", ret);
 		main_exit();
 		return ret;

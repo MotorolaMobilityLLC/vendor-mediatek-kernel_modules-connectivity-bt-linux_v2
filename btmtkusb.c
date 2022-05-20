@@ -597,13 +597,21 @@ static void btusb_ble_isoc_complete(struct urb *urb)
 			BT_ERR("%s: bdev->urb_transfer_buf is NULL!", __func__);
 			return;
 		}
-		isoc_pkt_len = isoc_buf[2] + (isoc_buf[3] << 8);
+		isoc_pkt_len = isoc_buf[2] + (isoc_buf[3] << 8) + HCI_ISO_PKT_HEADER_SIZE;
+
+		/* Skip padding */
+		BTMTK_DBG("%s: isoc_pkt_len = %d, urb->actual_length = %d", __func__, isoc_pkt_len, urb->actual_length);
+		if (isoc_pkt_len == HCI_ISO_PKT_HEADER_SIZE) {
+			BTMTK_DBG("%s: goto ble_iso_resub", __func__);
+			goto ble_iso_resub;
+		}
 
 		/* It's mtk specific heade for stack
 		 * hci layered didn't support 0x05 for ble iso, it will drop the packet type with 0x05
 		 * Driver will replace 0x05 to 0x02
 		 * header format : 0x02 0x00 0x44 xx xx + isoc packet header & payload
 		 */
+		memset(bdev->urb_transfer_buf, 0, URB_MAX_BUFFER_SIZE);
 		bdev->urb_transfer_buf[0] = HCI_ACLDATA_PKT;
 		bdev->urb_transfer_buf[1] = 0x00;
 		bdev->urb_transfer_buf[2] = 0x44;
@@ -627,6 +635,7 @@ static void btusb_ble_isoc_complete(struct urb *urb)
 		return;
 	}
 
+ble_iso_resub:
 	usb_anchor_urb(urb, &bdev->ble_isoc_anchor);
 	usb_mark_last_busy(bdev->udev);
 
@@ -891,16 +900,16 @@ static int btusb_open(struct hci_dev *hdev)
 	ifnum_base = bdev->intf->cur_altsetting->desc.bInterfaceNumber;
 
 	if (is_mt7961(bdev->chip_id)) {
-		BT_INFO("%s 7961 submit urb\n", __func__);
+		BTMTK_INFO("%s 7961 submit urb\n", __func__);
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
 			err = btusb_submit_intr_reset_urb(hdev, GFP_KERNEL);
 			if (err < 0)
 				goto failed;
-			/* err = btusb_submit_intr_ble_isoc_urb(hdev, GFP_KERNEL);
+			err = btusb_submit_intr_ble_isoc_urb(hdev, GFP_KERNEL);
 			if (err < 0) {
 				usb_kill_anchored_urbs(&bdev->ble_isoc_anchor);
 				goto failed;
-			}*/
+			}
 		} else if (BTMTK_IS_BT_1_INTF(ifnum_base)) {
 			/*need to do in bt_open in btmtk_main.c */
 			/* btmtk_usb_send_power_on_cmd_7668(hdev); */
@@ -1204,7 +1213,6 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	u16 crBaseAddr = 0, crRegOffset = 0;
 #endif
 
-	BT_DBG("%s", hdev->name);
 
 	/* TODO */
 	/* btmtk_usb_dispatch_data_bluetooth_kpi(skb->data, skb->len, bt_cb(skb)->pkt_type); */
@@ -1300,6 +1308,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		}
 #endif
 
+		/* For wmt cmd/evt */
 		if (skb->data[0] == 0x6f && skb->data[1] == 0xfc) {
 			skb_push(skb, 1);
 			skb->data[0] = 0x01;
@@ -1338,8 +1347,14 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 
 	case HCI_ACLDATA_PKT:
 		if (skb->data[0] == 0x00 && skb->data[1] == 0x44) {
+			int isoc_pkt_len = 0;
 			skb_pull(skb, 4);
-			BTMTK_DBG_RAW(skb->data, skb->len, "%s, send 0x02 0x00 0x44, it's ble iso packet", __func__);
+			isoc_pkt_len = skb->data[2] + (skb->data[3] << 8);
+			if (bdev->iso_threshold) {
+				memset(skb_put(skb, bdev->iso_threshold - isoc_pkt_len), 0, bdev->iso_threshold - isoc_pkt_len);
+				BTMTK_INFO("%s: Ble iso pkt size is %d, isoc_pkt_len = %d", __func__, bdev->iso_threshold, isoc_pkt_len);
+			}
+			BTMTK_DBG_RAW(skb->data, skb->len, "%s, add ble iso send 0x02 0x00 0x44, it's ble iso packet", __func__);
 			urb = alloc_intr_iso_urb(hdev, skb);
 		} else
 			urb = alloc_bulk_urb(hdev, skb);
@@ -1713,6 +1728,16 @@ static int btusb_probe(struct usb_interface *intf,
 				continue;
 			}
 		}
+		if (bdev->iso_channel) {
+			err = usb_driver_claim_interface(&btusb_driver,
+							 bdev->iso_channel, bdev);
+			if (err < 0) {
+				btmtk_free_hci_device(bdev, HCI_USB);
+				btmtk_initialize_cfg_items(bdev);
+				btmtk_cif_free_memory(bdev);
+				return err;
+			}
+		}
 	} else if (BTMTK_IS_BT_1_INTF(ifnum_base)) {
 		BT_INFO("interface number = 3, set interface number 4");
 		bdev->isoc = usb_ifnum_to_if(bdev->udev, 4);
@@ -1780,8 +1805,13 @@ static void btusb_disconnect(struct usb_interface *intf)
 	if (intf == bdev->intf) {
 		if (bdev->isoc)
 			usb_driver_release_interface(&btusb_driver, bdev->isoc);
-	} else if (intf == bdev->isoc)
+		if (bdev->iso_channel)
+			usb_driver_release_interface(&btusb_driver, bdev->iso_channel);
+	} else if (intf == bdev->isoc) {
 		usb_driver_release_interface(&btusb_driver, bdev->intf);
+	} else if (intf == bdev->iso_channel) {
+		usb_driver_release_interface(&btusb_driver, bdev->intf);
+	}
 
 	btmtk_free_setting_file(bdev);
 	btmtk_deregister_hci_device(bdev);

@@ -96,6 +96,9 @@ struct btmtk_dev {
 	struct usb_endpoint_descriptor	*isoc_tx_ep;
 	struct usb_endpoint_descriptor	*isoc_rx_ep;
 
+	/* For ble iso packet size */
+	int iso_threshold;
+
 	__u8	cmdreq_type;
 	__u8	cmdreq;
 
