@@ -942,7 +942,62 @@ static int btusb_submit_bulk_urb(struct hci_dev *hdev, gfp_t mem_flags)
 	return err;
 }
 
-static int btusb_submit_intr_iso_urb(struct hci_dev *hdev, gfp_t mem_flags)
+static void btusb_ble_isoc_complete(struct urb *urb)
+{
+	struct hci_dev *hdev = urb->context;
+	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	int err;
+
+	/*
+	 * This flag didn't support in kernel 4.x
+	 * Driver will remove it
+	 * if (!test_bit(HCI_RUNNING, &hdev->flags))
+	 * return;
+	 */
+
+	if (urb->status == 0) {
+		hdev->stat.byte_rx += urb->actual_length;
+
+		if (!bdev->urb_transfer_buf) {
+			BT_ERR("%s: bdev->urb_transfer_buf is NULL!", __func__);
+			return;
+		}
+
+		bdev->urb_transfer_buf[0] = HCI_ISO_PKT;
+		bdev->urb_transfer_buf[1] = 0x00;
+		bdev->urb_transfer_buf[2] = 0x44;
+		bdev->urb_transfer_buf[3] = (urb->actual_length & 0x00ff);
+		bdev->urb_transfer_buf[4] = ((urb->actual_length & 0xff00) >> 8);
+		memcpy(bdev->urb_transfer_buf + 5, urb->transfer_buffer, urb->actual_length);
+
+		BTMTK_DBG_RAW(bdev->urb_transfer_buf, urb->actual_length + 5, "%s: raw data is :", __func__);
+
+		err = btmtk_recv(hdev, bdev->urb_transfer_buf, urb->actual_length + 5);
+		if (err) {
+			BT_ERR("%s corrupted ACL packet", hdev->name);
+			hdev->stat.err_rx++;
+		}
+	} else if (urb->status == -ENOENT) {
+		/* Avoid suspend failed when usb_kill_urb */
+		return;
+	}
+
+	usb_anchor_urb(urb, &bdev->ble_isoc_anchor);
+	usb_mark_last_busy(bdev->udev);
+
+	err = usb_submit_urb(urb, GFP_ATOMIC);
+	if (err < 0) {
+		/* -EPERM: urb is being killed;
+		 * -ENODEV: device got disconnected
+		 */
+		if (err != -EPERM && err != -ENODEV)
+			BT_ERR("%s urb %p failed to resubmit (%d)",
+			       hdev->name, urb, -err);
+		usb_unanchor_urb(urb);
+	}
+}
+
+static int btusb_submit_intr_ble_isoc_urb(struct hci_dev *hdev, gfp_t mem_flags)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	struct urb *urb;
@@ -971,11 +1026,11 @@ static int btusb_submit_intr_iso_urb(struct hci_dev *hdev, gfp_t mem_flags)
 	BT_INFO("btusb_submit_intr_iso_urb : polling  0x%02X",  bdev->intr_iso_rx_ep->bEndpointAddress);
 
 	usb_fill_int_urb(urb, bdev->udev, pipe, buf, size,
-			 btusb_bulk_complete, hdev, bdev->intr_iso_rx_ep->bInterval);
+			 btusb_ble_isoc_complete, hdev, bdev->intr_iso_rx_ep->bInterval);
 
 	urb->transfer_flags |= URB_FREE_BUFFER;
 
-	usb_anchor_urb(urb, &bdev->intr_anchor);
+	usb_anchor_urb(urb, &bdev->ble_isoc_anchor);
 
 	err = usb_submit_urb(urb, mem_flags);
 	if (err < 0) {
@@ -1186,9 +1241,9 @@ static int btusb_open(struct hci_dev *hdev)
 			err = btusb_submit_intr_reset_urb(hdev, GFP_KERNEL);
 			if (err < 0)
 				goto failed;
-			err = btusb_submit_intr_iso_urb(hdev, GFP_KERNEL);
+			err = btusb_submit_intr_ble_isoc_urb(hdev, GFP_KERNEL);
 			if (err < 0) {
-				usb_kill_anchored_urbs(&bdev->intr_anchor);
+				usb_kill_anchored_urbs(&bdev->ble_isoc_anchor);
 				goto failed;
 			}
 		} else if (BTMTK_IS_BT_1_INTF(ifnum_base)) {
@@ -1225,6 +1280,7 @@ static void btusb_stop_traffic(struct btmtk_dev *bdev)
 	usb_kill_anchored_urbs(&bdev->bulk_anchor);
 	usb_kill_anchored_urbs(&bdev->isoc_anchor);
 	usb_kill_anchored_urbs(&bdev->ctrl_anchor);
+	usb_kill_anchored_urbs(&bdev->ble_isoc_anchor);
 }
 
 static int btusb_close(struct hci_dev *hdev)
@@ -1506,7 +1562,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	ifnum_base = bdev->intf->cur_altsetting->desc.bInterfaceNumber;
 
 	skb_pull(skb, 1);
-	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send_frame", __func__);
+	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send_frame, type = %d", __func__, skb->pkt_type);
 	switch (hci_skb_pkt_type(skb)) {
 	case HCI_COMMAND_PKT:
 #ifdef SUPPORT_HW_DVT
@@ -1625,9 +1681,11 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		return submit_or_queue_tx_urb(hdev, urb);
 
 	case HCI_ACLDATA_PKT:
-		if (skb->data[0] == 0x00 && skb->data[1] == 0x44)
+		if (skb->data[0] == 0x00 && skb->data[1] == 0x44) {
+			skb_pull(skb, 4);
+			BTMTK_DBG_RAW(skb->data, skb->len, "%s, send 0x02 0x00 0x44, it's ble iso packet", __func__);
 			urb = alloc_intr_iso_urb(hdev, skb);
-		else
+		} else
 			urb = alloc_bulk_urb(hdev, skb);
 		if (IS_ERR(urb))
 			return PTR_ERR(urb);
@@ -1730,6 +1788,7 @@ static void btusb_work(struct work_struct *work)
 	struct hci_dev *hdev = bdev->hdev;
 	int new_alts;
 	int err;
+	unsigned long flags;
 
 	if (bdev->sco_num > 0) {
 		if (!test_bit(BTUSB_DID_ISO_RESUME, &bdev->flags)) {
@@ -1754,29 +1813,25 @@ static void btusb_work(struct work_struct *work)
 		new_alts = bdev->new_isoc_altsetting;
 #endif
 
-		if (bdev->isoc_altsetting != new_alts) {
-			unsigned long flags;
+		clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
+		usb_kill_anchored_urbs(&bdev->isoc_anchor);
 
-			clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
-			usb_kill_anchored_urbs(&bdev->isoc_anchor);
+		/* When isochronous alternate setting needs to be
+		 * changed, because SCO connection has been added
+		 * or removed, a packet fragment may be left in the
+		 * reassembling state. This could lead to wrongly
+		 * assembled fragments.
+		 *
+		 * Clear outstanding fragment when selecting a new
+		 * alternate setting.
+		 */
+		spin_lock_irqsave(&bdev->rxlock, flags);
+		kfree_skb(bdev->sco_skb);
+		bdev->sco_skb = NULL;
+		spin_unlock_irqrestore(&bdev->rxlock, flags);
 
-			/* When isochronous alternate setting needs to be
-			 * changed, because SCO connection has been added
-			 * or removed, a packet fragment may be left in the
-			 * reassembling state. This could lead to wrongly
-			 * assembled fragments.
-			 *
-			 * Clear outstanding fragment when selecting a new
-			 * alternate setting.
-			 */
-			spin_lock_irqsave(&bdev->rxlock, flags);
-			kfree_skb(bdev->sco_skb);
-			bdev->sco_skb = NULL;
-			spin_unlock_irqrestore(&bdev->rxlock, flags);
-
-			if (__set_isoc_interface(hdev, new_alts) < 0)
-				return;
-		}
+		if (__set_isoc_interface(hdev, new_alts) < 0)
+			return;
 
 		if (!test_and_set_bit(BTUSB_ISOC_RUNNING, &bdev->flags)) {
 			if (btusb_submit_isoc_urb(hdev, GFP_KERNEL) < 0)
@@ -1787,7 +1842,7 @@ static void btusb_work(struct work_struct *work)
 	} else {
 		clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
 		usb_kill_anchored_urbs(&bdev->isoc_anchor);
-
+		BTMTK_INFO("%s set alt to zero", __func__);
 		__set_isoc_interface(hdev, 0);
 		if (test_and_clear_bit(BTUSB_DID_ISO_RESUME, &bdev->flags))
 			usb_autopm_put_interface(bdev->isoc ? bdev->isoc : bdev->intf);
@@ -1809,19 +1864,23 @@ static void btusb_waker(struct work_struct *work)
 static void btusb_reset_waker(struct work_struct *work)
 {
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, reset_waker);
-	int ret;
 	int val;
 
 	BT_INFO("%s: Receive a byte (0xFF)", __func__);
 	/* read interrupt EP15 CR */
 
+	mdelay(500); /* Need to improve */
+	cancel_work_sync(&bdev->work);
+	cancel_work_sync(&bdev->waker);
+
 	bdev->interface_state = BTMTK_STATE_FW_DUMP;
 	clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
+	bdev->sco_num = 0;
 
-	ret = btmtk_send_deinit_cmds(bdev);
 	btusb_stop_traffic(bdev);
+	mdelay(500);
 
 	/* read interrupt EP15 CR */
 	btmtk_cif_read_uhw_register(bdev, 0x760003A0, &val);
@@ -1941,6 +2000,7 @@ static int btusb_probe(struct usb_interface *intf,
 	init_usb_anchor(&bdev->bulk_anchor);
 	init_usb_anchor(&bdev->isoc_anchor);
 	init_usb_anchor(&bdev->ctrl_anchor);
+	init_usb_anchor(&bdev->ble_isoc_anchor);
 	spin_lock_init(&bdev->rxlock);
 
 #ifdef SUPPORT_STPBTFWLOG
