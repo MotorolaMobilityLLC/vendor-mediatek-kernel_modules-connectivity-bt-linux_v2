@@ -1,3 +1,6 @@
+/* Define for proce node */
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 
 #include "btmtk_fw_log.h"
 
@@ -31,6 +34,16 @@ const struct file_operations BT_fopsfwlog = {
 	.poll = btmtk_fops_pollfwlog,
 	.unlocked_ioctl = btmtk_fops_unlocked_ioctlfwlog,
 	.compat_ioctl = btmtk_fops_compat_ioctlfwlog
+};
+
+/** read_write for proc */
+static int btmtk_proc_show(struct seq_file *m, void *v);
+static int btmtk_proc_open(struct inode *inode, struct  file *file);
+
+static const struct file_operations BT_proc_fops = {
+	.open = btmtk_proc_open,
+	.read = seq_read,
+	.release = single_release,
 };
 
 __weak int32_t btmtk_intcmd_wmt_utc_sync(void)
@@ -71,6 +84,50 @@ void fw_log_bt_event_cb(void)
 {
 	BTMTK_DBG("fw_log_bt_event_cb");
 	wake_up_interruptible(&BT_log_wq);
+}
+
+static int btmtk_proc_show(struct seq_file *m, void *v)
+{
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	seq_printf(m, "patch version:%s driver version:%s\n", bmain_info->fw_version_str, VERSION);
+	return 0;
+}
+
+static int btmtk_proc_open(struct inode *inode, struct  file *file)
+{
+	return single_open(file, btmtk_proc_show, NULL);
+}
+
+static void btmtk_proc_create_new_entry(void)
+{
+	struct proc_dir_entry *proc_show_entry = NULL;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	BTMTK_INFO("%s, proc initialized", __func__);
+
+	bmain_info->proc_dir = proc_mkdir("stpbt", NULL);
+	if (bmain_info->proc_dir == NULL) {
+		BTMTK_ERR("Unable to creat dir");
+		return;
+	}
+	proc_show_entry =  proc_create("bt_fw_version", 0644, bmain_info->proc_dir, &BT_proc_fops);
+	if (proc_show_entry == NULL) {
+		BTMTK_ERR("Unable to creat bt_fw_version node");
+		remove_proc_entry("stpbt", NULL);
+	}
+}
+
+static void btmtk_proc_delete_entry(void)
+{
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	if (bmain_info->proc_dir != NULL) {
+		remove_proc_entry("bt_fw_version", bmain_info->proc_dir);
+		remove_proc_entry("stpbt", NULL);
+		bmain_info->proc_dir = NULL;
+		BTMTK_INFO("%s, proc device node and folder removed!!", __func__);
+	}
 }
 
 int btmtk_fops_initfwlog(void)
@@ -134,6 +191,9 @@ int btmtk_fops_initfwlog(void)
 		skb_queue_head_init(&g_fwlog->fwlog_queue);
 		init_waitqueue_head(&(g_fwlog->fw_log_inq));
 	}
+
+	btmtk_proc_create_new_entry();
+
 	BTMTK_INFO("%s: End", __func__);
 	return 0;
 
@@ -184,6 +244,8 @@ int btmtk_fops_exitfwlog(void)
 	BTMTK_INFO("%s: BT_chrdevfwlog driver removed.\n", __func__);
 
 	kfree(g_fwlog);
+
+	btmtk_proc_delete_entry();
 	return 0;
 }
 

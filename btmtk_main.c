@@ -48,7 +48,6 @@ struct btmtk_dev *g_sbdev;
 /*btmtk main information*/
 static struct btmtk_main_info main_info;
 
-
 /* State machine table that clarify through each HIF events,
  * To specify HIF event on
  * Entering / End / Error
@@ -72,27 +71,29 @@ static const struct btmtk_cif_state g_cif_state[] = {
 	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_FW_DUMP, BTMTK_STATE_FW_DUMP},
 };
 
+static int btmtk_send_hci_tci_set_sleep_cmd_766x(struct btmtk_dev *bdev);
+
 __weak int btmtk_cif_register(void)
 {
-	BTMTK_ERR("weak function %s not implement", __func__);
+	BTMTK_WARN("weak function %s not implement", __func__);
 	return -1;
 }
 
 __weak int btmtk_cif_deregister(void)
 {
-	BTMTK_ERR("weak function %s not implement", __func__);
+	BTMTK_WARN("weak function %s not implement", __func__);
 	return -1;
 }
 
 __weak int btmtk_cif_send_calibration(struct btmtk_dev *bdev)
 {
-	BTMTK_ERR("weak function %s not implement", __func__);
+	BTMTK_WARN("weak function %s not implement", __func__);
 	return -1;
 }
 
 __weak int btmtk_cif_rx_packet_handler(struct hci_dev *hdev, struct sk_buff *skb)
 {
-	BTMTK_ERR("weak function %s not implement", __func__);
+	BTMTK_WARN("weak function %s not implement", __func__);
 	return -1;
 }
 void btmtk_do_gettimeofday(struct timeval *tv)
@@ -118,8 +119,6 @@ void btmtk_getUTCtime(struct rtc_time *tm, u32 *usec)
 	tm->tm_mon += 1;
 	*usec = tv.tv_usec;
 }
-
-static int btmtk_send_hci_tci_set_sleep_cmd_766x(struct btmtk_dev *bdev);
 
 /*get 1 byte only*/
 int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value)
@@ -1387,10 +1386,39 @@ int btmtk_load_code_from_bin(u8 **image, char *bin_name, struct device *dev,
 	return 0;
 }
 
-static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
+static u8 *btmtk_memstr(u8 *buf, u32 buf_len, char *substr)
+{
+	u32 sublen = 0;
+	int i = 0;
+	u8 *cur = NULL;
+
+	if (buf == NULL || buf_len == 0 || substr == NULL) {
+		BTMTK_WARN("%s, parameter is invalid!", __func__);
+		return NULL;
+	}
+
+	sublen = strlen(substr);
+	cur = buf + buf_len - 1;
+	for (i = buf_len - 1; i >= 0; i--) {
+		if (buf_len - 1 - i < sublen) {
+			cur--;
+			continue;
+		}
+		if (*cur == *substr && memcmp(cur, substr, sublen) == 0)
+			return cur;
+
+		cur--;
+	}
+
+	return NULL;
+}
+
+static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwbuf_len)
 {
 	struct _PATCH_HEADER *patchHdr = NULL;
 	struct _Global_Descr *globalDesrc = NULL;
+	u8 *fw_version = NULL;
+	u32 fw_version_len = 0;
 
 	if (fwbuf == NULL) {
 		BTMTK_WARN("%s, fwbuf is NULL!", __func__);
@@ -1398,11 +1426,20 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
 	}
 
 	patchHdr = (struct _PATCH_HEADER *)fwbuf;
+	fw_version = btmtk_memstr(fwbuf, fwbuf_len, FW_VERSION_KEY_WORDS);
 
 	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		globalDesrc = (struct _Global_Descr *)(fwbuf + FW_ROM_PATCH_HEADER_SIZE);
 
 	BTMTK_INFO("[btmtk] =============== Patch Info ==============");
+
+	if (fw_version) {
+		memset(main_info.fw_version_str, 0, FW_VERSION_BUF_SIZE);
+		fw_version_len = MIN(((u32)(fwbuf + fwbuf_len - fw_version)), FW_VERSION_BUF_SIZE);
+		memcpy(main_info.fw_version_str, fw_version, fw_version_len);
+		BTMTK_INFO("[btmtk] fw_version = %s", main_info.fw_version_str);
+	}
+
 	if (patchHdr) {
 		BTMTK_INFO("[btmtk] Built Time = %s", patchHdr->ucDateTime);
 		BTMTK_INFO("[btmtk] Hw Ver = 0x%04x", patchHdr->u2HwVer);
@@ -1841,7 +1878,7 @@ int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, bool patch_flag)
 		/*Display rom patch info*/
 		btmtk_print_wifi_patch_info(bdev, rom_patch);
 	else
-		btmtk_print_bt_patch_info(bdev, rom_patch);
+		btmtk_print_bt_patch_info(bdev, rom_patch, rom_patch_len);
 
 	ret = btmtk_send_fw_rom_patch_79xx(bdev, rom_patch, patch_flag);
 	if (ret < 0) {
@@ -1912,7 +1949,7 @@ int btmtk_load_rom_patch_766x(struct btmtk_dev *bdev)
 
 	patchHdr = (struct _PATCH_HEADER *)rom_patch;
 	/*Display rom patch info*/
-	btmtk_print_bt_patch_info(bdev, rom_patch);
+	btmtk_print_bt_patch_info(bdev, rom_patch, rom_patch_len);
 
 	pos = kmalloc(UPLOAD_PATCH_UNIT, GFP_ATOMIC);
 	if (!pos) {

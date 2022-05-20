@@ -253,6 +253,10 @@
 #define WRITE_PINMUX_EVT_LEN 7
 
 #define PINMUX_REG_NUM 2
+
+#define FW_VERSION_BUF_SIZE 256
+#define FW_VERSION_KEY_WORDS "t-neptune"
+
 enum {
 	RES_1 = 0,
 	RES_DOT_5,
@@ -617,6 +621,10 @@ struct btmtk_main_info {
 
 	u8 wmt_over_hci_header[WMT_OVER_HCI_HEADER_SIZE];
 	u8 read_iso_packet_size_cmd[READ_ISO_PACKET_CMD_SIZE];
+
+	/* record firmware version */
+	struct proc_dir_entry *proc_dir;
+	char fw_version_str[FW_VERSION_BUF_SIZE];
 };
 
 static inline int is_mt7902(u32 chip_id)
