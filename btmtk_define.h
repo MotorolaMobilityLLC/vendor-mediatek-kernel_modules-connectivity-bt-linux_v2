@@ -42,7 +42,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.200051301"
+#define VERSION "7.0.200051501"
 #define SUBVER ":turnkey"
 
 
@@ -110,7 +110,7 @@ extern uint8_t btmtk_log_lvl;
 			int raw_count = 0;					\
 			const unsigned char *ptr = p;				\
 			pr_cont("[btmtk_info] "fmt, ##__VA_ARGS__);		\
-			for (raw_count = 0; raw_count < MIN(l, BTMTK_MAX_LOG_LEN); ++raw_count) {	\
+			for (raw_count = 0; raw_count < l; ++raw_count) {	\
 				pr_cont(" %02X", ptr[raw_count]);		\
 			}							\
 			pr_cont("\n");						\
@@ -183,6 +183,7 @@ extern uint8_t btmtk_log_lvl;
 #define IO_BUF_SIZE		(HCI_MAX_EVENT_SIZE > 256 ? HCI_MAX_EVENT_SIZE : 256)
 #define HCI_SNOOP_ENTRY_NUM	60
 #define HCI_SNOOP_BUF_SIZE	32
+#define HCI_SNOOP_MAX_BUF_SIZE	66
 #define EVENT_COMPARE_SIZE	64
 
 #define SECTION_SPEC_NUM	13

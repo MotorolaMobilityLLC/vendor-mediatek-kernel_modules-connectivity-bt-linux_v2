@@ -70,6 +70,7 @@ int btmtk_picus_disable(struct btmtk_dev *bdev);
 
 void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf);
 void btmtk_hci_snoop_save_event(u32 len, u8 *buf);
+void btmtk_hci_snoop_save_adv_event(u32 len, u8 *buf);
 void btmtk_hci_snoop_save_acl(u32 len, u8 *buf);
 
 
@@ -130,10 +131,10 @@ void btmtk_hci_snoop_save_acl(u32 len, u8 *buf);
 #define PATCH_DOWNLOAD_USING_WMT 0
 #define PATCH_DOWNLOAD_USING_DMA 1
 
-#define PATCH_DOWNLOAD_PHASE1_2_DELAY_TIME 10
-#define PATCH_DOWNLOAD_PHASE1_2_RETRY 20
-#define PATCH_DOWNLOAD_PHASE3_DELAY_TIME 500
-#define PATCH_DOWNLOAD_PHASE3_RETRY 2
+#define PATCH_DOWNLOAD_PHASE1_2_DELAY_TIME 1
+#define PATCH_DOWNLOAD_PHASE1_2_RETRY 5
+#define PATCH_DOWNLOAD_PHASE3_DELAY_TIME 20
+#define PATCH_DOWNLOAD_PHASE3_RETRY 20
 
 /* Expected minimum supported interface */
 #define BT_MCU_MINIMUM_INTERFACE_NUM	4

@@ -153,6 +153,8 @@ static void btusb_intr_complete(struct urb *urb)
 	struct hci_dev *hdev = urb->context;
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	int err;
+	u8 *buf;
+	static u8 intr_blocking_usb_warn;
 
 	BTMTK_DBG("%s urb %p status %d count %d", hdev->name, urb, urb->status,
 	       urb->actual_length);
@@ -167,6 +169,13 @@ static void btusb_intr_complete(struct urb *urb)
 		return;
 	}
 
+	if (urb->status != 0 && intr_blocking_usb_warn < 10) {
+		intr_blocking_usb_warn++;
+		BTMTK_WARN("%s: urb %p urb->status %d count %d", __func__,
+			urb, urb->status, urb->actual_length);
+	} else if (urb->status == 0 && urb->actual_length != 0)
+		intr_blocking_usb_warn = 0;
+
 	if (urb->status == 0) {
 		hdev->stat.byte_rx += urb->actual_length;
 
@@ -175,8 +184,11 @@ static void btusb_intr_complete(struct urb *urb)
 			return;
 		}
 
-		if (urb->actual_length >= URB_MAX_BUFFER_SIZE) {
-			BT_ERR("%s: urb->actual_length is invalid!", __func__);
+		buf = urb->transfer_buffer;
+		if (urb->actual_length >= URB_MAX_BUFFER_SIZE ||
+			(urb->actual_length != (buf[1] + 2) && urb->actual_length > 1)) {
+			BT_ERR("%s: urb->actual_length is invalid, buf[1] = %d!",
+				__func__, buf[1]);
 			BTMTK_INFO_RAW(urb->transfer_buffer, urb->actual_length,
 				"urb->actual_length:%d, urb->transfer_buffer:%p",
 				urb->actual_length, urb->transfer_buffer);
@@ -199,7 +211,12 @@ static void btusb_intr_complete(struct urb *urb)
 			goto intr_resub;
 		}
 
-		btmtk_hci_snoop_save_event(urb->actual_length, urb->transfer_buffer);
+		/* need to remove after SQC done*/
+		if (buf[0] == 0x3E)
+			btmtk_hci_snoop_save_adv_event(urb->actual_length, urb->transfer_buffer);
+		else
+			btmtk_hci_snoop_save_event(urb->actual_length, urb->transfer_buffer);
+
 		err = btmtk_recv(hdev, bdev->urb_transfer_buf, urb->actual_length + 1);
 		if (err) {
 			BT_ERR("%s corrupted event packet, urb_transfer_buf = %p, transfer_buffer = %p",
@@ -482,6 +499,9 @@ static void btusb_bulk_complete(struct urb *urb)
 	struct hci_dev *hdev = urb->context;
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	int err;
+	u8 *buf;
+	u16 len = 0;
+	static u8 block_bulkin_usb_warn;
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: ERROR, bdev is NULL!", __func__);
@@ -492,6 +512,13 @@ static void btusb_bulk_complete(struct urb *urb)
 		BTMTK_ERR("%s: ERROR, hdev is NULL!", __func__);
 		return;
 	}
+
+	if (urb->status != 0 && block_bulkin_usb_warn < 10) {
+		block_bulkin_usb_warn++;
+		BTMTK_INFO("%s: urb %p urb->status %d count %d", __func__, urb,
+			urb->status, urb->actual_length);
+	} else if (urb->status == 0 && urb->actual_length != 0)
+		block_bulkin_usb_warn = 0;
 
 	/*
 	 * This flag didn't support in kernel 4.x
@@ -507,8 +534,11 @@ static void btusb_bulk_complete(struct urb *urb)
 			return;
 		}
 
-		if (urb->actual_length >= URB_MAX_BUFFER_SIZE) {
-			BT_ERR("%s urb->actual_length is invalid!", __func__);
+		buf = urb->transfer_buffer;
+		len = buf[2] + ((buf[3] << 8) & 0xff00);
+		if (urb->actual_length >= URB_MAX_BUFFER_SIZE ||
+			urb->actual_length != len + 4) {
+			BT_ERR("%s urb->actual_length is invalid, len = %d!", __func__, len);
 			BTMTK_INFO_RAW(urb->transfer_buffer, urb->actual_length,
 				"urb->actual_length:%d, urb->transfer_buffer:%p",
 				urb->actual_length, urb->transfer_buffer);
@@ -1974,6 +2004,9 @@ static int btusb_resume(struct usb_interface *intf)
 	 * }
 	 */
 
+	/* when BT off, BTUSB_INTR_RUNNING will be clear,
+	 * so we need to start traffic in btmtk_woble_resume when BT off
+	 */
 	if (test_bit(BTUSB_INTR_RUNNING, &bdev->flags)) {
 		err = btusb_submit_intr_urb(hdev, GFP_NOIO);
 		if (err < 0) {

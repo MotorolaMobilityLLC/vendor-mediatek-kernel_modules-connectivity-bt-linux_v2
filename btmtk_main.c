@@ -64,20 +64,30 @@ static u8 reset_stack_flag;
 
 
 /* save Hci Snoop for debug*/
-static u8 hci_cmd_snoop_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_BUF_SIZE];
-static u8 hci_cmd_snoop_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
-static unsigned int hci_cmd_snoop_timestamp[HCI_SNOOP_ENTRY_NUM];
-static int hci_cmd_snoop_index = HCI_SNOOP_ENTRY_NUM - 1;
+static u8 hci_cmd_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
+static u8 hci_cmd_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
+static u16 hci_cmd_actual_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
+static unsigned int hci_cmd_timestamp[HCI_SNOOP_ENTRY_NUM];
+static int hci_cmd_index = HCI_SNOOP_ENTRY_NUM - 1;
 
-static u8 hci_event_snoop_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_BUF_SIZE];
-static u8 hci_event_snoop_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
-static unsigned int hci_event_snoop_timestamp[HCI_SNOOP_ENTRY_NUM];
-static int hci_event_snoop_index = HCI_SNOOP_ENTRY_NUM - 1;
+static u8 hci_event_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
+static u8 hci_event_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
+static u16 hci_event_actual_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
+static unsigned int hci_event_timestamp[HCI_SNOOP_ENTRY_NUM];
+static int hci_event_index = HCI_SNOOP_ENTRY_NUM - 1;
 
-static u8 hci_acl_snoop_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_BUF_SIZE];
-static u8 hci_acl_snoop_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
-static unsigned int hci_acl_snoop_timestamp[HCI_SNOOP_ENTRY_NUM];
-static int hci_acl_snoop_index = HCI_SNOOP_ENTRY_NUM - 1;
+static u8 hci_adv_event_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
+static u8 hci_adv_event_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
+static u16 hci_adv_event_actual_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
+static unsigned int hci_adv_event_timestamp[HCI_SNOOP_ENTRY_NUM];
+static int hci_adv_event_index = HCI_SNOOP_ENTRY_NUM - 1;
+
+
+static u8 hci_acl_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
+static u8 hci_acl_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
+static u16 hci_acl_actual_len[HCI_SNOOP_ENTRY_NUM] = { 0 };
+static unsigned int hci_acl_timestamp[HCI_SNOOP_ENTRY_NUM];
+static int hci_acl_index = HCI_SNOOP_ENTRY_NUM - 1;
 
 /* State machine table that clarify through each HIF events,
  * To specify HIF event on
@@ -329,7 +339,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	/* CC command */
 	if (o_fwlog_buf[0] == FWLOG_TYPE) {
 		while (index < ((o_fwlog_buf[2] << 8) + o_fwlog_buf[1])) {
-			switch(o_fwlog_buf[index]) {
+			switch (o_fwlog_buf[index]) {
 			case FWLOG_HCI_IDX:    /* hci index */
 				vlen = o_fwlog_buf[index + 1];
 				hci_idx = o_fwlog_buf[index + 2];
@@ -560,42 +570,64 @@ static void btmtk_hci_snoop_print_to_log(void)
 	int counter, index;
 
 	BTMTK_INFO("HCI Command Dump");
+	BTMTK_INFO("Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data");
 	BTMTK_INFO("index(len)(timestamp:us) :HCI Command");
-	index = hci_cmd_snoop_index + 1;
+	index = hci_cmd_index + 1;
 	if (index >= HCI_SNOOP_ENTRY_NUM)
 		index = 0;
 	for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
-		if (hci_cmd_snoop_len[index] > 0)
-			BTMTK_INFO_RAW(hci_cmd_snoop_buf[index], hci_cmd_snoop_len[index],
-				"time(%u)--len(%d):", hci_cmd_snoop_timestamp[index], hci_cmd_snoop_len[index]);
+		if (hci_cmd_len[index] > 0)
+			BTMTK_INFO_RAW(hci_cmd_buf[index], hci_cmd_len[index],
+				"time(%u)-act_len(%d)-len(%d):", hci_cmd_timestamp[index],
+				hci_cmd_actual_len[index], hci_cmd_len[index]);
 		index++;
 		if (index >= HCI_SNOOP_ENTRY_NUM)
 			index = 0;
 	}
 
 	BTMTK_INFO("HCI Event Dump");
+	BTMTK_INFO("Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data");
 	BTMTK_INFO("index(len)(timestamp:us) :HCI Event");
-	index = hci_event_snoop_index + 1;
+	index = hci_event_index + 1;
 	if (index >= HCI_SNOOP_ENTRY_NUM)
 		index = 0;
 	for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
-		if (hci_event_snoop_len[index] > 0)
-			BTMTK_INFO_RAW(hci_event_snoop_buf[index], hci_event_snoop_len[index],
-				"time(%u)--len(%d):", hci_event_snoop_timestamp[index], hci_event_snoop_len[index]);
+		if (hci_event_len[index] > 0)
+			BTMTK_INFO_RAW(hci_event_buf[index], hci_event_len[index],
+				"time(%u)-act_len(%d)-len(%d):", hci_event_timestamp[index],
+				hci_event_actual_len[index], hci_event_len[index]);
+		index++;
+		if (index >= HCI_SNOOP_ENTRY_NUM)
+			index = 0;
+	}
+
+	BTMTK_INFO("HCI ADV Event Dump");
+	BTMTK_INFO("Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data");
+	BTMTK_INFO("index(len)(timestamp:us) :HCI ADV Event");
+	index = hci_adv_event_index + 1;
+	if (index >= HCI_SNOOP_ENTRY_NUM)
+		index = 0;
+	for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
+		if (hci_adv_event_len[index] > 0)
+			BTMTK_INFO_RAW(hci_adv_event_buf[index], hci_adv_event_len[index],
+				"time(%u)-act_len(%d)-len(%d):", hci_adv_event_timestamp[index],
+				hci_adv_event_actual_len[index], hci_adv_event_len[index]);
 		index++;
 		if (index >= HCI_SNOOP_ENTRY_NUM)
 			index = 0;
 	}
 
 	BTMTK_INFO("HCI ACL Dump");
+	BTMTK_INFO("Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data");
 	BTMTK_INFO("index(len)(timestamp:us) :ACL");
-	index = hci_acl_snoop_index + 1;
+	index = hci_acl_index + 1;
 	if (index >= HCI_SNOOP_ENTRY_NUM)
 		index = 0;
 	for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
-		if (hci_acl_snoop_len[index] > 0) {
-			BTMTK_INFO_RAW(hci_acl_snoop_buf[index], hci_acl_snoop_len[index],
-				"time(%u)--len(%d):", hci_acl_snoop_timestamp[index], hci_acl_snoop_len[index]);
+		if (hci_acl_len[index] > 0) {
+			BTMTK_INFO_RAW(hci_acl_buf[index], hci_acl_len[index],
+				"time(%u)-act_len(%d)-len(%d):", hci_acl_timestamp[index],
+				hci_acl_actual_len[index], hci_acl_len[index]);
 		}
 		index++;
 		if (index >= HCI_SNOOP_ENTRY_NUM)
@@ -614,54 +646,151 @@ static unsigned int btmtk_hci_snoop_get_microseconds(void)
 void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
+	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
+	u8 separator_char[] = {0xA5, 0xA5};
+	u8 *copy_tail_buf;
 
 	if (buf) {
-		if (len < HCI_SNOOP_BUF_SIZE)
+		if (len < HCI_SNOOP_BUF_SIZE) {
 			copy_len = len;
-		hci_cmd_snoop_len[hci_cmd_snoop_index] = copy_len & 0xff;
-		memset(hci_cmd_snoop_buf[hci_cmd_snoop_index], 0, HCI_SNOOP_BUF_SIZE);
-		memcpy(hci_cmd_snoop_buf[hci_cmd_snoop_index], buf, copy_len & 0xff);
-		hci_cmd_snoop_timestamp[hci_cmd_snoop_index] = btmtk_hci_snoop_get_microseconds();
+			copy_tail_len = 0;
+		} else if (len > HCI_SNOOP_BUF_SIZE && len <= HCI_SNOOP_BUF_SIZE * 2)
+			copy_tail_len = len - copy_len;
 
-		hci_cmd_snoop_index--;
-		if (hci_cmd_snoop_index < 0)
-			hci_cmd_snoop_index = HCI_SNOOP_ENTRY_NUM - 1;
+		hci_cmd_len[hci_cmd_index] = copy_len & 0xff;
+		hci_cmd_actual_len[hci_cmd_index] = len & 0xffff;
+		hci_cmd_timestamp[hci_cmd_index] = btmtk_hci_snoop_get_microseconds();
+		memset(hci_cmd_buf[hci_cmd_index], 0, HCI_SNOOP_MAX_BUF_SIZE);
+		memcpy(hci_cmd_buf[hci_cmd_index], buf, copy_len & 0xff);
+		/* save less then 32 bytes data in the buffer tail, using A5 A5 to
+		 * separator the head 32 bytes data and the tail 32 bytes data
+		 */
+		if (copy_tail_len > 0) {
+			copy_tail_buf = buf + len - copy_tail_len;
+			hci_cmd_len[hci_cmd_index] +=
+				(copy_tail_len + sizeof(separator_char)) & 0xff;
+			memcpy(hci_cmd_buf[hci_cmd_index] + copy_len, separator_char,
+				sizeof(separator_char));
+			memcpy(hci_cmd_buf[hci_cmd_index] + copy_len + sizeof(separator_char),
+				copy_tail_buf, copy_tail_len);
+		}
+
+		hci_cmd_index--;
+		if (hci_cmd_index < 0)
+			hci_cmd_index = HCI_SNOOP_ENTRY_NUM - 1;
+	}
+}
+
+void btmtk_hci_snoop_save_adv_event(u32 len, u8 *buf)
+{
+	u32 copy_len = HCI_SNOOP_BUF_SIZE;
+	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
+	u8 separator_char[] = {0xA5, 0xA5};
+	u8 *copy_tail_buf;
+
+	if (buf) {
+		if (len < HCI_SNOOP_BUF_SIZE) {
+			copy_len = len;
+			copy_tail_len = 0;
+		} else if (len > HCI_SNOOP_BUF_SIZE && len <= HCI_SNOOP_BUF_SIZE * 2)
+			copy_tail_len = len - copy_len;
+
+		hci_adv_event_len[hci_adv_event_index] = copy_len & 0xff;
+		hci_adv_event_actual_len[hci_adv_event_index] = len & 0xffff;
+		hci_adv_event_timestamp[hci_adv_event_index] = btmtk_hci_snoop_get_microseconds();
+		memset(hci_adv_event_buf[hci_adv_event_index], 0, HCI_SNOOP_MAX_BUF_SIZE);
+		memcpy(hci_adv_event_buf[hci_adv_event_index], buf, copy_len);
+		/* save less then 32 bytes data in the buffer tail, using A5 A5 to
+		 * separator the head 32 bytes data and the tail 32 bytes data
+		 */
+		if (copy_tail_len > 0) {
+			copy_tail_buf = buf + len - copy_tail_len;
+			hci_adv_event_len[hci_adv_event_index] +=
+				(copy_tail_len + sizeof(separator_char)) & 0xff;
+			memcpy(hci_adv_event_buf[hci_adv_event_index] + copy_len, separator_char,
+				sizeof(separator_char));
+			memcpy(hci_adv_event_buf[hci_adv_event_index] + copy_len + sizeof(separator_char),
+				copy_tail_buf, copy_tail_len);
+		}
+
+		hci_adv_event_index--;
+		if (hci_adv_event_index < 0)
+			hci_adv_event_index = HCI_SNOOP_ENTRY_NUM - 1;
 	}
 }
 
 void btmtk_hci_snoop_save_event(u32 len, u8 *buf)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
+	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
+	u8 separator_char[] = {0xA5, 0xA5};
+	u8 *copy_tail_buf;
 
 	if (buf) {
-		if (len < HCI_SNOOP_BUF_SIZE)
+		if (len < HCI_SNOOP_BUF_SIZE) {
 			copy_len = len;
-		hci_event_snoop_len[hci_event_snoop_index] = copy_len & 0xff;
-		memset(hci_event_snoop_buf[hci_event_snoop_index], 0, HCI_SNOOP_BUF_SIZE);
-		memcpy(hci_event_snoop_buf[hci_event_snoop_index], buf, copy_len);
-		hci_event_snoop_timestamp[hci_event_snoop_index] = btmtk_hci_snoop_get_microseconds();
+			copy_tail_len = 0;
+		} else if (len > HCI_SNOOP_BUF_SIZE && len <= HCI_SNOOP_BUF_SIZE * 2)
+			copy_tail_len = len - copy_len;
 
-		hci_event_snoop_index--;
-		if (hci_event_snoop_index < 0)
-			hci_event_snoop_index = HCI_SNOOP_ENTRY_NUM - 1;
+		hci_event_len[hci_event_index] = copy_len & 0xff;
+		hci_event_actual_len[hci_event_index] = len & 0xffff;
+		hci_event_timestamp[hci_event_index] = btmtk_hci_snoop_get_microseconds();
+		memset(hci_event_buf[hci_event_index], 0, HCI_SNOOP_MAX_BUF_SIZE);
+		memcpy(hci_event_buf[hci_event_index], buf, copy_len);
+		/* save less then 32 bytes data in the buffer tail, using A5 A5 to
+		 * separator the head 32 bytes data and the tail 32 bytes data
+		 */
+		if (copy_tail_len > 0) {
+			copy_tail_buf = buf + len - copy_tail_len;
+			hci_event_len[hci_event_index] +=
+				(copy_tail_len + sizeof(separator_char)) & 0xff;
+			memcpy(hci_event_buf[hci_event_index] + copy_len, separator_char,
+				sizeof(separator_char));
+			memcpy(hci_event_buf[hci_event_index] + copy_len + sizeof(separator_char),
+				copy_tail_buf, copy_tail_len);
+		}
+
+		hci_event_index--;
+		if (hci_event_index < 0)
+			hci_event_index = HCI_SNOOP_ENTRY_NUM - 1;
 	}
 }
 
 void btmtk_hci_snoop_save_acl(u32 len, u8 *buf)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
+	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
+	u8 separator_char[] = {0xA5, 0xA5};
+	u8 *copy_tail_buf;
 
 	if (buf) {
-		if (len < HCI_SNOOP_BUF_SIZE)
+		if (len < HCI_SNOOP_BUF_SIZE) {
 			copy_len = len;
-		hci_acl_snoop_len[hci_acl_snoop_index] = copy_len & 0xff;
-		memset(hci_acl_snoop_buf[hci_acl_snoop_index], 0, HCI_SNOOP_BUF_SIZE);
-		memcpy(hci_acl_snoop_buf[hci_acl_snoop_index], buf, copy_len & 0xff);
-		hci_acl_snoop_timestamp[hci_acl_snoop_index] = btmtk_hci_snoop_get_microseconds();
+			copy_tail_len = 0;
+		} else if (len > HCI_SNOOP_BUF_SIZE && len <= HCI_SNOOP_BUF_SIZE * 2)
+			copy_tail_len = len - copy_len;
 
-		hci_acl_snoop_index--;
-		if (hci_acl_snoop_index < 0)
-			hci_acl_snoop_index = HCI_SNOOP_ENTRY_NUM - 1;
+		hci_acl_len[hci_acl_index] = copy_len & 0xff;
+		hci_acl_actual_len[hci_acl_index] = len & 0xffff;
+		hci_acl_timestamp[hci_acl_index] = btmtk_hci_snoop_get_microseconds();
+		memset(hci_acl_buf[hci_acl_index], 0, HCI_SNOOP_MAX_BUF_SIZE);
+		memcpy(hci_acl_buf[hci_acl_index], buf, copy_len & 0xff);
+		/* save less then 32 bytes data in the buffer tail, using A5 A5 to
+		 * separator the head 32 bytes data and the tail 32 bytes data
+		 */
+		if (copy_tail_len > 0) {
+			copy_tail_buf = buf + len - copy_tail_len;
+			hci_acl_len[hci_acl_index] += (copy_tail_len + sizeof(separator_char)) & 0xff;
+			memcpy(hci_acl_buf[hci_acl_index] + copy_len, separator_char,
+				sizeof(separator_char));
+			memcpy(hci_acl_buf[hci_acl_index] + copy_len + sizeof(separator_char),
+				copy_tail_buf, copy_tail_len);
+		}
+
+		hci_acl_index--;
+		if (hci_acl_index < 0)
+			hci_acl_index = HCI_SNOOP_ENTRY_NUM - 1;
 	}
 }
 
@@ -1072,8 +1201,8 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 
 		state = btmtk_get_chip_state(bdev);
 		if (state != BTMTK_STATE_FW_DUMP) {
-			btmtk_hci_snoop_print_to_log();
 			BTMTK_INFO("%s: FW dump begin", __func__);
+			btmtk_hci_snoop_print_to_log();
 			/* Print too much log, it may cause kernel panic. */
 			dump_data_counter = 0;
 			dump_data_length = 0;
@@ -1125,7 +1254,8 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 				skb->data[1] == 0x05) {
 		/* picus or syslog */
 		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_QUEUE_COUNT) {
-			if (btmtk_skb_enq_fwlog(bdev->hdev, skb->data, skb->len, FWLOG_TYPE, &g_fwlog->fwlog_queue) == 0) {
+			if (btmtk_skb_enq_fwlog(bdev->hdev, skb->data, skb->len,
+				FWLOG_TYPE, &g_fwlog->fwlog_queue) == 0) {
 				wake_up_interruptible(&g_fwlog->fw_log_inq);
 				fwlog_picus_blocking_warn = 0;
 			}
@@ -1787,6 +1917,10 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 
 		/*FW Download finished */
 		if (loop_count == section_num - 1) {
+/* need to remove check wifi dl patch success or not according to Jyun-ji's
+ * comment, because bt driver do nothing when wifi dl patch failed
+ */
+#if 0
 			if (patch_flag) {
 				patch_status = btmtk_send_wmt_download_cmd(bdev, pos, 0, event,
 							sizeof(event) - 1, sectionMap, 0, dma_flag, patch_flag);
@@ -1795,16 +1929,19 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 				else
 					BTMTK_ERR("%s: Wifi patch download failed!", __func__);
 			} else {
-				if (dma_flag == PATCH_DOWNLOAD_USING_DMA) {
-					ret = btmtk_send_wmt_download_cmd(bdev, pos, 0, event,
-						sizeof(event) - 1, sectionMap, 3, dma_flag, patch_flag);
-					if (ret < 0) {
-						BTMTK_ERR("%s: send wmd dl cmd state 3 failed, terminate!", __func__);
-						goto err;
-					}
+#endif
+			if (dma_flag == PATCH_DOWNLOAD_USING_DMA) {
+				ret = btmtk_send_wmt_download_cmd(bdev, pos, 0, event,
+					sizeof(event) - 1, sectionMap, 3, dma_flag, patch_flag);
+				if (ret < 0) {
+					BTMTK_ERR("%s: send wmd dl cmd state 3 failed, terminate!", __func__);
+					goto err;
 				}
-				BTMTK_INFO("%s: loading bt rom patch... Done", __func__);
 			}
+			BTMTK_INFO("%s: loading rom patch... Done", __func__);
+#if 0
+			}
+#endif
 		}
 next_section:
 		continue;
@@ -4077,7 +4214,10 @@ static void btmtk_rx_work(struct work_struct *work)
 
 		if (hci_skb_pkt_type(skb) == HCI_EVENT_PKT) {
 			/* save hci evt pkt for debug */
-			btmtk_hci_snoop_save_event(skb->len, skb->data);
+			if (skb->data[0] == 0x3E)
+				btmtk_hci_snoop_save_adv_event(skb->len, skb->data);
+			else
+				btmtk_hci_snoop_save_event(skb->len, skb->data);
 
 			if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 				skb->len >= event_need_compare_len) {
