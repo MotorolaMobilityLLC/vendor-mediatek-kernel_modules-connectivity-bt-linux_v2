@@ -146,13 +146,13 @@ void LD_load_code_from_bin(unsigned char **image, char *bin_name, char *path, mt
 	*	 NOTE: latest vfs_mount seems decided this time access directory
 	*/
 	if (path) {
-		snprintf(mtk_patch_bin_patch, sizeof(mtk_patch_bin_patch), "%s/%s", path, bin_name);
+		(void)snprintf(mtk_patch_bin_patch, sizeof(mtk_patch_bin_patch), "%s/%s", path, bin_name);
 		printf("File: %s\n", mtk_patch_bin_patch);
 	} else {
 #if (ENABLE_MODULE_ANDROID_BOOT == 1)
-		snprintf(mtk_patch_bin_patch, sizeof(mtk_patch_bin_patch), "%s/%s", "/firmware", bin_name);
+		(void)snprintf(mtk_patch_bin_patch, sizeof(mtk_patch_bin_patch), "%s/%s", "/firmware", bin_name);
 #else
-		snprintf(mtk_patch_bin_patch, sizeof(mtk_patch_bin_patch), "%s/%s", "/krl/wifi/ralink/firmware", bin_name);
+		(void)snprintf(mtk_patch_bin_patch, sizeof(mtk_patch_bin_patch), "%s/%s", "/krl/wifi/ralink/firmware", bin_name);
 #endif
 		printf("mtk_patch_bin_patch: %s\n", mtk_patch_bin_patch);
 	}
@@ -488,7 +488,7 @@ static int findUsbDevice(struct usb_device* udev)
 		if(ret == 0)
 		{
 			// set bt_usb_port to store mt bt usb device port
-			snprintf(portNumStr, sizeof(portNumStr), "%d", idx);
+			(void)snprintf(portNumStr, sizeof(portNumStr), "%d", idx);
 			setenv(BT_USB_PORT, portNumStr);
 			saveenv();
 			return 0;
