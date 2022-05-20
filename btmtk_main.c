@@ -1033,6 +1033,53 @@ exit:
 	return ret;
 }
 
+static int btmtk_set_audio_pin_mux_7902(struct btmtk_dev *bdev)
+{
+	int ret = 0;
+	unsigned int i = 0;
+	u8 write_pinmux_cmd[WRITE_PINMUX_CMD_LEN_7902] = { 0x01, 0x34, 0xFC, 0x03, 0x02, 0x00, 0x01 };
+	u8 write_pinmux_event[WRITE_PINMUX_EVT_LEN_7902] = { 0x04, 0x0E, 0x04, 0x01, 0x34, 0xFC, 0x00 };
+	u8 write_pinmux_pin_num[PINMUX_REG_NUM_7902] = { 0x00, 0x01, 0x02, 0x04 };
+	u8 write_pinmux_pin_mode[PINMUX_REG_NUM_7902] = { 0x01, 0x01, 0x01, 0x01 };
+	struct fw_cfg_struct *audio_pinmux_num = &bdev->bt_cfg.audio_pinmux_num;
+	struct fw_cfg_struct *audio_pinmux_mode = &bdev->bt_cfg.audio_pinmux_mode;
+
+	if (audio_pinmux_num->content && audio_pinmux_num->length) {
+		BTMTK_INFO("%s load audio pinmux num from bt.cfg", __func__);
+		memcpy(write_pinmux_pin_num, audio_pinmux_num->content, audio_pinmux_num->length);
+	} else {
+		BTMTK_INFO("%s load default audio pinmux num", __func__);
+	}
+	BTMTK_INFO_RAW(write_pinmux_pin_num, PINMUX_REG_NUM_7902, "%s: Pin NUM:", __func__);
+
+	if (audio_pinmux_mode->content && audio_pinmux_mode->length) {
+		BTMTK_INFO("%s load audio pinmux mode from bt.cfg", __func__);
+		memcpy(write_pinmux_pin_mode, audio_pinmux_mode->content, audio_pinmux_mode->length);
+	} else {
+		BTMTK_INFO("%s load default audio pinmux mode", __func__);
+	}
+	BTMTK_INFO_RAW(write_pinmux_pin_mode, PINMUX_REG_NUM_7902, "%s: Pin MODE:", __func__);
+
+	for (i = 0; i < PINMUX_REG_NUM_7902; i++) {
+		write_pinmux_cmd[WRITE_PINMUX_CMD_LEN_7902 - 2] = write_pinmux_pin_num[i];
+		write_pinmux_cmd[WRITE_PINMUX_CMD_LEN_7902 - 1] = write_pinmux_pin_mode[i];
+
+		BTMTK_INFO_RAW(write_pinmux_cmd, WRITE_PINMUX_CMD_LEN_7902, "%s: Send CMD:", __func__);
+		ret = btmtk_main_send_cmd(bdev, write_pinmux_cmd, WRITE_PINMUX_CMD_LEN_7902,
+				write_pinmux_event, WRITE_PINMUX_EVT_LEN_7902, 0, 0, BTMTK_TX_PKT_FROM_HOST);
+		if (ret < 0) {
+			BTMTK_ERR("%s: failed(%d)", __func__, ret);
+			goto exit;
+		}
+
+		BTMTK_INFO("%s, confirm pinmux num : 0x%02x, mode :0x%02x", __func__,
+				write_pinmux_pin_num[i], write_pinmux_pin_mode[i]);
+	}
+
+exit:
+	return ret;
+}
+
 static int btmtk_set_audio_setting(struct btmtk_dev *bdev)
 {
 	int ret = 0;
@@ -1044,7 +1091,11 @@ static int btmtk_set_audio_setting(struct btmtk_dev *bdev)
 			return ret;
 		}
 
-		ret = btmtk_set_audio_pin_mux(bdev);
+		if (is_mt7902(bdev->chip_id)) {
+			ret = btmtk_set_audio_pin_mux_7902(bdev);
+		} else
+			ret = btmtk_set_audio_pin_mux(bdev);
+
 		if (ret) {
 			BTMTK_ERR("%s, btmtk_sdio_set_audio_pin_mux error(%d)", __func__, ret);
 			return ret;
@@ -2107,7 +2158,7 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 	u16 temp_len = 0;
 	u8 temp[TEMP_LEN]; /* save for total hex number */
 	unsigned long parsing_result = 0;
-	char *search_result = NULL;
+	char *search_result = NULL, *ptr = NULL;
 	char *search_end = NULL;
 	char search[SEARCH_LEN];
 	char *next_block = NULL;
@@ -2134,8 +2185,19 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 
 		ret = 0;
 
-		search_result = strstr((char *)searchcontent, search);
+		ptr = search_result = strstr((char *)searchcontent, search);
 		if (search_result) {
+			/* Add # for comment in bt.cfg */
+			if (ptr > (char *)searchcontent) {
+				ptr--;
+				while ((*ptr == ' ') && (ptr != (char *)searchcontent))
+					ptr--;
+				if (*ptr == '#') {
+					BTMTK_WARN("%s: %s has been ignored", __func__, search);
+					return -1;;
+				}
+			}
+
 			memset(temp, 0, TEMP_LEN);
 			search_result = strstr(search_result, "0x");
 			if (search_result == NULL) {
@@ -2484,9 +2546,22 @@ static void btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 					&bt_cfg_content->audio_cmd, 1, searchcontent, FW_CFG_INX_LEN_NONE);
 			if (ret)
 				BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_AUDIO_ENABLE_CMD);
+
+			ret = btmtk_load_fw_cfg_setting(BT_AUDIO_PINMUX_NUM,
+					&bt_cfg_content->audio_pinmux_num, 1, searchcontent, FW_CFG_INX_LEN_NONE);
+			if (ret)
+				BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_AUDIO_PINMUX_NUM);
+
+			ret = btmtk_load_fw_cfg_setting(BT_AUDIO_PINMUX_MODE,
+					&bt_cfg_content->audio_pinmux_mode, 1, searchcontent, FW_CFG_INX_LEN_NONE);
+			if (ret)
+				BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_AUDIO_PINMUX_MODE);
 		}
 	} else {
 		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_AUDIO_SET);
+		bt_cfg_content->support_audio_setting = true; /* default to turn on, for others not update */
+		BTMTK_WARN("%s: %s default turn on %d!", __func__, BT_AUDIO_SET,
+				bt_cfg_content->support_audio_setting);
 	}
 
 	ret = btmtk_load_fw_cfg_setting(BT_PHASE1_WMT_CMD, bt_cfg_content->phase1_wmt_cmd,
