@@ -133,6 +133,7 @@ __weak int btmtk_cif_send_calibration(struct btmtk_dev *bdev)
 	return -1;
 }
 
+#if (KERNEL_VERSION(4, 19, 84) > LINUX_VERSION_CODE)
 __weak void do_gettimeofday(struct timeval *tv)
 {
 	struct timespec64 ts;
@@ -141,6 +142,7 @@ __weak void do_gettimeofday(struct timeval *tv)
 	tv->tv_sec = ts.tv_sec;
 	tv->tv_usec = ts.tv_nsec/1000;
 }
+#endif
 
 static int btmtk_enter_standby(void);
 static int btmtk_send_hci_tci_set_sleep_cmd_766x(struct btmtk_dev *bdev);
@@ -1057,7 +1059,7 @@ static int btmtk_reboot_notify(struct notifier_block *nb,
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
 
-	BTMTK_INFO("%s: btmtk_reboot_notify(%x)", __func__, event);
+	BTMTK_INFO("%s: btmtk_reboot_notify(%d)", __func__, (int)event);
 
 	if (event == SYS_RESTART) {
 		BTMTK_INFO("%s: enter", __func__);
@@ -2659,12 +2661,14 @@ int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *bdev)
 	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x06, 0x02, 0x00, 0x00, 0x01 };
 	/* To-Do, for event check */
 	u8 event[] = { 0x04, 0xE4, 0x05, 0x02, 0x06, 0x01, 0x00 };	/* event[6] is key */
-	int ret = -1;
+	int ret = -1, retry = RETRY_TIMES;
 
 	if (!bdev) {
 		BTMTK_ERR("%s: bdev is NULL !", __func__);
 		return ret;
 	}
+
+retry_again:
 
 	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), WMT_DELAY_TIMES,
 			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
@@ -2679,7 +2683,13 @@ int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *bdev)
 			bdev->power_state = BTMTK_DONGLE_STATE_POWER_ON;
 			break;
 		case 2:			 /* TODO:retry */
-			BTMTK_INFO("%s: need to try again", __func__);
+			if (retry > 0) {
+				/* comment from fw, we need to retry a sec until power on sucessfully. */
+				retry--;
+				BTMTK_INFO("%s: need to try again", __func__);
+				mdelay(50);
+				goto retry_again;
+			}
 			break;
 		default:
 			BTMTK_WARN("%s: Unknown result: %02X", __func__, bdev->io_buf[6]);
