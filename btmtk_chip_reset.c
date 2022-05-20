@@ -21,6 +21,7 @@ void btmtk_reset_waker(struct work_struct *work)
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	int cif_event = 0, err = 0;
 
+	DUMP_TIME_STAMP("chip_reset_start");
 	cif_event = HIF_EVENT_SUBSYS_RESET;
 	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
 		/* Error */
@@ -44,14 +45,18 @@ void btmtk_reset_waker(struct work_struct *work)
 	bdev->subsys_reset = 1;
 	bdev->sco_num = 0;
 
-	if (bmain_info->whole_reset_flag == 0) {
-		if (bmain_info->hif_hook.subsys_reset)
+	if (bmain_info->chip_reset_flag == 0) {
+		if (bmain_info->hif_hook.subsys_reset) {
+			DUMP_TIME_STAMP("subsys_chip_reset_start");
 			err = bmain_info->hif_hook.subsys_reset(bdev);
-		else
+			atomic_inc(&bmain_info->subsys_reset_count);
+			DUMP_TIME_STAMP("subsys_chip_reset_end");
+		} else {
 			BTMTK_INFO("%s: Not support subsys chip reset", __func__);
+		}
 	} else {
 		err = -1;
-		BTMTK_INFO("%s: whole_reset_flag is %d", __func__, bmain_info->whole_reset_flag);
+		BTMTK_INFO("%s: chip_reset_flag is %d", __func__, bmain_info->chip_reset_flag);
 	}
 
 	if (err) {
@@ -65,11 +70,14 @@ void btmtk_reset_waker(struct work_struct *work)
 		 * test, then found the final solution.
 		 */
 		/* msleep(2000); */
-		if (bmain_info->hif_hook.whole_reset)
+		if (bmain_info->hif_hook.whole_reset) {
+			DUMP_TIME_STAMP("whole_chip_reset_start");
 			bmain_info->hif_hook.whole_reset(bdev);
-		else
+			atomic_inc(&bmain_info->whole_reset_count);
+			DUMP_TIME_STAMP("whole_chip_reset_end");
+		} else {
 			BTMTK_INFO("%s: Not support whole chip reset", __func__);
-		bmain_info->whole_reset_flag = 0;
+		}
 		goto Finish;
 	}
 
@@ -118,6 +126,7 @@ void btmtk_reset_waker(struct work_struct *work)
 
 Finish:
 	bmain_info->hif_hook.chip_reset_notify(bdev);
+	DUMP_TIME_STAMP("chip_reset_end");
 
 	/* Set End/Error state */
 	if (err < 0)

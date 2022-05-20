@@ -242,10 +242,6 @@
 #define HCI_RESET_CMD_LEN 4
 #define READ_ISO_PACKET_SIZE_CMD_HDR_LEN 4
 
-#ifndef LD_PATCH_TIME
-#define LD_PATCH_TIME 0
-#endif
-
 enum {
 	RES_1 = 0,
 	RES_DOT_5,
@@ -553,7 +549,10 @@ struct hif_hook_ptr {
 };
 
 struct btmtk_main_info {
-	int whole_reset_flag;
+	int chip_reset_flag;
+	atomic_t subsys_reset_count;
+	atomic_t whole_reset_count;
+
 	u8 reset_stack_flag;
 	struct wakeup_source *fwdump_ws;
 	struct wakeup_source *woble_ws;

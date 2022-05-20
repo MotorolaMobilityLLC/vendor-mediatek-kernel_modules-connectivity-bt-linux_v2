@@ -47,6 +47,9 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define EP_RST_OPT 0x74011890
 #define EP_RST_IN_OUT_OPT 0x00010001
 
+#define BT_GDMA_DONE_ADDR 0x81021130
+#define BT_GDMA_DONE_VALUE 0x00EE0000
+
 /* CMD&Event sent by driver */
 #define NOTIFY_ALT_EVT_LEN 7
 

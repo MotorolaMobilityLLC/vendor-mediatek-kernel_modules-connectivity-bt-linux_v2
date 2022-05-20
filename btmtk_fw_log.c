@@ -297,16 +297,31 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
+	if (strncmp(i_fwlog_buf, "chip_reset=", strlen("chip_reset=")) == 0) {
+		u8 val = *(i_fwlog_buf + strlen("chip_reset=")) - '0';
+
+		bmain_info->chip_reset_flag = val;
+		BTMTK_INFO("%s: set chip reset flag to %d", __func__, bmain_info->chip_reset_flag);
+		ret = count;
+		goto exit;
+	}
 	if (strncmp(i_fwlog_buf, "whole chip reset", strlen("whole chip reset")) == 0) {
 		BTMTK_INFO("whole chip reset start");
-		bmain_info->whole_reset_flag = 1;
+		bmain_info->chip_reset_flag = 1;
 		schedule_work(&pp_bdev[hci_idx]->reset_waker);
 		ret = count;
 		goto exit;
 	}
 	if (strncmp(i_fwlog_buf, "subsys chip reset", strlen("subsys chip reset")) == 0) {
 		BTMTK_INFO("subsys chip reset");
+		bmain_info->chip_reset_flag = 0;
 		schedule_work(&pp_bdev[hci_idx]->reset_waker);
+		ret = count;
+		goto exit;
+	}
+	if (strncmp(i_fwlog_buf, "dump chip reset", strlen("dump chip reset")) == 0) {
+		BTMTK_INFO("subsys chip reset = %d", atomic_read(&bmain_info->subsys_reset_count));
+		BTMTK_INFO("whole chip reset = %d", atomic_read(&bmain_info->whole_reset_count));
 		ret = count;
 		goto exit;
 	}
@@ -658,6 +673,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		state = btmtk_get_chip_state(bdev);
 		if (state != BTMTK_STATE_FW_DUMP) {
 			BTMTK_INFO("%s: FW dump begin", __func__);
+			DUMP_TIME_STAMP("FW_dump_start");
 			btmtk_hci_snoop_print_to_log();
 			/* Print too much log, it may cause kernel panic. */
 			dump_data_counter = 0;
@@ -692,6 +708,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			/* TODO: Chip reset*/
 			bmain_info->reset_stack_flag = HW_ERR_CODE_CORE_DUMP;
 			btmtk_fwdump_wake_unlock();
+			DUMP_TIME_STAMP("FW_dump_end");
 		}
 
 		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_ASSERT_QUEUE_COUNT) {

@@ -108,6 +108,17 @@ void btmtk_do_gettimeofday(struct timeval *tv)
 #endif
 }
 
+void btmtk_getUTCtime(struct rtc_time *tm, u32 *usec)
+{
+	struct timeval tv;
+
+	btmtk_do_gettimeofday(&tv);
+	rtc_time_to_tm(tv.tv_sec, tm);
+	tm->tm_year += 1900;
+	tm->tm_mon += 1;
+	*usec = tv.tv_usec;
+}
+
 static int btmtk_send_hci_tci_set_sleep_cmd_766x(struct btmtk_dev *bdev);
 
 /*get 1 byte only*/
@@ -1139,6 +1150,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	skb = alloc_skb(cmd_len + BT_SKB_RESERVE, GFP_ATOMIC);
 	if (skb == NULL) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
+		ret = -ENOMEM;
 		goto exit;
 	}
 	/* Reserv for core and drivers use */
@@ -1491,7 +1503,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 	struct _Section_Map *sectionMap;
 	struct _Global_Descr *globalDescr;
 	u8 event[LD_PATCH_EVT_LEN] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
-#if LD_PATCH_TIME
+#if DEBUG_LD_PATCH_TIME
 	struct timeval tv_start, tv_bgf, tv_ilm;
 	u32 dlt_dma = 0, dlt_all = 0;
 
@@ -1599,7 +1611,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 		 * }
 		 * }
 		 */
-#if LD_PATCH_TIME
+#if DEBUG_LD_PATCH_TIME
 		else {
 			if (loop_count == 0) {
 				btmtk_do_gettimeofday(&tv_bgf);
@@ -3391,6 +3403,7 @@ static int bt_open(struct hci_dev *hdev)
 	char alpha2[5];
 
 	BTMTK_INFO("%s: MTK BT Driver Version : %s", __func__, VERSION);
+	DUMP_TIME_STAMP("open_start");
 
 	if (!hdev) {
 		BTMTK_ERR("%s: invalid parameters!", __func__);
@@ -3478,6 +3491,7 @@ static int bt_open(struct hci_dev *hdev)
 			btmtk_load_country_table(bdev);
 	}
 
+	DUMP_TIME_STAMP("open_end");
 	return 0;
 
 failed:
@@ -3650,9 +3664,12 @@ static void btmtk_rx_work(struct work_struct *work)
 		} else {
 			/* for bluetooth kpi */
 			btmtk_dispatch_fwlog_bluetooth_kpi(bdev, skb->data, skb->len, hci_skb_pkt_type(skb));
-			/* Can't send to stack when is not WORKING */
+			/* If reset stack enabled,
+			 * driver should discard the frames
+			 * when is in suspend/resume state
+			 */
 			state = btmtk_get_chip_state(bdev);
-			if (state != BTMTK_STATE_WORKING) {
+			if (bdev->bt_cfg.reset_stack_after_woble && state != BTMTK_STATE_WORKING) {
 				kfree_skb(skb);
 				continue;
 			}

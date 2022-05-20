@@ -40,9 +40,10 @@
 #include <linux/kthread.h>
 #include <linux/freezer.h>
 #include <linux/vmalloc.h>
+#include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2020122401"
+#define VERSION "7.0.2020123101"
 #define SUBVER ":turnkey"
 
 #define ENABLESTP FALSE
@@ -133,12 +134,8 @@ extern uint8_t btmtk_log_lvl;
 			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
 			uint8_t raw_buf[HCI_SNOOP_MAX_BUF_SIZE * 5 + 10];	\
 			const unsigned char *ptr = p;	\
-			for (cnt_ = 0; cnt_ < len_; ++cnt_) {	\
-				if (snprintf(raw_buf+5*cnt_, 6, "0x%02X ", ptr[cnt_]) < 0) {	\
-					pr_info("snprintf error\n");	\
-					break;	\
-				}	\
-			}	\
+			for (cnt_ = 0; cnt_ < len_; ++cnt_)	\
+				(void)snprintf(raw_buf+5*cnt_, 6, "0x%02X ", ptr[cnt_]);	\
 			raw_buf[5*cnt_] = '\0';	\
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
 				pr_cont("[btmtk_info] "fmt"%s\n", ##__VA_ARGS__, raw_buf);	\
@@ -155,12 +152,8 @@ extern uint8_t btmtk_log_lvl;
 			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
 			uint8_t raw_buf[HCI_SNOOP_MAX_BUF_SIZE * 5 + 10];	\
 			const unsigned char *ptr = p;	\
-			for (cnt_ = 0; cnt_ < len_; ++cnt_) {	\
-				if (snprintf(raw_buf+5*cnt_, 6, "0x%02X ", ptr[cnt_]) < 0) {	\
-					pr_info("snprintf error\n");	\
-					break;	\
-				}	\
-			}	\
+			for (cnt_ = 0; cnt_ < len_; ++cnt_)	\
+				(void)snprintf(raw_buf+5*cnt_, 6, "0x%02X ", ptr[cnt_]);	\
 			raw_buf[5*cnt_] = '\0';	\
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
 				pr_cont("[btmtk_debug] "fmt"%s\n", ##__VA_ARGS__, raw_buf);	\
@@ -315,5 +308,29 @@ struct bt_cfg_struct {
 #define CHIP_ID	0x70010200
 #define FLAVOR	0x70010020
 
+
+#ifndef DEBUG_LD_PATCH_TIME
+#define DEBUG_LD_PATCH_TIME 0
+#endif
+
+#ifndef DEBUG_DUMP_TIME
+#define DEBUG_DUMP_TIME 0
+#endif
+
+#if DEBUG_DUMP_TIME
+void btmtk_getUTCtime(struct rtc_time *tm, u32 *usec);
+#define DUMP_TIME_STAMP(__str) \
+	do { \
+		struct rtc_time tm; \
+		u32 usec; \
+		btmtk_getUTCtime(&tm, &usec); \
+		BTMTK_INFO("%s:%d, %s - DUMP_TIME_STAMP UTC: %d-%02d-%02d %02d:%02d:%02d.%06u", \
+			__func__, __LINE__, __str, \
+			tm.tm_year, tm.tm_mon, tm.tm_mday, \
+			tm.tm_hour, tm.tm_min, tm.tm_sec, usec); \
+	} while(0)
+#else
+#define DUMP_TIME_STAMP(__str)
+#endif
 
 #endif /* __BTMTK_DEFINE_H__ */

@@ -1598,6 +1598,7 @@ static int btmtk_sdio_interrupt_process(struct btmtk_dev *bdev)
 		BTMTK_INFO("%s CHISR 0x%08x", __func__, u32ReadCRValue);
 		/* FW can't send TX_EMPTY for 0xFD5B */
 		atomic_set(&cif_dev->tx_rdy, 1);
+		DUMP_TIME_STAMP("notify_chip_reset");
 		schedule_work(&bdev->reset_waker);
 		return ret;
 	}
@@ -1861,10 +1862,10 @@ static int btmtk_cif_probe(struct sdio_func *func,
 
 	/* Mediatek Driver Version */
 	BTMTK_INFO("%s: MTK BT Driver Version : %s", __func__, VERSION);
-
 	BTMTK_DBG("vendor=0x%x, device=0x%x, class=%d, fn=%d",
 			id->vendor, id->device, id->class,
 			func->num);
+	DUMP_TIME_STAMP("probe_start");
 
 	/* sdio interface numbers  */
 	if (func->num != BTMTK_SDIO_FUNC) {
@@ -1900,6 +1901,7 @@ static int btmtk_cif_probe(struct sdio_func *func,
 	else
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 
+	DUMP_TIME_STAMP("probe_end");
 	return ret;
 }
 

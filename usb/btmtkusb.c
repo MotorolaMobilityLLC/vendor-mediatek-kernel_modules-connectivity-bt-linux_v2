@@ -256,6 +256,7 @@ static void btusb_intr_complete(struct urb *urb)
 			 * Receive a bytes 0xFF from controller, it's WDT interrupt to driver.
 			 * WDT interrupt is a mechanism to do L0.5 reset.
 			 */
+			DUMP_TIME_STAMP("notify_chip_reset");
 			schedule_work(&bdev->reset_waker);
 			goto intr_resub;
 		}
@@ -1684,7 +1685,9 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 {
 	int cur_len = 0;
 	int ret = 0;
+	u32 value = 0;
 	s32 sent_len;
+	int retry = RETRY_TIMES;
 	u8 dl_done_cmd[LD_PATCH_CMD_LEN] = {0x01, 0x6F, 0xFC, 0x05, 0x01, 0x01, 0x01, 0x00, PATCH_PHASE3};
 	u8 event[LD_PATCH_EVT_LEN] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
 
@@ -1718,6 +1721,19 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			cur_len += sent_len;
 		} else
 			break;
+	}
+
+	do {
+		btmtk_usb_read_register(bdev, BT_GDMA_DONE_ADDR, &value);
+		if ((value & BT_GDMA_DONE_VALUE) == BT_GDMA_DONE_VALUE)
+			break;
+		msleep(DELAY_TIMES);
+	} while(retry-- > 0);
+
+	if ((value & BT_GDMA_DONE_VALUE) != BT_GDMA_DONE_VALUE) {
+		BTMTK_INFO("%s: DL Failed 0x81021130=%08X", __func__, value);
+		ret = -1;
+		goto exit;
 	}
 
 	BTMTK_INFO_RAW(dl_done_cmd, LD_PATCH_CMD_LEN, "%s: send dl cmd - ", __func__);
@@ -2519,6 +2535,7 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 	/* Mediatek Driver Version */
 	BTMTK_INFO("%s: MTK BT Driver Version : %s", __func__, VERSION);
 
+	DUMP_TIME_STAMP("probe_start");
 	/* USB interface only.
 	 * USB will need to identify thru descriptor's interface numbering.
 	 */
@@ -2557,6 +2574,7 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 	else
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 
+	DUMP_TIME_STAMP("probe_end");
 	return ret;
 }
 
