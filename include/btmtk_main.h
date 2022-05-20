@@ -361,6 +361,8 @@ struct btmtk_dev {
 	int wobt_irqlevel;
 	atomic_t irq_enable_count;
 	struct input_dev *WoBLEInputDev;
+
+	u8 opcode_usr[2];
 };
 
 typedef int (*cif_open_ptr)(struct hci_dev *hdev);

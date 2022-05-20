@@ -455,6 +455,8 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	} else {
 		memcpy(skb->data, o_fwlog_buf, len);
 		skb->len = len;
+		g_bdev[hci_idx]->opcode_usr[0] = o_fwlog_buf[1];
+		g_bdev[hci_idx]->opcode_usr[1] = o_fwlog_buf[2];
 	}
 
 	/* won't send command if g_bdev not define */
@@ -1441,12 +1443,13 @@ static int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 			}
 		}
 		return 1;
-	} else if (skb->data[3] == 0x5D && skb->data[4] == 0xFC) {
-		/* to drop picus related event after save event, don't send picus event to host,
-		 * because host will trace this event as other host cmd's event,
-		 * it will cause command timeout
-		 */
-		BTMTK_INFO_RAW(skb->data, skb->len, "%s: discard picus related event:", __func__);
+	} else if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
+			skb->data[0] == 0x0E &&
+			bdev->opcode_usr[0] == skb->data[3] &&
+			bdev->opcode_usr[1] == skb->data[4]) {
+		BTMTK_INFO("Discard event from user hci command");
+		bdev->opcode_usr[0] = 0;
+		bdev->opcode_usr[1] = 0;
 		return 1;
 	} else if (memcmp(skb->data, RESET_EVENT, sizeof(RESET_EVENT)) == 0) {
 		BTMTK_INFO("%s: Get RESET_EVENT", __func__);
@@ -2538,10 +2541,7 @@ int btmtk_picus_enable(struct btmtk_dev *bdev)
 {
 	u8 dft_enable_cmd[] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x02 };
 	u8 *enable_cmd = NULL;
-	/* Can't check event now
-	 * Event will be dropped by btmtk_dispatch_pkt(). It can't be compared
-	 * u8 enable_event[] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
-	 */
+	u8 enable_event[] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
 	int enable_len = 0;
 	int ret = -1;	/* if successful, 0 */
 
@@ -2560,8 +2560,10 @@ int btmtk_picus_enable(struct btmtk_dev *bdev)
 	BTMTK_INFO_RAW(enable_cmd, enable_len, "%s: Send CMD:", __func__);
 
 	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
-		ret = btmtk_main_send_cmd(bdev, enable_cmd, enable_len,
-			NULL, 0, DELAY_TIMES, RETRY_TIMES,
+		ret = btmtk_main_send_cmd(bdev,
+			enable_cmd, enable_len,
+			enable_event, sizeof(enable_event),
+			DELAY_TIMES, RETRY_TIMES,
 			BTMTK_TX_PKT_FROM_HOST);
 	else
 		BTMTK_WARN("%s: not support for 0x%x", __func__, bdev->chip_id);
@@ -2573,17 +2575,16 @@ int btmtk_picus_enable(struct btmtk_dev *bdev)
 int btmtk_picus_disable(struct btmtk_dev *bdev)
 {
 	u8 dft_disable_cmd[] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x00 };
-	/* Can't check event now
-	 * Event will be dropped by btmtk_dispatch_pkt(). It can't be compared
-	 * u8 dft_disable_event[] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
-	 */
+	u8 dft_disable_event[] = { 0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00 };
 	int ret = -1;	/* if successful, 0 */
 
 	BTMTK_INFO("%s\n", __func__);
 
 	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
-		ret = btmtk_main_send_cmd(bdev, dft_disable_cmd, sizeof(dft_disable_cmd),
-			NULL, 0, DELAY_TIMES, RETRY_TIMES,
+		ret = btmtk_main_send_cmd(bdev,
+			dft_disable_cmd, sizeof(dft_disable_cmd),
+			dft_disable_event, sizeof(dft_disable_event),
+			DELAY_TIMES, RETRY_TIMES,
 			BTMTK_TX_PKT_FROM_HOST);
 	else
 		BTMTK_WARN("%s: not support for 0x%x", __func__, bdev->chip_id);
@@ -3878,6 +3879,7 @@ static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	int index = 0;
+	uint8_t event[2] = { 0x04, 0x0E };
 
 	BTMTK_INFO("%s enter", __func__);
 
@@ -3886,7 +3888,8 @@ static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
 			bdev->bt_cfg.vendor_cmd[index].length) {
 			ret = btmtk_main_send_cmd(bdev, bdev->bt_cfg.vendor_cmd[index].content,
 				bdev->bt_cfg.vendor_cmd[index].length,
-				NULL, 0, 0, 0, BTMTK_TX_PKT_FROM_HOST);
+				event, sizeof(event),
+				0, 0, BTMTK_TX_PKT_FROM_HOST);
 			if (ret < 0) {
 				BTMTK_ERR("%s: Send vendor cmd failed(%d)! Index: %d",
 					__func__, ret, index);
@@ -3907,6 +3910,7 @@ static int btmtk_send_phase1_wmt_cfg(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	int index = 0;
+	uint8_t event[2] = { 0x04, 0xE4 };
 
 	BTMTK_INFO("%s", __func__);
 
@@ -3915,7 +3919,7 @@ static int btmtk_send_phase1_wmt_cfg(struct btmtk_dev *bdev)
 			bdev->bt_cfg.phase1_wmt_cmd[index].length) {
 			ret = btmtk_main_send_cmd(bdev, bdev->bt_cfg.phase1_wmt_cmd[index].content,
 					bdev->bt_cfg.phase1_wmt_cmd[index].length,
-					NULL, 0,
+					event, sizeof(event),
 					20, 20, BTMTK_TX_CMD_FROM_DRV);
 			if (ret < 0) {
 				BTMTK_ERR("%s: Send phase1 wmt cmd failed(%d)! Index: %d",
