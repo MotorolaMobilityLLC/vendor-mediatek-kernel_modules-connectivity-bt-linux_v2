@@ -68,6 +68,14 @@ static const struct sdio_device_id btmtk_sdio_tabls[] = {
 		 *.driver_data = (unsigned long) &btmtk_sdio_7961
 		 */ },
 
+	{ SDIO_DEVICE(SDIO_VENDOR_ID_MEDIATEK, 0x790A)
+		/*,
+		 *.driver_data = (unsigned long) &btmtk_sdio_790A
+		 *.For sdio interface, WiFi & BT use the different
+		 * PID to recognize their interface.
+		 * WiFi : 7902, BT: 790A.
+		 */ },
+
 	{ }	/* Terminating entry */
 };
 MODULE_DEVICE_TABLE(sdio, btmtk_sdio_tabls);
