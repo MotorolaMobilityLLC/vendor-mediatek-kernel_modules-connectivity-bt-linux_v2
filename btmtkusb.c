@@ -326,11 +326,19 @@ static int btusb_submit_wmt_urb(struct hci_dev *hdev, gfp_t mem_flags)
 		return -ENOMEM;
 	}
 
-	dr->bRequestType = 0xC0;
-	dr->bRequest     = 0x01;
-	dr->wIndex       = 0;
-	dr->wValue       = 0x30;
-	dr->wLength      = __cpu_to_le16(size);
+	if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM) {
+		dr->bRequestType = 0xC0;
+		dr->bRequest     = 0x01;
+		dr->wIndex       = 0;
+		dr->wValue       = 0x30;
+		dr->wLength      = __cpu_to_le16(size);
+	} else if (bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT1_MCU_INTERFACE_NUM) {
+		dr->bRequestType = 0xA1;
+		dr->bRequest     = 0x01;
+		dr->wIndex       = 0x03;
+		dr->wValue       = 0x30;
+		dr->wLength      = __cpu_to_le16(size);
+	}
 
 	pipe = usb_rcvctrlpipe(bdev->udev, 0);
 
@@ -1527,8 +1535,10 @@ static int btusb_probe(struct usb_interface *intf,
 	btmtk_cap_init(bdev);
 	if(bdev->intf->cur_altsetting->desc.bInterfaceNumber == BT0_MCU_INTERFACE_NUM)
 		err = btmtk_load_rom_patch(bdev);
-	else
+	else {
 		BTMTK_INFO("interface = %d, don't download patch", bdev->intf->cur_altsetting->desc.bInterfaceNumber);
+		bdev->interface_state = BTMTK_STATE_WORKING;
+	}
 
 	/* Interface numbers are hardcoded in the specification */
 	if (intf->cur_altsetting->desc.bInterfaceNumber == 0) {
