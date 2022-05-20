@@ -1929,6 +1929,7 @@ int btmtk_cif_register(void)
 
 	BTMTK_INFO("%s", __func__);
 
+	memset(&hook, 0, sizeof(hook));
 	hook.open = btmtk_sdio_open;
 	hook.close = btmtk_sdio_close;
 	hook.reg_read = btmtk_sdio_read_register;
