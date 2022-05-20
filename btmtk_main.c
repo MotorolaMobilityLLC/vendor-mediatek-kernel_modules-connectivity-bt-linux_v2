@@ -2227,11 +2227,12 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 		if (search_result) {
 			memset(temp, 0, TEMP_LEN);
 			search_result = strstr(search_result, "0x");
-			/* find next line as end of this command line, if NULL means last line */
 			if (search_result == NULL) {
-				BTMTK_ERR("%s: Search_result is NULL", __func__);
-				continue;
+				BTMTK_ERR("%s: search_result is NULL", __func__);
+				return -1;
 			}
+
+			/* find next line as end of this command line, if NULL means last line */
 			next_block = strstr(search_result, ":");
 
 			/* Add HCI packet type to front of each command/event */
@@ -2252,10 +2253,6 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 			}
 
 			do {
-				if (search_result == NULL) {
-					BTMTK_ERR("%s: search_result is NULL", __func__);
-					break;
-				}
 				search_end = strstr(search_result, ",");
 				if (search_end == NULL) {
 					BTMTK_ERR("%s: Search_end is NULL", __func__);
@@ -2282,6 +2279,10 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 					break;
 				}
 				search_result = strstr(search_end, "0x");
+				if (search_result == NULL) {
+					BTMTK_ERR("%s: search_result is NULL", __func__);
+					break;
+				}
 			} while (search_result < next_block || (search_result && next_block == NULL));
 		} else
 			BTMTK_DBG("%s: %s is not found in %d", __func__, search, i);
@@ -3802,15 +3803,11 @@ int btmtk_register_hci_device(struct btmtk_dev *bdev)
 
 #else
 #if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
-		ret = test_and_clear_bit(HCI_SETUP, &hdev->dev_flags);
+	ret = test_and_clear_bit(HCI_SETUP, &hdev->dev_flags);
 #else
-		ret = hci_dev_test_and_clear_flag(hdev, HCI_SETUP);
+	ret = hci_dev_test_and_clear_flag(hdev, HCI_SETUP);
 #endif
-		if (ret)
-			BTMTK_INFO("%s, the bit value returned is %d", __func__, ret);
-		else
-			BTMTK_INFO("%s, the bit value returned is %d", __func__, ret);
-
+	BTMTK_INFO("%s, the bit value returned is %d", __func__, ret);
 #endif /* CFG_SUPPORT_BLUEZ */
 
 exit:
