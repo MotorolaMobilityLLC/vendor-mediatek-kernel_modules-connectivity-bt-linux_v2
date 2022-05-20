@@ -42,7 +42,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.200042902"
+#define VERSION "7.0.200050701"
 #define SUBVER ":turnkey"
 
 

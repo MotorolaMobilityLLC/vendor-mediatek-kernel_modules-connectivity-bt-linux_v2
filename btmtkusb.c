@@ -950,14 +950,23 @@ static int btusb_open(struct hci_dev *hdev)
 	if (is_mt7961(bdev->chip_id)) {
 		BTMTK_INFO("%s 7961 submit urb\n", __func__);
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
-			err = btusb_submit_intr_reset_urb(hdev, GFP_KERNEL);
-			if (err < 0)
-				goto failed;
-			err = btusb_submit_intr_ble_isoc_urb(hdev, GFP_KERNEL);
-			if (err < 0) {
-				usb_kill_anchored_urbs(&bdev->ble_isoc_anchor);
-				goto failed;
-			}
+			if (bdev->reset_intr_ep) {
+				err = btusb_submit_intr_reset_urb(hdev, GFP_KERNEL);
+				if (err < 0)
+					goto failed;
+			} else
+				BTMTK_INFO("%s, reset_intr_ep missing, don't submit_intr_reset_urb!",
+					__func__);
+
+			if (bdev->intr_iso_rx_ep) {
+				err = btusb_submit_intr_ble_isoc_urb(hdev, GFP_KERNEL);
+				if (err < 0) {
+					usb_kill_anchored_urbs(&bdev->ble_isoc_anchor);
+					goto failed;
+				}
+			} else
+				BTMTK_INFO("%s, intr_iso_rx_ep missing, don't submit_intr_ble_isoc_urb!",
+					__func__);
 		} else if (BTMTK_IS_BT_1_INTF(ifnum_base)) {
 			/*need to do in bt_open in btmtk_main.c */
 			/* btmtk_usb_send_power_on_cmd_7668(hdev); */
@@ -1368,23 +1377,17 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		}
 
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
-			if (is_mt7961(bdev->chip_id))
-#ifdef BGF0_CMD_BULK
+			if (is_mt7961(bdev->chip_id) && bdev->bulk_cmd_tx_ep)
 				urb = alloc_bulk_cmd_urb(hdev, skb);
-#else
+			else
 				urb = alloc_ctrl_urb(hdev, skb);
-#endif
-			else if (is_mt7663(bdev->chip_id))
-				urb = alloc_ctrl_urb(hdev, skb);
-
 		} else if (BTMTK_IS_BT_1_INTF(ifnum_base)) {
 			if (is_mt7961(bdev->chip_id)) {
-#ifdef BGF1_CMD_BULK
-				UNUSED(alloc_ctrl_bgf1_urb);
-				urb = alloc_bulk_cmd_urb(hdev, skb);
-#else
-				urb = alloc_ctrl_bgf1_urb(hdev, skb);
-#endif
+				if (bdev->bulk_cmd_tx_ep) {
+					UNUSED(alloc_ctrl_bgf1_urb);
+					urb = alloc_bulk_cmd_urb(hdev, skb);
+				} else
+					urb = alloc_ctrl_bgf1_urb(hdev, skb);
 			} else if (is_mt7663(bdev->chip_id))
 				urb = alloc_ctrl_urb(hdev, skb);
 		}
@@ -1396,13 +1399,14 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 
 	case HCI_ACLDATA_PKT:
 		if (skb->data[0] == 0x00 && skb->data[1] == 0x44) {
-			int isoc_pkt_len = 0;
-			int isoc_pkt_padding = 0;
+			if (bdev->iso_channel && bdev->iso_threshold) {
+				int isoc_pkt_len = 0;
+				int isoc_pkt_padding = 0;
 
-			skb_pull(skb, 4);
-			isoc_pkt_len = skb->data[2] + (skb->data[3] << 8) + HCI_ISO_PKT_HEADER_SIZE;
-			isoc_pkt_padding = bdev->iso_threshold - isoc_pkt_len;
-			if (bdev->iso_threshold) {
+				skb_pull(skb, 4);
+				isoc_pkt_len = skb->data[2] + (skb->data[3] << 8) + HCI_ISO_PKT_HEADER_SIZE;
+				isoc_pkt_padding = bdev->iso_threshold - isoc_pkt_len;
+
 				if (skb_tailroom(skb) < isoc_pkt_padding) {
 					/* hci driver alllocate the size of skb that is to samll, need re-allocate */
 					iso_skb = alloc_skb(HCI_MAX_ISO_SIZE + BT_SKB_RESERVE, GFP_ATOMIC);
@@ -1416,15 +1420,22 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 
 					/* After call back, bt drive will free iso_skb */
 					urb = alloc_intr_iso_urb(hdev, iso_skb);
-					BTMTK_DBG_RAW(iso_skb->data, iso_skb->len, "%s, it's ble iso packet", __func__);
+					BTMTK_DBG_RAW(iso_skb->data, iso_skb->len, "%s, it's ble iso packet",
+						__func__);
 
 					/* It's alloc by hci drver, bt driver must be free it. */
 					kfree_skb(skb);
 				} else {
 					memset(skb_put(skb, isoc_pkt_padding), 0, isoc_pkt_padding);
 					urb = alloc_intr_iso_urb(hdev, skb);
-					BTMTK_DBG_RAW(iso_skb->data, iso_skb->len, "%s, it's ble iso packet", __func__);
+					BTMTK_DBG_RAW(iso_skb->data, iso_skb->len, "%s, it's ble iso packet",
+						__func__);
 				}
+			} else {
+				BTMTK_WARN("btusb_send_frame send iso data, but iso channel not exit");
+				/* if iso channel not exist, we need to drop iso data then free the skb */
+				kfree_skb(skb);
+				return 0;
 			}
 		} else
 			urb = alloc_bulk_urb(hdev, skb);
@@ -1436,7 +1447,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 
 	case HCI_SCODATA_PKT:
 		if (hci_conn_num(hdev, SCO_LINK) < 1) {
-			BTMTK_INFO("btusb_send_frame hci_conn sco link = %d\n", hci_conn_num(hdev, SCO_LINK));
+			BTMTK_INFO("btusb_send_frame hci_conn sco link = %d", hci_conn_num(hdev, SCO_LINK));
 			/* We need to study how to solve this in hw_dvt case.*/
 #ifndef CFG_SUPPORT_HW_DVT
 			return -ENODEV;

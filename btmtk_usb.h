@@ -33,10 +33,6 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define HCI_EV_VENDOR			0xff
 #define HCI_USB_IO_BUF_SIZE		256
 
-/** For MTK Endpoint desc. */
-#define BGF0_CMD_BULK
-#define BGF1_CMD_BULK
-
 
 /* UHW CR mapping */
 #define BT_MISC 0x70002510

@@ -1011,6 +1011,7 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 
 		state = btmtk_get_chip_state(bdev);
 		if (state != BTMTK_STATE_FW_DUMP) {
+			btmtk_hci_snoop_print_to_log();
 			BTMTK_INFO("%s: FW dump begin", __func__);
 			/* Print too much log, it may cause kernel panic. */
 			dump_data_counter = 0;
@@ -1326,10 +1327,12 @@ static void btmtk_load_code_from_bin(const struct firmware **fw_firmware,
 			break;
 		} else if (retry <= 0) {
 			*fw_firmware = NULL;
-			pr_err("%s: request_firmware %d times fail!!! err = %d", __func__, 10, err);
+			BTMTK_INFO("%s: request_firmware %d times fail, maybe file not exist, err = %d",
+				__func__, 10, err);
 			return;
 		}
-		pr_err("%s: request_firmware fail!!! err = %d, retry = %d", __func__, err, retry);
+		BTMTK_INFO("%s: request_firmware fail, maybe file not exist, err = %d, retry = %d",
+			__func__, err, retry);
 		msleep(100);
 	} while (retry-- > 0);
 
@@ -1455,11 +1458,11 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 		if (patch_flag) {
 			for (i = 0; i < SECTION_SPEC_NUM; i++) {
 				revert_SecSpec = be2cpu32(sectionMap->u4SecSpec[i]);
-				memcpy(&cmd[10] + i * sizeof(u32), (u8 *)&revert_SecSpec, sizeof(u32));
+				memcpy(&cmd[PATCH_HEADER_SIZE] + i * sizeof(u32), (u8 *)&revert_SecSpec, sizeof(u32));
 			}
 		} else
-			memcpy(&cmd[10], (u8 *)sectionMap + FW_ROM_PATCH_SEC_MAP_SIZE - SEC_MAP_NEED_SEND_SIZE,
-					SEC_MAP_NEED_SEND_SIZE);
+			memcpy(&cmd[PATCH_HEADER_SIZE], (u8 *)(sectionMap->u4SecSpec), SEC_MAP_NEED_SEND_SIZE);
+
 		BTMTK_INFO_RAW(cmd, cmd_len, "%s: CMD:", __func__);
 
 		ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
@@ -2679,7 +2682,7 @@ int btmtk_load_code_from_setting_files(char *setting_file_name,
 	BTMTK_INFO("%s: begin setting_file_name = %s", __func__, setting_file_name);
 	err = request_firmware(&fw_entry, setting_file_name, dev);
 	if (err != 0 || fw_entry == NULL) {
-		BTMTK_ERR("%s: request_firmware function fail!! error code = %d, fw_entry = %p",
+		BTMTK_INFO("%s: request_firmware fail, maybe file not exist, err = %d, fw_entry = %p",
 				__func__, err, fw_entry);
 		if (fw_entry)
 			release_firmware(fw_entry);
@@ -3924,9 +3927,6 @@ void btmtk_reset_waker(struct work_struct *work)
 		BTMTK_WARN("%s priv setting is NULL", __func__);
 		goto Finish;
 	}
-
-	/* print 30 HCI cmds/events before reset*/
-	btmtk_hci_snoop_print_to_log();
 
 	cif_state = &bdev->cif_state[cif_event];
 
