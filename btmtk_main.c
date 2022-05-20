@@ -1046,13 +1046,19 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 					  const struct h4_recv_pkt *pkts,
 					  int pkts_count)
 {
-	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	struct btmtk_dev *bdev = NULL;
 	/* used for print debug log*/
 	const unsigned char *buffer_dbg = buffer;
 	int count_dbg = count;
 
-	if (bdev == NULL || hdev == NULL || buffer == NULL) {
+	if (hdev == NULL || buffer == NULL) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
+		return ERR_PTR(-EINVAL);
+	}
+
+	bdev = hci_get_drvdata(hdev);
+	if (bdev == NULL) {
+		BTMTK_ERR("%s, bdev is invalid", __func__);
 		return ERR_PTR(-EINVAL);
 	}
 	/* Check for error from previous call */
@@ -1062,9 +1068,6 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 
 	while (count) {
 		int i, len;
-
-		if (!count)
-			break;
 
 		if (!skb) {
 			for (i = 0; i < pkts_count; i++) {
@@ -1470,10 +1473,16 @@ int btmtk_dispatch_event(struct hci_dev *hdev, struct sk_buff *skb)
 
 int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb)
 {
-	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	struct btmtk_dev *bdev = NULL;
 
-	if (bdev == NULL || bdev->workqueue == NULL || hdev == NULL || skb == NULL) {
+	if (hdev == NULL || skb == NULL) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
+		return -EINVAL;
+	}
+
+	bdev = hci_get_drvdata(hdev);
+	if (bdev == NULL || bdev->workqueue == NULL) {
+		BTMTK_ERR("%s, bdev or workqueue is invalid!", __func__);
 		return -EINVAL;
 	}
 
@@ -1492,15 +1501,21 @@ int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb)
 
 int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb)
 {
-	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	struct btmtk_dev *bdev = NULL;
 	//struct hci_event_hdr *hdr = (void *)skb->data;
-	int err = 0;
 
-	if (bdev == NULL || bdev->workqueue == NULL || hdev == NULL || skb == NULL) {
+	if (hdev == NULL || skb == NULL) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
-		err = -EINVAL;
-		goto err_out;
+		return -EINVAL;
 	}
+
+	bdev = hci_get_drvdata(hdev);
+	if (bdev == NULL || bdev->workqueue == NULL) {
+		BTMTK_ERR("%s, bdev or workqueue is invalid!", __func__);
+		kfree_skb(skb);
+		return -EINVAL;
+	}
+
 	/* Fix up the vendor event id with 0xff for vendor specific instead
 	 * of 0xe4 so that event send via monitoring socket can be parsed
 	 * properly.
@@ -1528,10 +1543,6 @@ int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb)
 	}
 #endif
 	return 0;
-
-err_out:
-	kfree_skb(skb);
-	return err;
 }
 
 int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
@@ -4010,6 +4021,12 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	u8 buf[] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x02, 0x01, 0x00, 0x08 };
 	struct sk_buff *skb = NULL;
 
+	if (!bdev) {
+		BTMTK_ERR("%s, invalid parameters!", __func__);
+		ret = -EINVAL;
+		goto exit;
+	}
+
 	state = btmtk_get_chip_state(bdev);
 	if (state == BTMTK_STATE_FW_DUMP) {
 		BTMTK_WARN("%s: FW dumping already!!!", __func__);
@@ -4017,12 +4034,6 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	}
 
 	BTMTK_INFO("%s: send assert cmd", __func__);
-
-	if (!bdev) {
-		BTMTK_ERR("%s, invalid parameters!", __func__);
-		ret = -EINVAL;
-		goto exit;
-	}
 
 	skb = alloc_skb(sizeof(buf) + BT_SKB_RESERVE, GFP_ATOMIC);
 	if (!skb) {
@@ -4150,10 +4161,16 @@ static int bt_close(struct hci_dev *hdev)
 	int ret = -1;
 	int state = BTMTK_STATE_INIT;
 	int fstate = BTMTK_FOPS_STATE_INIT;
-	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	struct btmtk_dev *bdev = NULL;
 
-	if (!bdev || !hdev) {
+	if (!hdev) {
 		BTMTK_ERR("%s: invalid parameters!", __func__);
+		return ret;
+	}
+
+	bdev = hci_get_drvdata(hdev);
+	if (!bdev) {
+		BTMTK_ERR("%s: bdev is invalid!", __func__);
 		return ret;
 	}
 
@@ -4210,13 +4227,19 @@ static int bt_open(struct hci_dev *hdev)
 	int ret = -1;
 	int state = BTMTK_STATE_INIT;
 	int fstate = BTMTK_FOPS_STATE_INIT;
-	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	struct btmtk_dev *bdev = NULL;
 
 	BTMTK_INFO("%s: MTK BT Driver Version : %s", __func__, VERSION);
 
-	if (!bdev || !hdev) {
+	if (!hdev) {
 		BTMTK_ERR("%s: invalid parameters!", __func__);
-		goto failed;
+		return -EFAULT;
+	}
+
+	bdev = hci_get_drvdata(hdev);
+	if (!bdev) {
+		BTMTK_ERR("%s: bdev is invalid", __func__);
+		return -EFAULT;
 	}
 
 	state = btmtk_get_chip_state(bdev);
@@ -4285,11 +4308,17 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	/* parsing commands */
 	u8 fw_assert_cmd[] = { 0x01, 0x5B, 0xFD, 0x00 };
 	u8 reset_cmd[] = { 0x01, 0x03, 0x0C, 0x00 };
-	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	struct btmtk_dev *bdev = NULL;
 
 	if (hdev == NULL || skb == NULL) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
-		goto exit;
+		return -ENODEV;
+	}
+
+	bdev = hci_get_drvdata(hdev);
+	if (bdev == NULL) {
+		BTMTK_ERR("%s, bdev is invalid!", __func__);
+		return -ENODEV;
 	}
 
 	fstate = btmtk_fops_get_state(bdev);
