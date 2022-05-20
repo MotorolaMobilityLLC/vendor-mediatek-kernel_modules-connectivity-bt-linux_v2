@@ -27,6 +27,7 @@
 #include <linux/gpio/consumer.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/clk.h>
+#include <linux/suspend.h>
 
 #define HCI_HEADER_LEN	4
 
@@ -96,10 +97,17 @@ struct mtk_stp_hdr {
 #define WAKEUP_CMD_LEN 5
 #define WAKEUP_EVT_LEN 9
 
+#define FWOWN_CMD_LEN 9
+#define DRVOWN_CMD_LEN 9
+#define OWNTYPE_EVT_LEN 9
+
 #define BT_UART_DEFAULT_BAUD 115200
 
 /* Delay time between subsys reset GPIO pull low/high */
 #define SUBSYS_RESET_GPIO_DELAY_TIME 50
+
+/* Delay time after write data to io_buf */
+#define IO_BUF_DELAY_TIME 50
 
 typedef int (*pdwnc_func) (u8 fgReset);
 typedef int (*reset_func_ptr2) (unsigned int gpio, int init_value);
@@ -153,6 +161,7 @@ struct btmtk_uart_dev {
 	u16	stp_dlen;
 
 	struct UART_CONFIG	uart_cfg;
+	struct btmtk_woble	bt_woble;
 };
 
 #define btmtk_uart_is_standalone(bdev)	\

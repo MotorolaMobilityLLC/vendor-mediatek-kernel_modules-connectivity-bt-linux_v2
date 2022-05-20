@@ -28,6 +28,7 @@ static DEFINE_MUTEX(btmtk_uart_ops_mutex);
 static char event_need_compare[EVENT_COMPARE_SIZE] = {0};
 static char event_need_compare_len;
 static char event_compare_status;
+static struct tty_struct *g_tty;
 
 static int btmtk_uart_open(struct hci_dev *hdev)
 {
@@ -58,7 +59,7 @@ int btmtk_uart_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 		int delay, int retry, int pkt_type)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
-	int ret = 0;
+	int ret = -1;
 
 	BTMTK_DBG("%s: start", __func__);
 
@@ -79,7 +80,7 @@ int btmtk_uart_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 		goto exit;
 	}
 
-	btmtk_send_to_tx_queue(cif_dev, skb);
+	ret = btmtk_send_to_tx_queue(cif_dev, skb);
 
 exit:
 	return ret;
@@ -145,6 +146,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 	bdev->recv_evt_len = skb->len;
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		skb->len >= event_need_compare_len) {
+		memset(bdev->io_buf, 0, IO_BUF_SIZE);
 		if (memcmp(skb->data, &get_baudrate_event[1], GETBAUD_EVT_LEN - 1) == 0
 			&& (skb->len == (GETBAUD_EVT_LEN - HCI_TYPE_SIZE + BAUD_SIZE))) {
 			BTMTK_INFO("%s: GET BAUD = %02X %02X %02X, FC = %02X", __func__,
@@ -167,8 +169,13 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 			/* If driver need to check result from skb, it can get from io_buf */
 			/* Such as chip_id, fw_version, etc. */
-			memcpy(skb_push(skb, 1), &bt_cb(skb)->pkt_type, 1);
-			memcpy(bdev->io_buf, skb->data, skb->len);
+			bdev->io_buf[0] = bt_cb(skb)->pkt_type;
+			memmove(&bdev->io_buf[1], skb->data, skb->len);
+			/* if io_buf is not update timely, it will write wrong number to register
+			 * it might make uart pinmux been changed, add delay or print log can avoid this
+			 * or mstar member said we can also use dsb(ISHST);
+			 */
+			msleep(IO_BUF_DELAY_TIME);
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 			BTMTK_DBG("%s, compare success", __func__);
 		} else {
@@ -265,6 +272,7 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 	u8 *cmd = NULL;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	int ret = -1;
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
@@ -304,9 +312,13 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 		cmd[BT_FLOWCTRL_OFFSET] = BT_NONE_FC;
 	}
 
-	btmtk_main_send_cmd(bdev,
+	ret = btmtk_main_send_cmd(bdev,
 			cmd, SETBAUD_CMD_LEN, event, SETBAUD_EVT_LEN,
 			0, 0, BTMTK_TX_CMD_FROM_DRV);
+	if (ret < 0) {
+		BTMTK_ERR("%s btmtk_uart_send_set_uart_cmd failed!!", __func__);
+		return ret;
+	}
 
 	cif_dev->uart_baudrate_set = 1;
 	BTMTK_INFO("%s done", __func__);
@@ -318,12 +330,17 @@ static int btmtk_uart_send_query_uart_cmd(struct hci_dev *hdev)
 	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x04, 0x01, 0x00, 0x02};
 	u8 event[] = { 0x04, 0xE4, 0x0a, 0x02, 0x04, 0x06, 0x00, 0x00, 0x02};
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	int ret = -1;
 
-	btmtk_main_send_cmd(bdev, cmd, GETBAUD_CMD_LEN, event, GETBAUD_EVT_LEN, DELAY_TIMES,
+	ret = btmtk_main_send_cmd(bdev, cmd, GETBAUD_CMD_LEN, event, GETBAUD_EVT_LEN, DELAY_TIMES,
 			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+	if (ret < 0) {
+		BTMTK_ERR("%s btmtk_uart_send_query_uart_cmd failed!!", __func__);
+		return ret;
+	}
 
 	BTMTK_INFO("%s done", __func__);
-	return 0;
+	return ret;
 }
 
 int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
@@ -332,6 +349,7 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 	u8 event[] = { 0x04, 0xE4, 0x06, 0x02, 0x03, 0x02, 0x00, 0x00, 0x03};
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	struct btmtk_uart_dev *cif_dev = NULL;
+	int ret = -1;
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
@@ -339,11 +357,15 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 		BTMTK_INFO("%s uart baudrate is 115200, no need", __func__);
 		return 0;
 	}
-	btmtk_main_send_cmd(bdev, cmd, WAKEUP_CMD_LEN, event, WAKEUP_EVT_LEN,
+	ret = btmtk_main_send_cmd(bdev, cmd, WAKEUP_CMD_LEN, event, WAKEUP_EVT_LEN,
 			0, 0, BTMTK_TX_CMD_FROM_DRV);
+	if (ret < 0) {
+		BTMTK_ERR("%s btmtk_uart_send_query_uart_cmd failed!!", __func__);
+		return ret;
+	}
 
 	BTMTK_INFO("%s done", __func__);
-	return 0;
+	return ret;
 }
 
 static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
@@ -352,6 +374,7 @@ static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 	struct tty_struct *tty;
 	struct UART_CONFIG uart_cfg;
 	struct btmtk_uart_dev *cif_dev = NULL;
+	int ret = -1;
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	uart_cfg = cif_dev->uart_cfg;
@@ -362,7 +385,15 @@ static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 	gpio_set_value(bdev->bt_cfg.dongle_reset_gpio_pin, 0);
 	msleep(SUBSYS_RESET_GPIO_DELAY_TIME);
 	gpio_set_value(bdev->bt_cfg.dongle_reset_gpio_pin, 1);
-	msleep(50);
+	/* Basically, we need to polling the cr (BT_MISC) untill the subsys reset is completed
+	 * However, there is no uart_hw mechnism in buzzard, we can't read the info from controller now
+	 * use msleep instead currently
+	 */
+	msleep(SUBSYS_RESET_GPIO_DELAY_TIME);
+
+	/* Flush any pending characters in the driver and discipline. */
+	tty_ldisc_flush(tty);
+	tty_driver_flush_buffer(tty);
 
 	/* set tty host baud and flowcontrol to default value */
 	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);
@@ -372,7 +403,11 @@ static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 	tty_set_termios(tty, &new_termios);
 
 	/* set chip baud and flowcontrol to config setting */
-	btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
+	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
+	if (ret < 0) {
+		BTMTK_ERR("%s btmtk_uart_send_set_uart_cmd failed!!", __func__);
+		goto exit;
+	}
 
 	/* set tty host baud and flowcontrol to config setting */
 	BTMTK_INFO("Set config baud: %d, flowcontrol: %d", uart_cfg.iBaudrate, uart_cfg.fc);
@@ -402,15 +437,15 @@ static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 	}
 
 	tty_set_termios(tty, &new_termios);
-	btmtk_uart_send_wakeup_cmd(bdev->hdev);
-	return 0;
-}
+	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
+	if (ret < 0) {
+		BTMTK_ERR("%s btmtk_uart_send_set_uart_cmd failed!!", __func__);
+		goto exit;
+	}
 
-static int btmtk_uart_whole_reset(struct btmtk_dev *bdev)
-{
-	int ret = -1;
-	/* Process GPIO for whole chip reset pin */
-	/* if wifi use pcie interface, it will cause system reboot. */
+	BTMTK_INFO("%s done", __func__);
+
+exit:
 	return ret;
 }
 
@@ -473,11 +508,6 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			break;
 	}
 
-	/* fw received dl command is abnormal if sending after dma
-	 * download patch done right away and this will cause fw dump
-	 * Workaround: wait 10ms to prevent sending dl cmd immadiately
-	 */
-	usleep_range(10, 20);
 	BTMTK_INFO("%s: send dl cmd", __func__);
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, LD_PATCH_CMD_LEN,
@@ -505,7 +535,7 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	BTMTK_DBG_RAW(cmd, cmd_len, "%s, len = %d Send CMD : ", __func__, cmd_len);
 	/* BTMTK_INFO("%s: tty %p\n", __func__, bdev->tty); */
 	while (len != cmd_len) {
-		ret = cif_dev->tty->ops->write(cif_dev->tty, cmd, cmd_len);
+		ret = cif_dev->tty->ops->write(cif_dev->tty, cmd + len, cmd_len - len);
 		len += ret;
 		BTMTK_DBG("%s, len = %d", __func__, len);
 	}
@@ -636,18 +666,8 @@ end:
 	return err;
 }
 
-int btmtk_uart_free_hci_device(struct btmtk_uart_dev *bdev, int hci_bus_type)
-{
-	btmtk_tx_thread_exit(bdev);
-
-	hci_unregister_dev(bdev->hdev);
-	hci_free_dev(bdev->hdev);
-	BTMTK_INFO("%s done", __func__);
-	return 0;
-}
-
 /* ------ LDISC part ------ */
-/* btmtk_uart_tty_open
+/* btmtk_uart_tty_probe
  *
  *     Called when line discipline changed to HCI_UART.
  *
@@ -703,7 +723,7 @@ static int btmtk_uart_tty_probe(struct tty_struct *tty)
 	return 0;
 }
 
-/* btmtk_uart_tty_close()
+/* btmtk_uart_tty_disconnect
  *
  *    Called when the line discipline is changed to something
  *    else, the tty is closed, or the tty detects a hangup.
@@ -711,12 +731,14 @@ static int btmtk_uart_tty_probe(struct tty_struct *tty)
 static void btmtk_uart_tty_disconnect(struct tty_struct *tty)
 {
 	struct btmtk_dev *bdev = tty->disc_data;
+	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
 	BTMTK_INFO("%s: tty %p", __func__, tty);
+
+	btmtk_woble_uninitialize(&cif_dev->bt_woble);
 	cancel_work_sync(&bdev->reset_waker);
 	btmtk_tx_thread_exit(bdev->cif_dev);
-	if (bdev->hdev)
-		btmtk_main_cif_disconnect_notify(bdev, HCI_UART);
+	btmtk_main_cif_disconnect_notify(bdev, HCI_UART);
 }
 
 /*
@@ -793,8 +815,6 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 	case HCIUARTSETWAKEUP:
 		BTMTK_INFO("%s: <!!> Send Wakeup <!!>", __func__);
 		err = btmtk_uart_send_wakeup_cmd(bdev->hdev);
-		BTMTK_INFO("%s: <!!> Send Wakeup done, wait 200ms <!!>", __func__);
-		msleep(200);
 		break;
 	case HCIUARTGETBAUD:
 		BTMTK_INFO("%s: <!!> Get BAUDRATE <!!>", __func__);
@@ -860,8 +880,6 @@ static long btmtk_uart_tty_compat_ioctl(struct tty_struct *tty, struct file *fil
 	case HCIUARTSETWAKEUP:
 		BTMTK_INFO("%s: <!!> Send Wakeup <!!>", __func__);
 		err = btmtk_uart_send_wakeup_cmd(bdev->hdev);
-		BTMTK_INFO("%s: <!!> Send Wakeup done, wait 200ms <!!>", __func__);
-		msleep(200);
 		break;
 	case HCIUARTGETBAUD:
 		BTMTK_INFO("%s: <!!> Get BAUDRATE <!!>", __func__);
@@ -882,6 +900,13 @@ static long btmtk_uart_tty_compat_ioctl(struct tty_struct *tty, struct file *fil
 			BTMTK_ERR("%s: Set HCIUARTLOADPATCH command failed (%d)", __func__, err);
 			btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 		}
+
+		err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
+		if (err < 0)
+			BTMTK_ERR("btmtk_woble_initialize failed!");
+		else
+			BTMTK_ERR("btmtk_woble_initialize");
+
 		break;
 	case HCIUARTINIT:
 		BTMTK_INFO("%s: <!!> Set HCIUARTINIT <!!>", __func__);
@@ -924,6 +949,32 @@ static void btmtk_uart_tty_wakeup(struct tty_struct *tty)
 	BTMTK_INFO("%s: tty %p", __func__, tty);
 }
 
+static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
+{
+	int ret;
+	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x03, 0x01, 0x00, 0x01 };
+	u8 event[] = { 0x04, 0xE4, 0x06, 0x02, 0x03, 0x02, 0x00, 0x00, 0x01 };
+
+	BTMTK_INFO("%s", __func__);
+	ret = btmtk_main_send_cmd(bdev, cmd, FWOWN_CMD_LEN, event, OWNTYPE_EVT_LEN,
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+
+	return ret;
+}
+
+static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
+{
+	int ret;
+	u8 cmd[] = { 0xFF };
+	u8 event[] = { 0x04, 0xE4, 0x06, 0x02, 0x03, 0x02, 0x00, 0x00, 0x03 };
+
+	BTMTK_INFO("%s", __func__);
+	ret = btmtk_main_send_cmd(bdev, cmd, DRVOWN_CMD_LEN, event, OWNTYPE_EVT_LEN,
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+
+	return ret;
+}
+
 static int btmtk_cif_probe(struct tty_struct *tty)
 {
 	int ret = -1;
@@ -949,6 +1000,7 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 	bdev->intf_dev = tty->dev;
 	bdev->cif_dev = cif_dev;
 	dev_set_drvdata(tty->dev, bdev);
+	g_tty = tty;
 
 	/* Retrieve current HIF event state */
 	cif_event = HIF_EVENT_PROBE;
@@ -1002,6 +1054,146 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 	devm_kfree(tty->dev, cif_dev);
 }
 
+static int btmtk_cif_suspend(void)
+{
+	int cif_event = 0, state, ret = 0;
+	struct btmtk_cif_state *cif_state = NULL;
+	struct tty_struct *tty = g_tty;
+	struct btmtk_dev *bdev = dev_get_drvdata(tty->dev);
+	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	struct btmtk_woble *bt_woble = &cif_dev->bt_woble;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+
+	BTMTK_INFO("%s", __func__);
+
+	if (bdev->get_hci_reset) {
+		BTMTK_WARN("open flow not ready(%d), retry", bdev->get_hci_reset);
+		return -EAGAIN;
+	}
+
+	if (bmain_info->reset_stack_flag) {
+		BTMTK_WARN("reset stack flag(%d), retry", bmain_info->reset_stack_flag);
+		return -EAGAIN;
+	}
+
+	fstate = btmtk_fops_get_state(bdev);
+	if ((fstate == BTMTK_FOPS_STATE_CLOSING) ||
+		(fstate == BTMTK_FOPS_STATE_OPENING)) {
+		BTMTK_WARN("%s: fops open/close is on-going, retry", __func__);
+		return -EAGAIN;
+	}
+
+	if (bdev->suspend_count++) {
+		BTMTK_WARN("Has suspended. suspend_count: %d, end", bdev->suspend_count);
+		return 0;
+	}
+
+	state = btmtk_get_chip_state(bdev);
+	/* Retrieve current HIF event state */
+	if (state == BTMTK_STATE_FW_DUMP) {
+		BTMTK_WARN("%s: FW dumping ongoing, don't dos suspend flow!!!", __func__);
+		cif_event = HIF_EVENT_FW_DUMP;
+	} else
+		cif_event = HIF_EVENT_SUSPEND;
+
+	cif_state = &bdev->cif_state[cif_event];
+
+	/* Set Entering state */
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+	ret = btmtk_woble_suspend(bt_woble);
+	if (ret < 0)
+		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
+
+	ret = btmtk_uart_fw_own(bdev);
+	if (ret < 0)
+		BTMTK_ERR("%s: set fw own return fail %d", __func__, ret);
+
+	/* Set End/Error state */
+	if (ret == 0)
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	else
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+
+	return 0;
+}
+
+static int btmtk_cif_resume(void)
+{
+	struct tty_struct *tty = g_tty;
+	struct btmtk_dev *bdev = dev_get_drvdata(tty->dev);
+	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	struct btmtk_woble *bt_woble = &cif_dev->bt_woble;
+	struct btmtk_cif_state *cif_state = NULL;
+	int ret;
+
+	BTMTK_INFO("%s", __func__);
+	bdev->suspend_count--;
+
+	if (bdev->suspend_count) {
+		BTMTK_INFO("data->suspend_count %d, return 0", bdev->suspend_count);
+		return 0;
+	}
+
+	cif_state = &bdev->cif_state[HIF_EVENT_RESUME];
+
+	/* Set Entering state */
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+	ret = btmtk_uart_driver_own(bdev);
+	if (ret < 0)
+		BTMTK_ERR("%s: set driver own return fail %d", __func__, ret);
+
+	ret = btmtk_woble_resume(bt_woble);
+	if (ret < 0)
+		BTMTK_ERR("%s: btmtk_woble_resume return fail %d", __func__, ret);
+
+	/* Set End/Error state */
+	if (ret == 0)
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	else
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+	return 0;
+}
+
+static int btmtk_pm_notification(struct notifier_block *this, unsigned long event, void *ptr)
+{
+	int retry = 40;
+	int ret = NOTIFY_DONE;
+	BTMTK_DBG("event = %ld", event);
+
+	/* if get into suspend flow while doing audio pinmux setting
+	 * it may have chance mischange uart pinmux we want to write
+	 * retry and wait audio setting done then do suspend flow
+	 */
+	switch (event) {
+	case PM_SUSPEND_PREPARE:
+		do {
+			ret = btmtk_cif_suspend();
+			if (ret == 0) {
+				break;
+			} else if (retry <= 0) {
+				BTMTK_ERR("not ready to suspend");
+				return NOTIFY_STOP;
+			}
+			msleep(50);
+		} while (retry-- > 0);
+		break;
+	case PM_POST_SUSPEND:
+		btmtk_cif_resume();
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
+static struct notifier_block btmtk_pm_notifier = {
+	.notifier_call = btmtk_pm_notification,
+};
+
 static int uart_register(void)
 {
 	static struct tty_ldisc_ops btmtk_uart_ldisc;
@@ -1029,6 +1221,11 @@ static int uart_register(void)
 		BTMTK_ERR("MTK line discipline registration failed. (%d)", err);
 		return err;
 	}
+	err = register_pm_notifier(&btmtk_pm_notifier);
+	if (err) {
+		BTMTK_ERR("Register pm notifier failed. (%d)", err);
+		return err;
+	}
 
 	BTMTK_INFO("%s done", __func__);
 	return err;
@@ -1037,11 +1234,18 @@ static int uart_deregister(void)
 {
 	u32 err = 0;
 
+	err = unregister_pm_notifier(&btmtk_pm_notifier);
+	if (err) {
+		BTMTK_ERR("Unregister pm notifier failed. (%d)", err);
+		return err;
+	}
+
 	err = tty_unregister_ldisc(N_MTK);
 	if (err) {
 		BTMTK_ERR("line discipline registration failed. (%d)", err);
 		return err;
 	}
+
 	return 0;
 }
 
@@ -1060,7 +1264,6 @@ int btmtk_cif_register(void)
 	hook.send_and_recv = btmtk_uart_send_and_recv;
 	hook.event_filter = btmtk_uart_event_filter;
 	hook.subsys_reset = btmtk_uart_subsys_reset;
-	hook.whole_reset = btmtk_uart_whole_reset;
 	hook.chip_reset_notify = btmtk_uart_chip_reset_notify;
 	hook.cif_mutex_lock = btmtk_uart_cif_mutex_lock;
 	hook.cif_mutex_unlock = btmtk_uart_cif_mutex_unlock;
