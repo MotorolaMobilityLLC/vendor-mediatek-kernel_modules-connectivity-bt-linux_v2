@@ -37,7 +37,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.200031201"
+#define VERSION "7.0.200031501"
 #define SUBVER ":turnkey"
 
 
@@ -124,6 +124,9 @@ extern uint8_t btmtk_log_lvl;
 		}								\
 	} while (0)
 
+#define BTMTK_CIF_IS_NULL(bdev, cif_event) \
+	(!bdev || !(&bdev->cif_state[cif_event]))
+
 /**
  *
  * HCI packet type
@@ -180,9 +183,31 @@ extern uint8_t btmtk_log_lvl;
 /* Define for WoBLE */
 #define BD_ADDRESS_SIZE 6
 #define WOBLE_SETTING_COUNT 10
-#define WOBLE_SETTING_FILE_NAME "woble_setting_7663.bin"
+#define WMT_CMD_COUNT 255
+#define VENDOR_CMD_COUNT 255
+#define WOBLE_SETTING_FILE_NAME_7663 "woble_setting_7663.bin"
+#define WOBLE_SETTING_FILE_NAME_7961 "woble_setting_7961.bin"
 #define WOBLE_EVENT_INTERVAL_TIMO	500
 #define WOBLE_COMP_EVENT_TIMO		5000
+
+#define BT_CFG_NAME "bt.cfg"
+#define BT_UNIFY_WOBLE "SUPPORT_UNIFY_WOBLE"
+#define BT_UNIFY_WOBLE_TYPE "UNIFY_WOBLE_TYPE"
+#define BT_WOBLE_BY_EINT "SUPPORT_WOBLE_BY_EINT"
+#define BT_DONGLE_RESET_PIN "BT_DONGLE_RESET_GPIO_PIN"
+#define BT_RESET_DONGLE "SUPPORT_DONGLE_RESET"
+#define BT_FULL_FW_DUMP "SUPPORT_FULL_FW_DUMP"
+#define BT_WOBLE_WAKELOCK "SUPPORT_WOBLE_WAKELOCK"
+#define BT_WOBLE_FOR_BT_DISABLE "SUPPORT_WOBLE_FOR_BT_DISABLE"
+#define BT_RESET_STACK_AFTER_WOBLE "RESET_STACK_AFTER_WOBLE"
+#define BT_AUTO_PICUS "SUPPORT_AUTO_PICUS"
+#define BT_AUTO_PICUS_FILTER "PICUS_FILTER_CMD"
+#define BT_WMT_CMD "WMT_CMD"
+#define BT_VENDOR_CMD "VENDOR_CMD"
+
+
+#define PM_KEY_BTW (0x0015) /* Notify PM the unify woble type */
+
 
 enum fw_cfg_index_len {
 	FW_CFG_INX_LEN_NONE = 0,
@@ -193,6 +218,22 @@ enum fw_cfg_index_len {
 struct fw_cfg_struct {
 	char	*content;	/* APCF content or radio off content */
 	int	length;		/* APCF content or radio off content of length */
+};
+
+struct bt_cfg_struct {
+	bool	support_unify_woble;	/* support unify woble or not */
+	bool	support_woble_by_eint;		/* support woble by eint or not */
+	bool	support_dongle_reset;		/* support chip reset or not */
+	bool	support_full_fw_dump;		/* dump full fw coredump or not */
+	bool	support_woble_wakelock;		/* support when woble error, do wakelock or not */
+	bool	support_woble_for_bt_disable;		/* when bt disable, support enter susend or not */
+	bool	reset_stack_after_woble;	/* support reset stack to re-connect IOT after resume */
+	bool	support_auto_picus;			/* support enable PICUS automatically */
+	struct fw_cfg_struct picus_filter;	/* support on PICUS filter command customization */
+	unsigned int	dongle_reset_gpio_pin;		/* BT_DONGLE_RESET_GPIO_PIN number */
+	unsigned int	unify_woble_type;	/* 0: legacy. 1: waveform. 2: IR */
+	struct fw_cfg_struct wmt_cmd[WMT_CMD_COUNT];
+	struct fw_cfg_struct vendor_cmd[VENDOR_CMD_COUNT];
 };
 
 #define WIFI_DOWNLOAD	TRUE

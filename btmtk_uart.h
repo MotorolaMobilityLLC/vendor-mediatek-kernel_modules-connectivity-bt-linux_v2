@@ -71,6 +71,7 @@ struct btmtk_dev {
 #define HCIUARTSETSTP _IOW('U', 203, int)
 #define HCIUARTLOADPATCH _IOW('U', 204, int)
 #define HCIUARTSETWAKEUP _IOW('U', 205, int)
+
 /**
  * Send cmd dispatch evt
  */

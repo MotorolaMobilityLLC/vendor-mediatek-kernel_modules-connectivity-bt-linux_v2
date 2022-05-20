@@ -18,8 +18,9 @@
 int btmtk_get_chip_state(struct btmtk_dev *bdev);
 void btmtk_set_chip_state(struct btmtk_dev *bdev, int new_state);
 int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
-int btmtk_register_hci_device(struct btmtk_dev *bdev);
 void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
+int btmtk_register_hci_device(struct btmtk_dev *bdev);
+int btmtk_deregister_hci_device(struct btmtk_dev *bdev);
 int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count);
 int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb);
@@ -29,11 +30,12 @@ int btmtk_send_init_cmds(struct btmtk_dev *hdev);
 int btmtk_send_deinit_cmds(struct btmtk_dev *hdev);
 int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		const int cmd_len, const uint8_t *event, const int event_len, int delay,
-		int retry, int endpoint, const int tx_state, bool wmt_cmd);
+		int retry, int endpoint);
 int btmtk_send_wmt_reset(struct btmtk_dev *hdev);
 int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *hdev);
 int btmtk_send_wmt_power_off_cmd(struct btmtk_dev *hdev);
-int btmtk_woble_wake_up(struct btmtk_dev *bdev);
+int btmtk_woble_suspend(struct btmtk_dev *bdev);
+int btmtk_woble_resume(struct btmtk_dev *bdev);
 int btmtk_handle_leaving_WoBLE_state(struct btmtk_dev *bdev);
 int btmtk_handle_entering_WoBLE_state(struct btmtk_dev *bdev);
 int btmtk_load_woble_setting(char *bin_name,
@@ -47,7 +49,12 @@ struct btmtk_dev *btmtk_get_dev(void);
 void btmtk_release_dev(struct btmtk_dev *bdev);
 struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev);
 void btmtk_free_dev_memory(struct device *dev, struct btmtk_dev *bdev);
-
+void btmtk_initialize_cfg_items(struct btmtk_dev *bdev);
+bool btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_dev *bdev);
+u8 btmtk_get_reset_stack_flag(void);
+int btmtk_reset_power_on(struct btmtk_dev *bdev);
+void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev);
+void btmtk_free_setting_file(struct btmtk_dev *bdev);
 
 
 //static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb);
@@ -117,6 +124,9 @@ void btmtk_free_dev_memory(struct device *dev, struct btmtk_dev *bdev);
 #define HIF_EVENT_DISCONNECT	1
 #define HIF_EVENT_SUSPEND	2
 #define HIF_EVENT_RESUME	3
+#define HIF_EVENT_STANDBY	4
+
+#define CHAR2HEX_SIZE	4
 
 struct btmtk_cif_state {
 	unsigned char ops_enter;
@@ -165,6 +175,13 @@ enum {
 	BTMTK_FOPS_STATE_OPENED,	/* open in fops_open */
 	BTMTK_FOPS_STATE_CLOSING,	/* during closing */
 	BTMTK_FOPS_STATE_CLOSED,	/* closed */
+};
+
+enum {
+	BTMTK_EVENT_COMPARE_STATE_UNKNOWN,
+	BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE,
+	BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE,
+	BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS,
 };
 
 struct h4_recv_pkt {
@@ -245,6 +262,18 @@ static inline int is_mt7663(u32 chip_id)
 	if (chip_id == 0x7663)
 		return 1;
 	return 0;
+}
+
+static inline int is_support_unify_woble(struct btmtk_dev *bdev)
+{
+	if (bdev->bt_cfg.support_unify_woble) {
+		if (is_mt7961(bdev->chip_id) || is_mt7663(bdev->chip_id))
+			return 1;
+		else
+			return 0;
+	} else {
+		return 0;
+	}
 }
 
 #endif /* __BTMTK_MAIN_H__ */

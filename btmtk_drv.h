@@ -107,8 +107,6 @@ struct memory_type_mapping {
 
 #define FW_DUMP_FILE_NAME_SIZE     64
 
-#define EVENT_COMPARE_SIZE     64
-
 
 /* #define SAVE_FW_DUMP_IN_KERNEL     1 */
 

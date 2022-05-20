@@ -146,6 +146,10 @@ struct btmtk_dev {
 	unsigned int	woble_need_trigger_coredump;
 	struct	wakeup_source	woble_ws;
 	unsigned int	woble_need_set_radio_off_in_probe;
+
+	unsigned char		*bt_cfg_file_name;
+	struct bt_cfg_struct	bt_cfg;
+
 	/* TODO, need to confirm the max size of urb data, also need to confirm
 	 * whether intr_complete and bulk_complete and soc_complete can all share
 	 * this urb_transfer_buf
@@ -154,7 +158,7 @@ struct btmtk_dev {
 };
 
 int btmtk_cif_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
-		int delay, int retry, int endpoint, bool wmt_cmd);
+		int delay, int retry, int endpoint);
 int btmtk_cif_send_calibration(struct btmtk_dev *bdev);
 int btmtk_cif_open(struct hci_dev *hdev);
 int btmtk_cif_close(struct hci_dev *hdev);
@@ -164,5 +168,4 @@ int btmtk_cif_get_rom_patch_result(struct btmtk_dev *bdev);
 int btmtk_cif_recv_evt(struct btmtk_dev *bdev, int delay, int retry);
 int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val);
 int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val);
-
 #endif
