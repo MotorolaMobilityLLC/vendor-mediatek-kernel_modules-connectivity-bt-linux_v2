@@ -330,6 +330,7 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 	case UART_HW_FC:
 		cmd[BT_FLOWCTRL_OFFSET] = BT_HW_FC;
 		break;
+	case UART_MTK_SW_FC:
 	case UART_LINUX_FC:
 		cmd[BT_FLOWCTRL_OFFSET] = BT_SW_FC;
 		break;
@@ -431,7 +432,7 @@ static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);
 	tty_termios_encode_baud_rate(&new_termios, BT_UART_DEFAULT_BAUD, BT_UART_DEFAULT_BAUD);
 	new_termios.c_cflag &= ~(CRTSCTS);
-	new_termios.c_iflag &= ~(NOFLSH);
+	new_termios.c_iflag &= ~(NOFLSH|CRTSCTS);
 	tty_set_termios(tty, &new_termios);
 
 	/* set chip baud and flowcontrol to config setting */
@@ -459,13 +460,13 @@ static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 		break;
 	/* MTK Software FC */
 	case UART_MTK_SW_FC:
-		new_termios.c_cflag &= ~(CRTSCTS);
-		new_termios.c_iflag |= NOFLSH;
+		new_termios.c_iflag |= CRTSCTS;
+		new_termios.c_cflag &= ~(NOFLSH);
 		break;
 	/* default disable flow control */
 	default:
 		new_termios.c_cflag &= ~(CRTSCTS);
-		new_termios.c_iflag &= ~(NOFLSH);
+		new_termios.c_iflag &= ~(NOFLSH|CRTSCTS);
 	}
 
 	tty_set_termios(tty, &new_termios);
@@ -523,7 +524,7 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);
 	tty_termios_encode_baud_rate(&new_termios, BT_UART_DEFAULT_BAUD, BT_UART_DEFAULT_BAUD);
 	new_termios.c_cflag &= ~(CRTSCTS);
-	new_termios.c_iflag &= ~(NOFLSH);
+	new_termios.c_iflag &= ~(NOFLSH|CRTSCTS);
 	tty_set_termios(tty, &new_termios);
 
 	/* set chip baud and flowcontrol to config setting */
@@ -554,13 +555,13 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 		break;
 	/* MTK Software FC */
 	case UART_MTK_SW_FC:
-		new_termios.c_cflag &= ~(CRTSCTS);
-		new_termios.c_iflag |= NOFLSH;
+		new_termios.c_iflag |= CRTSCTS;
+		new_termios.c_cflag &= ~(NOFLSH);
 		break;
 	/* default disable flow control */
 	default:
 		new_termios.c_cflag &= ~(CRTSCTS);
-		new_termios.c_iflag &= ~(NOFLSH);
+		new_termios.c_iflag &= ~(NOFLSH|CRTSCTS);
 	}
 
 	tty_set_termios(tty, &new_termios);

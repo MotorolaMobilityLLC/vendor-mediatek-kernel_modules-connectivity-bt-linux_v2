@@ -12,6 +12,6 @@ on property:vendor.connsys.driver.ready=no
   stop uart_launcher
 
 # service for uart_launcher
-service uart_launcher /vendor/bin/uart_launcher
+service uart_launcher /vendor/bin/uart_launcher -f 1 -c 3000000 -p /dev/ttyS3
   user root
   group system

@@ -122,13 +122,13 @@ int setup_uart_param (
         break;
     /* MTK Software FC */
     case UART_MTK_SW_FC:
-        ti.c_cflag &= ~(CRTSCTS);
-        ti.c_iflag |= NOFLSH;
+        ti.c_iflag |= CRTSCTS;
+        ti.c_cflag &= ~(NOFLSH);
         break;
     /* default disable flow control */
     default:
         ti.c_cflag &= ~(CRTSCTS);
-        ti.c_iflag &= ~(NOFLSH);
+        ti.c_iflag &= ~(NOFLSH|CRTSCTS);
     }
 
     BPRINT_D("c_c CRTSCTS = 0x%16x", CRTSCTS);
@@ -267,12 +267,11 @@ int main(int argc, char *argv[])
     int fd_num = 0;
     int err = 0;
     int opt;
-    int baudrate = 3000000;
-    int chang_baud_rate = 1;
+    int baudrate = 115200;
+    int chang_baud_rate = 0;
     int retry = 0;
     int flow_control = UART_DISABLE_FC;
-    //char *tty_path = "/dev/ttyUSB0";
-    char *tty_path = "/dev/ttyS3";
+    char *tty_path = "/dev/ttyUSB0";
     struct UART_CONFIG sUartConfig;
     struct sigaction sigact;
     struct flock fl;
@@ -291,7 +290,6 @@ int main(int argc, char *argv[])
     sigaction(SIGKILL, &sigact, NULL);
     init_flock(&fl);
     ld = N_MTK;
-    ALOGW("%s: flow_control[%d] baudrate[%d]",__func__, flow_control, baudrate);
 
     while ((opt = getopt(argc, argv, "c:f:p:k:l::")) != -1) {
         switch (opt) {
@@ -468,7 +466,6 @@ exit:
     if (gTtyFd > 0) {
         BPRINT_I("unlock_flock");
         unlock_flock(gTtyFd, &fl, F_UNLCK, SEEK_SET);
-        ALOGW("%s: close",__func__);
         close(gTtyFd);
     }
     BPRINT_I("uart_launcher stop");
