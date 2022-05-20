@@ -28,7 +28,6 @@
 #include <asm/unaligned.h>
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h>
-#include "btmtk_config.h"
 #include "btmtk_define.h"
 #include "btmtk_usb.h"
 #include "btmtk_main.h"

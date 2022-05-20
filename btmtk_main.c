@@ -3195,7 +3195,6 @@ int btmtk_handle_entering_WoBLE_state(struct btmtk_dev *bdev)
 {
 	int ret = -1;
 	int fstate = BTMTK_FOPS_STATE_INIT;
-	int state = BTMTK_STATE_INIT;
 
 	BTMTK_INFO("%s: begin", __func__);
 
@@ -3205,12 +3204,6 @@ int btmtk_handle_entering_WoBLE_state(struct btmtk_dev *bdev)
 			BTMTK_WARN("%s: fops is not open yet(%d)!, return", __func__, fstate);
 			return 0;
 		}
-	}
-
-	state = btmtk_get_chip_state(bdev);
-	if (state == BTMTK_STATE_FW_DUMP) {
-		BTMTK_ERR("%s: chip state is in fw dump, state = %d!", __func__, state);
-		goto Finish;
 	}
 
 	if (bdev->chip_reset || bdev->subsys_reset) {
@@ -4324,7 +4317,6 @@ static void btmtk_rx_work(struct work_struct *work)
 	/* BTMTK_DBG("%s enter", __func__); */
 
 	while ((skb = skb_dequeue(&bdev->rx_q))) {
-
 		/* BTMTK_DBG_RAW(skb->data, skb->len, "%s, recv evt", __func__); */
 		skip_pkt = btmtk_dispatch_pkt(bdev->hdev, skb);
 		if (skip_pkt != 0) {

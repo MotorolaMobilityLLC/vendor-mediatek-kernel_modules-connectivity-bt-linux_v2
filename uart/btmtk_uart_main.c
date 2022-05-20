@@ -10,8 +10,6 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *  See http://www.gnu.org/licenses/gpl-2.0.html for more details.
  */
-
-#include "btmtk_config.h"
 #include "btmtk_define.h"
 #include "btmtk_uart.h"
 #include "btmtk_main.h"

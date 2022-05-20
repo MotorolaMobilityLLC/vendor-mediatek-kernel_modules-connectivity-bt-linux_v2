@@ -38,11 +38,8 @@
 #include <linux/of_gpio.h>
 
 
-#include "btmtk_config.h"
-
-
 /** Driver version */
-#define VERSION "7.0.200052001"
+#define VERSION "7.0.200052101"
 #define SUBVER ":turnkey"
 
 

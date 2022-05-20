@@ -20,8 +20,6 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  */
-
-#include "btmtk_config.h"
 #include "btmtk_define.h"
 #include "btmtk_sdio.h"
 #include "btmtk_main.h"

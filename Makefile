@@ -31,20 +31,24 @@ MTK_CHIP_IF := usb
 
 ifeq ($(MTK_CHIP_IF), sdio)
     MOD_NAME = btmtk_sdio
-    CFILES := btmtksdio.c
+    CFILES := sdio/btmtksdio.c
     ccflags-y += -DCHIP_IF_SDIO
+    ccflags-y += -I$(src)/include/sdio
 else ifeq ($(MTK_CHIP_IF), usb)
     MOD_NAME = btmtk_usb
-    CFILES := btmtkusb.c
+    CFILES := usb/btmtkusb.c
     ccflags-y += -DCHIP_IF_USB
+    ccflags-y += -I$(src)/include/usb
 else ifeq ($(MTK_CHIP_IF), uart)
     MOD_NAME = btmtk_uart
-    CFILES := btmtk_uart_main.c
+    CFILES := uart/btmtk_uart_main.c
     ccflags-y += -DCHIP_IF_UART
+    ccflags-y += -I$(src)/include/uart
 else
     MOD_NAME = btmtkbtif
-    CFILES := btmtk_btif.c
+    CFILES := btif/btmtk_btif.c
     ccflags-y += -DCHIP_IF_BTIF
+    ccflags-y += -I$(src)/include/btif
 endif
 
 CFILES += btmtk_main.c
@@ -72,16 +76,15 @@ clean:
 # Check coding style
 # export IGNORE_CODING_STYLE_RULES := NEW_TYPEDEFS,LEADING_SPACE,CODE_INDENT,SUSPECT_CODE_INDENT
 ccs:
-	./util/checkpatch.pl -f btmtk_main.c
-	./util/checkpatch.pl -f btmtk_sdio.c
-	./util/checkpatch.pl -f btmtk_sdio.h
-	./util/checkpatch.pl -f btmtk_config.h
+	./util/checkpatch.pl -f ./sdio/btmtk_sdio.c
+	./util/checkpatch.pl -f ./sdio/btmtk_sdio.h
 	./util/checkpatch.pl -f btmtk_define.h
 	./util/checkpatch.pl -f btmtk_drv.h
 	./util/checkpatch.pl -f btmtk_chip_if.h
 	./util/checkpatch.pl -f btmtk_main.h
-	./util/checkpatch.pl -f btmtk_uart.h
-	./util/checkpatch.pl -f btmtk_uart_main.c
-	./util/checkpatch.pl -f btmtk_usb.h
-	./util/checkpatch.pl -f btmtkusb.c
+	./util/checkpatch.pl -f ./uart/btmtk_uart.h
+	./util/checkpatch.pl -f ./uart/btmtk_uart_main.c
+	./util/checkpatch.pl -f ./usb/btmtk_usb.h
+	./util/checkpatch.pl -f ./usb/btmtkusb.c
+	./util/checkpatch.pl -f btmtk_main.c
 
