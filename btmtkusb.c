@@ -539,8 +539,10 @@ static void btusb_bulk_complete(struct urb *urb)
 		return;
 	}
 
-	if (!test_bit(BTUSB_BULK_RUNNING, &bdev->flags))
+	if (!test_bit(BTUSB_BULK_RUNNING, &bdev->flags)) {
+		BTMTK_DBG("%s test flag failed", __func__);
 		return;
+	}
 
 bulk_resub:
 	usb_anchor_urb(urb, &bdev->bulk_anchor);
@@ -667,11 +669,11 @@ static void btusb_ble_isoc_complete(struct urb *urb)
 			urb->transfer_buffer, isoc_pkt_len + HCI_ISO_PKT_HEADER_SIZE);
 
 		BTMTK_DBG_RAW(bdev->urb_transfer_buf,
-			urb->actual_length + HCI_ISO_PKT_WITH_ACL_HEADER_SIZE,
+			isoc_pkt_len + HCI_ISO_PKT_WITH_ACL_HEADER_SIZE,
 			"%s: raw data is :", __func__);
 
 		err = btmtk_recv(hdev, bdev->urb_transfer_buf,
-			urb->actual_length + HCI_ISO_PKT_WITH_ACL_HEADER_SIZE);
+			isoc_pkt_len + HCI_ISO_PKT_WITH_ACL_HEADER_SIZE);
 		if (err) {
 			BT_ERR("%s corrupted ACL packet", hdev->name);
 			hdev->stat.err_rx++;
