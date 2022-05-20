@@ -37,9 +37,11 @@
 #include <linux/of.h>
 #include <linux/of_gpio.h>
 
+#include <linux/kthread.h>
+#include <linux/freezer.h>
 
 /** Driver version */
-#define VERSION "7.0.2000081001"
+#define VERSION "7.0.2020081001"
 #define SUBVER ":turnkey"
 
 

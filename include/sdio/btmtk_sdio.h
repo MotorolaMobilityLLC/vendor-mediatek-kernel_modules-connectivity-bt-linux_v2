@@ -96,6 +96,7 @@ typedef int (*set_gpio_high)(u8 gpio);
 /* Driver & FW own related */
 #define DRIVER_OWN 0
 #define FW_OWN 1
+#define SET_OWN_LOOP_COUNT 20
 
 struct btmtk_sdio_hdr {
 	/* For SDIO Header */
@@ -105,16 +106,19 @@ struct btmtk_sdio_hdr {
 	u8	bt_type;
 } __packed;
 
+struct btmtk_sdio_thread {
+	struct task_struct *task;
+	wait_queue_head_t wait_q;
+	void *priv;
+	u8 thread_status;
+};
+
 struct btmtk_sdio_dev {
 	struct sdio_func *func;
 
-	bool keep_drv_on;
-	u8 tx_empty;
-	u8 rx_done;
-	u32 int_count;
 	bool no_fw_own;
-	bool tx_dnld_rdy;
-	/* bool rx_dnld_rdy; */
+	atomic_t int_count;
+	atomic_t tx_rdy;
 
 	/* TODO, need to confirm the max size of urb data, also need to confirm
 	 * whether intr_complete and bulk_complete and soc_complete can all share
@@ -122,5 +126,8 @@ struct btmtk_sdio_dev {
 	 */
 	unsigned char	*transfer_buf;
 	unsigned char	*sdio_packet;
+
+	struct sk_buff_head tx_queue;
+	struct btmtk_sdio_thread sdio_thread;
 };
 #endif

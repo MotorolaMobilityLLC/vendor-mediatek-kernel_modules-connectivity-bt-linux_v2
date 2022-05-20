@@ -353,7 +353,7 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 		if (!skb) {
 			BT_ERR("%s skb is null!", __func__);
 			hdev->stat.err_rx++;
-			return;
+			goto exit;
 		}
 
 		if (urb->actual_length >= HCI_MAX_EVENT_SIZE) {
@@ -363,7 +363,7 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 				urb->actual_length, urb->transfer_buffer);
 			kfree_skb(skb);
 			hdev->stat.err_rx++;
-			return;
+			goto exit;
 		}
 		hci_skb_pkt_type(skb) = HCI_EVENT_PKT;
 		memcpy(skb_put(skb, urb->actual_length), urb->transfer_buffer, urb->actual_length);
@@ -373,7 +373,7 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 		return;
 	} else if (urb->status == -ENOENT) {
 		/* Avoid suspend failed when usb_kill_urb */
-		return;
+		goto exit;
 	}
 
 	usb_mark_last_busy(cif_dev->udev);
@@ -390,12 +390,18 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 	usb_anchor_urb(urb, &cif_dev->ctrl_anchor);
 	err = usb_submit_urb(urb, GFP_ATOMIC);
 	if (err < 0) {
+		kfree(urb->setup_packet);
 		/* -EPERM: urb is being killed;
 		 * -ENODEV: device got disconnected
 		 */
 		if (err != -EPERM && err != -ENODEV)
 			usb_unanchor_urb(urb);
 	}
+
+	return;
+
+exit:
+	kfree(urb->setup_packet);
 }
 
 static int btusb_submit_wmt_urb(struct hci_dev *hdev, gfp_t mem_flags)
@@ -446,6 +452,7 @@ static int btusb_submit_wmt_urb(struct hci_dev *hdev, gfp_t mem_flags)
 	buf = kmalloc(size, GFP_KERNEL);
 	if (!buf) {
 		kfree(dr);
+		usb_free_urb(urb);
 		return -ENOMEM;
 	}
 
@@ -461,6 +468,7 @@ static int btusb_submit_wmt_urb(struct hci_dev *hdev, gfp_t mem_flags)
 		if (err != -EPERM && err != -ENODEV)
 			BT_ERR("%s urb %p submission failed (%d)",
 					hdev->name, urb, -err);
+		kfree(dr);
 		usb_unanchor_urb(urb);
 	}
 
