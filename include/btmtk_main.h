@@ -309,9 +309,7 @@ struct _Section_Map {
 			u32 u4SecKeyIdx;
 			u32 u4AlignLen;
 			u32 u4SecType;
-			u8  uDlMode;
-			u8  uCrcType;
-			u8  res[2];
+			u32 u4DLModeCrcType;
 			u32 u4Crc;
 			u32 reserved[6];
 		} bin_info_spec;

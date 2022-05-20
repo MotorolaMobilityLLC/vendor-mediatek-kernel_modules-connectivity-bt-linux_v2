@@ -2139,18 +2139,20 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 				FW_ROM_PATCH_GD_SIZE + FW_ROM_PATCH_SEC_MAP_SIZE * loop_count);
 		dma_flag = PATCH_DOWNLOAD_USING_WMT;
 		if (patch_flag) {
+			/* wifi is big-endian */
 			section_offset = be2cpu32(sectionMap->u4SecOffset);
 			dl_size = be2cpu32(sectionMap->bin_info_spec.u4DLSize);
+			dma_flag = be2cpu32(sectionMap->bin_info_spec.u4DLModeCrcType) & 0xFF;
 		} else {
+			/* BT is little-endian */
 			section_offset = sectionMap->u4SecOffset;
 			dl_size = sectionMap->bin_info_spec.u4DLSize;
 			/*
-			 * 0: BGF patch
-			 * 1: BT ILM
-			 * only BT ILM support DL DMA
+			 * loop_count = 0: BGF patch
+			 *              1: BT ILM
+			 * only BT ILM support DL DMA for Buzzard
 			 */
-			if (loop_count == 1)
-				dma_flag = sectionMap->bin_info_spec.uDlMode;
+			dma_flag = le2cpu32(sectionMap->bin_info_spec.u4DLModeCrcType) & 0xFF;
 		}
 		BTMTK_INFO("%s: loop_count = %d, section_offset = 0x%08x, download patch_len = 0x%08x, dl mode = %d\n",
 				__func__, loop_count, section_offset, dl_size, dma_flag);
@@ -2201,22 +2203,13 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 				}
 			}
 		}
-
 		/* FW Download finished */
 		if (loop_count == section_num - 1) {
-/* need to remove check wifi dl patch success or not according to Jyun-ji's
- * comment, because bt driver do nothing when wifi dl patch failed
- */
+			/* need to remove delay according to
+			 * Jyun-ji's comment later
+			 */
 			if (patch_flag) {
 				mdelay(500);
-#if 0
-				patch_status = btmtk_send_wmt_download_cmd(bdev, pos, 0, event,
-					sizeof(event) - 1, sectionMap, 0, dma_flag, patch_flag);
-				if (patch_status == PATCH_READY)
-					BTMTK_INFO("%s: Wifi patch already download %d", __func__, patch_status);
-				else
-				BTMTK_ERR("%s: Wifi patch download failed!", __func__);
-#endif
 			}
 		}
 next_section:
@@ -2606,7 +2599,7 @@ int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *bdev)
 	/* Support 7668 and 7663 and 7961 */
 	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x06, 0x02, 0x00, 0x00, 0x01 };
 	/* To-Do, for event check */
-	u8 event[] = { 0x04, 0xE4, 0x05, 0x02, 0x06, 0x01, 0x00 };	/* event[7] is key */
+	u8 event[] = { 0x04, 0xE4, 0x05, 0x02, 0x06, 0x01, 0x00 };	/* event[6] is key */
 	int ret = -1, retry = RETRY_TIMES;
 
 	if (!bdev) {
@@ -2623,7 +2616,7 @@ retry_again:
 		bdev->power_state = BTMTK_DONGLE_STATE_ERROR;
 		ret = -1;
 	} else if (ret == 0 && bdev->recv_evt_len > 0) {
-		switch (bdev->io_buf[7]) {
+		switch (bdev->io_buf[6]) {
 		case 0:			 /* successful */
 			BTMTK_INFO("%s: OK", __func__);
 			bdev->power_state = BTMTK_DONGLE_STATE_POWER_ON;

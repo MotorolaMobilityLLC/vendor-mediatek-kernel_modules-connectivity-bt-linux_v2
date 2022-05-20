@@ -1702,8 +1702,8 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			/* btmtk_cif_send_bulk_out will send from image[1],
 			 * image[0] will be ingored
 			 */
-			image[0] = 0x2;
-			memcpy(&image[1], fwbuf + section_offset + cur_len, sent_len);
+			image[0] = HCI_ACLDATA_PKT;
+			memcpy(&image[HCI_TYPE_SIZE], fwbuf + section_offset + cur_len, sent_len);
 			BTMTK_DBG("%s: sent_len = %d, cur_len = %d", __func__,
 					sent_len, cur_len);
 			ret = btmtk_main_send_cmd(bdev,
