@@ -90,14 +90,14 @@ clean:
 # export IGNORE_CODING_STYLE_RULES := NEW_TYPEDEFS,LEADING_SPACE,CODE_INDENT,SUSPECT_CODE_INDENT
 ccs:
 	./util/checkpatch.pl -f ./sdio/btmtk_sdio.c
-	./util/checkpatch.pl -f ./sdio/btmtk_sdio.h
-	./util/checkpatch.pl -f btmtk_define.h
-	./util/checkpatch.pl -f btmtk_drv.h
-	./util/checkpatch.pl -f btmtk_chip_if.h
-	./util/checkpatch.pl -f btmtk_main.h
-	./util/checkpatch.pl -f ./uart/btmtk_uart.h
+	./util/checkpatch.pl -f ./include/sdio/btmtk_sdio.h
+	./util/checkpatch.pl -f ./include/btmtk_define.h
+	./util/checkpatch.pl -f ./include/btmtk_drv.h
+	./util/checkpatch.pl -f ./include/btmtk_chip_if.h
+	./util/checkpatch.pl -f ./include/btmtk_main.h
+	./util/checkpatch.pl -f ./include/uart/btmtk_uart.h
 	./util/checkpatch.pl -f ./uart/btmtk_uart_main.c
-	./util/checkpatch.pl -f ./usb/btmtk_usb.h
+	./util/checkpatch.pl -f ./include/usb/btmtk_usb.h
 	./util/checkpatch.pl -f ./usb/btmtkusb.c
 	./util/checkpatch.pl -f btmtk_main.c
 

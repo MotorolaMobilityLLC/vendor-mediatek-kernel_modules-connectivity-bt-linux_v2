@@ -39,7 +39,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.200052801"
+#define VERSION "7.0.200052901"
 #define SUBVER ":turnkey"
 
 
@@ -242,7 +242,7 @@ struct bt_cfg_struct {
 	struct fw_cfg_struct picus_filter;	/* support on PICUS filter command customization */
 	struct fw_cfg_struct picus_enable;	/* support on PICUS enable command customization */
 	bool	support_picus_to_host;			/* support picus log to host (boots/bluedroid) */
-	unsigned int	dongle_reset_gpio_pin;		/* BT_DONGLE_RESET_GPIO_PIN number */
+	int	dongle_reset_gpio_pin;		/* BT_DONGLE_RESET_GPIO_PIN number */
 	unsigned int	unify_woble_type;	/* 0: legacy. 1: waveform. 2: IR */
 	struct fw_cfg_struct wmt_cmd[WMT_CMD_COUNT];
 	struct fw_cfg_struct vendor_cmd[VENDOR_CMD_COUNT];

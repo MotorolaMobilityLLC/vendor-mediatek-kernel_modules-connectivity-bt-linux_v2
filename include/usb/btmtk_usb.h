@@ -150,7 +150,6 @@ struct btmtk_dev {
 	struct fw_cfg_struct	woble_setting_apcf_resume[WOBLE_SETTING_COUNT];
 	unsigned char	bdaddr[BD_ADDRESS_SIZE];
 	unsigned int	woble_need_trigger_coredump;
-	struct	wakeup_source	woble_ws;
 	unsigned int	woble_need_set_radio_off_in_probe;
 
 	unsigned char		*bt_cfg_file_name;
@@ -181,5 +180,5 @@ int btmtk_cif_recv_evt(struct btmtk_dev *bdev, int delay, int retry);
 int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val);
 int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val);
 int btmtk_cif_subsys_reset(struct btmtk_dev *bdev);
-
+void btmtk_cif_toggle_rst_pin(struct btmtk_dev *bdev);
 #endif

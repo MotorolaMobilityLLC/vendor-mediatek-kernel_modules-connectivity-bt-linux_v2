@@ -49,7 +49,6 @@ void btmtk_release_dev(struct btmtk_dev *bdev);
 struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev);
 void btmtk_free_dev_memory(struct device *dev, struct btmtk_dev *bdev);
 void btmtk_reset_waker(struct work_struct *work);
-void btmtk_toggle_rst_pin(struct btmtk_dev *bdev);
 void btmtk_initialize_cfg_items(struct btmtk_dev *bdev);
 bool btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_dev *bdev);
 u8 btmtk_get_reset_stack_flag(void);
@@ -74,9 +73,9 @@ void btmtk_hci_snoop_save_event(u32 len, u8 *buf);
 void btmtk_hci_snoop_save_adv_event(u32 len, u8 *buf);
 void btmtk_hci_snoop_save_acl(u32 len, u8 *buf);
 void btmtk_hci_snoop_print(u32 len, const u8 *buf);
-
-
-
+unsigned long btmtk_kallsyms_lookup_name(const char *name);
+void btmtk_woble_wake_lock(struct btmtk_dev *bdev);
+void btmtk_woble_wake_unlock(struct btmtk_dev *bdev);
 
 //static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb);
 
@@ -150,6 +149,8 @@ void btmtk_hci_snoop_print(u32 len, const u8 *buf);
 #define HIF_EVENT_STANDBY	4
 #define HIF_EVENT_SUBSYS_RESET	5
 #define HIF_EVENT_WHOLE_CHIP_RESET	6
+#define HIF_EVENT_FW_DUMP	7
+
 
 #define CHAR2HEX_SIZE	4
 
@@ -214,6 +215,12 @@ struct btmtk_fops_fwlog {
 	spinlock_t fwlog_lock;
 	u8 btmtk_bluetooth_kpi;
 };
+
+struct btmtk_main_info {
+	u8 reset_stack_flag;
+	struct wakeup_source *woble_ws;
+};
+
 
 enum {
 	BTMTK_DONGLE_STATE_UNKNOWN,

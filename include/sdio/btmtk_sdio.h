@@ -187,7 +187,6 @@ struct btmtk_dev {
 	struct fw_cfg_struct	woble_setting_apcf_resume[WOBLE_SETTING_COUNT];
 	unsigned char	bdaddr[BD_ADDRESS_SIZE];
 	unsigned int	woble_need_trigger_coredump;
-	struct	wakeup_source	woble_ws;
 	unsigned int	woble_need_set_radio_off_in_probe;
 
 	unsigned char		*bt_cfg_file_name;

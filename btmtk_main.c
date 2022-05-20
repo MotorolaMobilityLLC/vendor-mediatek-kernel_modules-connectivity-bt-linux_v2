@@ -61,8 +61,8 @@ const u8 READ_ISO_PACKET_SIZE_CMD[] = { 0x01, 0x98, 0xFD, 0x02 };
 
 u8 wmt_over_hci_header[] = { 0x01, 0x6F, 0xFC};
 
-/*TODO, maybe need to support multiple dongle to do reset stack*/
-static u8 reset_stack_flag;
+/*btmtk main information*/
+static struct btmtk_main_info main_info;
 
 /* bluetooth kpi */
 static u8 btmtk_bluetooth_kpi;
@@ -112,10 +112,30 @@ static const struct btmtk_cif_state g_cif_state[] = {
 	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_WORKING, BTMTK_STATE_FW_DUMP},
 	/* BTMTK_STATE_FW_DUMP */
 	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_DISCONNECT, BTMTK_STATE_FW_DUMP},
+	/* BTMTK_STATE_FW_DUMP */
+	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_FW_DUMP, BTMTK_STATE_FW_DUMP},
 };
 
 static int btmtk_enter_standby(void);
 static int btmtk_send_hci_tci_set_sleep_cmd_766x(struct btmtk_dev *bdev);
+
+void btmtk_woble_wake_lock(struct btmtk_dev *bdev)
+{
+	if (bdev->bt_cfg.support_woble_wakelock) {
+		BTMTK_INFO("%s: enter", __func__);
+		__pm_stay_awake(main_info.woble_ws);
+		BTMTK_INFO("%s: exit", __func__);
+	}
+}
+
+void btmtk_woble_wake_unlock(struct btmtk_dev *bdev)
+{
+	if (bdev->bt_cfg.support_woble_wakelock) {
+		BTMTK_INFO("%s: enter", __func__);
+		__pm_relax(main_info.woble_ws);
+		BTMTK_INFO("%s: exit", __func__);
+	}
+}
 
 int btmtk_skb_enq_fwlog(struct hci_dev *hdev, void *src, u32 len, u8 type, struct sk_buff_head *queue)
 {
@@ -476,6 +496,10 @@ void btmtk_free_setting_file(struct btmtk_dev *bdev)
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.vendor_cmd, VENDOR_CMD_COUNT);
 
 	memset(&bdev->bt_cfg, 0, sizeof(bdev->bt_cfg));
+	/* reset pin initial value need to be -1, used to judge after
+	 * disconnected before probe, can't do chip reset
+	 */
+	bdev->bt_cfg.dongle_reset_gpio_pin = -1;
 }
 
 void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
@@ -554,7 +578,7 @@ static void btmtk_fops_set_state(struct btmtk_dev *bdev, int new_state)
 	FOPS_MUTEX_UNLOCK();
 }
 
-static unsigned long btmtk_kallsyms_lookup_name(const char *name)
+unsigned long btmtk_kallsyms_lookup_name(const char *name)
 {
 	unsigned long ret = 0;
 
@@ -572,7 +596,7 @@ static unsigned long btmtk_kallsyms_lookup_name(const char *name)
 
 u8 btmtk_get_reset_stack_flag(void)
 {
-	return reset_stack_flag;
+	return main_info.reset_stack_flag;
 }
 
 static void btmtk_hci_snoop_print_to_log(void)
@@ -882,12 +906,16 @@ static int main_init(void)
 
 			/* BTMTK_FOPS_STATE_UNKNOWN instead? */
 			btmtk_fops_set_state(g_bdev[i], BTMTK_FOPS_STATE_INIT);
-
 		} else {
 			return -ENOMEM;
 		}
 	}
 
+#ifdef CONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT
+	main_info.woble_ws = wakeup_source_register(NULL, "btmtk_woble_wakelock");
+#else
+	main_info.woble_ws = wakeup_source_register("btmtk_woble_wakelock");
+#endif
 	return 0;
 }
 
@@ -902,13 +930,13 @@ static int main_exit(void)
 		return 0;
 	}
 
+	wakeup_source_unregister(main_info.woble_ws);
 	for (i = 0; i < btmtk_intf_num; i++) {
 		if (g_bdev[i] != NULL)
 			btmtk_free_dev_memory(NULL, g_bdev[i]);
 	}
 
 	kfree(g_bdev);
-
 	return 0;
 }
 
@@ -1276,7 +1304,7 @@ int btmtk_dispatch_pkt(struct hci_dev *hdev, struct sk_buff *skb)
 			/* This is the latest coredump packet. */
 			BTMTK_INFO("%s: FW dump end, dump_data_counter = %d", __func__, dump_data_counter);
 			/* TODO: Chip reset*/
-			reset_stack_flag = HW_ERR_CODE_CORE_DUMP;
+			main_info.reset_stack_flag = HW_ERR_CODE_CORE_DUMP;
 		}
 
 		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_ASSERT_QUEUE_COUNT) {
@@ -1431,6 +1459,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	struct sk_buff *skb = NULL;
 	int ret = 0;
 	unsigned long comp_event_timo = 0, start_time = 0;
+	int state = BTMTK_STATE_INIT;
 
 	if (bdev == NULL || bdev->hdev == NULL ||
 		cmd == NULL || cmd_len <= 0) {
@@ -1445,6 +1474,13 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		BTMTK_WARN("%s: chip power isn't on, ignore this command, state is %d",
 			__func__, bdev->power_state);
 		return ret;
+	}
+
+	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_FW_DUMP) {
+		BTMTK_WARN("%s: FW dumping ongoing, don't send any cmd to FW!!!", __func__);
+		ret = -1;
+		goto exit;
 	}
 
 	skb = alloc_skb(cmd_len + BT_SKB_RESERVE, GFP_ATOMIC);
@@ -1519,7 +1555,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 					ret = 0;
 					break;
 				}
-				usleep_range(10,100);
+				usleep_range(10, 100);
 			} while (time_before(jiffies, comp_event_timo));
 
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
@@ -1891,8 +1927,8 @@ void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev)
 	struct sk_buff *skb = NULL;
 	u8 hwerr_event[] = { 0x04, 0x10, 0x01, 0xff };
 
-	BTMTK_ERR("%s reset_stack_flag = %d!!", __func__, reset_stack_flag);
-	if (reset_stack_flag) {
+	BTMTK_ERR("%s reset_stack_flag = %d!!", __func__, main_info.reset_stack_flag);
+	if (main_info.reset_stack_flag) {
 		skb = alloc_skb(sizeof(hwerr_event) + BT_SKB_RESERVE, GFP_ATOMIC);
 		if (skb == NULL) {
 			BTMTK_ERR("%s allocate skb failed!!", __func__);
@@ -1900,7 +1936,7 @@ void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev)
 			hci_skb_pkt_type(skb) = HCI_EVENT_PKT;
 			skb->data[0] = hwerr_event[1];
 			skb->data[1] = hwerr_event[2];
-			skb->data[2] = reset_stack_flag;
+			skb->data[2] = main_info.reset_stack_flag;
 			skb->len = sizeof(hwerr_event) - 1;
 			BTMTK_DBG_RAW(skb->data, skb->len, "%s: hw err event:", __func__);
 			hci_recv_frame(bdev->hdev, skb);
@@ -2252,11 +2288,14 @@ struct btmtk_dev *btmtk_get_dev(void)
 			else
 				g_bdev[i]->dongle_index = g_bdev[i - 1]->dongle_index + 1;
 
+			/* reset pin initial value need to be -1, used to judge after
+			 * disconnected before probe, can't do chip reset
+			 */
+			g_bdev[i]->bt_cfg.dongle_reset_gpio_pin = -1;
 			tmp_bdev = g_bdev[i];
 
 			/* Hook pre-defined table on state machine */
 			g_bdev[i]->cif_state = (struct btmtk_cif_state *)g_cif_state;
-
 			break;
 		}
 	}
@@ -2280,6 +2319,11 @@ void btmtk_release_dev(struct btmtk_dev *bdev)
 			 */
 			if (memcmp(tmp_bdev, g_bdev[i], sizeof(*tmp_bdev)) == 0) {
 				memset(tmp_bdev, 0, sizeof(*tmp_bdev));
+				/* reset pin initial value need to be -1, used to judge after
+				 * disconnected before probe, can't do chip reset
+				 */
+				bdev->bt_cfg.dongle_reset_gpio_pin = -1;
+
 				tmp_bdev = NULL;
 				break;
 			}
@@ -3195,6 +3239,7 @@ int btmtk_handle_entering_WoBLE_state(struct btmtk_dev *bdev)
 {
 	int ret = -1;
 	int fstate = BTMTK_FOPS_STATE_INIT;
+	int state = BTMTK_STATE_INIT;
 
 	BTMTK_INFO("%s: begin", __func__);
 
@@ -3204,6 +3249,12 @@ int btmtk_handle_entering_WoBLE_state(struct btmtk_dev *bdev)
 			BTMTK_WARN("%s: fops is not open yet(%d)!, return", __func__, fstate);
 			return 0;
 		}
+	}
+
+	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_FW_DUMP) {
+		BTMTK_WARN("%s: FW dumping ongoing, don't send any cmd to FW!!!", __func__);
+		goto Finish;
 	}
 
 	if (bdev->chip_reset || bdev->subsys_reset) {
@@ -3284,7 +3335,10 @@ STOP_TRAFFIC:
 Finish:
 	if (ret) {
 		bdev->power_state = BTMTK_DONGLE_STATE_ERROR;
-		//btmtk_usb_woble_wake_lock(g_data);
+		if (bdev->bt_cfg.support_woble_wakelock) {
+			btmtk_cif_toggle_rst_pin(bdev);
+			btmtk_woble_wake_lock(bdev);
+		}
 	}
 
 	BTMTK_INFO("%s: end ret = %d, power_state =%d", __func__, ret, bdev->power_state);
@@ -3338,19 +3392,19 @@ int btmtk_woble_resume(struct btmtk_dev *bdev)
 	if (ret < 0) {
 		BTMTK_ERR("%s: btmtk_handle_leaving_WoBLE_state return fail %d", __func__, ret);
 		/* avoid rtc to to suspend again, do FW dump first */
-		//btmtk_usb_woble_wake_lock(g_data);
+		btmtk_woble_wake_lock(bdev);
 		btmtk_send_assert_cmd(bdev);
 		goto exit;
 	}
 
 	if (bdev->bt_cfg.reset_stack_after_woble
-		&& reset_stack_flag == HW_ERR_NONE
+		&& main_info.reset_stack_flag == HW_ERR_NONE
 		&& fstate == BTMTK_FOPS_STATE_OPENED)
-		reset_stack_flag = HW_ERR_CODE_RESET_STACK_AFTER_WOBLE;
+		main_info.reset_stack_flag = HW_ERR_CODE_RESET_STACK_AFTER_WOBLE;
 
 	btmtk_send_hw_err_to_host(bdev);
 	BTMTK_INFO("%s: end(%d), reset_stack_flag = %d, fstate = %d", __func__, ret,
-			reset_stack_flag, fstate);
+			main_info.reset_stack_flag, fstate);
 
 exit:
 	BTMTK_INFO("%s: end", __func__);
@@ -3742,8 +3796,8 @@ int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 	if (ret < 0) {
 		if (bdev->power_state != BTMTK_DONGLE_STATE_POWER_ON) {
 			BTMTK_ERR("%s, btmtk_send_wmt_power_on_cmd failed!", __func__);
-			if (reset_stack_flag == HW_ERR_NONE)
-				reset_stack_flag = HW_ERR_CODE_POWER_ON;
+			if (main_info.reset_stack_flag == HW_ERR_NONE)
+				main_info.reset_stack_flag = HW_ERR_CODE_POWER_ON;
 			/* TODO */
 			/* btmtk_usb_toggle_rst_pin(); */
 		}
@@ -3787,8 +3841,8 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 	ret = btmtk_send_wmt_power_off_cmd(bdev);
 	if (bdev->power_state != BTMTK_DONGLE_STATE_POWER_OFF) {
 		BTMTK_WARN("Power off failed, reset it");
-		if (reset_stack_flag == HW_ERR_NONE)
-			reset_stack_flag = HW_ERR_CODE_POWER_OFF;
+		if (main_info.reset_stack_flag == HW_ERR_NONE)
+			main_info.reset_stack_flag = HW_ERR_CODE_POWER_OFF;
 		btmtk_send_assert_cmd(bdev);
 	}
 
@@ -3993,9 +4047,9 @@ exit:
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
 
 err:
-	reset_stack_flag = HW_ERR_NONE;
+	main_info.reset_stack_flag = HW_ERR_NONE;
 	PM_OPS_MUTEX_UNLOCK();
-	BTMTK_INFO("%s: end, reset_stack_flag = %d", __func__, reset_stack_flag);
+	BTMTK_INFO("%s: end, reset_stack_flag = %d", __func__, main_info.reset_stack_flag);
 	return 0;
 }
 
@@ -4059,7 +4113,7 @@ static int bt_open(struct hci_dev *hdev)
 #endif /* CFG_SUPPORT_DVT */
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENED);
-	reset_stack_flag = HW_ERR_NONE;
+	main_info.reset_stack_flag = HW_ERR_NONE;
 
 	return 0;
 
@@ -4105,8 +4159,8 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		goto exit;
 	}
 
-	if (reset_stack_flag) {
-		BTMTK_WARN("%s: reset_stack_flag (%d)!", __func__, reset_stack_flag);
+	if (main_info.reset_stack_flag) {
+		BTMTK_WARN("%s: reset_stack_flag (%d)!", __func__, main_info.reset_stack_flag);
 		ret = -EFAULT;
 		goto exit;
 	}
@@ -4150,101 +4204,6 @@ static int bt_setup(struct hci_dev *hdev)
 	return 0;
 }
 
-void btmtk_toggle_rst_pin(struct btmtk_dev *bdev)
-{
-	struct device_node *node;
-	u32 rst_pin_num = 0;
-
-	BTMTK_INFO("%s: begin", __func__);
-
-	bdev->chip_reset = 1;
-	/* Initialize the interface specific function pointers */
-	bdev->pf_pdwndFunc = (pdwnc_func) btmtk_kallsyms_lookup_name("PDWNC_SetBTInResetState");
-	if (bdev->pf_pdwndFunc)
-		BTMTK_INFO("%s: Found PDWNC_SetBTInResetState", __func__);
-	else
-		BTMTK_WARN("%s: No Exported Func Found PDWNC_SetBTInResetState", __func__);
-
-	bdev->pf_resetFunc2 = (reset_func_ptr2) btmtk_kallsyms_lookup_name("mtk_gpio_set_value");
-	if (!bdev->pf_resetFunc2)
-		BTMTK_ERR("%s: No Exported Func Found mtk_gpio_set_value", __func__);
-	else
-		BTMTK_INFO("%s: Found mtk_gpio_set_value", __func__);
-
-	bdev->pf_lowFunc = (set_gpio_low) btmtk_kallsyms_lookup_name("MDrv_GPIO_Set_Low");
-	bdev->pf_highFunc = (set_gpio_high) btmtk_kallsyms_lookup_name("MDrv_GPIO_Set_High");
-	if (!bdev->pf_lowFunc || !bdev->pf_highFunc)
-		BTMTK_WARN("%s: No Exported Func Found MDrv_GPIO_Set_Low or High", __func__);
-	else
-		BTMTK_INFO("%s: Found MDrv_GPIO_Set_Low & MDrv_GPIO_Set_High", __func__);
-
-	if (bdev->pf_pdwndFunc) {
-		BTMTK_INFO("%s: Invoke PDWNC_SetBTInResetState(%d)", __func__, 1);
-		bdev->pf_pdwndFunc(1);
-	} else
-		BTMTK_INFO("%s: No Exported Func Found PDWNC_SetBTInResetState", __func__);
-
-	if (bdev->pf_resetFunc2) {
-		rst_pin_num = bdev->bt_cfg.dongle_reset_gpio_pin;
-		BTMTK_INFO("%s: Invoke bdev->pf_resetFunc2(%d,%d)", __func__, rst_pin_num, 0);
-		bdev->pf_resetFunc2(rst_pin_num, 0);
-		mdelay(RESET_PIN_SET_LOW_TIME);
-		BTMTK_INFO("%s: Invoke bdev->pf_resetFunc2(%d,%d)", __func__, rst_pin_num, 1);
-		bdev->pf_resetFunc2(rst_pin_num, 1);
-		goto exit;
-	}
-
-	node = of_find_compatible_node(NULL, NULL, "mstar,gpio-wifi-ctl");
-	if (node) {
-		if (of_property_read_u32(node, "wifi-ctl-gpio", &rst_pin_num) == 0) {
-			if (bdev->pf_lowFunc && bdev->pf_highFunc) {
-				BTMTK_INFO("%s: Invoke bdev->pf_lowFunc(%d)", __func__, rst_pin_num);
-				bdev->pf_lowFunc(rst_pin_num);
-				mdelay(RESET_PIN_SET_LOW_TIME);
-				BTMTK_INFO("%s: Invoke bdev->pf_highFunc(%d)", __func__, rst_pin_num);
-				bdev->pf_highFunc(rst_pin_num);
-				goto exit;
-			}
-		} else
-			BTMTK_WARN("%s, failed to obtain wifi control gpio\n", __func__);
-	} else {
-		if (bdev->pf_lowFunc && bdev->pf_highFunc) {
-			rst_pin_num = bdev->bt_cfg.dongle_reset_gpio_pin;
-			BTMTK_INFO("%s: Invoke bdev->pf_lowFunc(%d)", __func__, rst_pin_num);
-			bdev->pf_lowFunc(rst_pin_num);
-			mdelay(RESET_PIN_SET_LOW_TIME);
-			BTMTK_INFO("%s: Invoke bdev->pf_highFunc(%d)", __func__, rst_pin_num);
-			bdev->pf_highFunc(rst_pin_num);
-			goto exit;
-		}
-	}
-
-	/* use linux kernel common api */
-	do {
-		struct device_node *node;
-		u32 mt76xx_reset_gpio = bdev->bt_cfg.dongle_reset_gpio_pin;
-
-		node = of_find_compatible_node(NULL, NULL, "mediatek,connectivity-combo");
-		if (node) {
-			mt76xx_reset_gpio = of_get_named_gpio(node, "mt76xx-reset-gpio", 0);
-			if (gpio_is_valid(mt76xx_reset_gpio))
-				BTMTK_INFO("%s: Get chip reset gpio(%d)", __func__, mt76xx_reset_gpio);
-			else
-				mt76xx_reset_gpio = bdev->bt_cfg.dongle_reset_gpio_pin;
-		}
-
-		BTMTK_INFO("%s: Invoke Low(%d)", __func__, mt76xx_reset_gpio);
-		gpio_direction_output(mt76xx_reset_gpio, 0);
-		mdelay(RESET_PIN_SET_LOW_TIME);
-		BTMTK_INFO("%s: Invoke High(%d)", __func__, mt76xx_reset_gpio);
-		gpio_direction_output(mt76xx_reset_gpio, 1);
-		goto exit;
-	} while (0);
-
-exit:
-	BTMTK_INFO("%s: end", __func__);
-}
-
 void btmtk_reset_waker(struct work_struct *work)
 {
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, reset_waker);
@@ -4278,28 +4237,28 @@ void btmtk_reset_waker(struct work_struct *work)
 		/* L0.5 reset failed, do whole chip reset */
 		/* We will add support dongle reset flag, reading from bt.cfg */
 		bdev->subsys_reset = 0;
-		btmtk_toggle_rst_pin(bdev);
+		btmtk_cif_toggle_rst_pin(bdev);
 		goto Finish;
 	}
 
 	/* It's a test code for stress test (whole chip reset & L0.5 reset) */
 #if 0
-	if (bdev->bt_cfg.dongle_reset_gpio_pin == 0) {
+	if (bdev->bt_cfg.support_dongle_reset == 0) {
 		err = btmtk_cif_subsys_reset(bdev);
 		if (err) {
 			/* L0.5 reset failed, do whole chip reset */
-			btmtk_toggle_rst_pin(bdev);
+			btmtk_cif_toggle_rst_pin(bdev);
 			goto Finish;
 		}
 	} else {
 		/* L0.5 reset failed, do whole chip reset */
-		btmtk_toggle_rst_pin(bdev);
+		btmtk_cif_toggle_rst_pin(bdev);
 		//btmtk_send_hw_err_to_host(bdev);
 		goto Finish;
 	}
 #endif
 
-	reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
+	main_info.reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 	bdev->subsys_reset = 0;
 	btmtk_cap_init(bdev);
 	err = btmtk_load_rom_patch(bdev);
@@ -4308,6 +4267,7 @@ void btmtk_reset_waker(struct work_struct *work)
 		goto Finish;
 	}
 	btmtk_send_hw_err_to_host(bdev);
+	btmtk_woble_wake_unlock(bdev);
 
 Finish:
 	/* Set End/Error state */
@@ -4429,8 +4389,8 @@ void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 	fstate = btmtk_fops_get_state(bdev);
 	if (fstate == BTMTK_FOPS_STATE_OPENED || fstate == BTMTK_FOPS_STATE_CLOSING) {
 		BTMTK_WARN("%s: fstate = %d , set reset_stack_flag", __func__, fstate);
-		if (reset_stack_flag == HW_ERR_NONE)
-			reset_stack_flag = HW_ERR_CODE_USB_DISC;
+		if (main_info.reset_stack_flag == HW_ERR_NONE)
+			main_info.reset_stack_flag = HW_ERR_CODE_USB_DISC;
 	}
 
 	bdev->chip_reset = 0;

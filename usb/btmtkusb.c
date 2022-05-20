@@ -1617,6 +1617,111 @@ static void btusb_waker(struct work_struct *work)
 
 	usb_autopm_put_interface(bdev->intf);
 }
+
+void btmtk_cif_toggle_rst_pin(struct btmtk_dev *bdev)
+{
+	struct device_node *node;
+	int rst_pin_num = 0;
+
+	if (!bdev) {
+		BTMTK_WARN("%s: bdev is NULL!", __func__);
+		return;
+	}
+	if (bdev->bt_cfg.dongle_reset_gpio_pin == -1) {
+		BTMTK_WARN("%s: bt driver is not ready, please don't call chip reset!", __func__);
+		return;
+	}
+
+	BTMTK_INFO("%s: begin", __func__);
+
+	bdev->chip_reset = 1;
+	/* Initialize the interface specific function pointers */
+	bdev->pf_pdwndFunc = (pdwnc_func) btmtk_kallsyms_lookup_name("PDWNC_SetBTInResetState");
+	if (bdev->pf_pdwndFunc)
+		BTMTK_INFO("%s: Found PDWNC_SetBTInResetState", __func__);
+	else
+		BTMTK_WARN("%s: No Exported Func Found PDWNC_SetBTInResetState", __func__);
+
+	bdev->pf_resetFunc2 = (reset_func_ptr2) btmtk_kallsyms_lookup_name("mtk_gpio_set_value");
+	if (!bdev->pf_resetFunc2)
+		BTMTK_ERR("%s: No Exported Func Found mtk_gpio_set_value", __func__);
+	else
+		BTMTK_INFO("%s: Found mtk_gpio_set_value", __func__);
+
+	bdev->pf_lowFunc = (set_gpio_low) btmtk_kallsyms_lookup_name("MDrv_GPIO_Set_Low");
+	bdev->pf_highFunc = (set_gpio_high) btmtk_kallsyms_lookup_name("MDrv_GPIO_Set_High");
+	if (!bdev->pf_lowFunc || !bdev->pf_highFunc)
+		BTMTK_WARN("%s: No Exported Func Found MDrv_GPIO_Set_Low or High", __func__);
+	else
+		BTMTK_INFO("%s: Found MDrv_GPIO_Set_Low & MDrv_GPIO_Set_High", __func__);
+
+	if (bdev->pf_pdwndFunc) {
+		BTMTK_INFO("%s: Invoke PDWNC_SetBTInResetState(%d)", __func__, 1);
+		bdev->pf_pdwndFunc(1);
+	} else
+		BTMTK_INFO("%s: No Exported Func Found PDWNC_SetBTInResetState", __func__);
+
+	if (bdev->pf_resetFunc2) {
+		rst_pin_num = bdev->bt_cfg.dongle_reset_gpio_pin;
+		BTMTK_INFO("%s: Invoke bdev->pf_resetFunc2(%d,%d)", __func__, rst_pin_num, 0);
+		bdev->pf_resetFunc2(rst_pin_num, 0);
+		mdelay(RESET_PIN_SET_LOW_TIME);
+		BTMTK_INFO("%s: Invoke bdev->pf_resetFunc2(%d,%d)", __func__, rst_pin_num, 1);
+		bdev->pf_resetFunc2(rst_pin_num, 1);
+		goto exit;
+	}
+
+	node = of_find_compatible_node(NULL, NULL, "mstar,gpio-wifi-ctl");
+	if (node) {
+		if (of_property_read_u32(node, "wifi-ctl-gpio", &rst_pin_num) == 0) {
+			if (bdev->pf_lowFunc && bdev->pf_highFunc) {
+				BTMTK_INFO("%s: Invoke bdev->pf_lowFunc(%d)", __func__, rst_pin_num);
+				bdev->pf_lowFunc(rst_pin_num);
+				mdelay(RESET_PIN_SET_LOW_TIME);
+				BTMTK_INFO("%s: Invoke bdev->pf_highFunc(%d)", __func__, rst_pin_num);
+				bdev->pf_highFunc(rst_pin_num);
+				goto exit;
+			}
+		} else
+			BTMTK_WARN("%s, failed to obtain wifi control gpio\n", __func__);
+	} else {
+		if (bdev->pf_lowFunc && bdev->pf_highFunc) {
+			rst_pin_num = bdev->bt_cfg.dongle_reset_gpio_pin;
+			BTMTK_INFO("%s: Invoke bdev->pf_lowFunc(%d)", __func__, rst_pin_num);
+			bdev->pf_lowFunc(rst_pin_num);
+			mdelay(RESET_PIN_SET_LOW_TIME);
+			BTMTK_INFO("%s: Invoke bdev->pf_highFunc(%d)", __func__, rst_pin_num);
+			bdev->pf_highFunc(rst_pin_num);
+			goto exit;
+		}
+	}
+
+	/* use linux kernel common api */
+	do {
+		struct device_node *node;
+		int mt76xx_reset_gpio = bdev->bt_cfg.dongle_reset_gpio_pin;
+
+		node = of_find_compatible_node(NULL, NULL, "mediatek,connectivity-combo");
+		if (node) {
+			mt76xx_reset_gpio = of_get_named_gpio(node, "mt76xx-reset-gpio", 0);
+			if (gpio_is_valid(mt76xx_reset_gpio))
+				BTMTK_INFO("%s: Get chip reset gpio(%d)", __func__, mt76xx_reset_gpio);
+			else
+				mt76xx_reset_gpio = bdev->bt_cfg.dongle_reset_gpio_pin;
+		}
+
+		BTMTK_INFO("%s: Invoke Low(%d)", __func__, mt76xx_reset_gpio);
+		gpio_direction_output(mt76xx_reset_gpio, 0);
+		mdelay(RESET_PIN_SET_LOW_TIME);
+		BTMTK_INFO("%s: Invoke High(%d)", __func__, mt76xx_reset_gpio);
+		gpio_direction_output(mt76xx_reset_gpio, 1);
+		goto exit;
+	} while (0);
+
+exit:
+	BTMTK_INFO("%s: end", __func__);
+}
+
 int btmtk_cif_subsys_reset(struct btmtk_dev *bdev)
 {
 	int val, retry = 10;
@@ -1878,6 +1983,7 @@ static int btusb_probe(struct usb_interface *intf,
 	}
 
 	btmtk_send_hw_err_to_host(bdev);
+	btmtk_woble_wake_unlock(bdev);
 
 	return 0;
 }
@@ -1960,7 +2066,7 @@ static int btusb_suspend(struct usb_interface *intf, pm_message_t message)
 
 	BTMTK_INFO("%s end, suspend_count = %d", __func__, bdev->suspend_count);
 
-	return 0;
+	return ret;
 }
 
 static int btusb_resume(struct usb_interface *intf)
@@ -2154,13 +2260,21 @@ static int btmtk_cif_suspend(struct usb_interface *intf, pm_message_t message)
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
+	int state = BTMTK_STATE_INIT;
 
 	BTMTK_INFO("%s, enter", __func__);
 	BTMTK_CIF_GET_DEV_PRIV(bdev, intf, ifnum_base);
 
-	if (BTMTK_IS_BT_0_INTF(ifnum_base) || BTMTK_IS_BT_1_INTF(ifnum_base)) {
-		/* Retrieve current HIF event state */
+	state = btmtk_get_chip_state(bdev);
+	/* Retrieve current HIF event state */
+	if (state == BTMTK_STATE_FW_DUMP) {
+		BTMTK_WARN("%s: FW dumping ongoing, don't dos suspend flow!!!", __func__);
+		cif_event = HIF_EVENT_FW_DUMP;
+	} else
 		cif_event = HIF_EVENT_SUSPEND;
+
+	if (BTMTK_IS_BT_0_INTF(ifnum_base) || BTMTK_IS_BT_1_INTF(ifnum_base)) {
+
 		if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
 			/* Error */
 			BTMTK_WARN("%s intf[%d] priv setting is NULL", __func__, ifnum_base);
