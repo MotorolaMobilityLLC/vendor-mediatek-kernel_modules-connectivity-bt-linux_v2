@@ -1349,7 +1349,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		if (skb->data[0] == 0x00 && skb->data[1] == 0x44) {
 			int isoc_pkt_len = 0;
 			skb_pull(skb, 4);
-			isoc_pkt_len = skb->data[2] + (skb->data[3] << 8);
+			isoc_pkt_len = skb->data[2] + (skb->data[3] << 8) + HCI_ISO_PKT_HEADER_SIZE;
 			if (bdev->iso_threshold) {
 				memset(skb_put(skb, bdev->iso_threshold - isoc_pkt_len), 0, bdev->iso_threshold - isoc_pkt_len);
 				BTMTK_INFO("%s: Ble iso pkt size is %d, isoc_pkt_len = %d", __func__, bdev->iso_threshold, isoc_pkt_len);
