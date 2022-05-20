@@ -390,6 +390,7 @@ struct hif_hook_ptr {
 
 struct btmtk_main_info {
 	u8 reset_stack_flag;
+	struct wakeup_source *fwdump_ws;
 	struct wakeup_source *woble_ws;
 	struct wakeup_source *eint_ws;
 	struct hif_hook_ptr hif_hook;
@@ -498,5 +499,6 @@ int btmtk_main_woble_initialize(struct btmtk_dev *bdev);
 int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus);
 
 int btmtk_cif_send_calibration(struct btmtk_dev *bdev);
+int btmtk_send_assert_cmd(struct btmtk_dev *bdev);
 
 #endif /* __BTMTK_MAIN_H__ */
