@@ -71,7 +71,7 @@ static int btmtk_uart_send_query_uart_cmd(struct hci_dev *hdev)
 	/* To-Do, for event check */
 	/* u8 event[] = { 0x04, 0xE4, 0x0a, 0x02, 0x04, 0x06, 0x00, 0x00, 0x02}; */
 
-	btmtk_main_send_cmd(hdev, cmd, sizeof(cmd), BTMTKUART_TX_WAIT_VND_EVT);
+	btmtk_main_send_cmd(hdev, cmd, sizeof(cmd), BTMTK_TX_WAIT_VND_EVT);
 	BTMTK_INFO("%s done", __func__);
 	return 0;
 }

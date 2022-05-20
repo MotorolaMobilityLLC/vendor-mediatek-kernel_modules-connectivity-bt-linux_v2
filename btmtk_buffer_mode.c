@@ -13,6 +13,7 @@
 
 #include "btmtk_define.h"
 #include "btmtk_main.h"
+#include "btmtk_buffer_mode.h"
 
 static struct btmtk_buffer_mode_struct btmtk_buffer_mode;
 

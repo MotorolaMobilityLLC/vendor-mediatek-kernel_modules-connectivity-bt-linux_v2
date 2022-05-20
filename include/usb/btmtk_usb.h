@@ -16,6 +16,7 @@
 #include <linux/usb.h>
 #include "btmtk_define.h"
 #include "btmtk_main.h"
+#include "btmtk_woble.h"
 
 #define HCI_MAX_COMMAND_SIZE	255
 #define URB_MAX_BUFFER_SIZE	(4*1024)
@@ -103,5 +104,6 @@ struct btmtk_usb_dev {
 	unsigned char	*urb_intr_buf;
 	unsigned char	*urb_bulk_buf;
 	unsigned char	*urb_ble_isoc_buf;
+	struct btmtk_woble	bt_woble;
 };
 #endif

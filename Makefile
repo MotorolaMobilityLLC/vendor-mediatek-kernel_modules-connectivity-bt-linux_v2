@@ -44,28 +44,28 @@ MTK_CHIP_IF := usb
 
 ifeq ($(MTK_CHIP_IF), sdio)
     MOD_NAME = btmtk_sdio_unify
-    CFILES := sdio/btmtksdio.c btmtk_buffer_mode.c
+    CFILES := sdio/btmtksdio.c btmtk_woble.c btmtk_buffer_mode.c btmtk_chip_reset.c
     ccflags-y += -DCHIP_IF_SDIO
     ccflags-y += -DSDIO_DEBUG=0
     ccflags-y += -I$(src)/include/sdio
 else ifeq ($(MTK_CHIP_IF), usb)
-    MOD_NAME = btmtk_usb
-    CFILES := usb/btmtkusb.c
+    MOD_NAME = btmtk_usb_unify
+    CFILES := usb/btmtkusb.c btmtk_woble.c btmtk_chip_reset.c
     ccflags-y += -DCHIP_IF_USB
     ccflags-y += -I$(src)/include/usb
 else ifeq ($(MTK_CHIP_IF), uart)
-    MOD_NAME = btmtk_uart
+    MOD_NAME = btmtk_uart_unify
     CFILES := uart/btmtk_uart_main.c
     ccflags-y += -DCHIP_IF_UART
     ccflags-y += -I$(src)/include/uart
 else
-    MOD_NAME = btmtkbtif
+    MOD_NAME = btmtkbtif_unify
     CFILES := btif/btmtk_btif.c
     ccflags-y += -DCHIP_IF_BTIF
     ccflags-y += -I$(src)/include/btif
 endif
 
-CFILES += btmtk_main.c
+CFILES += btmtk_main.c btmtk_fw_log.c
 
 ccflags-y += -I$(src)/include/ -I$(src)/
 
@@ -97,10 +97,15 @@ ccs:
 	./util/checkpatch.pl -f ./include/btmtk_chip_if.h
 	./util/checkpatch.pl -f ./include/btmtk_main.h
 	./util/checkpatch.pl -f ./include/btmtk_buffer_mode.h
+	./util/checkpatch.pl -f ./include/btmtk_fw_log.h
+	./util/checkpatch.pl -f ./include/btmtk_woble.h
 	./util/checkpatch.pl -f ./include/uart/btmtk_uart.h
 	./util/checkpatch.pl -f ./uart/btmtk_uart_main.c
 	./util/checkpatch.pl -f ./include/usb/btmtk_usb.h
 	./util/checkpatch.pl -f ./usb/btmtkusb.c
+	./util/checkpatch.pl -f btmtk_fw_log.c
 	./util/checkpatch.pl -f btmtk_main.c
 	./util/checkpatch.pl -f btmtk_buffer_mode.c
+	./util/checkpatch.pl -f btmtk_woble.c
+	./util/checkpatch.pl -f btmtk_chip_reset.c
 

@@ -76,6 +76,25 @@
 	#define UNUSED(x) (void)(x)
 #endif
 
+#ifndef ALIGN_4
+#define ALIGN_4(_value)             (((_value) + 3) & ~3u)
+#endif /* ALIGN_4 */
+
+#ifndef ALIGN_8
+#define ALIGN_8(_value)             (((_value) + 7) & ~7u)
+#endif /* ALIGN_4 */
+
+/* This macro check the DW alignment of the input value.
+ * _value - value of address need to check
+ */
+#ifndef IS_ALIGN_4
+#define IS_ALIGN_4(_value)          (((_value) & 0x3) ? FALSE : TRUE)
+#endif /* IS_ALIGN_4 */
+
+#ifndef IS_NOT_ALIGN_4
+#define IS_NOT_ALIGN_4(_value)      (((_value) & 0x3) ? TRUE : FALSE)
+#endif /* IS_NOT_ALIGN_4 */
+
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
@@ -93,6 +112,8 @@
 #define HCI_SNOOP_ENTRY_NUM	30
 #define HCI_SNOOP_BUF_SIZE	32
 #define HCI_SNOOP_MAX_BUF_SIZE	66
+#define WMT_OVER_HCI_HEADER_SIZE	3
+#define READ_ISO_PACKET_CMD_SIZE	4
 
 extern uint8_t btmtk_log_lvl;
 
@@ -106,33 +127,47 @@ extern uint8_t btmtk_log_lvl;
 	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) pr_warn("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__); } while (0)
 
 #define BTMTK_INFO_RAW(p, l, fmt, ...)						\
-	do {									\
-		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) {			\
-			int raw_count = 0;					\
-			char str[HCI_SNOOP_MAX_BUF_SIZE * 3 + 1];		\
-			char *p_str = str;								\
-			const unsigned char *ptr = p;				\
-			pr_cont("[btmtk_info] "fmt, ##__VA_ARGS__);		\
-			for (raw_count = 0; raw_count < MIN(l, HCI_SNOOP_MAX_BUF_SIZE); ++raw_count)	\
-				p_str += sprintf(p_str, " %02X", ptr[raw_count]);			\
-			*p_str = '\0';									\
-			pr_cont("%s\n", str);						\
-		}								\
+	do {	\
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) {	\
+			int cnt_ = 0;	\
+			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
+			uint8_t raw_buf[HCI_SNOOP_MAX_BUF_SIZE * 5 + 10];	\
+			const unsigned char *ptr = p;	\
+			for (cnt_ = 0; cnt_ < len_; ++cnt_) {	\
+				if (snprintf(raw_buf+5*cnt_, 6, "0x%02X ", ptr[cnt_]) < 0) {	\
+					pr_info("snprintf error\n");	\
+					break;	\
+				}	\
+			}	\
+			raw_buf[5*cnt_] = '\0';	\
+			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
+				pr_cont("[btmtk_info] "fmt"%s\n", ##__VA_ARGS__, raw_buf);	\
+			} else {	\
+				pr_cont("[btmtk_info] "fmt"%s (prtail)\n", ##__VA_ARGS__, raw_buf);	\
+			}	\
+		}	\
 	} while (0)
 
 #define BTMTK_DBG_RAW(p, l, fmt, ...)						\
-	do {									\
-		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {			\
-			int raw_count = 0;					\
-			char str[HCI_SNOOP_MAX_BUF_SIZE * 3 + 1];		\
-			char *p_str = str;								\
-			const unsigned char *ptr = p;				\
-			pr_cont("[btmtk_debug] "fmt, ##__VA_ARGS__);		\
-			for (raw_count = 0; raw_count < MIN(l, HCI_SNOOP_MAX_BUF_SIZE); ++raw_count)	\
-				p_str += sprintf(p_str, " %02X", ptr[raw_count]);			\
-			*p_str = '\0';									\
-			pr_cont("%s\n", str);						\
-		}								\
+	do {	\
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {	\
+			int cnt_ = 0;	\
+			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
+			uint8_t raw_buf[HCI_SNOOP_MAX_BUF_SIZE * 5 + 10];	\
+			const unsigned char *ptr = p;	\
+			for (cnt_ = 0; cnt_ < len_; ++cnt_) {	\
+				if (snprintf(raw_buf+5*cnt_, 6, "0x%02X ", ptr[cnt_]) < 0) {	\
+					pr_info("snprintf error\n");	\
+					break;	\
+				}	\
+			}	\
+			raw_buf[5*cnt_] = '\0';	\
+			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
+				pr_cont("[btmtk_debug] "fmt"%s\n", ##__VA_ARGS__, raw_buf);	\
+			} else {	\
+				pr_cont("[btmtk_debug] "fmt"%s (prtail)\n", ##__VA_ARGS__, raw_buf); \
+			}	\
+		}	\
 	} while (0)
 
 #define BTMTK_CIF_IS_NULL(bdev, cif_event) \
@@ -190,15 +225,10 @@ extern uint8_t btmtk_log_lvl;
 
 #define SECTION_SPEC_NUM	13
 
-/* Define for WoBLE */
 #define BD_ADDRESS_SIZE 6
-#define WOBLE_SETTING_COUNT 10
 #define PHASE1_WMT_CMD_COUNT 255
 #define VENDOR_CMD_COUNT 255
-#define WOBLE_SETTING_FILE_NAME_7663 "woble_setting_7663.bin"
-#define WOBLE_SETTING_FILE_NAME_7961 "woble_setting_7961.bin"
-#define WOBLE_EVENT_INTERVAL_TIMO	500
-#define WOBLE_COMP_EVENT_TIMO		5000
+
 
 #define BT_CFG_NAME "bt.cfg"
 #define BT_UNIFY_WOBLE "SUPPORT_UNIFY_WOBLE"

@@ -13,12 +13,10 @@
 #ifndef __BTMTK_MAIN_H__
 #define __BTMTK_MAIN_H__
 #include "btmtk_define.h"
-#include "btmtk_chip_if.h"
 
 #define DEFAULT_COUNTRY_TABLE_NAME "btPowerTable.dat"
 
-
-/* static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb); */
+//static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb);
 
 #define hci_dev_test_and_clear_flag(hdev, nr)  test_and_clear_bit((nr), (hdev)->dev_flags)
 
@@ -130,8 +128,6 @@
 /* total fwlog info len */
 #define FWLOG_PRSV_LEN		32
 
-/* bluetooth kpi */
-#define KPI_WITHOUT_TYPE	0
 #define COUNTRY_CODE_LEN	2
 
 
@@ -152,9 +148,6 @@
 #define BLE_MAX_R2	80
 
 #define ERR_PWR		-9999
-
-extern u8 wmt_over_hci_header[];
-#define WMT_OVER_HCI_HEADER_SIZE	3
 
 #define WAIT_POWERKEY_TIMEOUT 5000
 
@@ -291,14 +284,14 @@ enum TX_TYPE {
 	BTMTK_TX_PKT_FROM_HOST,	/* send pkt from host, include acl and hci */
 };
 
-/* Device node */
-#if CFG_SUPPORT_MULTI_DEV_NODE
-	#define BT_CHR_DEV	"BT_multi_chrdevfwlog"
-	#define BT_DEV_NODE	"stpbt_multi_fwlog"
-#else
-	#define BT_CHR_DEV	"BT_chrdevfwlog"
-	#define BT_DEV_NODE	"stpbtfwlog"
-#endif
+enum bt_state {
+	FUNC_OFF = 0,
+	TURNING_ON = 1,
+	PRE_ON_AFTER_CAL = 2,
+	FUNC_ON = 3,
+	RESET_START = 4,
+	RESET_END = 5
+};
 
 struct bt_power_setting {
 	int8_t EDR_Max;
@@ -310,17 +303,6 @@ struct bt_power_setting {
 	int8_t BLE_LR_S2;
 	int8_t BLE_LR_S8;
 	char country_code[COUNTRY_CODE_LEN + 1];
-};
-
-struct btmtk_fops_fwlog {
-	dev_t g_devIDfwlog;
-	struct cdev BT_cdevfwlog;
-	wait_queue_head_t fw_log_inq;
-	struct sk_buff_head fwlog_queue;
-	struct class *pBTClass;
-	struct device *pBTDevfwlog;
-	spinlock_t fwlog_lock;
-	u8 btmtk_bluetooth_kpi;
 };
 
 enum {
@@ -442,6 +424,16 @@ struct _Section_Map {
 	.lsize = 1, \
 	.maxlen = HCI_MAX_EVENT_SIZE
 
+/* yumin todo */
+// TODO: replace by kernel constant if kernel support new spec
+#define HCI_ISODATA_PKT		0x05
+#define HCI_ISO_HDR_SIZE	4
+#define H4_RECV_ISO \
+	.type = HCI_ISODATA_PKT, \
+	.hlen = HCI_ISO_HDR_SIZE, \
+	.loff = 2, \
+	.lsize = 2, \
+	.maxlen = HCI_MAX_FRAME_SIZE
 
 struct btmtk_dev {
 	struct hci_dev	*hdev;
@@ -497,44 +489,18 @@ struct btmtk_dev {
 	unsigned char	*io_buf;
 
 	unsigned char	*setting_file;
-	unsigned char	*woble_setting_file_name;
-	unsigned int	woble_setting_len;
-
-	struct fw_cfg_struct	woble_setting_apcf[WOBLE_SETTING_COUNT];
-	struct fw_cfg_struct	woble_setting_apcf_fill_mac[WOBLE_SETTING_COUNT];
-	struct fw_cfg_struct	woble_setting_apcf_fill_mac_location[WOBLE_SETTING_COUNT];
-
-	struct fw_cfg_struct	woble_setting_radio_off;
-	struct fw_cfg_struct	woble_setting_wakeup_type;
-	struct fw_cfg_struct	woble_setting_radio_off_status_event;
-	/* complete event */
-	struct fw_cfg_struct	woble_setting_radio_off_comp_event;
-
-	struct fw_cfg_struct	woble_setting_radio_on;
-	struct fw_cfg_struct	woble_setting_radio_on_status_event;
-	struct fw_cfg_struct	woble_setting_radio_on_comp_event;
-
-	/* set apcf after resume(radio on) */
-	struct fw_cfg_struct	woble_setting_apcf_resume[WOBLE_SETTING_COUNT];
 	unsigned char	bdaddr[BD_ADDRESS_SIZE];
-	unsigned int	woble_need_trigger_coredump;
-	unsigned int	woble_need_set_radio_off_in_probe;
 
 	unsigned char		*bt_cfg_file_name;
 	struct bt_cfg_struct	bt_cfg;
 
 	/* single sku */
 	unsigned char		*country_file_name;
-
-	/* Foe Woble eint */
-	unsigned int wobt_irq;
-	int wobt_irqlevel;
-	atomic_t irq_enable_count;
-	struct input_dev *WoBLEInputDev;
-
 	u8 opcode_usr[2];
 };
 
+typedef int (*cif_bt_init_ptr)(void);
+typedef void (*cif_bt_exit_ptr)(void);
 typedef int (*cif_open_ptr)(struct hci_dev *hdev);
 typedef int (*cif_close_ptr)(struct hci_dev *hdev);
 typedef int (*cif_reg_read_ptr)(struct btmtk_dev *bdev, u32 reg, u32 *val);
@@ -551,11 +517,19 @@ typedef int (*cif_whole_reset_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_chip_reset_notify_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_mutex_lock_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_mutex_unlock_ptr)(struct btmtk_dev *bdev);
+typedef int (*cif_flush_ptr)(struct btmtk_dev *bdev);
+typedef void (*cif_log_init_ptr)(void);
+typedef void (*cif_log_register_cb_ptr)(void (*func)(void));
+typedef ssize_t (*cif_log_read_to_user_ptr)(char __user *buf, size_t count);
+typedef unsigned int (*cif_log_get_buf_size_ptr)(void);
+typedef void (*cif_log_deinit_ptr)(void);
 typedef void (*cif_open_done_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_dl_dma_ptr)(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset);
 
 struct hif_hook_ptr {
+	cif_bt_init_ptr			init;
+	cif_bt_exit_ptr			exit;
 	cif_open_ptr			open;
 	cif_close_ptr			close;
 	cif_reg_read_ptr		reg_read;
@@ -568,17 +542,52 @@ struct hif_hook_ptr {
 	cif_chip_reset_notify_ptr	chip_reset_notify;
 	cif_mutex_lock_ptr		cif_mutex_lock;
 	cif_mutex_unlock_ptr		cif_mutex_unlock;
+	cif_flush_ptr				flush;
+	cif_log_init_ptr			log_init;
+	cif_log_register_cb_ptr		log_register_cb;
+	cif_log_read_to_user_ptr	log_read_to_user;
+	cif_log_get_buf_size_ptr	log_get_buf_size;
+	cif_log_deinit_ptr			log_deinit;
 	cif_open_done_ptr		open_done;
 	cif_dl_dma_ptr			dl_dma;
 };
 
 struct btmtk_main_info {
+	int whole_reset_flag;
 	u8 reset_stack_flag;
 	struct wakeup_source *fwdump_ws;
 	struct wakeup_source *woble_ws;
 	struct wakeup_source *eint_ws;
 	struct hif_hook_ptr hif_hook;
 	struct bt_power_setting PWS;
+	/* save Hci Snoop for debug*/
+	u8 hci_cmd_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
+	u8 hci_cmd_len[HCI_SNOOP_ENTRY_NUM];
+	u16 hci_cmd_actual_len[HCI_SNOOP_ENTRY_NUM];
+	unsigned int hci_cmd_timestamp[HCI_SNOOP_ENTRY_NUM];
+	u8 hci_cmd_index;
+
+	u8 hci_event_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
+	u8 hci_event_len[HCI_SNOOP_ENTRY_NUM];
+	u16 hci_event_actual_len[HCI_SNOOP_ENTRY_NUM];
+	unsigned int hci_event_timestamp[HCI_SNOOP_ENTRY_NUM];
+	u8 hci_event_index;
+
+	u8 hci_adv_event_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
+	u8 hci_adv_event_len[HCI_SNOOP_ENTRY_NUM];
+	u16 hci_adv_event_actual_len[HCI_SNOOP_ENTRY_NUM];
+	unsigned int hci_adv_event_timestamp[HCI_SNOOP_ENTRY_NUM];
+	u8 hci_adv_event_index;
+
+
+	u8 hci_acl_buf[HCI_SNOOP_ENTRY_NUM][HCI_SNOOP_MAX_BUF_SIZE];
+	u8 hci_acl_len[HCI_SNOOP_ENTRY_NUM];
+	u16 hci_acl_actual_len[HCI_SNOOP_ENTRY_NUM];
+	unsigned int hci_acl_timestamp[HCI_SNOOP_ENTRY_NUM];
+	u8 hci_acl_index;
+
+	u8 wmt_over_hci_header[WMT_OVER_HCI_HEADER_SIZE];
+	u8 read_iso_packet_size_cmd[READ_ISO_PACKET_CMD_SIZE];
 };
 
 static inline int is_mt7922(u32 chip_id)
@@ -605,59 +614,69 @@ static inline int is_mt7663(u32 chip_id)
 	return 0;
 }
 
-static inline int is_support_unify_woble(struct btmtk_dev *bdev)
+static inline int is_mt66xx(u32 chip_id)
 {
-	if (bdev->bt_cfg.support_unify_woble) {
-		if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id) || is_mt7663(bdev->chip_id))
-			return 1;
-		else
-			return 0;
-	} else {
-		return 0;
-	}
+	chip_id &= 0xFFFF;
+	if (chip_id == 0x6631 || chip_id == 0x6635)
+		return 1;
+	return 0;
 }
 
 unsigned char btmtk_get_chip_state(struct btmtk_dev *bdev);
 void btmtk_set_chip_state(struct btmtk_dev *bdev, unsigned char new_state);
+int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
+void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
 int btmtk_register_hci_device(struct btmtk_dev *bdev);
 int btmtk_deregister_hci_device(struct btmtk_dev *bdev);
 int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count);
 int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb);
+int btmtk_recv_iso(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_send_init_cmds(struct btmtk_dev *hdev);
 int btmtk_send_deinit_cmds(struct btmtk_dev *hdev);
-int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
-		const int cmd_len, const uint8_t *event, const int event_len, int delay,
-		int retry, int pkt_type);
 int btmtk_send_wmt_reset(struct btmtk_dev *hdev);
-int btmtk_woble_suspend(struct btmtk_dev *bdev);
-int btmtk_woble_resume(struct btmtk_dev *bdev);
-int btmtk_load_code_from_setting_files(char *setting_file_name,
-		struct device *dev, u32 *code_len, struct btmtk_dev *bdev);
-int btmtk_load_woble_setting(char *bin_name,
-		struct device *dev, u32 *code_len, struct btmtk_dev *bdev);
 int btmtk_load_rom_patch_766x(struct btmtk_dev *hdev);
 int btmtk_load_rom_patch(struct btmtk_dev *bdev);
 struct btmtk_dev *btmtk_get_dev(void);
 void btmtk_reset_waker(struct work_struct *work);
+int btmtk_cap_init(struct btmtk_dev *bdev);
 struct btmtk_main_info *btmtk_get_main_info(void);
+int btmtk_get_interface_num(void);
+int btmtk_reset_power_on(struct btmtk_dev *bdev);
+
 void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev);
 void btmtk_free_setting_file(struct btmtk_dev *bdev);
+
+unsigned char btmtk_fops_get_state(struct btmtk_dev *bdev);
+
 void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf);
 void btmtk_hci_snoop_save_event(u32 len, u8 *buf);
 void btmtk_hci_snoop_save_adv_event(u32 len, u8 *buf);
 void btmtk_hci_snoop_save_acl(u32 len, u8 *buf);
 void btmtk_hci_snoop_print(u32 len, const u8 *buf);
+void btmtk_hci_snoop_print_to_log(void);
 unsigned long btmtk_kallsyms_lookup_name(const char *name);
 void btmtk_do_gettimeofday(struct timeval *tv);
-void btmtk_woble_wake_unlock(struct btmtk_dev *bdev);
 void btmtk_reg_hif_hook(struct hif_hook_ptr *hook);
 int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus);
 void btmtk_main_cif_uninitialize(struct btmtk_dev *bdev, int hci_bus);
-int btmtk_main_woble_initialize(struct btmtk_dev *bdev);
 int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus);
+int btmtk_load_code_from_bin(u8 **image, char *bin_name,
+					 struct device *dev, u32 *code_len, u8 retry);
+int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
+		const int cmd_len, const uint8_t *event, const int event_len, int delay,
+		int retry, int pkt_type);
+int btmtk_load_code_from_setting_files(char *setting_file_name,
+			struct device *dev, u32 *code_len, struct btmtk_dev *bdev);
+int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_content,
+		int counter, u8 *searchcontent, enum fw_cfg_index_len index_length);
 int btmtk_send_assert_cmd(struct btmtk_dev *bdev);
+void btmtk_free_fw_cfg_struct(struct fw_cfg_struct *fw_cfg, int count);
+struct btmtk_dev **btmtk_get_pp_bdev(void);
+
+
+int32_t btmtk_set_sleep(struct hci_dev *hdev, u_int8_t need_wait);
+int32_t bgfsys_bt_patch_dl(void);
 int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value);
 void btmtk_set_country_code_from_wifi(char *code);
-
 #endif /* __BTMTK_MAIN_H__ */
