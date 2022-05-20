@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2022022301"
+#define VERSION "8.0.2022032302"
 #define SUBVER ":connac3_dev"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -225,6 +225,9 @@ extern uint8_t btmtk_log_lvl;
 #define SEC_MAP_NEED_SEND_SIZE	52
 #define PATCH_STATUS	7
 
+#define DOWNLOAD_BY_INDEX	0
+#define DOWNLOAD_BY_TYPE	1
+#define BT_BIN_TYP_NUM	6
 
 #define IO_BUF_SIZE		(HCI_MAX_EVENT_SIZE > 256 ? HCI_MAX_EVENT_SIZE : 256)
 #define EVENT_COMPARE_SIZE	64
@@ -375,8 +378,7 @@ struct debug_reg_struct {
 void btmtk_getUTCtime(struct bt_utc_struct *utc);
 #define DUMP_TIME_STAMP(__str) \
 	do { \
-		bt_utc_struct utc; \
-		u32 usec; \
+		struct bt_utc_struct utc; \
 		btmtk_getUTCtime(&utc); \
 		BTMTK_INFO("%s:%d, %s - DUMP_TIME_STAMP UTC: %d-%02d-%02d %02d:%02d:%02d.%06u", \
 			__func__, __LINE__, __str, \

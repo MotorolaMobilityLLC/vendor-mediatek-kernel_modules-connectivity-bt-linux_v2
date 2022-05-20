@@ -953,6 +953,16 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		atomic_set(&bmain_info->subsys_reset_conti_count, 0);
 	}
 
+	/* dynamic download for connac3 */
+	if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
+			skb->data[0] == 0x0E && skb->data[1] == 0x04 &&
+			skb->data[2] == 0x01 && skb->data[3] == 0x01 &&
+			skb->data[4] == 0xFE) {
+		BTMTK_INFO_RAW(skb->data, skb->len, "%s: Get dynamic DL EVENT- ", __func__);
+		btmtk_dynamic_load_rom_patch(bdev, skb->data[5]);
+		return 1; /* 1 : not to host */
+	}
+
 	/* filter event from usr cmd */
 	if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
 			skb->data[0] == 0x0E) {
