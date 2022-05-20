@@ -1569,8 +1569,8 @@ static int btmtk_check_need_load_rom_patch(struct btmtk_dev *bdev)
 		return ret;
 	}
 
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 20,
-			0, BTMTK_TX_CMD_FROM_DRV);
+	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), DELAY_TIMES,
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 	/* can't get correct event */
 	if (ret < 0)
 		return PATCH_ERR;
@@ -1737,7 +1737,7 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 		BTMTK_INFO_RAW(cmd, cmd_len, "%s: CMD:", __func__);
 
 		ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
-				event, event_len, 20, 0, BTMTK_TX_CMD_FROM_DRV);
+				event, event_len, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 		if (ret < 0) {
 			BTMTK_ERR("%s: send wmd dl cmd failed, terminate!", __func__);
 			return PATCH_ERR;
@@ -1754,7 +1754,7 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 		cmd[7] = 0x00; /* palyload length */
 		cmd[8] = 0x03; /* which is the FW download state 3: finished */
 		ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
-				event, event_len, 0, 0, BTMTK_TX_CMD_FROM_DRV);
+				event, event_len, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 		if (ret < 0)
 			BTMTK_ERR("%s: send wmd dl cmd failed, terminate!", __func__);
 	} else
@@ -2418,8 +2418,8 @@ int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *bdev)
 		return ret;
 	}
 
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 100,
-			20, BTMTK_TX_CMD_FROM_DRV);
+	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), WMT_DELAY_TIMES,
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 	if (ret < 0) {
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 		bdev->power_state = BTMTK_DONGLE_STATE_ERROR;
@@ -2462,8 +2462,8 @@ int btmtk_send_wmt_power_off_cmd(struct btmtk_dev *bdev)
 		return 0;
 	}
 
-	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), 20,
-			20, BTMTK_TX_CMD_FROM_DRV);
+	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), DELAY_TIMES,
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 	if (ret < 0) {
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 		bdev->power_state = BTMTK_DONGLE_STATE_ERROR;
@@ -2501,7 +2501,7 @@ int btmtk_picus_enable(struct btmtk_dev *bdev)
 
 	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		ret = btmtk_main_send_cmd(bdev, enable_cmd, enable_len,
-			enable_event, sizeof(enable_event), 10, 10,
+			enable_event, sizeof(enable_event), DELAY_TIMES, RETRY_TIMES,
 			BTMTK_TX_PKT_FROM_HOST);
 	else
 		BTMTK_WARN("%s: not support for 0x%x", __func__, bdev->chip_id);
@@ -2521,7 +2521,7 @@ int btmtk_picus_disable(struct btmtk_dev *bdev)
 
 	if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		ret = btmtk_main_send_cmd(bdev, dft_disable_cmd, sizeof(dft_disable_cmd),
-			dft_disable_event, sizeof(dft_disable_event), 10, 10,
+			dft_disable_event, sizeof(dft_disable_event), DELAY_TIMES, RETRY_TIMES,
 			BTMTK_TX_PKT_FROM_HOST);
 	else
 		BTMTK_WARN("%s: not support for 0x%x", __func__, bdev->chip_id);

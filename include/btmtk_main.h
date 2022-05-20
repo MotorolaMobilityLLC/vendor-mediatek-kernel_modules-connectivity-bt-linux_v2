@@ -77,6 +77,11 @@
 #define PATCH_DOWNLOAD_PHASE3_DELAY_TIME 20
 #define PATCH_DOWNLOAD_PHASE3_RETRY 20
 
+/* * delay and retrey for main_send_cmd */
+#define WMT_DELAY_TIMES 100
+#define DELAY_TIMES 20
+#define RETRY_TIMES 20
+
 /* Expected minimum supported interface */
 #define BT_MCU_MINIMUM_INTERFACE_NUM	4
 

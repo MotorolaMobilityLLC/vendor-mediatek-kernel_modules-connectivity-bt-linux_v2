@@ -87,7 +87,6 @@ typedef int (*set_gpio_high)(u8 gpio);
 /**
  * Send cmd dispatch evt
  */
-#define RETRY_TIMES 10
 #define HCI_EV_VENDOR			0xff
 #define SDIO_BLOCK_SIZE                 512
 #define SDIO_RW_RETRY_COUNT 500
