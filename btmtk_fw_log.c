@@ -237,6 +237,7 @@ int btmtk_fops_initfwlog(void)
 	} else {
 		spin_lock_init(&g_fwlog->fwlog_lock);
 		skb_queue_head_init(&g_fwlog->fwlog_queue);
+		skb_queue_head_init(&g_fwlog->usr_opcode_queue);//opcode
 		init_waitqueue_head(&(g_fwlog->fw_log_inq));
 	}
 
@@ -339,6 +340,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	int hci_idx = 0;
 	int vlen = 0, index = 3;
 	struct sk_buff *skb = NULL;
+	struct sk_buff *skb_opcode = NULL;
 	int state = BTMTK_STATE_INIT;
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	u8 *i_fwlog_buf = NULL;
@@ -559,8 +561,15 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 #if defined(DRV_RETURN_SPECIFIC_HCE_ONLY) && (DRV_RETURN_SPECIFIC_HCE_ONLY == 1)
 		// 0xFC26 is get link & profile information command.
 		if (*(uint16_t *)(o_fwlog_buf + 1) != 0xFC26) {
-			pp_bdev[hci_idx]->opcode_usr[0] = o_fwlog_buf[1];
-			pp_bdev[hci_idx]->opcode_usr[1] = o_fwlog_buf[2];
+			skb_opcode = alloc_skb(len + FWLOG_PRSV_LEN, GFP_ATOMIC);
+			if (!skb_opcode) {
+				BTMTK_ERR("%s allocate skb failed!!", __func__);
+				ret = -ENOMEM;
+				goto exit;
+			}
+			memcpy(skb_opcode->data, (o_fwlog_buf + 1), 2);
+			skb_queue_tail(&g_fwlog->usr_opcode_queue, skb_opcode);
+			BTMTK_INFO("opcode is %02x,%02x", skb_opcode->data[0], skb_opcode->data[1]);
 		}
 #endif
 	}
@@ -616,6 +625,8 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 free_skb:
 	kfree_skb(skb);
 	skb = NULL;
+	/* clean opcode queue if bt is disable */
+	skb_queue_purge(&g_fwlog->usr_opcode_queue);
 exit:
 	kfree(i_fwlog_buf);
 	kfree(o_fwlog_buf);
@@ -825,6 +836,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 	int state = BTMTK_STATE_INIT;
 	u8 hci_reset_event[HCI_RESET_EVT_LEN] = { 0x04, 0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00 };
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	struct sk_buff *skb_opcode = NULL;
 
 	if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 			skb->data[0] == 0x6f &&
@@ -910,21 +922,33 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		}
 		return 1;
 	} else if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
-			skb->data[0] == 0x0E &&
-			bdev->opcode_usr[0] == skb->data[3] &&
-			bdev->opcode_usr[1] == skb->data[4]) {
-		BTMTK_INFO_RAW(skb->data, skb->len, "%s: Discard event from user hci command - ", __func__);
-		bdev->opcode_usr[0] = 0;
-		bdev->opcode_usr[1] = 0;
-
-#if defined(DRV_RETURN_SPECIFIC_HCE_ONLY) && (DRV_RETURN_SPECIFIC_HCE_ONLY == 0)
-		// should return to upper layer tool
-		if (btmtk_skb_enq_fwlog(bdev, skb->data, skb->len, FWLOG_TYPE,
-					&g_fwlog->fwlog_queue) == 0) {
-			wake_up_interruptible(&g_fwlog->fw_log_inq);
+					skb->data[0] == 0x0E) {
+		if (skb_queue_len(&g_fwlog->usr_opcode_queue)) {
+			BTMTK_INFO("%s: opcode queue len is %d", __func__,
+					skb_queue_len(&g_fwlog->usr_opcode_queue));
+			skb_opcode= skb_dequeue(&g_fwlog->usr_opcode_queue);
 		}
+
+		if (skb_opcode == NULL)
+			return 0;
+
+		if (skb_opcode->data[0] == skb->data[3] &&
+					skb_opcode->data[1] == skb->data[4]) {
+			BTMTK_INFO_RAW(skb->data, skb->len, "%s: Discard event from user hci command - ", __func__);
+#if defined(DRV_RETURN_SPECIFIC_HCE_ONLY) && (DRV_RETURN_SPECIFIC_HCE_ONLY == 0)
+			// should return to upper layer tool
+			if (btmtk_skb_enq_fwlog(bdev, skb->data, skb->len, FWLOG_TYPE,
+						&g_fwlog->fwlog_queue) == 0) {
+				wake_up_interruptible(&g_fwlog->fw_log_inq);
+			}
+			kfree_skb(skb_opcode);
 #endif
-		return 1;
+			return 1;
+		} else {
+			BTMTK_INFO("%s: check opcode fail!", __func__);
+			skb_queue_head(&g_fwlog->usr_opcode_queue, skb_opcode);
+			return 0;
+		}
 	} else if (memcmp(skb->data, &hci_reset_event[1], HCI_RESET_EVT_LEN - 1) == 0) {
 		BTMTK_INFO("%s: Get RESET_EVENT", __func__);
 		bdev->get_hci_reset = 1;
