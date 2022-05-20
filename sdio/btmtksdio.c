@@ -401,11 +401,11 @@ static int btmtk_sdio_set_fw_own(struct btmtk_sdio_dev *cif_dev, int retry)
 
 	BTMTK_DBG("%s", __func__);
 
+	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_INIT);
 	if (cif_dev->no_fw_own)
 		return 0;
 
 	SDIO_OWN_MUTEX_LOCK();
-	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_CANCEL);
 
 	/* For CHLPCR, bit 8 could help us to check driver own or fw own
 	 * 0: COM driver doesn't have ownership
@@ -517,20 +517,29 @@ static void btmtk_fw_own_timer(struct timer_list *timer)
 }
 #endif
 
+static void btmtk_sdio_update_fw_own_timer(struct btmtk_sdio_dev *cif_dev)
+{
+	BTMTK_DBG("%s: update fw own timer", __func__);
+	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_INIT);
+	mod_timer(&cif_dev->fw_own_timer, jiffies + msecs_to_jiffies(FW_OWN_TIMEOUT));
+}
+
 static void btmtk_sdio_create_fw_own_timer(struct btmtk_sdio_dev *cif_dev)
 {
-	if (atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_CANCEL) {
-		BTMTK_DBG("%s: create fw own timer", __func__);
-		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_INIT);
 #if (KERNEL_VERSION(4, 15, 0) > LINUX_VERSION_CODE)
-		init_timer(&cif_dev->fw_own_timer);
-		cif_dev->fw_own_timer.function = btmtk_fw_own_timer;
-		cif_dev->fw_own_timer.data = (unsigned long)cif_dev;
+	init_timer(&cif_dev->fw_own_timer);
+	cif_dev->fw_own_timer.function = btmtk_fw_own_timer;
+	cif_dev->fw_own_timer.data = (unsigned long)cif_dev;
 #else
-		timer_setup(&cif_dev->fw_own_timer, btmtk_fw_own_timer, 0);
+	timer_setup(&cif_dev->fw_own_timer, btmtk_fw_own_timer, 0);
 #endif
-	}
-	mod_timer(&cif_dev->fw_own_timer, jiffies + FW_OWN_TIMEOUT * HZ / 1000);
+	BTMTK_INFO("%s end", __func__);
+}
+
+static void btmtk_sdio_delete_fw_own_timer(struct btmtk_sdio_dev *cif_dev)
+{
+	del_timer_sync(&cif_dev->fw_own_timer);
+	BTMTK_INFO("%s end", __func__);
 }
 
 static int btmtk_sdio_set_driver_own(struct btmtk_sdio_dev *cif_dev, int retry)
@@ -549,7 +558,7 @@ static int btmtk_sdio_set_driver_own(struct btmtk_sdio_dev *cif_dev, int retry)
 	BTMTK_DBG("%s", __func__);
 
 	if (cif_dev->no_fw_own == 0)
-		btmtk_sdio_create_fw_own_timer(cif_dev);
+		btmtk_sdio_update_fw_own_timer(cif_dev);
 
 	SDIO_OWN_MUTEX_LOCK();
 	/* For CHLPCR, bit 8 could help us to check driver own or fw own
@@ -837,7 +846,7 @@ unlock:
 
 static int btmtk_sdio_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 {
-	int ret;
+	int ret = 0;
 	u8 cmd[READ_REGISTER_CMD_LEN] = {0x01, 0x6F, 0xFC, 0x0C,
 				0x01, 0x08, 0x08, 0x00,
 				0x02, 0x01, 0x00, 0x01,
@@ -867,7 +876,7 @@ static int btmtk_sdio_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 
 	BTMTK_INFO("%s: reg=%x, value=0x%08x", __func__, reg, *val);
 
-	return 0;
+	return ret;
 }
 
 static int btmtk_sdio_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
@@ -1368,6 +1377,15 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 		}
 	}
 
+	/* error handle*/
+	if (!atomic_read(&cif_dev->sdio_thread.thread_status)) {
+		BTMTK_WARN("%s main thread already stopped, don't send cmd anymore!!", __func__);
+		ret = -1;
+		kfree_skb(skb);
+		skb = NULL;
+		goto exit;
+	}
+
 	if (skb->data[0] == MTK_HCI_ACLDATA_PKT && skb->data[1] == 0x00 && skb->data[2] == 0x44) {
 		/* it's for ble iso, remove speicific header
 		 * 02 00 44 len len + payload to 05 + payload
@@ -1555,6 +1573,9 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 {
 	unsigned long comp_event_timo = 0, start_time = 0;
 	int ret = -1;
+	struct btmtk_sdio_dev *cif_dev = NULL;
+
+	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
 	if (event) {
 		if (event_len > EVENT_COMPARE_SIZE) {
@@ -1583,7 +1604,7 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 	ret = btmtk_sdio_send_cmd(bdev, skb, delay, retry, pkt_type);
 	if (ret < 0) {
 		BTMTK_ERR("%s btmtk_sdio_send_cmd failed!!", __func__);
-		goto fw_assert;
+		goto exit;
 	}
 
 	do {
@@ -1592,8 +1613,23 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 			ret = 0;
 			break;
 		}
+
+		/* error handle*/
+		if (!atomic_read(&cif_dev->sdio_thread.thread_status)) {
+			BTMTK_WARN("%s main thread already stopped, don't wait evt anymore!!", __func__);
+			ret = -1;
+			goto exit;
+		}
+
 		usleep_range(10, 100);
 	} while (time_before(jiffies, comp_event_timo));
+
+	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
+		atomic_read(&cif_dev->sdio_thread.thread_status)) {
+		BTMTK_ERR("%s wait expect event timeout!!", __func__);
+		ret = -1;
+		goto fw_assert;
+	}
 
 	event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
 	goto exit;
@@ -1862,154 +1898,6 @@ static int btmtk_sdio_set_write_clear(struct btmtk_sdio_dev *cif_dev)
 	return ret;
 }
 
-static int btmtk_sdio_poll_subsys_done(struct btmtk_sdio_dev *cif_dev)
-{
-	u32 u32ReadCRValue = 0;
-	int retry = 100;
-
-/*	btmtk_sdio_writel(0x30, 0xFD, cif_dev->func);
- *	BTMTK_INFO("%s write 0x30 = 0xFD, retry = %d", __func__, retry);
- */
-	while (retry-- > 0) {
-/*		btmtk_sdio_readl(0x2c, &u32ReadCRValue, cif_dev->func);
- *		BTMTK_INFO("%s read 0x2c = 0x%08X, retry = %d", __func__, u32ReadCRValue, retry);
- *		btmtk_sdio_readl(CHLPCR, &u32ReadCRValue, cif_dev->func);
- *		BTMTK_INFO("%s read CHLPCR 0x%08X, retry = %d", __func__, u32ReadCRValue, retry);
- *		btmtk_sdio_readl(SWPCDBGR, &u32ReadCRValue, cif_dev->func);
- *		BTMTK_INFO("%s read SWPCDBGR 0x%08X, retry = %d", __func__, u32ReadCRValue, retry);
- */
-		btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
-		BTMTK_INFO("%s read CHCR 0x%08X, retry = %d", __func__, u32ReadCRValue, retry);
-		if (u32ReadCRValue & (0x1 << 8))
-			return 0;
-		msleep(20);
-	}
-
-	return -1;
-}
-
-static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
-{
-	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
-	u32 u32ReadCRValue = 0;
-	int retry = RETRY_TIMES;
-	u32 ret = 0;
-
-	do {
-		/* After WDT, CHLPCR maybe can't show driver/fw own status
-		 * BT SW should check PD2HRM0R bit 0
-		 * 1: Driver own. 0: FW own
-		 */
-		btmtk_sdio_keep_driver_own(cif_dev, 1);
-		ret = btmtk_sdio_readl(PD2HRM0R, &u32ReadCRValue, cif_dev->func);
-		msleep(DELAY_TIMES);
-		retry--;
-	} while (((u32ReadCRValue & PD2HRM0R_DRIVER_OWN) != PD2HRM0R_DRIVER_OWN)
-			&& retry > 0);
-
-	BTMTK_INFO("%s read PD2HRM0R 0x%08X", __func__, u32ReadCRValue);
-	cif_dev->patched = 0;
-
-	btmtk_sdio_set_wifi_driver_own(1);
-
-	/* write CHCR[3] 0 */
-	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
-	BTMTK_INFO("%s read CHCR 0x%08X", __func__, u32ReadCRValue);
-	u32ReadCRValue &= 0xFFFFFFF7;
-	BTMTK_INFO("%s write CHCR 0x%08X", __func__, u32ReadCRValue);
-	btmtk_sdio_writel(CHCR, u32ReadCRValue, cif_dev->func);
-
-	/* write CHCR[3] to 1 */
-	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
-	BTMTK_INFO("%s read CHCR 0x%08X", __func__, u32ReadCRValue);
-	u32ReadCRValue |= 0x00000008;
-	BTMTK_INFO("%s write CHCR 0x%08X", __func__, u32ReadCRValue);
-	btmtk_sdio_writel(CHCR, u32ReadCRValue, cif_dev->func);
-
-	/* write CHCR[5] to 0 */
-	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
-	BTMTK_INFO("%s read CHCR 0x%08X", __func__, u32ReadCRValue);
-	u32ReadCRValue &= 0xFFFFFFDF;
-	BTMTK_INFO("%s write CHCR 0x%08X", __func__, u32ReadCRValue);
-	btmtk_sdio_writel(CHCR, u32ReadCRValue, cif_dev->func);
-
-	/* write CHCR[5] to 1 */
-	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
-	BTMTK_INFO("%s read CHCR 0x%08X", __func__, u32ReadCRValue);
-	u32ReadCRValue |= 0x00000020;
-	BTMTK_INFO("%s write CHCR 0x%08X", __func__, u32ReadCRValue);
-	btmtk_sdio_writel(CHCR, u32ReadCRValue, cif_dev->func);
-
-	/* Poll subsys reset done */
-	if (btmtk_sdio_poll_subsys_done(cif_dev))
-		return -EIO;
-
-	/* Do-init cr */
-	/* Disable the interrupts on the card */
-	btmtk_sdio_enable_host_int(cif_dev);
-	BTMTK_DBG("call btmtk_sdio_enable_host_int done");
-
-	/* Set interrupt output */
-	ret = btmtk_sdio_writel(CHIER, FIRMWARE_INT_BIT31 | FIRMWARE_INT|TX_FIFO_OVERFLOW |
-			FW_INT_IND_INDICATOR | TX_COMPLETE_COUNT |
-			TX_UNDER_THOLD | TX_EMPTY | RX_DONE, cif_dev->func);
-	if (ret) {
-		BTMTK_ERR("Set interrupt output fail(%d)", ret);
-		ret = -EIO;
-		return ret;
-	}
-
-	/* Enable interrupt output */
-	ret = btmtk_sdio_writel(CHLPCR, C_FW_INT_EN_SET, cif_dev->func);
-	if (ret) {
-		BTMTK_ERR("enable interrupt output fail(%d)", ret);
-		ret = -EIO;
-		return ret;
-	}
-
-	/* Adopt write clear method */
-	btmtk_sdio_set_write_clear(cif_dev);
-
-	ret = btmtk_sdio_readl(0, &u32ReadCRValue, cif_dev->func);
-	BTMTK_INFO("%s read chipid =  %x", __func__, u32ReadCRValue);
-
-	return ret;
-}
-
-static int btmtk_sdio_whole_reset(struct btmtk_dev *bdev)
-{
-	int ret = -1;
-	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
-	struct mmc_card *card = cif_dev->func->card;
-	struct mmc_host *host = NULL;
-
-	if ((card == NULL) || (card->host  == NULL)) {
-		BTMTK_ERR("mmc structs are NULL");
-		return ret;
-	}
-
-	host = card->host;
-	if (host->rescan_entered != 0) {
-		host->rescan_entered = 0;
-		BTMTK_INFO("set mmc_host rescan to 0");
-	}
-	cif_dev->patched = 0;
-
-	BTMTK_INFO("mmc_remove_host");
-	mmc_remove_host(host);
-
-	/* Replace hooked SDIO driver probe to new API;
-	 * 1. It will be new kthread(state) after mmc_add_host;
-	 * 2. Extend flexibility to notify us that HW reset was triggered,
-	 * more flexiable on reviving in exchanging old/new kthread(state).
-	 */
-	BTMTK_INFO("mmc_add_host");
-	ret = mmc_add_host(host);
-
-	BTMTK_INFO("mmc_add_host return %d", ret);
-	return ret;
-}
-
 /* bt_tx_wait_for_msg
  *
  *    Check needing action of current bt status to wake up bt thread
@@ -2147,8 +2035,9 @@ static int btmtk_sdio_main_thread(void *data)
 
 	sched_setscheduler(current, SCHED_RR, &param);
 
-	BTMTK_INFO("btmtk_sdio_main_thread start running...");
 	atomic_set(&cif_dev->sdio_thread.thread_status, 1);
+	BTMTK_INFO("thread_status = %d, btmtk_sdio_main_thread start running...",
+		atomic_read(&cif_dev->sdio_thread.thread_status));
 
 	for (;;) {
 		wait_event_interruptible(cif_dev->sdio_thread.wait_q,
@@ -2165,7 +2054,7 @@ static int btmtk_sdio_main_thread(void *data)
 				BTMTK_ERR("set fw own return fail");
 				bdev->debug_type = DEBUG_SOP_SLEEP;
 				btmtk_reset_trigger(bdev);
-				continue;
+				break;
 			}
 		}
 
@@ -2175,7 +2064,7 @@ static int btmtk_sdio_main_thread(void *data)
 				BTMTK_ERR("set driver own return fail");
 				bdev->debug_type = DEBUG_SOP_WAKEUP;
 				btmtk_reset_trigger(bdev);
-				continue;
+				break;
 			}
 		}
 
@@ -2185,7 +2074,7 @@ static int btmtk_sdio_main_thread(void *data)
 			atomic_set(&cif_dev->int_count, 0);
 			if (btmtk_sdio_interrupt_process(bdev)) {
 				btmtk_reset_trigger(bdev);
-				continue;
+				break;
 			}
 		} else {
 			BTMTK_DBG("go tx");
@@ -2200,7 +2089,7 @@ static int btmtk_sdio_main_thread(void *data)
 				if (ret) {
 					BTMTK_ERR("tx pkt return fail %d", ret);
 					btmtk_reset_trigger(bdev);
-					continue;
+					break;
 				}
 			}
 		}
@@ -2209,6 +2098,22 @@ static int btmtk_sdio_main_thread(void *data)
 	atomic_set(&cif_dev->sdio_thread.thread_status, 0);
 	BTMTK_WARN("end");
 	return 0;
+}
+
+static void btmtk_sdio_stop_main_thread(struct btmtk_sdio_dev *cif_dev)
+{
+	skb_queue_purge(&cif_dev->tx_queue);
+	if (!IS_ERR(cif_dev->sdio_thread.task) && atomic_read(&cif_dev->sdio_thread.thread_status)) {
+		kthread_stop(cif_dev->sdio_thread.task);
+		wake_up_interruptible(&cif_dev->sdio_thread.wait_q);
+
+		while (atomic_read(&cif_dev->sdio_thread.thread_status)) {
+			BTMTK_INFO("wait btmtk_sdio_main_thread stop");
+			msleep(100);
+		}
+
+		BTMTK_INFO("btmtk_sdio_main_thread stop success!");
+	}
 }
 
 static int btmtk_sdio_probe(struct sdio_func *func,
@@ -2298,22 +2203,27 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 
 	err = btmtk_main_cif_initialize(bdev, HCI_SDIO);
 	if (err < 0) {
-		BTMTK_ERR("[ERR] btmtk_main_cif_initialize failed!");
-		goto free_mem;
+		if (err == -EIO) {
+			BTMTK_ERR("[ERR] btmtk_main_cif_initialize failed, do chip reset!!!");
+			goto exit;
+		} else {
+			BTMTK_ERR("[ERR] btmtk_main_cif_initialize failed!");
+			goto free_mem;
+		}
 	}
 
 	err = btmtk_load_rom_patch(bdev);
 	if (err < 0) {
-		BTMTK_ERR("btmtk load rom patch failed!");
-		goto deinit;
+		BTMTK_ERR("btmtk load rom patch failed, do chip reset!!!");
+		goto exit;
 	}
 
 	cif_dev->patched = 1;
 
 	err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
 	if (err < 0) {
-		BTMTK_ERR("btmtk_woble_initialize failed!");
-		goto deinit;
+		BTMTK_ERR("btmtk_main_woble_initialize failed, do chip reset!!!");
+		goto exit;
 	}
 
 	btmtk_buffer_mode_initialize(bdev, &cif_dev->buffer_mode);
@@ -2330,37 +2240,20 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 
 free_setting:
 	btmtk_woble_uninitialize(&cif_dev->bt_woble);
-deinit:
 	btmtk_main_cif_uninitialize(bdev, HCI_SDIO);
 free_mem:
 	btmtk_cif_free_memory(cif_dev);
 free_thread:
-	kthread_stop(cif_dev->sdio_thread.task);
-	wake_up_interruptible(&cif_dev->sdio_thread.wait_q);
-	BTMTK_INFO("wake_up_interruptible main_thread done");
+	btmtk_sdio_stop_main_thread(cif_dev);
 unreg_sdio:
 	btmtk_sdio_unregister_dev(cif_dev);
 end:
 	BTMTK_INFO("%s normal end, ret = %d", __func__, err);
 	btmtk_sdio_keep_driver_own(cif_dev, 0);
+	btmtk_woble_wake_unlock(bdev);
 
+exit:
 	return 0;
-}
-
-static void btmtk_sdio_stop_main_thread(struct btmtk_sdio_dev *cif_dev)
-{
-	skb_queue_purge(&cif_dev->tx_queue);
-	if (!IS_ERR(cif_dev->sdio_thread.task)) {
-		kthread_stop(cif_dev->sdio_thread.task);
-		wake_up_interruptible(&cif_dev->sdio_thread.wait_q);
-
-		while (atomic_read(&cif_dev->sdio_thread.thread_status)) {
-			BTMTK_INFO("wait btmtk_sdio_main_thread stop");
-			msleep(100);
-		}
-
-		BTMTK_INFO("btmtk_sdio_main_thread stop success!");
-	}
 }
 
 static void btmtk_sdio_disconnect(struct sdio_func *func)
@@ -2628,6 +2521,181 @@ static int btmtk_cif_resume(struct device *dev)
 }
 #endif	/* CONFIG_PM */
 
+static int btmtk_sdio_poll_subsys_done(struct btmtk_sdio_dev *cif_dev)
+{
+	u32 u32ReadCRValue = 0;
+	int retry = 100;
+
+/*	btmtk_sdio_writel(0x30, 0xFD, cif_dev->func);
+ *	BTMTK_INFO("%s write 0x30 = 0xFD, retry = %d", __func__, retry);
+ */
+	while (retry-- > 0) {
+/*		btmtk_sdio_readl(0x2c, &u32ReadCRValue, cif_dev->func);
+ *		BTMTK_INFO("%s read 0x2c = 0x%08X, retry = %d", __func__, u32ReadCRValue, retry);
+ *		btmtk_sdio_readl(CHLPCR, &u32ReadCRValue, cif_dev->func);
+ *		BTMTK_INFO("%s read CHLPCR 0x%08X, retry = %d", __func__, u32ReadCRValue, retry);
+ *		btmtk_sdio_readl(SWPCDBGR, &u32ReadCRValue, cif_dev->func);
+ *		BTMTK_INFO("%s read SWPCDBGR 0x%08X, retry = %d", __func__, u32ReadCRValue, retry);
+ */
+		btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
+		BTMTK_INFO("%s read CHCR 0x%08X, retry = %d", __func__, u32ReadCRValue, retry);
+		if (u32ReadCRValue & (0x1 << 8))
+			return 0;
+		msleep(20);
+	}
+
+	return -1;
+}
+
+static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
+{
+	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
+	u32 u32ReadCRValue = 0;
+	int retry = RETRY_TIMES;
+	u32 ret = 0;
+
+	do {
+		/* After WDT, CHLPCR maybe can't show driver/fw own status
+		 * BT SW should check PD2HRM0R bit 0
+		 * 1: Driver own. 0: FW own
+		 */
+		btmtk_sdio_keep_driver_own(cif_dev, 1);
+		ret = btmtk_sdio_readl(PD2HRM0R, &u32ReadCRValue, cif_dev->func);
+		msleep(DELAY_TIMES);
+		retry--;
+	} while (((u32ReadCRValue & PD2HRM0R_DRIVER_OWN) != PD2HRM0R_DRIVER_OWN)
+			&& retry > 0);
+
+	BTMTK_INFO("%s read PD2HRM0R 0x%08X", __func__, u32ReadCRValue);
+
+	/* if thread stopped, we need to create a new thread before subsys reset*/
+		if (!atomic_read(&cif_dev->sdio_thread.thread_status)) {
+			skb_queue_purge(&cif_dev->tx_queue);
+			atomic_set(&cif_dev->int_count, 0);
+			atomic_set(&cif_dev->tx_rdy, 1);
+			cif_dev->sdio_thread.task = kthread_run(btmtk_sdio_main_thread,
+					bdev, "btmtk_sdio_main_thread");
+			if (IS_ERR(cif_dev->sdio_thread.task)) {
+				BTMTK_ERR("btmtk_sdio_main_thread failed to start!");
+				ret = PTR_ERR(cif_dev->sdio_thread.task);
+				goto exit;
+			}
+		}
+
+	cif_dev->patched = 0;
+
+	btmtk_sdio_set_wifi_driver_own(1);
+
+	/* write CHCR[3] 0 */
+	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
+	BTMTK_INFO("%s read CHCR 0x%08X", __func__, u32ReadCRValue);
+	u32ReadCRValue &= 0xFFFFFFF7;
+	BTMTK_INFO("%s write CHCR 0x%08X", __func__, u32ReadCRValue);
+	btmtk_sdio_writel(CHCR, u32ReadCRValue, cif_dev->func);
+
+	/* write CHCR[3] to 1 */
+	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
+	BTMTK_INFO("%s read CHCR 0x%08X", __func__, u32ReadCRValue);
+	u32ReadCRValue |= 0x00000008;
+	BTMTK_INFO("%s write CHCR 0x%08X", __func__, u32ReadCRValue);
+	btmtk_sdio_writel(CHCR, u32ReadCRValue, cif_dev->func);
+
+	/* write CHCR[5] to 0 */
+	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
+	BTMTK_INFO("%s read CHCR 0x%08X", __func__, u32ReadCRValue);
+	u32ReadCRValue &= 0xFFFFFFDF;
+	BTMTK_INFO("%s write CHCR 0x%08X", __func__, u32ReadCRValue);
+	btmtk_sdio_writel(CHCR, u32ReadCRValue, cif_dev->func);
+
+	/* write CHCR[5] to 1 */
+	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
+	BTMTK_INFO("%s read CHCR 0x%08X", __func__, u32ReadCRValue);
+	u32ReadCRValue |= 0x00000020;
+	BTMTK_INFO("%s write CHCR 0x%08X", __func__, u32ReadCRValue);
+	btmtk_sdio_writel(CHCR, u32ReadCRValue, cif_dev->func);
+
+	/* Poll subsys reset done */
+	if (btmtk_sdio_poll_subsys_done(cif_dev)) {
+		ret = -EIO;
+		goto free_thread;
+	}
+
+	/* Do-init cr */
+	/* Disable the interrupts on the card */
+	btmtk_sdio_enable_host_int(cif_dev);
+	BTMTK_DBG("call btmtk_sdio_enable_host_int done");
+
+	/* Set interrupt output */
+	ret = btmtk_sdio_writel(CHIER, FIRMWARE_INT_BIT31 | FIRMWARE_INT|TX_FIFO_OVERFLOW |
+			FW_INT_IND_INDICATOR | TX_COMPLETE_COUNT |
+			TX_UNDER_THOLD | TX_EMPTY | RX_DONE, cif_dev->func);
+	if (ret) {
+		BTMTK_ERR("Set interrupt output fail(%d)", ret);
+		ret = -EIO;
+		goto free_thread;
+	}
+
+	/* Enable interrupt output */
+	ret = btmtk_sdio_writel(CHLPCR, C_FW_INT_EN_SET, cif_dev->func);
+	if (ret) {
+		BTMTK_ERR("enable interrupt output fail(%d)", ret);
+		ret = -EIO;
+		goto free_thread;
+	}
+
+	/* Adopt write clear method */
+	btmtk_sdio_set_write_clear(cif_dev);
+
+	ret = btmtk_sdio_readl(0, &u32ReadCRValue, cif_dev->func);
+	BTMTK_INFO("%s read chipid =  %x", __func__, u32ReadCRValue);
+	if (ret) {
+		BTMTK_ERR("%s, read chipid fail(%d)", __func__, ret);
+		ret = -EIO;
+		goto free_thread;
+	}
+	goto exit;
+
+free_thread:
+	btmtk_sdio_stop_main_thread(cif_dev);
+
+exit:
+	return ret;
+}
+
+static int btmtk_sdio_whole_reset(struct btmtk_dev *bdev)
+{
+	int ret = -1;
+	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
+	struct mmc_card *card = cif_dev->func->card;
+	struct mmc_host *host = NULL;
+
+	if ((card == NULL) || (card->host  == NULL)) {
+		BTMTK_ERR("mmc structs are NULL");
+		return ret;
+	}
+
+	host = card->host;
+	if (host->rescan_entered != 0) {
+		host->rescan_entered = 0;
+		BTMTK_INFO("set mmc_host rescan to 0");
+	}
+	cif_dev->patched = 0;
+	btmtk_sdio_set_wifi_driver_own(0);
+
+	BTMTK_INFO("mmc_remove_host");
+	mmc_remove_host(host);
+
+	/* Replace hooked SDIO driver probe to new API;
+	 * 1. It will be new kthread(state) after mmc_add_host;
+	 * 2. Extend flexibility to notify us that HW reset was triggered,
+	 * more flexiable on reviving in exchanging old/new kthread(state).
+	 */
+	BTMTK_INFO("mmc_add_host");
+	ret = mmc_add_host(host);
+
+	BTMTK_INFO("mmc_add_host return %d", ret);
+	return ret;
+}
 
 #ifdef CONFIG_PM
 static const struct dev_pm_ops btmtk_sdio_pm_ops = {
@@ -2706,6 +2774,7 @@ int btmtk_cif_register(void)
 	hook.dump_debug_sop = btmtk_sdio_dump_debug_sop;
 	btmtk_reg_hif_hook(&hook);
 
+	btmtk_sdio_create_fw_own_timer(&g_sdio_dev);
 	retval = sdio_register();
 	if (retval)
 		BTMTK_ERR("*** SDIO registration fail(%d)! ***", retval);
@@ -2719,6 +2788,7 @@ int btmtk_cif_deregister(void)
 	BTMTK_INFO("%s", __func__);
 
 	sdio_deregister();
+	btmtk_sdio_delete_fw_own_timer(&g_sdio_dev);
 	BTMTK_INFO("%s: Done", __func__);
 	return 0;
 }

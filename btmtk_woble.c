@@ -760,7 +760,6 @@ int btmtk_woble_resume(struct btmtk_woble *bt_woble)
 		BTMTK_ERR("%s: btmtk_handle_leaving_WoBLE_state return fail %d", __func__, ret);
 		/* avoid rtc to to suspend again, do FW dump first */
 		btmtk_woble_wake_lock(bdev);
-		btmtk_send_assert_cmd(bdev);
 		goto exit;
 	}
 
@@ -812,7 +811,7 @@ static int btmtk_RegisterBTIrq(struct btmtk_woble *bt_woble)
 						   interrupts, ARRAY_SIZE(interrupts));
 			bt_woble->wobt_irqlevel = interrupts[1];
 			if (request_irq(bt_woble->wobt_irq, (void *)btmtk_woble_isr,
-					bt_woble->wobt_irqlevel, "woble-eint", bt_woble->bdev))
+					bt_woble->wobt_irqlevel, "woble-eint", bt_woble))
 				BTMTK_INFO("WOBTIRQ LINE NOT AVAILABLE!!");
 			else {
 				BTMTK_INFO("disable BT IRQ");
@@ -962,7 +961,8 @@ void btmtk_woble_uninitialize(struct btmtk_woble *bt_woble)
 			disable_irq_nosync(bt_woble->wobt_irq);
 		} else
 			BTMTK_INFO("irq_enable count:%d", atomic_read(&(bt_woble->irq_enable_count)));
-		free_irq(bt_woble->wobt_irq, bdev);
+		if (bt_woble->wobt_irq)
+			free_irq(bt_woble->wobt_irq, bt_woble);
 
 		btmtk_woble_input_deinit(bt_woble);
 	}

@@ -1806,7 +1806,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 		 * }
 		 */
 #if DEBUG_LD_PATCH_TIME
-		else {
+		if (!patch_flag) {
 			if (loop_count == 0) {
 				btmtk_do_gettimeofday(&tv_bgf);
 			} else if (loop_count == 1) {
@@ -2785,7 +2785,7 @@ static void btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_d
 		if (ret != -2)
 			return;
 
-		if(btmtk_load_code_from_setting_files(BT_CFG_NAME, dev, &code_len, bdev) != 0) {
+		if (btmtk_load_code_from_setting_files(BT_CFG_NAME, dev, &code_len, bdev) != 0) {
 			BTMTK_ERR("btmtk_usb_load_code_from_setting_files %s failed!!", BT_CFG_NAME);
 			return;
 		}
@@ -2852,9 +2852,12 @@ static int btmtk_send_hci_tci_set_sleep_cmd_766x(struct btmtk_dev *bdev)
 
 int btmtk_cap_init(struct btmtk_dev *bdev)
 {
+	int ret = 0;
+
 	if (!bdev) {
 		BTMTK_ERR("%s, bdev is NULL!", __func__);
-		return -1;
+		ret = -1;
+		goto exit;
 	}
 	/* Todo read wifi fw version
 	 * int wifi_fw_ver;
@@ -2864,13 +2867,30 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 	 * BTMTK_ERR("wifi fw_ver = %04X", wifi_fw_ver);
 	 */
 
-	main_info.hif_hook.reg_read(bdev, CHIP_ID, &bdev->chip_id);
-	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
-		main_info.hif_hook.reg_read(bdev, FLAVOR, &bdev->flavor);
-		main_info.hif_hook.reg_read(bdev, FW_VERSION, &bdev->fw_version);
+	ret = main_info.hif_hook.reg_read(bdev, CHIP_ID, &bdev->chip_id);
+	if (ret < 0) {
+		BTMTK_ERR("read chip id failed");
+		ret = -EIO;
+		goto exit;
 	} else {
-		BTMTK_ERR("Unknown Mediatek device(%04X)\n", bdev->chip_id);
-		return -1;
+		if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
+			ret = main_info.hif_hook.reg_read(bdev, FLAVOR, &bdev->flavor);
+			if (ret < 0) {
+				BTMTK_ERR("read flavor id failed");
+				ret = -EIO;
+				goto exit;
+			}
+			ret = main_info.hif_hook.reg_read(bdev, FW_VERSION, &bdev->fw_version);
+			if (ret < 0) {
+				BTMTK_ERR("read fw version failed");
+				ret = -EIO;
+				goto exit;
+			}
+		} else {
+			BTMTK_ERR("Unknown Mediatek device(%04X)\n", bdev->chip_id);
+			ret = -EIO;
+			goto exit;
+		}
 	}
 
 	BTMTK_INFO("%s: Chip ID = 0x%x", __func__, bdev->chip_id);
@@ -2880,7 +2900,8 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 	memset(bdev->rom_patch_bin_file_name, 0, MAX_BIN_FILE_NAME_LEN);
 	if ((bdev->fw_version & 0xff) == 0xff) {
 		BTMTK_ERR("%s: failed, wrong FW version : 0x%x !", __func__, bdev->fw_version);
-		return -1;
+		ret = -1;
+		goto exit;
 	}
 
 	/* Bin filename format : "BT_RAM_CODE_MT%04x_%x_%x_hdr.bin"
@@ -2900,9 +2921,12 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s: rom patch file name is %s", __func__, bdev->rom_patch_bin_file_name);
 
-	snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s_%x.%s", BT_CFG_NAME_PREFIX, bdev->chip_id, BT_CFG_NAME_SUFFIX);
+	snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s_%x.%s", BT_CFG_NAME_PREFIX,
+		bdev->chip_id, BT_CFG_NAME_SUFFIX);
 	memset(bdev->bdaddr, 0, BD_ADDRESS_SIZE);
-	return 0;
+
+exit:
+	return ret;
 }
 
 static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
@@ -3071,8 +3095,9 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	}
 
 	state = btmtk_get_chip_state(bdev);
-	if (state == BTMTK_STATE_FW_DUMP) {
-		BTMTK_WARN("%s: FW dumping already!!!", __func__);
+	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SUSPEND) {
+		BTMTK_WARN("%s: FW dumping already or in suspend state don't send assert, state = %d!!!",
+			__func__, state);
 		return ret;
 	}
 
@@ -3088,10 +3113,14 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	skb->len = ASSERT_CMD_LEN;
 
 	ret = main_info.hif_hook.send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES, (int)BTMTK_TX_CMD_FROM_DRV);
-	if (ret < 0)
+	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
-	else
+		btmtk_reset_trigger(bdev);
+	} else {
+		bdev->debug_type = DEBUG_SOP_NO_RESPONSE;
+		btmtk_reset_timer_add(bdev);
 		BTMTK_INFO("%s: OK", __func__);
+	}
 
 exit:
 	return ret;
@@ -3920,7 +3949,10 @@ void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 
 	/* Drop queues */
 	skb_queue_purge(&bdev->rx_q);
-	destroy_workqueue(bdev->workqueue);
+	if (bdev->workqueue) {
+		destroy_workqueue(bdev->workqueue);
+		bdev->workqueue = NULL;
+	}
 
 	if (bdev->hdev) {
 		hci_free_dev(bdev->hdev);
@@ -4020,6 +4052,12 @@ int btmtk_register_hci_device(struct btmtk_dev *bdev)
 #if CFG_SUPPORT_BLUEZ
 
 #else
+	/* why need to clear flag HCI_SETUP? */
+	/* reason: if don't clearflag HCI_SETUP, bluedroid do open will return at
+	 * the case HCI_CHANNEL_USER of hci_sock_bind API, because hci_dev_test_flag(hdev, HCI_SETUP)
+	 * is true, it will goto done, just skip the hci_dev_open
+	 */
+
 #if (KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE)
 	ret = test_and_clear_bit(HCI_SETUP, &hdev->dev_flags);
 #else
@@ -4036,8 +4074,16 @@ int btmtk_deregister_hci_device(struct btmtk_dev *bdev)
 {
 	int err = 0;
 
-	if (bdev && bdev->hdev)
+	/* when not do hci_register_dev action, we do hci_unregister_dev will crash,
+	 * so we add test_flag to decide whether hci_register_dev has been 
+	 * successful or failed, if  hci_register_dev success, it will set flag to
+	 * HCI_BREDR_ENABLED, After this flag has been set to HCI_BREDR_ENABLED, we
+	 * can be able to do hci_unregister_dev.
+	 */
+	if (bdev && bdev->hdev && hci_dev_test_flag(bdev->hdev, HCI_BREDR_ENABLED)) {
 		hci_unregister_dev(bdev->hdev);
+		BTMTK_INFO("%s end", __func__);
+	}
 
 	return err;
 }
@@ -4132,8 +4178,13 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 
 	err = btmtk_cap_init(bdev);
 	if (err < 0) {
-		BTMTK_ERR("btmtk_cap_init failed!");
-		goto free_hci_dev;
+		if (err == -EIO) {
+			BTMTK_ERR("btmtk_cap_init failed, do chip reset!");
+			goto end;
+		} else {
+			BTMTK_ERR("btmtk_cap_init failed!");
+			goto free_hci_dev;
+		}
 	}
 
 	btmtk_load_bt_cfg(bdev->bt_cfg_file_name, bdev->intf_dev, bdev);

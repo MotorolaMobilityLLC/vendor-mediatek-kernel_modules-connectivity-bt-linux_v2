@@ -1975,6 +1975,7 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		if ((value & BT_GDMA_DONE_VALUE_R) != value) {
 			BTMTK_INFO("%s: DL Failed cr=%08X", __func__, value);
 			ret = -1;
+			btmtk_send_assert_cmd(bdev);
 			goto exit;
 		}
 	} else
@@ -2370,7 +2371,7 @@ static int btusb_probe(struct usb_interface *intf,
 	if (!bdev) {
 		BTMTK_ERR("[ERR] bdev is NULL");
 		err = -ENOMEM;
-		goto end;
+		goto error;
 	}
 	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 
@@ -2424,7 +2425,7 @@ static int btusb_probe(struct usb_interface *intf,
 	if (!cif_dev->intr_ep || !cif_dev->bulk_tx_ep || !cif_dev->bulk_rx_ep) {
 		BTMTK_ERR("[ERR] intr_ep or bulk_tx_ep or bulk_rx_ep is NULL");
 		err = -ENODEV;
-		goto end;
+		goto error;
 	}
 
 	cif_dev->cmdreq_type = USB_TYPE_CLASS;
@@ -2452,13 +2453,18 @@ static int btusb_probe(struct usb_interface *intf,
 	err = btmtk_cif_allocate_memory(cif_dev);
 	if (err < 0) {
 		BTMTK_ERR("[ERR] btmtk_cif_allocate_memory failed!");
-		goto end;
+		goto error;
 	}
 
 	err = btmtk_main_cif_initialize(bdev, HCI_USB);
 	if (err < 0) {
-		BTMTK_ERR("[ERR] btmtk_main_cif_initialize failed!");
-		goto free_mem;
+		if (err == -EIO) {
+			BTMTK_ERR("[ERR] btmtk_main_cif_initialize failed, do chip reset!!!");
+			goto end;
+		} else {
+			BTMTK_ERR("[ERR] btmtk_main_cif_initialize failed!");
+			goto free_mem;
+		}
 	}
 
 	/* only usb interface need this callback to allocate isoc trx endpoint
@@ -2474,8 +2480,8 @@ static int btusb_probe(struct usb_interface *intf,
 		BTMTK_INFO("interface = %d, don't download patch", ifnum_base);
 
 	if (err < 0) {
-		BTMTK_ERR("btmtk load rom patch failed!");
-		goto deinit1;
+		BTMTK_ERR("btmtk load rom patch failed, do chip reset!!!");
+		goto end;
 	}
 
 	/* For reset */
@@ -2537,8 +2543,8 @@ static int btusb_probe(struct usb_interface *intf,
 
 	err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
 	if (err < 0) {
-		BTMTK_ERR("btmtk_woble_initialize failed!");
-		goto deinit1;
+		BTMTK_ERR("btmtk_main_woble_initialize failed, do chip reset!!!");
+		goto end;
 	}
 
 	btmtk_woble_wake_unlock(bdev);
@@ -2557,6 +2563,7 @@ static int btusb_probe(struct usb_interface *intf,
 		goto free_setting;
 	}
 
+end:
 	return 0;
 
 free_setting:
@@ -2565,7 +2572,7 @@ deinit1:
 	btmtk_main_cif_uninitialize(bdev, HCI_USB);
 free_mem:
 	btmtk_cif_free_memory(cif_dev);
-end:
+error:
 	return err;
 }
 
@@ -3184,7 +3191,7 @@ static int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val
 static int btmtk_usb_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 {
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
-	int ret = -1;
+	int ret = 0;
 	__le16 reg_high;
 	__le16 reg_low;
 
@@ -3203,6 +3210,7 @@ static int btmtk_usb_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 	if (ret < 0) {
 		*val = 0xffffffff;
 		BTMTK_ERR("%s: error(%d), reg=%x, value=%x", __func__, ret, reg, *val);
+		btmtk_reset_trigger(bdev);
 		return ret;
 	}
 
@@ -3510,6 +3518,12 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 			}
 			usleep_range(10, 100);
 		} while (time_before(jiffies, comp_event_timo));
+
+		if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE) {
+			BTMTK_ERR("%s wait expect event timeout!!", __func__);
+			ret = -1;
+			goto fw_assert;
+		}
 
 		event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
 	}

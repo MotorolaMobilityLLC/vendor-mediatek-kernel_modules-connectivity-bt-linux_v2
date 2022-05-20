@@ -58,8 +58,16 @@ void btmtk_reset_waker(struct work_struct *work)
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	int cif_event = 0, err = 0;
+	int state = BTMTK_STATE_INIT;
 
 	btmtk_reset_timer_del(bdev);
+
+	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_SUBSYS_RESET || bdev->subsys_reset || bdev->chip_reset) {
+		BTMTK_INFO("%s: reset is ongoing, state = %d, subsys_rst = %d, chip_rst = %d",
+			__func__, state, bdev->subsys_reset, bdev->chip_reset);
+		return;
+	}
 
 	if (bdev->debug_type != DEBUG_SOP_NONE && bmain_info->hif_hook.dump_debug_sop)
 		bmain_info->hif_hook.dump_debug_sop(bdev, bdev->debug_type);
@@ -94,24 +102,28 @@ void btmtk_reset_waker(struct work_struct *work)
 
 			DUMP_TIME_STAMP("subsys_chip_reset_start");
 			err = bmain_info->hif_hook.subsys_reset(bdev);
-			atomic_inc(&bmain_info->subsys_reset_count);
-			DUMP_TIME_STAMP("subsys_chip_reset_end");
-
-			bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
-			bdev->subsys_reset = 0;
-
-			err = btmtk_cap_init(bdev);
 			if (err < 0) {
-				BTMTK_ERR("btmtk init failed!");
+				BTMTK_INFO("subsys reset failed, do whole chip reset!");
 			} else {
-				err = btmtk_load_rom_patch(bdev);
+				atomic_inc(&bmain_info->subsys_reset_count);
+				DUMP_TIME_STAMP("subsys_chip_reset_end");
+
+				bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
+				bdev->subsys_reset = 0;
+
+				err = btmtk_cap_init(bdev);
 				if (err < 0) {
-					BTMTK_INFO("btmtk load rom patch failed!");
+					BTMTK_ERR("btmtk init failed!");
 				} else {
-					btmtk_send_hw_err_to_host(bdev);
-					btmtk_woble_wake_unlock(bdev);
-					if (bmain_info->hif_hook.chip_reset_notify)
-						bmain_info->hif_hook.chip_reset_notify(bdev);
+					err = btmtk_load_rom_patch(bdev);
+					if (err < 0) {
+						BTMTK_INFO("btmtk load rom patch failed!");
+					} else {
+						btmtk_send_hw_err_to_host(bdev);
+						btmtk_woble_wake_unlock(bdev);
+						if (bmain_info->hif_hook.chip_reset_notify)
+							bmain_info->hif_hook.chip_reset_notify(bdev);
+					}
 				}
 			}
 		} else {
@@ -152,6 +164,19 @@ void btmtk_reset_waker(struct work_struct *work)
 
 void btmtk_reset_trigger(struct btmtk_dev *bdev)
 {
+	int state = BTMTK_STATE_INIT;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_SUSPEND) {
+		BTMTK_INFO("%s suspend state don't do chip reset!", __func__);
+		return;
+	}
+	if (state == BTMTK_STATE_PROBE) {
+		bmain_info->chip_reset_flag = 1;
+		BTMTK_INFO("%s just do whole chip reset in probe stage!", __func__);
+	}
+
 	schedule_work(&bdev->reset_waker);
 }
 

@@ -201,10 +201,10 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define BTMTK_SDIO_THREAD_RX		(1 << 2)
 #define BTMTK_SDIO_THREAD_FW_OWN	(1 << 3)
 
-#define FW_OWN_TIMEOUT		200
-#define FW_OWN_TIMER_CANCEL	0
-#define FW_OWN_TIMER_INIT	1
-#define FW_OWN_TIMER_RUNNING	2
+#define FW_OWN_TIMEOUT		30
+#define FW_OWN_TIMER_INIT	0
+#define FW_OWN_TIMER_RUNNING	1
+
 
 struct btmtk_sdio_hdr {
 	/* For SDIO Header */
