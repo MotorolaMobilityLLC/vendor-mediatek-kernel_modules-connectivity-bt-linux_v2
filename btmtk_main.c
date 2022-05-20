@@ -1904,15 +1904,16 @@ exit:
 	 *  $$$$ : chip id
 	 *  % : fw version & 0xFF + 1 (in HEX)
 	 */
-	 bdev->flavor = (bdev->flavor & 0x00000080) >> 7;
-	 BTMTK_INFO("%s: flavor1 = 0x%x", __func__, bdev->flavor);
-	if (bdev->flavor) {
-		/* if flavor equals 1, it represent 7920, else it represent 7921*/
-		snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_%xa_%x_hdr.bin",
-				bdev->chip_id & 0xffff, bdev->flavor, (bdev->fw_version & 0xff) + 1);
-	} else
-		snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_%x_%x_hdr.bin",
-				bdev->chip_id & 0xffff, bdev->flavor, (bdev->fw_version & 0xff) + 1);
+	bdev->flavor = (bdev->flavor & 0x00000080) >> 7;
+	BTMTK_INFO("%s: flavor1 = 0x%x", __func__, bdev->flavor);
+
+	/* if flavor equals 1, it represent 7920, else it represent 7921 */
+	if (bdev->flavor)
+		snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_1a_%x_hdr.bin",
+				bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
+	else
+		snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_1_%x_hdr.bin",
+				bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
 
 	BTMTK_INFO("%s: rom patch file name is %s", __func__, bdev->rom_patch_bin_file_name);
 }
