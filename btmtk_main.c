@@ -3709,8 +3709,11 @@ static void btmtk_rx_work(struct work_struct *work)
 	while ((skb = skb_dequeue(&bdev->rx_q))) {
 		/* BTMTK_DBG_RAW(skb->data, skb->len, "%s, recv evt", __func__); */
 		skip_pkt = btmtk_dispatch_pkt(bdev->hdev, skb);
-		if (skip_pkt != 0)
+		if (skip_pkt != 0) {
+                        /* kfree_skb should be moved to btmtk_dispach_pkt */
+			kfree_skb(skb);
 			continue;
+		}
 
 		if (hci_skb_pkt_type(skb) == HCI_EVENT_PKT) {
 			if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
