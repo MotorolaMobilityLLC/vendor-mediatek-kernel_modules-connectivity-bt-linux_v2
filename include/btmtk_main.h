@@ -377,6 +377,8 @@ typedef int (*cif_event_filter_ptr)(struct btmtk_dev *bdev, struct sk_buff *skb)
 typedef int (*cif_subsys_reset_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_whole_reset_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_chip_reset_notify_ptr)(struct btmtk_dev *bdev);
+typedef void (*cif_mutex_lock_ptr)(struct btmtk_dev *bdev);
+typedef void (*cif_mutex_unlock_ptr)(struct btmtk_dev *bdev);
 
 struct hif_hook_ptr {
 	cif_open_ptr			open;
@@ -389,6 +391,8 @@ struct hif_hook_ptr {
 	cif_subsys_reset_ptr		subsys_reset;
 	cif_whole_reset_ptr		whole_reset;
 	cif_chip_reset_notify_ptr	chip_reset_notify;
+	cif_mutex_lock_ptr		cif_mutex_lock;
+	cif_mutex_unlock_ptr		cif_mutex_unlock;
 };
 
 struct btmtk_main_info {

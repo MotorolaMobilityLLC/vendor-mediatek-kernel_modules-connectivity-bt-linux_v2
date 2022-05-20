@@ -30,10 +30,6 @@ static DEFINE_MUTEX(btmtk_fops_state_mutex);
 #define FOPS_MUTEX_LOCK()	mutex_lock(&btmtk_fops_state_mutex)
 #define FOPS_MUTEX_UNLOCK()	mutex_unlock(&btmtk_fops_state_mutex)
 
-static DEFINE_MUTEX(btmtk_pm_ops_mutex);
-#define PM_OPS_MUTEX_LOCK()	mutex_lock(&btmtk_pm_ops_mutex)
-#define PM_OPS_MUTEX_UNLOCK()	mutex_unlock(&btmtk_pm_ops_mutex)
-
 const struct file_operations BT_fopsfwlog = {
 	.open = btmtk_fops_openfwlog,
 	.release = btmtk_fops_closefwlog,
@@ -2271,6 +2267,7 @@ int btmtk_load_rom_patch(struct btmtk_dev *bdev)
 			BTMTK_ERR("%s: btmtk_load_rom_patch_79xx bt patch failed!", __func__);
 			return err;
 		}
+
 #if CFG_SUPPORT_BT_DL_WIFI_PATCH
 		err = btmtk_load_rom_patch_79xx(bdev, WIFI_DOWNLOAD);
 		if (err < 0) {
@@ -3471,7 +3468,8 @@ static int btmtk_enter_standby(void)
 
 			cif_state = &bdev->cif_state[cif_event];
 
-			PM_OPS_MUTEX_LOCK();
+			if (main_info.hif_hook.cif_mutex_lock)
+				main_info.hif_hook.cif_mutex_lock(bdev);
 			/* Set Entering state */
 			btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
@@ -3484,7 +3482,8 @@ static int btmtk_enter_standby(void)
 			else
 				btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 
-			PM_OPS_MUTEX_UNLOCK();
+			if (main_info.hif_hook.cif_mutex_unlock)
+				main_info.hif_hook.cif_mutex_unlock(bdev);
 
 			if (ret)
 				break;
@@ -4187,7 +4186,6 @@ static int bt_close(struct hci_dev *hdev)
 		return ret;
 	}
 
-	PM_OPS_MUTEX_LOCK();
 	fstate = btmtk_fops_get_state(bdev);
 	if (fstate != BTMTK_FOPS_STATE_OPENED) {
 		BTMTK_WARN("%s: fops is not allow close(%d)", __func__, fstate);
@@ -4203,6 +4201,9 @@ static int bt_close(struct hci_dev *hdev)
 
 	BTMTK_INFO("%s, enter", __func__);
 
+	if (main_info.hif_hook.cif_mutex_lock)
+		main_info.hif_hook.cif_mutex_lock(bdev);
+
 #if CFG_SUPPORT_DVT
 	/* Don't send init cmd for DVT
 	 * Such as Lowpower DVT
@@ -4213,7 +4214,7 @@ static int bt_close(struct hci_dev *hdev)
 		ret = btmtk_send_deinit_cmds(bdev);
 		if (ret < 0) {
 			BTMTK_ERR("%s, btmtk_send_deinit_cmds failed", __func__);
-			goto exit;
+			goto unlock;
 		}
 	}
 #endif /* CFG_SUPPORT_DVT */
@@ -4225,12 +4226,16 @@ static int bt_close(struct hci_dev *hdev)
 	skb_queue_purge(&bdev->rx_q);
 
 	main_info.hif_hook.close(hdev);
+
+unlock:
+	if (main_info.hif_hook.cif_mutex_unlock)
+		main_info.hif_hook.cif_mutex_unlock(bdev);
 exit:
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
 
 err:
 	main_info.reset_stack_flag = HW_ERR_NONE;
-	PM_OPS_MUTEX_UNLOCK();
+
 	BTMTK_INFO("%s: end, reset_stack_flag = %d", __func__, main_info.reset_stack_flag);
 	return 0;
 }

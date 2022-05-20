@@ -92,10 +92,8 @@ struct btmtk_usb_dev {
 
 	unsigned char	*o_usb_buf;
 
-	/* TODO, need to confirm the max size of urb data, also need to confirm
-	 * whether intr_complete and bulk_complete and soc_complete can all share
-	 * this urb_transfer_buf
-	 */
-	unsigned char	*urb_transfer_buf;
+	unsigned char	*urb_intr_buf;
+	unsigned char	*urb_bulk_buf;
+	unsigned char	*urb_ble_isoc_buf;
 };
 #endif
