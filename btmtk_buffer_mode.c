@@ -226,15 +226,11 @@ void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev, struct btmtk_buffer_mo
 		return;
 
 	if (bdev->flavor)
-		ret = snprintf(btmtk_buffer_mode.file_name, MAX_BIN_FILE_NAME_LEN, "EEPROM_MT%04x_1a.bin",
+		(void)snprintf(btmtk_buffer_mode.file_name, MAX_BIN_FILE_NAME_LEN, "EEPROM_MT%04x_1a.bin",
 				bdev->chip_id & 0xffff);
 	else
-		ret = snprintf(btmtk_buffer_mode.file_name, MAX_BIN_FILE_NAME_LEN, "EEPROM_MT%04x_1.bin",
+		(void)snprintf(btmtk_buffer_mode.file_name, MAX_BIN_FILE_NAME_LEN, "EEPROM_MT%04x_1.bin",
 				bdev->chip_id & 0xffff);
-	if (ret < 0) {
-		BTMTK_ERR("%s: snprintf EEPROM failed!", __func__);
-		return;
-	}
 
 	ret = btmtk_load_code_from_setting_files(btmtk_buffer_mode.file_name, bdev->intf_dev, &code_len, bdev);
 	if (ret < 0) {

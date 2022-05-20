@@ -1669,7 +1669,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 	u8 event[LD_PATCH_EVT_LEN] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
 #if LD_PATCH_TIME
 	struct timeval tv_start, tv_bgf, tv_ilm;
-	long dlt_dma = 0, dlt_all = 0;
+	u32 dlt_dma = 0, dlt_all = 0;
 
 	memset(&tv_start, 0, sizeof(tv_start));
 	memset(&tv_bgf, 0, sizeof(tv_bgf));
@@ -1796,18 +1796,18 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 
 				dlt_all += (tv_ilm.tv_usec - tv_start.tv_usec) / 1000;
 
-				BTMTK_INFO("LD PATCH 1 tv_start: tv_sec:%d, tv_usec:%d.",
+				BTMTK_INFO("LD PATCH 1 tv_start: tv_sec:%zu, tv_usec:%zu.",
 					tv_start.tv_sec, tv_start.tv_usec);
-				BTMTK_INFO("LD PATCH 2 tv_bgf: tv_sec:%d, tv_usec:%d.",
+				BTMTK_INFO("LD PATCH 2 tv_bgf: tv_sec:%zu, tv_usec:%zu.",
 					tv_bgf.tv_sec, tv_bgf.tv_usec);
-				BTMTK_INFO("LD PATCH 3 tv_ilm: tv_sec:%d, tv_usec:%d.",
+				BTMTK_INFO("LD PATCH 3 tv_ilm: tv_sec:%zu, tv_usec:%zu.",
 					tv_ilm.tv_sec, tv_ilm.tv_usec);
 
 				if (dlt_dma != 0)
-					BTMTK_INFO("LD PATCH time: ILM_DMA:%dms, ALL:%dms.",
+					BTMTK_INFO("LD PATCH time: ILM_DMA:%ums, ALL:%ums.",
 						dlt_dma, dlt_all);
 				else
-					BTMTK_INFO("LD PATCH time: ILM_DMA:%dms.",
+					BTMTK_INFO("LD PATCH time: ILM_DMA:%ums.",
 						dlt_all);
 			}
 		}
@@ -1842,17 +1842,13 @@ int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, bool patch_flag)
 	if (patch_flag) {
 		if (bdev->flavor)
 			/* if flavor equals 1, it represent 7920, else it represent 7921*/
-			ret = snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+			(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 					"WIFI_MT%04x_patch_mcu_1a_%x_hdr.bin",
 					bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
 		else
-			ret = snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+			(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 					"WIFI_MT%04x_patch_mcu_1_%x_hdr.bin",
 					bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
-		if (ret < 0) {
-			BTMTK_ERR("%s: snprintf WIFI_patch_mcu failed!", __func__);
-			goto err;
-		}
 	}
 
 	btmtk_load_code_from_bin(&fw_firmware, bdev->rom_patch_bin_file_name, NULL,
@@ -2716,17 +2712,13 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 	for (i = 0; i < counter; i++) {
 		temp_len = 0;
 		if (index_length == FW_CFG_INX_LEN_2) /* EX: APCF01 */
-			ret = snprintf(search, SEARCH_LEN, "%s%02d:", block_name, i);
+			(void)snprintf(search, SEARCH_LEN, "%s%02d:", block_name, i);
 		else if (index_length == FW_CFG_INX_LEN_3) /* EX: APCF001 */
-			ret = snprintf(search, SEARCH_LEN, "%s%03d:", block_name, i);
+			(void)snprintf(search, SEARCH_LEN, "%s%03d:", block_name, i);
 		else
-			ret = snprintf(search, SEARCH_LEN, "%s:", block_name);
-		if (ret < 0) {
-			BTMTK_ERR("%s: snprintf %s failed!", __func__, block_name);
-			return ret;
-		}
-		ret = 0;
+			(void)snprintf(search, SEARCH_LEN, "%s:", block_name);
 
+		ret = 0;
 		search_result = strstr((char *)searchcontent, search);
 		if (search_result) {
 			memset(temp, 0, TEMP_LEN);
@@ -3295,14 +3287,8 @@ static bool btmtk_parse_bt_cfg_file(char *item_name,
 	}
 
 	memset(search, 0, SEARCH_LEN);
-	ret = snprintf(search, SEARCH_LEN, "%s", item_name); /* EX: SUPPORT_UNIFY_WOBLE */
-	if (ret < 0) {
-		BTMTK_ERR("%s: snprintf %s failed!", __func__, item_name);
-		ret = false;
-		goto out;
-	}
+	(void)snprintf(search, SEARCH_LEN, "%s", item_name); /* EX: SUPPORT_UNIFY_WOBLE */
 	p = ptr = strstr((char *)searchcontent, search);
-
 	if (!ptr) {
 		BTMTK_ERR("%s: Can't find %s\n", __func__, item_name);
 		ret = false;
@@ -3579,8 +3565,6 @@ static int btmtk_send_hci_tci_set_sleep_cmd_766x(struct btmtk_dev *bdev)
 
 int btmtk_cap_init(struct btmtk_dev *bdev)
 {
-	int ret = 0;
-
 	if (!bdev) {
 		BTMTK_ERR("%s, bdev is NULL!", __func__);
 		return -1;
@@ -3621,15 +3605,11 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 
 	/* if flavor equals 1, it represent 7920, else it represent 7921 */
 	if (bdev->flavor)
-		ret = snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_1a_%x_hdr.bin",
+		(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_1a_%x_hdr.bin",
 				bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
 	else
-		ret = snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_1_%x_hdr.bin",
+		(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_1_%x_hdr.bin",
 				bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
-	if (ret < 0) {
-		BTMTK_ERR("%s: snprintf BT_RAM_CODE failed!", __func__);
-		return ret;
-	}
 
 	BTMTK_INFO("%s: rom patch file name is %s", __func__, bdev->rom_patch_bin_file_name);
 
@@ -5397,10 +5377,8 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 
 	btmtk_load_bt_cfg(bdev->bt_cfg_file_name, bdev->intf_dev, bdev);
 
-	err = snprintf(bdev->country_file_name, MAX_BIN_FILE_NAME_LEN,
+	(void)snprintf(bdev->country_file_name, MAX_BIN_FILE_NAME_LEN,
 			DEFAULT_COUNTRY_TABLE_NAME);
-	if (err < 0)
-		BTMTK_ERR("set country_file_name failed!");
 
 	return 0;
 
