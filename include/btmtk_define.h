@@ -41,7 +41,7 @@
 #include <linux/freezer.h>
 
 /** Driver version */
-#define VERSION "7.0.2020111802"
+#define VERSION "7.0.2020112001"
 #define SUBVER ":turnkey"
 
 
@@ -236,7 +236,7 @@ enum fw_cfg_index_len {
 
 struct fw_cfg_struct {
 	char	*content;	/* APCF content or radio off content */
-	int	length;		/* APCF content or radio off content of length */
+	u32	length;		/* APCF content or radio off content of length */
 };
 
 struct bt_cfg_struct {

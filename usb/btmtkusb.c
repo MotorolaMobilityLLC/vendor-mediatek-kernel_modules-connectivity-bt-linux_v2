@@ -2880,12 +2880,6 @@ static int btmtk_usb_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 	return 0;
 }
 
-
-int btmtk_cif_send_calibration(struct btmtk_dev *bdev)
-{
-	return 0;
-}
-
 static void btmtk_cif_load_rom_patch_complete(struct urb *urb)
 {
 	struct completion *sent_to_mcu_done = (struct completion *)urb->context;

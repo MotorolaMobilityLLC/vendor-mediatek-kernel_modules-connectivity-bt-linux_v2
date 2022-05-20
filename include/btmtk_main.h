@@ -158,6 +158,8 @@ extern u8 wmt_over_hci_header[];
 
 #define WAIT_POWERKEY_TIMEOUT 5000
 
+#define CHIP_STATE_MSG_NUM 10
+
 #define SEPARATOR_LEN 2
 #define STP_CRC_LEN 2
 #define TEMP_LEN 260
@@ -309,7 +311,7 @@ struct bt_power_setting {
 	int8_t BLE_2M;
 	int8_t BLE_LR_S2;
 	int8_t BLE_LR_S8;
-	char country_code[3];
+	char country_code[COUNTRY_CODE_LEN + 1];
 };
 
 struct btmtk_fops_fwlog {
@@ -612,8 +614,6 @@ static inline int is_support_unify_woble(struct btmtk_dev *bdev)
 
 int btmtk_get_chip_state(struct btmtk_dev *bdev);
 void btmtk_set_chip_state(struct btmtk_dev *bdev, int new_state);
-int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
-void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
 int btmtk_register_hci_device(struct btmtk_dev *bdev);
 int btmtk_deregister_hci_device(struct btmtk_dev *bdev);
 int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count);
@@ -625,60 +625,33 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		const int cmd_len, const uint8_t *event, const int event_len, int delay,
 		int retry, int pkt_type);
 int btmtk_send_wmt_reset(struct btmtk_dev *hdev);
-int btmtk_send_wmt_power_on_cmd(struct btmtk_dev *hdev);
-int btmtk_send_wmt_power_off_cmd(struct btmtk_dev *hdev);
 int btmtk_woble_suspend(struct btmtk_dev *bdev);
 int btmtk_woble_resume(struct btmtk_dev *bdev);
-int btmtk_handle_leaving_WoBLE_state(struct btmtk_dev *bdev);
-int btmtk_handle_entering_WoBLE_state(struct btmtk_dev *bdev);
 int btmtk_load_code_from_setting_files(char *setting_file_name,
 		struct device *dev, u32 *code_len, struct btmtk_dev *bdev);
 int btmtk_load_woble_setting(char *bin_name,
 		struct device *dev, u32 *code_len, struct btmtk_dev *bdev);
 int btmtk_load_rom_patch_766x(struct btmtk_dev *hdev);
-int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev);
-int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev);
 int btmtk_load_rom_patch(struct btmtk_dev *bdev);
 struct btmtk_dev *btmtk_get_dev(void);
-void btmtk_release_dev(struct btmtk_dev *bdev);
-struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev);
-void btmtk_free_dev_memory(struct device *dev, struct btmtk_dev *bdev);
 void btmtk_reset_waker(struct work_struct *work);
-void btmtk_initialize_cfg_items(struct btmtk_dev *bdev);
-bool btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_dev *bdev);
 struct btmtk_main_info *btmtk_get_main_info(void);
-int btmtk_reset_power_on(struct btmtk_dev *bdev);
 void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev);
 void btmtk_free_setting_file(struct btmtk_dev *bdev);
-/** file_operations: stpbtfwlog */
-int btmtk_fops_openfwlog(struct inode *inode, struct file *file);
-int btmtk_fops_closefwlog(struct inode *inode, struct file *file);
-ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, loff_t *f_pos);
-ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos);
-unsigned int btmtk_fops_pollfwlog(struct file *filp, poll_table *wait);
-long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigned long arg);
-
-/* Auto enable picus */
-int btmtk_picus_enable(struct btmtk_dev *bdev);
-int btmtk_picus_disable(struct btmtk_dev *bdev);
-
 void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf);
 void btmtk_hci_snoop_save_event(u32 len, u8 *buf);
 void btmtk_hci_snoop_save_adv_event(u32 len, u8 *buf);
 void btmtk_hci_snoop_save_acl(u32 len, u8 *buf);
 void btmtk_hci_snoop_print(u32 len, const u8 *buf);
 unsigned long btmtk_kallsyms_lookup_name(const char *name);
-void btmtk_woble_wake_lock(struct btmtk_dev *bdev);
 void btmtk_woble_wake_unlock(struct btmtk_dev *bdev);
 void btmtk_reg_hif_hook(struct hif_hook_ptr *hook);
 int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus);
 void btmtk_main_cif_uninitialize(struct btmtk_dev *bdev, int hci_bus);
 int btmtk_main_woble_initialize(struct btmtk_dev *bdev);
 int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus);
-int btmtk_cif_send_calibration(struct btmtk_dev *bdev);
 int btmtk_send_assert_cmd(struct btmtk_dev *bdev);
 int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value);
-
 void btmtk_set_country_code_from_wifi(char *code);
 
 #endif /* __BTMTK_MAIN_H__ */
