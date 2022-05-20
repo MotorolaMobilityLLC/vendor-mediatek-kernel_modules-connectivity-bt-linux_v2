@@ -3085,7 +3085,7 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 		ret = btmtk_usb_send_cmd(bdev, skb, delay, retry, pkt_type);
 		if (ret < 0) {
 			BTMTK_ERR("%s btmtk_usb_send_cmd failed!!", __func__);
-			goto exit;
+			goto fw_assert;
 		}
 
 		if (event && event_len > 0) {
@@ -3093,7 +3093,7 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 			if (bdev->recv_evt_len < 0) {
 				BTMTK_ERR("%s btmtk_cif_recv_evt failed!!", __func__);
 				ret = -1;
-				goto exit;
+				goto fw_assert;
 			}
 
 			if (bdev->io_buf && bdev->recv_evt_len >= event_len) {
@@ -3137,7 +3137,7 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 		ret = btmtk_usb_send_cmd(bdev, skb, delay, retry, pkt_type);
 		if (ret < 0) {
 			BTMTK_ERR("%s btmtk_sdio_send_cmd failed!!", __func__);
-			goto exit;
+			goto fw_assert;
 		}
 
 		do {
@@ -3151,7 +3151,9 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 
 		event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
 	}
-
+	goto exit;
+fw_assert:
+	btmtk_send_assert_cmd(bdev);
 exit:
 	return ret;
 }

@@ -1008,7 +1008,7 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 	ret = btmtk_sdio_send_cmd(bdev, skb, delay, retry, pkt_type);
 	if (ret < 0) {
 		BTMTK_ERR("%s btmtk_sdio_send_cmd failed!!", __func__);
-		goto exit;
+		goto fw_assert;
 	}
 
 	do {
@@ -1021,6 +1021,9 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 	} while (time_before(jiffies, comp_event_timo));
 
 	event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
+	goto exit;
+fw_assert:
+	btmtk_send_assert_cmd(bdev);
 exit:
 	return ret;
 }

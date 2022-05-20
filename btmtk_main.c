@@ -4159,8 +4159,6 @@ int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 			BTMTK_ERR("%s, btmtk_send_wmt_power_on_cmd failed!", __func__);
 			if (main_info.reset_stack_flag == HW_ERR_NONE)
 				main_info.reset_stack_flag = HW_ERR_CODE_POWER_ON;
-			/* TODO */
-			/* btmtk_usb_toggle_rst_pin(); */
 		}
 		goto exit;
 	}
@@ -4168,14 +4166,12 @@ int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 	ret = btmtk_send_phase1_wmt_cfg(bdev);
 	if (ret < 0) {
 		BTMTK_ERR("btmtk_send_wmt_cfg failed");
-		btmtk_send_assert_cmd(bdev);
 		goto exit;
 	}
 
 	if (bdev->bt_cfg.support_auto_picus == true) {
 		if (btmtk_picus_enable(bdev) < 0) {
 			BTMTK_ERR("send picus filter param failed");
-			btmtk_send_assert_cmd(bdev);
 			ret = -1;
 			goto exit;
 		}
@@ -4184,7 +4180,6 @@ int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 	ret = btmtk_send_vendor_cfg(bdev);
 	if (ret < 0) {
 		BTMTK_ERR("btmtk_send_vendor_cfg failed");
-		btmtk_send_assert_cmd(bdev);
 		goto exit;
 	}
 
