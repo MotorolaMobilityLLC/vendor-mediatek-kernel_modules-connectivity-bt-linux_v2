@@ -422,9 +422,9 @@ static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s end", __func__);
 }
 
-int btmtk_get_chip_state(struct btmtk_dev *bdev)
+unsigned char btmtk_get_chip_state(struct btmtk_dev *bdev)
 {
-	int state = BTMTK_STATE_INIT;
+	unsigned char state = BTMTK_STATE_INIT;
 
 	CHIP_STATE_MUTEX_LOCK();
 	state = bdev->interface_state;
@@ -433,14 +433,14 @@ int btmtk_get_chip_state(struct btmtk_dev *bdev)
 	return state;
 }
 
-void btmtk_set_chip_state(struct btmtk_dev *bdev, int new_state)
+void btmtk_set_chip_state(struct btmtk_dev *bdev, unsigned char new_state)
 {
-	static const char * const state_msg[CHIP_STATE_MSG_NUM] = {
+	static const char * const state_msg[BTMTK_STATE_MSG_NUM] = {
 		"UNKNOWN", "INIT", "DISCONNECT", "PROBE", "WORKING", "SUSPEND", "RESUME",
 		"FW_DUMP", "STANDBY", "SUBSYS_RESET",
 	};
 
-	if (new_state >= CHIP_STATE_MSG_NUM) {
+	if (new_state >= BTMTK_STATE_MSG_NUM) {
 		BTMTK_INFO("%s: new_state invalid(%d)", __func__, new_state);
 		return;
 	}
@@ -453,9 +453,9 @@ void btmtk_set_chip_state(struct btmtk_dev *bdev, int new_state)
 	CHIP_STATE_MUTEX_UNLOCK();
 }
 
-static int btmtk_fops_get_state(struct btmtk_dev *bdev)
+static unsigned char btmtk_fops_get_state(struct btmtk_dev *bdev)
 {
-	int state = BTMTK_FOPS_STATE_INIT;
+	unsigned char state = BTMTK_FOPS_STATE_INIT;
 
 	FOPS_MUTEX_LOCK();
 	state = bdev->fops_state;
@@ -464,11 +464,16 @@ static int btmtk_fops_get_state(struct btmtk_dev *bdev)
 	return state;
 }
 
-static void btmtk_fops_set_state(struct btmtk_dev *bdev, int new_state)
+static void btmtk_fops_set_state(struct btmtk_dev *bdev, unsigned char new_state)
 {
-	static const char * const fstate_msg[] = {
+	static const char * const fstate_msg[BTMTK_FOPS_STATE_MSG_NUM] = {
 		"UNKNOWN", "INIT", "OPENING", "OPENED", "CLOSING", "CLOSED",
 	};
+
+	if (new_state >= BTMTK_FOPS_STATE_MSG_NUM) {
+		BTMTK_INFO("%s: new_state invalid(%d)", __func__, new_state);
+		return;
+	}
 
 	BTMTK_INFO("%s: FOPS_%s(%d) -> FOPS_%s(%d)", __func__, fstate_msg[bdev->fops_state],
 			bdev->fops_state, fstate_msg[new_state], new_state);
@@ -2500,7 +2505,7 @@ int btmtk_set_Woble_APCF(struct btmtk_dev *bdev)
 		0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 	u8 event[APCF_EVT_HDR_LEN] = { 0x04, 0x0E, 0x07, 0x01, 0x57, 0xFD, 0x00, /* 0x06 00 63 */ };
 	int ret = -1;
-	int i = 0;
+	u8 i = 0;
 
 	BTMTK_INFO("%s: woble_setting_apcf[0].length %d",
 			__func__, bdev->woble_setting_apcf[0].length);
@@ -2651,7 +2656,7 @@ static int btmtk_del_Woble_APCF_index(struct btmtk_dev *bdev)
 static int btmtk_set_Woble_APCF_Resume(struct btmtk_dev *bdev)
 {
 	u8 event[APCF_RESUME_EVT_HDR_LEN] = { 0x04, 0x0e, 0x07, 0x01, 0x57, 0xfd, 0x00 };
-	int i = 0;
+	u8 i = 0;
 	int ret = -1;
 
 	BTMTK_INFO("%s, enter, bdev->woble_setting_apcf_resume[0].length= %d",
@@ -2690,7 +2695,7 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 		int counter, u8 *searchcontent, enum fw_cfg_index_len index_length)
 {
 	int ret = 0, i = 0;
-	int temp_len = 0;
+	u16 temp_len = 0;
 	u8 temp[TEMP_LEN]; /* save for total hex number */
 	unsigned long parsing_result = 0;
 	char *search_result = NULL;
@@ -3649,7 +3654,7 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
 {
 	int ret = 0;
-	int index = 0;
+	u16 index = 0;
 	uint8_t event[EVT_HDR_LEN] = { 0x04, 0x0E };
 
 	BTMTK_INFO("%s enter", __func__);
@@ -3681,7 +3686,7 @@ exit:
 static int btmtk_send_phase1_wmt_cfg(struct btmtk_dev *bdev)
 {
 	int ret = 0;
-	int index = 0;
+	u16 index = 0;
 	uint8_t event[EVT_HDR_LEN] = { 0x04, 0xE4 };
 
 	BTMTK_INFO("%s", __func__);

@@ -158,8 +158,6 @@ extern u8 wmt_over_hci_header[];
 
 #define WAIT_POWERKEY_TIMEOUT 5000
 
-#define CHIP_STATE_MSG_NUM 10
-
 #define SEPARATOR_LEN 2
 #define STP_CRC_LEN 2
 #define TEMP_LEN 260
@@ -355,6 +353,8 @@ enum {
 	BTMTK_STATE_FW_DUMP,
 	BTMTK_STATE_STANDBY,
 	BTMTK_STATE_SUBSYS_RESET,
+
+	BTMTK_STATE_MSG_NUM
 };
 
 /* Please keep sync with btmtk_fops_set_state function */
@@ -365,6 +365,8 @@ enum {
 	BTMTK_FOPS_STATE_OPENED,	/* open in fops_open */
 	BTMTK_FOPS_STATE_CLOSING,	/* during closing */
 	BTMTK_FOPS_STATE_CLOSED,	/* closed */
+
+	BTMTK_FOPS_STATE_MSG_NUM
 };
 
 enum {
@@ -615,8 +617,8 @@ static inline int is_support_unify_woble(struct btmtk_dev *bdev)
 	}
 }
 
-int btmtk_get_chip_state(struct btmtk_dev *bdev);
-void btmtk_set_chip_state(struct btmtk_dev *bdev, int new_state);
+unsigned char btmtk_get_chip_state(struct btmtk_dev *bdev);
+void btmtk_set_chip_state(struct btmtk_dev *bdev, unsigned char new_state);
 int btmtk_register_hci_device(struct btmtk_dev *bdev);
 int btmtk_deregister_hci_device(struct btmtk_dev *bdev);
 int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count);
