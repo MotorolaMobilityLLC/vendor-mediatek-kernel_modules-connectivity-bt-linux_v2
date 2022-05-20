@@ -228,7 +228,11 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		/* check hci event /wmt event for uart/UART interface, check hci
 		 * event for USB interface
 		 */
+#if (USE_DEVICE_NODE == 0)
 		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_COMP_EVENT_TIMO);
+#else
+		comp_event_timo = jiffies + msecs_to_jiffies(2000);
+#endif
 		BTMTK_DBG("event_need_compare_len %d, event_compare_status %d",
 			event_need_compare_len, event_compare_status);
 	} else {
@@ -521,10 +525,12 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	/* set chip baud and flowcontrol to config setting */
 	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
 	if (ret < 0) {
-		BTMTK_ERR("%s btmtk_uart_send_set_uart_cmd failed!!", __func__);
-		goto exit;
+		BTMTK_WARN("%s retry send cmd", __func__);
+		ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
+		if (ret < 0) {
+			goto exit;
+		}
 	}
-
 
 	/* set tty host baud and flowcontrol to config setting */
 	BTMTK_INFO("Set config baud: %d, flowcontrol: %d", uart_cfg.iBaudrate, uart_cfg.fc);
@@ -567,12 +573,11 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	/* Set End/Error state */
 	if (ret == 0) {
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
-		goto exit;
 	} else {
 		BTMTK_ERR("%s: btmtk_load_rom_patch failed (%d)", __func__, ret);
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+		goto exit;
 	}
-
 
 	BTMTK_INFO("%s done", __func__);
 
@@ -880,11 +885,11 @@ static int btmtk_uart_tty_probe(struct tty_struct *tty)
 static void btmtk_uart_tty_disconnect(struct tty_struct *tty)
 {
 	struct btmtk_dev *bdev = tty->disc_data;
+#if (USE_DEVICE_NODE == 0)
 	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
-
-	BTMTK_INFO("%s: tty %p", __func__, tty);
-
 	btmtk_woble_uninitialize(&cif_dev->bt_woble);
+#endif
+	BTMTK_INFO("%s: tty %p", __func__, tty);
 	cancel_work_sync(&bdev->reset_waker);
 	btmtk_tx_thread_exit(bdev->cif_dev);
 	btmtk_main_cif_disconnect_notify(bdev, HCI_UART);
@@ -967,15 +972,21 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 		cif_dev->uart_cfg = uart_cfg;
 		BTMTK_INFO("%s: <!!> Set BAUDRATE, fc = %d iBaudrate = %d <!!>",
 				__func__, (int)uart_cfg.fc, uart_cfg.iBaudrate);
-		//err = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
+#if (USE_DEVICE_NODE == 0)
+		err = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
+#endif
 		break;
 	case HCIUARTSETWAKEUP:
 		BTMTK_INFO("%s: <!!> Send Wakeup <!!>", __func__);
-		//err = btmtk_uart_send_wakeup_cmd(bdev->hdev);
+#if (USE_DEVICE_NODE == 0)
+		err = btmtk_uart_send_wakeup_cmd(bdev->hdev);
+#endif
 		break;
 	case HCIUARTGETBAUD:
 		BTMTK_INFO("%s: <!!> Get BAUDRATE <!!>", __func__);
-		//err = btmtk_uart_send_query_uart_cmd(bdev->hdev);
+#if (USE_DEVICE_NODE == 0)
+		err = btmtk_uart_send_query_uart_cmd(bdev->hdev);
+#endif
 		break;
 	case HCIUARTSETSTP:
 		BTMTK_INFO("%s: <!!> Set STP mandatory command <!!>", __func__);
@@ -1200,8 +1211,18 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_uart_dev *cif_dev;
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	int retry = 30;
+
+	BTMTK_INFO("%s", __func__);
 
 	bdev = dev_get_drvdata(tty->dev);
+	/* wait bt_close */
+	do {
+		fstate = btmtk_fops_get_state(bdev);
+		BTMTK_WARN("%s: fstate[%d], retry[%d]", __func__, fstate, retry);
+		msleep(100);
+	} while (retry-- && fstate != BTMTK_FOPS_STATE_CLOSED);
 	cif_dev = bdev->cif_dev;
 
 	/* Retrieve current HIF event state */

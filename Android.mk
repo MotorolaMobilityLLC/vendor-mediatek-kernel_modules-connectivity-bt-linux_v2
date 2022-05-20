@@ -87,3 +87,4 @@ include $(MTK_KERNEL_MODULE)
 
 #endif
 endif
+include $(LOCAL_PATH)/uart_daemon/Android.mk

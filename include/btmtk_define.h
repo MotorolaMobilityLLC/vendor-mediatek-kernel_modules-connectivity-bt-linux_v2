@@ -159,6 +159,8 @@ extern uint8_t btmtk_log_lvl;
 		}	\
 	} while (0)
 
+//#undef BTMTK_INFO_RAW
+
 #define BTMTK_DBG_RAW(p, l, fmt, ...)						\
 	do {	\
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {	\
@@ -177,6 +179,7 @@ extern uint8_t btmtk_log_lvl;
 		}	\
 	} while (0)
 
+//#define BTMTK_INFO_RAW BTMTK_DBG_RAW
 
 #define BTMTK_CIF_IS_NULL(bdev, cif_event) \
 	(!bdev || !(&bdev->cif_state[cif_event]))
