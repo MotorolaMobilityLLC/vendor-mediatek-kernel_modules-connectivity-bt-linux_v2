@@ -28,6 +28,10 @@
 
 #include "btmtk_main.h"
 
+#ifndef SDIO_DEBUG
+#define SDIO_DEBUG 0
+#endif
+
 /**
  * Card-relate definition.
  */
@@ -54,6 +58,7 @@
 #define CRDR		0x001C
 #define CTFSR		0x0020
 #define CRPLR		0x0024
+#define PD2HRM0R	0x00DC
 #define SWPCDBGR	0x0154
 /* CHLPCR */
 #define C_FW_INT_EN_SET			0x00000001

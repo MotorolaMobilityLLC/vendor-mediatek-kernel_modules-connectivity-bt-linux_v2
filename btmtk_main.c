@@ -15,6 +15,7 @@
 #include <linux/of_irq.h>
 #include <linux/input.h>
 #include <linux/pm_wakeup.h>
+#include <linux/reboot.h>
 
 #include "btmtk_define.h"
 #include "btmtk_main.h"
@@ -951,6 +952,89 @@ void btmtk_hci_snoop_print(u32 len, const u8 *buf)
 	}
 }
 
+static int btmtk_reboot_notify(struct notifier_block *nb,
+			unsigned long event, void *unused)
+{
+	int ret = 0;
+	int i = 0;
+	int cif_event = 0;
+	int fstate = 0;
+	int state = 0;
+	struct btmtk_cif_state *cif_state = NULL;
+	struct btmtk_dev *bdev = NULL;
+
+	BTMTK_INFO("%s: btmtk_reboot_notify(%x)", __func__, event);
+
+	if (event == SYS_RESTART) {
+		BTMTK_INFO("%s: enter", __func__);
+		for (i = 0; i < btmtk_intf_num; i++) {
+			/* Find valid dev for already probe interface. */
+			if (g_bdev[i]->hdev != NULL) {
+				bdev = g_bdev[i];
+
+				fstate = btmtk_fops_get_state(bdev);
+				if (fstate != BTMTK_FOPS_STATE_OPENED) {
+					BTMTK_WARN("%s: fops is not opened(%d)", __func__, fstate);
+					continue;
+				}
+
+				state = btmtk_get_chip_state(bdev);
+				if (state != BTMTK_STATE_WORKING) {
+					BTMTK_WARN("%s: not in working(%d).", __func__, state);
+					continue;
+				}
+
+				cif_event = HIF_EVENT_DISCONNECT;
+				if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
+					/* Error */
+					BTMTK_WARN("%s parameter is NULL", __func__);
+					continue;
+				}
+
+				cif_state = &bdev->cif_state[cif_event];
+				/* Set Entering state */
+				btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+				btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSING);
+
+				if (main_info.hif_hook.cif_mutex_lock)
+					main_info.hif_hook.cif_mutex_lock(bdev);
+
+				ret = btmtk_send_deinit_cmds(bdev);
+				if (ret < 0) {
+					BTMTK_ERR("%s, btmtk_send_deinit_cmds failed", __func__);
+				}
+#if 0
+				/* Flush RX works */
+				flush_work(&bdev->rx_work);
+
+				/* Drop queues */
+				skb_queue_purge(&bdev->rx_q);
+#endif
+				main_info.hif_hook.close(bdev->hdev);
+
+				if (main_info.hif_hook.cif_mutex_unlock)
+					main_info.hif_hook.cif_mutex_unlock(bdev);
+
+				btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
+
+				/* Set End/Error state */
+				if (ret == 0)
+					btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+				else
+					btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+			}
+		}
+	}
+
+	return 0;
+}
+
+static struct notifier_block btmtk_reboot_notifier = {
+	.notifier_call = btmtk_reboot_notify,
+	.next = NULL,
+	.priority = 0,
+};
 
 static int main_init(void)
 {
@@ -978,6 +1062,10 @@ static int main_init(void)
 		} else
 			BTMTK_WARN("%s: No Exported Func Found [%s], just skip!", __func__, func_name);
 	} while (0);
+
+	BTMTK_INFO("%s: Register reboot_notifier callback success.", __func__);
+	/* Is it necessary? bt_close will be called by reboot. */
+	register_reboot_notifier(&btmtk_reboot_notifier);
 
 	g_bdev = kzalloc((sizeof(*g_bdev) * btmtk_intf_num), GFP_KERNEL);
 	if (!g_bdev) {
