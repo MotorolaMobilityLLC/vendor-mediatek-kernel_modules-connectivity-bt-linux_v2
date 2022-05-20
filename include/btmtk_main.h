@@ -251,6 +251,7 @@ enum {
 	BTMTK_STATE_RESUME,
 	BTMTK_STATE_FW_DUMP,
 	BTMTK_STATE_STANDBY,
+	BTMTK_STATE_SUBSYS_RESET,
 };
 
 /* Please keep sync with btmtk_fops_set_state function */

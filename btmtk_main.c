@@ -109,7 +109,7 @@ static const struct btmtk_cif_state g_cif_state[] = {
 	/* HIF_EVENT_STANDBY */
 	{BTMTK_STATE_STANDBY, BTMTK_STATE_STANDBY, BTMTK_STATE_FW_DUMP},
 	/* BTMTK_STATE_FW_DUMP */
-	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_WORKING, BTMTK_STATE_FW_DUMP},
+	{BTMTK_STATE_SUBSYS_RESET, BTMTK_STATE_WORKING, BTMTK_STATE_FW_DUMP},
 	/* BTMTK_STATE_FW_DUMP */
 	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_DISCONNECT, BTMTK_STATE_FW_DUMP},
 	/* BTMTK_STATE_FW_DUMP */
@@ -543,7 +543,8 @@ int btmtk_get_chip_state(struct btmtk_dev *bdev)
 void btmtk_set_chip_state(struct btmtk_dev *bdev, int new_state)
 {
 	static const char * const state_msg[] = {
-		"UNKNOWN", "INIT", "DISCONNECT", "PROBE", "WORKING", "SUSPEND", "RESUME", "FW_DUMP", "STANDBY",
+		"UNKNOWN", "INIT", "DISCONNECT", "PROBE", "WORKING", "SUSPEND", "RESUME",
+		"FW_DUMP", "STANDBY", "SUBSYS_RESET",
 	};
 
 	BTMTK_INFO("%s: %s(%d) -> %s(%d)", __func__, state_msg[bdev->interface_state],

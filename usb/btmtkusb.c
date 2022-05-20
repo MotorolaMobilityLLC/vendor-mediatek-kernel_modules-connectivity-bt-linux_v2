@@ -2478,14 +2478,14 @@ int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 	reset_buf[2] = ((val >> 16) & 0x00ff);
 	reset_buf[3] = ((val >> 24) & 0x00ff);
 
-	memset(bdev->io_buf, 0, IO_BUF_SIZE);
+	memcpy(bdev->o_usb_buf, reset_buf, sizeof(reset_buf));
 	ret = usb_control_msg(bdev->udev, usb_sndctrlpipe(bdev->udev, 0),
 			0x02,						/* bRequest */
 			0x5E,						/* bRequestType */
 			reg_high,					/* wValue */
 			reg_low,					/* wIndex */
-			reset_buf,
-			4, USB_CTRL_IO_TIMO);
+			bdev->o_usb_buf,
+			sizeof(reset_buf), USB_CTRL_IO_TIMO);
 
 	BTMTK_DBG("%s: high=%x, reg_low=%x, val=%x", __func__, reg_high, reg_low, val);
 	BTMTK_DBG("%s: reset_buf = %x %x %x %x", __func__, reset_buf[3], reset_buf[2], reset_buf[1], reset_buf[0]);
@@ -2570,20 +2570,19 @@ int btmtk_cif_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 	reg_high = ((reg >> 16) & 0xffff);
 	reg_low = (reg & 0xffff);
 
-	memset(bdev->io_buf, 0, IO_BUF_SIZE);
-
 	buf[0] = 0;
 	buf[1] = 0;
 	buf[2] = (val & 0x00ff);
 	buf[3] = ((val >> 8) & 0x00ff);
 
+	memcpy(bdev->o_usb_buf, buf, sizeof(buf));
 	ret = usb_control_msg(bdev->udev, usb_sndctrlpipe(bdev->udev, 0),
 			0x66,						/* bRequest */
 			0x40,	/* bRequestType */
 			reg_high,					/* wValue */
 			reg_low,					/* wIndex */
-			buf,
-			4, USB_CTRL_IO_TIMO);
+			bdev->o_usb_buf,
+			sizeof(buf), USB_CTRL_IO_TIMO);
 
 	BTMTK_DBG("%s: buf = %x %x %x %x", __func__, buf[3], buf[2], buf[1], buf[0]);
 

@@ -39,7 +39,7 @@
 
 
 /** Driver version */
-#define VERSION "7.0.2000060101"
+#define VERSION "7.0.2000060501"
 #define SUBVER ":turnkey"
 
 
@@ -111,12 +111,14 @@ extern u8 wmt_over_hci_header[];
 	do {									\
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) {			\
 			int raw_count = 0;					\
+			char str[HCI_SNOOP_MAX_BUF_SIZE * 3 + 1];		\
+			char *p_str = str;								\
 			const unsigned char *ptr = p;				\
 			pr_cont("[btmtk_info] "fmt, ##__VA_ARGS__);		\
-			for (raw_count = 0; raw_count < MIN(l, HCI_SNOOP_MAX_BUF_SIZE); ++raw_count) {	\
-				pr_cont(" %02X", ptr[raw_count]);		\
-			}							\
-			pr_cont("\n");						\
+			for (raw_count = 0; raw_count < MIN(l, HCI_SNOOP_MAX_BUF_SIZE); ++raw_count)	\
+				p_str += sprintf(p_str, " %02X", ptr[raw_count]);			\
+			*p_str = '\0';									\
+			pr_cont("%s\n", str);						\
 		}								\
 	} while (0)
 
@@ -124,12 +126,14 @@ extern u8 wmt_over_hci_header[];
 	do {									\
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {			\
 			int raw_count = 0;					\
+			char str[HCI_SNOOP_MAX_BUF_SIZE * 3 + 1];		\
+			char *p_str = str;								\
 			const unsigned char *ptr = p;				\
 			pr_cont("[btmtk_debug] "fmt, ##__VA_ARGS__);		\
-			for (raw_count = 0; raw_count < MIN(l, HCI_SNOOP_MAX_BUF_SIZE); ++raw_count) {	\
-				pr_cont(" %02X", ptr[raw_count]);		\
-			}							\
-			pr_cont("\n");						\
+			for (raw_count = 0; raw_count < MIN(l, HCI_SNOOP_MAX_BUF_SIZE); ++raw_count)	\
+				p_str += sprintf(p_str, " %02X", ptr[raw_count]);			\
+			*p_str = '\0';									\
+			pr_cont("%s\n", str);						\
 		}								\
 	} while (0)
 
