@@ -1207,6 +1207,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	unsigned int ifnum_base;
 	int ret = 0;
+	struct sk_buff *iso_skb = NULL;
 #ifdef CFG_SUPPORT_HW_DVT
 	struct sk_buff *evt_skb;
 	uint8_t notify_alt_evt[] = {0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00};
@@ -1348,18 +1349,34 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	case HCI_ACLDATA_PKT:
 		if (skb->data[0] == 0x00 && skb->data[1] == 0x44) {
 			int isoc_pkt_len = 0;
-
+			int isoc_pkt_padding = 0;
 			skb_pull(skb, 4);
 			isoc_pkt_len = skb->data[2] + (skb->data[3] << 8) + HCI_ISO_PKT_HEADER_SIZE;
+			isoc_pkt_padding = bdev->iso_threshold - isoc_pkt_len;
 			if (bdev->iso_threshold) {
-				memset(skb_put(skb, bdev->iso_threshold - isoc_pkt_len), 0,
-					bdev->iso_threshold - isoc_pkt_len);
-				BTMTK_INFO("%s: Ble iso pkt size is %d, isoc_pkt_len = %d", __func__,
-					bdev->iso_threshold, isoc_pkt_len);
+				if (skb_tailroom(skb) < isoc_pkt_padding) {
+					/* hci driver alllocate the size of skb that is to samll, need re-allocate */
+					iso_skb = alloc_skb(HCI_MAX_ISO_SIZE + BT_SKB_RESERVE, GFP_ATOMIC);
+					if (!iso_skb) {
+						BTMTK_ERR("%s allocate skb failed!!", __func__);
+						return -ENOMEM;
+					}
+					/* copy skb data into iso_skb */
+					skb_copy_bits(skb, 0, skb_put(iso_skb, skb->len), skb->len);
+					memset(skb_put(iso_skb, isoc_pkt_padding), 0, isoc_pkt_padding);
+
+					/* After call back, bt drive will free iso_skb */
+					urb = alloc_intr_iso_urb(hdev, iso_skb);
+					BTMTK_DBG_RAW(iso_skb->data, iso_skb->len, "%s, it's ble iso packet", __func__);
+
+					/* It's alloc by hci drver, bt driver must be free it. */
+					kfree_skb(skb);
+				} else {
+					memset(skb_put(skb, isoc_pkt_padding), 0, isoc_pkt_padding);
+					urb = alloc_intr_iso_urb(hdev, skb);
+					BTMTK_DBG_RAW(iso_skb->data, iso_skb->len, "%s, it's ble iso packet", __func__);
+				}
 			}
-			BTMTK_DBG_RAW(skb->data, skb->len,
-				"%s, add ble iso send 0x02 0x00 0x44, it's ble iso packet", __func__);
-			urb = alloc_intr_iso_urb(hdev, skb);
 		} else
 			urb = alloc_bulk_urb(hdev, skb);
 		if (IS_ERR(urb))

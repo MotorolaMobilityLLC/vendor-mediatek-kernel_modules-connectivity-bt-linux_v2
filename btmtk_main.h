@@ -150,6 +150,7 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 #define FWLOG_BLUETOOTH_KPI_QUEUE_COUNT		200
 #define HCI_MAX_COMMAND_SIZE			255
 #define HCI_MAX_COMMAND_BUF_SIZE		(HCI_MAX_COMMAND_SIZE * 3)
+#define HCI_MAX_ISO_SIZE	340
 
 struct btmtk_cif_state {
 	unsigned char ops_enter;

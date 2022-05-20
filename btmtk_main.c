@@ -3816,7 +3816,7 @@ static void btmtk_rx_work(struct work_struct *work)
 		/* BTMTK_DBG_RAW(skb->data, skb->len, "%s, recv evt", __func__); */
 		skip_pkt = btmtk_dispatch_pkt(bdev->hdev, skb);
 		if (skip_pkt != 0) {
-                        /* kfree_skb should be moved to btmtk_dispach_pkt */
+			/* kfree_skb should be moved to btmtk_dispach_pkt */
 			kfree_skb(skb);
 			continue;
 		}
