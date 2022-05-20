@@ -74,7 +74,7 @@
 /* Local Configuration */
 /*============================================================================*/
 
-#define LD_VERSION "4.0.21051401"
+#define LD_VERSION "4.0.21060701"
 
 #define BUFFER_SIZE  (1024 * 4)	/* Size of RX Queue */
 #define BT_SEND_HCI_CMD_BEFORE_SUSPEND 1
@@ -580,7 +580,7 @@ static void btmtk_usb_cap_init(struct LD_btmtk_usb_data *data)
 			 *  $$$$ : chip id
 			 *  % : fw version & 0xFF + 1 (in HEX)
 			 */
-			snprintf((char *)data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "mt%04x_patch_e%x_hdr.bin",
+			(void)snprintf((char *)data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "mt%04x_patch_e%x_hdr.bin",
 					data->chip_id & 0xFFFF, (fw_ver & 0xFF) + 1);
 			usb_debug("patch name: %s\n", data->rom_patch_bin_file_name);
 			data->rom_patch_len = 0;
@@ -631,11 +631,11 @@ static void btmtk_usb_cap_init(struct LD_btmtk_usb_data *data)
 		data->flavor = (data->flavor & 0x00000080) >> 7;
 		/* if flavor equals 1, it represent 7920, else it represent 7921 */
 		if (data->flavor)
-			snprintf((char *)data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+			(void)snprintf((char *)data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 				"BT_RAM_CODE_MT%04x_1a_%x_hdr.bin", data->chip_id & 0xffff,
 				(data->fw_version & 0xff) + 1);
 		else
-			snprintf(data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+			(void)snprintf(data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 				"BT_RAM_CODE_MT%04x_1_%x_hdr.bin",
 				data->chip_id & 0xffff, (data->fw_version & 0xff) + 1);
 
@@ -1953,11 +1953,11 @@ static int btmtk_usb_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct 
 	for (i = 0; i < counter; i++) {
 		temp_len = 0;
 		if (index_length == FW_CFG_INX_LEN_2) /* EX: APCF01 */
-			snprintf(search, sizeof(search), "%s%02d:", block_name, i);
+			(void)snprintf(search, sizeof(search), "%s%02d:", block_name, i);
 		else if (index_length == FW_CFG_INX_LEN_3) /* EX: APCF001 */
-			snprintf(search, sizeof(search), "%s%03d:", block_name, i);
+			(void)snprintf(search, sizeof(search), "%s%03d:", block_name, i);
 		else
-			snprintf(search, sizeof(search), "%s:", block_name);
+			(void)snprintf(search, sizeof(search), "%s:", block_name);
 		search_result = strstr((char *)searchcontent, search);
 
 		if (search_result) {
@@ -2209,7 +2209,7 @@ static int btmtk_usb_parse_bt_cfg_file(char *item_name, char *text, u8 *searchco
 	}
 
 	memset(search, 0, sizeof(search));
-	snprintf(search, sizeof(search), "%s", item_name); /* EX: SUPPORT_UNIFY_WOBLE */
+	(void)snprintf(search, sizeof(search), "%s", item_name); /* EX: SUPPORT_UNIFY_WOBLE */
 	p = ptr = strstr((char *)searchcontent, search);
 
 	if (!ptr) {
