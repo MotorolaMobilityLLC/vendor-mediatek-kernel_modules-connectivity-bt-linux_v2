@@ -1090,6 +1090,7 @@ static int btmtk_usb_open(struct hci_dev *hdev)
 					usb_kill_anchored_urbs(&cif_dev->ble_isoc_anchor);
 					goto failed;
 				}
+				set_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags);
 			} else
 				BTMTK_INFO("%s, intr_iso_rx_ep missing, don't submit_intr_ble_isoc_urb!",
 					__func__);
