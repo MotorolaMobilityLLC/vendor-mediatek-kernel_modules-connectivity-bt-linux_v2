@@ -2041,6 +2041,12 @@ static int btusb_probe(struct usb_interface *intf,
 
 	btmtk_woble_wake_unlock(bdev);
 
+#if CFG_SUPPORT_BLUEZ
+	err = btmtk_send_init_cmds(bdev);
+	if (err < 0)
+		BTMTK_ERR("%s, btmtk_send_init_cmds failed, err = %d", __func__, err);
+#endif /* CFG_SUPPORT_BLUEZ */
+
 	err = btmtk_register_hci_device(bdev);
 	if (err < 0) {
 		BT_ERR("btmtk_register_hci_device failed!");
@@ -2100,7 +2106,7 @@ static int btusb_suspend(struct usb_interface *intf, pm_message_t message)
 {
 	struct btmtk_dev *bdev = usb_get_intfdata(intf);
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
-	int ret = -1;
+	int ret = 0;
 
 	BT_DBG("intf %p", intf);
 

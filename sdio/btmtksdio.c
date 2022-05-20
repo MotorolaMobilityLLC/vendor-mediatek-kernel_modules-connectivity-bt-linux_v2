@@ -1266,7 +1266,7 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 		goto end;
 	}
 
-	err = btmtk_main_cif_initialize(bdev,int HCI_SDIO);
+	err = btmtk_main_cif_initialize(bdev, HCI_SDIO);
 	if (err < 0) {
 		BTMTK_ERR("[ERR] btmtk_main_cif_initialize failed!");
 		goto free_mem;
