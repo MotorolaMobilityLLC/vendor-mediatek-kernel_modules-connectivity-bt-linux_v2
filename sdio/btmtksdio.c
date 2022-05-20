@@ -30,6 +30,10 @@ static char event_need_compare_len;
 static char event_compare_status;
 const u8 READ_ADDRESS_EVENT[] = { 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00 };
 
+static DEFINE_MUTEX(btmtk_sdio_ops_mutex);
+#define SDIO_OPS_MUTEX_LOCK()	mutex_lock(&btmtk_sdio_ops_mutex)
+#define SDIO_OPS_MUTEX_UNLOCK()	mutex_unlock(&btmtk_sdio_ops_mutex)
+
 /*static const struct btmtksdio_data btmtk_sdio_7663 = {
 	.fwname = FIRMWARE_MT7663,
 };
@@ -65,6 +69,16 @@ static const struct sdio_device_id btmtk_sdio_tabls[] = {
 	{ }	/* Terminating entry */
 };
 MODULE_DEVICE_TABLE(sdio, btmtk_sdio_tabls);
+
+static void btmtk_sdio_cif_mutex_lock(struct btmtk_dev *bdev)
+{
+	SDIO_OPS_MUTEX_LOCK();
+}
+
+static void btmtk_sdio_cif_mutex_unlock(struct btmtk_dev *bdev)
+{
+	SDIO_OPS_MUTEX_UNLOCK();
+}
 
 void btmtk_sdio_set_no_fwn_own(struct btmtk_sdio_dev *cif_dev, int flag)
 {
@@ -1534,6 +1548,7 @@ static void btmtk_cif_disconnect(struct sdio_func *func)
 
 	cif_state = &bdev->cif_state[cif_event];
 
+	btmtk_sdio_cif_mutex_lock(bdev);
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
@@ -1542,6 +1557,7 @@ static void btmtk_cif_disconnect(struct sdio_func *func)
 
 	/* Set End/Error state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	btmtk_sdio_cif_mutex_unlock(bdev);
 }
 
 #ifdef CONFIG_PM
@@ -1760,6 +1776,8 @@ int btmtk_cif_register(void)
 	hook.subsys_reset = btmtk_sdio_subsys_reset;
 	hook.whole_reset = btmtk_sdio_whole_reset;
 	hook.chip_reset_notify = btmtk_sdio_chip_reset_notify;
+	hook.cif_mutex_lock = btmtk_sdio_cif_mutex_lock;
+	hook.cif_mutex_unlock = btmtk_sdio_cif_mutex_unlock;
 	btmtk_reg_hif_hook(&hook);
 
 	retval = sdio_register();
