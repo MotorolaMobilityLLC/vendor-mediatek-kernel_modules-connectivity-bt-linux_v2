@@ -17,6 +17,7 @@
 #include "btmtk_define.h"
 #include "btmtk_main.h"
 #include "btmtk_woble.h"
+#include "btmtk_chip_reset.h"
 
 #define HCI_MAX_COMMAND_SIZE	255
 #define URB_MAX_BUFFER_SIZE	(4*1024)

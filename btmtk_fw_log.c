@@ -1,5 +1,4 @@
 
-#include "btmtk_main.h"
 #include "btmtk_fw_log.h"
 
 /*
@@ -308,14 +307,14 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	if (strncmp(i_fwlog_buf, "whole chip reset", strlen("whole chip reset")) == 0) {
 		BTMTK_INFO("whole chip reset start");
 		bmain_info->chip_reset_flag = 1;
-		schedule_work(&pp_bdev[hci_idx]->reset_waker);
+		btmtk_reset_trigger(pp_bdev[hci_idx]);
 		ret = count;
 		goto exit;
 	}
 	if (strncmp(i_fwlog_buf, "subsys chip reset", strlen("subsys chip reset")) == 0) {
 		BTMTK_INFO("subsys chip reset");
 		bmain_info->chip_reset_flag = 0;
-		schedule_work(&pp_bdev[hci_idx]->reset_waker);
+		btmtk_reset_trigger(pp_bdev[hci_idx]);
 		ret = count;
 		goto exit;
 	}

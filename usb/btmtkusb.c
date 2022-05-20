@@ -28,10 +28,8 @@
 #include <asm/unaligned.h>
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h>
-#include "btmtk_define.h"
+
 #include "btmtk_usb.h"
-#include "btmtk_main.h"
-#include "btmtk_woble.h"
 
 static struct usb_driver btusb_driver;
 static struct btmtk_cif_chip_reset reset_func;
@@ -402,7 +400,7 @@ static void btusb_intr_complete(struct urb *urb)
 			 * WDT interrupt is a mechanism to do L0.5 reset.
 			 */
 			DUMP_TIME_STAMP("notify_chip_reset");
-			schedule_work(&bdev->reset_waker);
+			btmtk_reset_trigger(bdev);
 			goto intr_resub;
 		}
 

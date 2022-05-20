@@ -28,6 +28,7 @@
 #include "btmtk_main.h"
 #include "btmtk_woble.h"
 #include "btmtk_buffer_mode.h"
+#include "btmtk_chip_reset.h"
 
 #ifndef BTMTK_SDIO_DEBUG
 #define BTMTK_SDIO_DEBUG 0

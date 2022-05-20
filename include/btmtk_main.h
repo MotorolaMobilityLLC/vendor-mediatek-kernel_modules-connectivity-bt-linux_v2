@@ -454,6 +454,8 @@ struct btmtk_dev {
 	struct work_struct	waker;
 	struct work_struct	reset_waker;
 
+	struct timer_list chip_reset_timer;
+
 	int	recv_evt_len;
 	int	tx_in_flight;
 	spinlock_t	txlock;
@@ -651,7 +653,6 @@ int btmtk_send_wmt_reset(struct btmtk_dev *hdev);
 int btmtk_load_rom_patch_766x(struct btmtk_dev *hdev);
 int btmtk_load_rom_patch(struct btmtk_dev *bdev);
 struct btmtk_dev *btmtk_get_dev(void);
-void btmtk_reset_waker(struct work_struct *work);
 int btmtk_cap_init(struct btmtk_dev *bdev);
 struct btmtk_main_info *btmtk_get_main_info(void);
 int btmtk_get_interface_num(void);

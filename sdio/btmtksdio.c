@@ -21,10 +21,7 @@
  *
  */
 
-#include "btmtk_define.h"
 #include "btmtk_sdio.h"
-#include "btmtk_main.h"
-#include "btmtk_woble.h"
 
 static char event_need_compare[EVENT_COMPARE_SIZE] = {0};
 static char event_need_compare_len;
@@ -1248,7 +1245,7 @@ static void btmtk_sdio_interrupt(struct sdio_func *func)
 		 */
 		ret = btmtk_sdio_readl(CHISR, &u32ReadCRValue, func);
 		BTMTK_INFO("%s CHISR 0x%08x", __func__, u32ReadCRValue);
-		schedule_work(&bdev->reset_waker);
+		btmtk_reset_trigger(bdev);
 		return;
 	}
 
@@ -1759,7 +1756,7 @@ static int btmtk_sdio_interrupt_process(struct btmtk_dev *bdev)
 		/* FW can't send TX_EMPTY for 0xFD5B */
 		atomic_set(&cif_dev->tx_rdy, 1);
 		DUMP_TIME_STAMP("notify_chip_reset");
-		schedule_work(&bdev->reset_waker);
+		btmtk_reset_trigger(bdev);
 		return ret;
 	}
 
@@ -1814,7 +1811,7 @@ static int btmtk_sdio_main_thread(void *data)
 		ret = btmtk_sdio_set_own_back(cif_dev, DRIVER_OWN, RETRY_TIMES);
 		if (ret) {
 			BTMTK_ERR("set driver own return fail");
-			schedule_work(&bdev->reset_waker);
+			btmtk_reset_trigger(bdev);
 			continue;
 		}
 #if 1
@@ -1823,7 +1820,7 @@ static int btmtk_sdio_main_thread(void *data)
 			BTMTK_DBG("go int");
 			atomic_set(&cif_dev->int_count, 0);
 			if (btmtk_sdio_interrupt_process(bdev)) {
-				schedule_work(&bdev->reset_waker);
+				btmtk_reset_trigger(bdev);
 				continue;
 			}
 		} else {
@@ -1843,7 +1840,7 @@ static int btmtk_sdio_main_thread(void *data)
 			ret = btmtk_tx_pkt(cif_dev, skb);
 			if (ret) {
 				BTMTK_ERR("tx pkt return fail %d", ret);
-				schedule_work(&bdev->reset_waker);
+				btmtk_reset_trigger(bdev);
 				continue;
 			}
 		}
@@ -1854,7 +1851,7 @@ static int btmtk_sdio_main_thread(void *data)
 			ret = btmtk_sdio_set_own_back(cif_dev, FW_OWN, RETRY_TIMES);
 			if (ret) {
 				BTMTK_ERR("set fw own return fail");
-				schedule_work(&bdev->reset_waker);
+				btmtk_reset_trigger(bdev);
 			}
 		}
 	}

@@ -14,6 +14,9 @@
 #ifndef __BTMTK_FW_LOG_H__
 #define __BTMTK_FW_LOG_H__
 
+#include "btmtk_main.h"
+#include "btmtk_chip_reset.h"
+
 #define BT_FWLOG_IOC_MAGIC          (0xfc)
 #define BT_FWLOG_IOC_ON_OFF      _IOW(BT_FWLOG_IOC_MAGIC, 0, int)
 #define BT_FWLOG_IOC_SET_LEVEL   _IOW(BT_FWLOG_IOC_MAGIC, 1, int)

@@ -11,8 +11,43 @@
  *  See http://www.gnu.org/licenses/gpl-2.0.html for more details.
  */
 
-#include "btmtk_main.h"
-#include "btmtk_woble.h"
+#include "btmtk_chip_reset.h"
+
+#if (KERNEL_VERSION(4, 15, 0) > LINUX_VERSION_CODE)
+static void btmtk_reset_timer(unsigned long arg)
+{
+	struct btmtk_dev *bdev = (struct btmtk_dev *)arg;
+	BTMTK_INFO("%s: chip_reset not trigger in %d seconds, trigger it directly",
+		__func__, CHIP_RESET_TIMEOUT);
+	schedule_work(&bdev->reset_waker);
+}
+#else
+static void btmtk_reset_timer(struct timer_list *timer)
+{
+	struct btmtk_dev *bdev = from_timer(bdev, timer, chip_reset_timer);
+	BTMTK_INFO("%s: chip_reset not trigger in %d seconds, trigger it directly",
+		__func__, CHIP_RESET_TIMEOUT);
+	schedule_work(&bdev->reset_waker);
+}
+#endif
+
+static void btmtk_reset_timer_add(struct btmtk_dev *bdev)
+{
+#if (KERNEL_VERSION(4, 15, 0) > LINUX_VERSION_CODE)
+	init_timer(&bdev->chip_reset_timer);
+	bdev->chip_reset_timer.function = btmtk_reset_timer;
+	bdev->chip_reset_timer.data = (unsigned long)bdev;
+	mod_timer(&bdev->chip_reset_timer, jiffies + CHIP_RESET_TIMEOUT * HZ);
+#else
+	timer_setup(&bdev->chip_reset_timer, btmtk_reset_timer, 0);
+	mod_timer(&bdev->chip_reset_timer, jiffies + CHIP_RESET_TIMEOUT * HZ);
+#endif
+}
+
+static void btmtk_reset_timer_del(struct btmtk_dev *bdev)
+{
+	del_timer_sync(&bdev->chip_reset_timer);
+}
 
 void btmtk_reset_waker(struct work_struct *work)
 {
@@ -20,6 +55,8 @@ void btmtk_reset_waker(struct work_struct *work)
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	int cif_event = 0, err = 0;
+
+	btmtk_reset_timer_del(bdev);
 
 	DUMP_TIME_STAMP("chip_reset_start");
 	cif_event = HIF_EVENT_SUBSYS_RESET;
@@ -133,5 +170,11 @@ Finish:
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 	else
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+}
+
+void btmtk_reset_trigger(struct btmtk_dev *bdev)
+{
+	btmtk_reset_timer_add(bdev);
+	schedule_work(&bdev->reset_waker);
 }
 
