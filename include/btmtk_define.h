@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2021081801"
+#define VERSION "7.0.2021083001"
 #define SUBVER ":turnkey"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -260,6 +260,7 @@ extern uint8_t btmtk_log_lvl;
 
 #define BTMTK_RESET_DOING 1
 #define BTMTK_RESET_DONE 0
+#define BTMTK_MAX_SUBSYS_RESET_COUNT 3
 
 /**
  * Disable RESUME_RESUME

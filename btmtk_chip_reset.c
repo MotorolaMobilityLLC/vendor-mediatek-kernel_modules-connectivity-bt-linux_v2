@@ -96,7 +96,7 @@ void btmtk_reset_waker(struct work_struct *work)
 
 	bdev->sco_num = 0;
 
-	if (bmain_info->chip_reset_flag == 0) {
+	if (bmain_info->chip_reset_flag == 0 && atomic_read(&bmain_info->subsys_reset_conti_count) < BTMTK_MAX_SUBSYS_RESET_COUNT) {
 		if (bmain_info->hif_hook.subsys_reset) {
 			cur = atomic_cmpxchg(&bmain_info->subsys_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
 			if (cur == BTMTK_RESET_DOING) {
@@ -110,6 +110,7 @@ void btmtk_reset_waker(struct work_struct *work)
 				BTMTK_INFO("subsys reset failed, do whole chip reset!");
 			} else {
 				atomic_inc(&bmain_info->subsys_reset_count);
+				atomic_inc(&bmain_info->subsys_reset_conti_count);
 				DUMP_TIME_STAMP("subsys_chip_reset_end");
 
 				bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
@@ -135,7 +136,10 @@ void btmtk_reset_waker(struct work_struct *work)
 		}
 	} else {
 		err = -1;
-		BTMTK_INFO("%s: chip_reset_flag is %d", __func__, bmain_info->chip_reset_flag);
+		BTMTK_INFO("%s: chip_reset_flag is %d, subsys_reset_count %d",
+			__func__,
+			bmain_info->chip_reset_flag,
+			atomic_read(&bmain_info->subsys_reset_conti_count));
 	}
 
 	if (err < 0) {
