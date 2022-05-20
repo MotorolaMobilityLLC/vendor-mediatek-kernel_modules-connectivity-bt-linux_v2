@@ -162,21 +162,6 @@ void rx_debug_save(int type, u32 value, u8 *buf)
 }
 #endif
 
-static void btmtk_sdio_dump_power_status(struct btmtk_dev *bdev)
-{
-	struct btmtk_sdio_dev *cif_dev = NULL;
-	u32 value = 0;
-
-	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
-
-	btmtk_sdio_writel(BT_DUMP_POWER_STATUS_ADDR_W,
-		BT_DUMP_POWER_STATUS_VALUE_W, cif_dev->func);
-	btmtk_sdio_readl(BT_DUMP_POWER_STATUS_ADDR_R, &value, cif_dev->func);
-	BTMTK_INFO("%s W(0x%08X) = 0x%08X, R(0x%08X) = 0x%08X", __func__,
-		BT_DUMP_POWER_STATUS_ADDR_W, BT_DUMP_POWER_STATUS_VALUE_W,
-		BT_DUMP_POWER_STATUS_ADDR_R, value);
-}
-
 static void btmtk_sdio_dump_bgfsys_sleep_status(struct btmtk_dev *bdev)
 {
 	struct btmtk_sdio_dev *cif_dev = NULL;
@@ -273,8 +258,7 @@ static void btmtk_sdio_dump_bgf_bt_debug_log(struct btmtk_dev *bdev)
 
 static void btmtk_sdio_dump_debug_sop_sleep(struct btmtk_dev *bdev)
 {
-	/* dump Power_Status(Power_check) */
-	btmtk_sdio_dump_power_status(bdev);
+	/* dump Power_Status(Power_check), SDIO not support */
 
 	/* dump BGFSYS_Sleep_Status(Power_check) */
 	btmtk_sdio_dump_bgfsys_sleep_status(bdev);
@@ -289,8 +273,7 @@ static void btmtk_sdio_dump_debug_sop_sleep(struct btmtk_dev *bdev)
 
 static void btmtk_sdio_dump_debug_sop_wakeup(struct btmtk_dev *bdev)
 {
-	/* dump Power_Status(Power_check) */
-	btmtk_sdio_dump_power_status(bdev);
+	/* dump Power_Status(Power_check), SDIO not support */
 
 	/* dump bgf_bt_debug_log(BGFSYS_status) */
 	btmtk_sdio_dump_bgf_bt_debug_log(bdev);
