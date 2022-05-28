@@ -21,6 +21,16 @@
 #include "connv3_debug_utility.h"
 #include "connv3_mcu_log.h"
 #include "btmtk_fw_log.h"
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+/* uarthub API */
+extern int mtk8250_uart_hub_enable_bypass_mode(int bypass);
+extern int mtk8250_uart_hub_is_ready(void);
+extern int mtk8250_uart_hub_set_request(void);
+extern int mtk8250_uart_hub_fifo_ctrl(int ctrl);
+extern int mtk8250_uart_hub_dump_with_tag(const char *tag);
+#endif
+
 #endif
 
 #define LOG TRUE
@@ -346,6 +356,11 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 		cmd[BT_FLOWCTRL_OFFSET] = BT_NONE_FC;
 	}
 
+	/* uarthub setting
+	 * ex: 0x13 means hub enable, rhw disable, crc disable
+	 */
+	cmd[13] = (cif_dev->fw_hub_en << 4 | !cif_dev->rhw_en << 1 | !cif_dev->crc_en << 0);
+
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, SETBAUD_CMD_LEN, event, SETBAUD_EVT_LEN,
 			0, 0, BTMTK_TX_CMD_FROM_DRV);
@@ -381,7 +396,10 @@ static int btmtk_uart_send_query_uart_cmd(struct hci_dev *hdev)
 int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 {
 	u8 cmd[] = { 0x01, 0x6f, 0xfc, 0x01, 0xFF };
+	/* event before fw dl */
 	u8 event[] = { 0x04, 0xE4, 0x06, 0x02, 0x03, 0x02, 0x00, 0x00, 0x03};
+	/* event after fw dl */
+	u8 event2[] = { 0x04, 0xE4, 0x07, 0x02, 0x03, 0x03, 0x00, 0x00, 0x03, 0x01 };
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	struct btmtk_uart_dev *cif_dev = NULL;
 	int ret = -1;
@@ -397,10 +415,14 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 		BTMTK_INFO("%s uart baudrate is 115200, no need", __func__);
 		return 0;
 	}
-	if (is_mt6639(bdev->chip_id) || is_mt66xx(bdev->chip_id))
-		ret = btmtk_main_send_cmd(bdev, cmd+4, 1, event, WAKEUP_EVT_LEN,
-				0, 0, BTMTK_TX_CMD_FROM_DRV);
-	else
+	if (is_mt6639(bdev->chip_id) || is_mt66xx(bdev->chip_id)) {
+		if (cif_dev->fw_dl_ready)
+			ret = btmtk_main_send_cmd(bdev, cmd+4, 1, event2, WAKEUP_EVT_LEN + 1,
+					0, 0, BTMTK_TX_CMD_FROM_DRV);
+		else
+			ret = btmtk_main_send_cmd(bdev, cmd+4, 1, event, WAKEUP_EVT_LEN,
+					0, 0, BTMTK_TX_CMD_FROM_DRV);
+	} else
 		ret = btmtk_main_send_cmd(bdev, cmd, WAKEUP_CMD_LEN, event, WAKEUP_EVT_LEN,
 				0, 0, BTMTK_TX_CMD_FROM_DRV);
 
@@ -518,6 +540,7 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	int ret = -1;
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
+	int ready_retry;
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -552,6 +575,34 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s flush 0", __func__);
 	btmtk_set_uart_auxFunc();
 
+	ready_retry = 50;
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	/* use uarthub multi-host mode (default) */
+	ret = mtk8250_uart_hub_enable_bypass_mode(0);
+	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
+
+	/* Set TX,RX request */
+	ret = mtk8250_uart_hub_set_request();
+	if (ret) {
+		BTMTK_ERR("%s mtk8250_uart_hub_set_request fail", __func__);
+	}
+
+	/* Polling UARTHUB is ready state */
+	while (mtk8250_uart_hub_is_ready() <= 0 && --ready_retry) {
+		BTMTK_WARN("%s ready_retry[%d]", __func__, ready_retry);
+		usleep_range(1000, 1100);
+	}
+
+	if (ready_retry <= 0) {
+		ret = mtk8250_uart_hub_dump_with_tag("BT");
+		BTMTK_ERR("%s mtk8250_uart_hub_dump_with_tag ready_retry[%d] ret[%d]", __func__, ready_retry, ret);
+	}
+
+	/* use uarthub bypass mode */
+	ret = mtk8250_uart_hub_enable_bypass_mode(1);
+	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
+#endif
 	/* set tty host baud and flowcontrol to default value */
 	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);
 	tty_termios_encode_baud_rate(&new_termios, BT_UART_DEFAULT_BAUD, BT_UART_DEFAULT_BAUD);
@@ -562,6 +613,12 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	/* update baurdrate from dts */
 	if (cif_dev->baudrate)
 		uart_cfg.iBaudrate = cif_dev->baudrate;
+
+	/* uarhub setting */
+	cif_dev->fw_hub_en = 0;
+	cif_dev->rhw_en = 0;
+	cif_dev->crc_en = 0;
+	cif_dev->fw_dl_ready = 0;
 
 	/* set chip baud and flowcontrol to config setting */
 	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
@@ -606,6 +663,13 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	if (ret < 0)
 		goto exit;
 
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	/* disable ADSP,MD when fw dl */
+	ret = mtk8250_uart_hub_fifo_ctrl(1);
+	BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(1) ret[%d]", __func__, ret);
+#endif
+
+
 	ret = btmtk_load_rom_patch(bdev);
 	cif_event = HIF_EVENT_PROBE;
 	cif_state = &bdev->cif_state[cif_event];
@@ -615,8 +679,35 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	} else {
 		BTMTK_ERR("%s: btmtk_load_rom_patch failed (%d)", __func__, ret);
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+		return ret;
+	}
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	/* enable ADSP,MD when fw dl done*/
+	ret = mtk8250_uart_hub_fifo_ctrl(0);
+	BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(0) ret[%d]", __func__, ret);
+
+	/* uarhub setting */
+	cif_dev->fw_hub_en = 1;
+	cif_dev->rhw_en = 0;
+	cif_dev->crc_en = 1;
+	cif_dev->fw_dl_ready = 1;
+
+	/* set chip baud and flowcontrol to config setting */
+	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
+	if (ret < 0) {
+		BTMTK_WARN("%s after fwdl, send uarhub setting cmd", __func__);
 		goto exit;
 	}
+
+	/* after fw dl, use uarthub multi-host mode */
+	ret = mtk8250_uart_hub_enable_bypass_mode(0);
+	BTMTK_INFO("%s after fw dl, mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
+
+	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
+	if (ret < 0)
+		goto exit;
+#endif
 
 	BTMTK_INFO("%s done", __func__);
 
