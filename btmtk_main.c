@@ -4090,6 +4090,7 @@ static int bt_close(struct hci_dev *hdev)
 		BTMTK_WARN("%s: fw dump ongoing, can't close yet", __func__);
 		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(15000))) {
 			BTMTK_ERR("%s: uanble to finish coredump in 15s", __func__);
+			connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump fail");
 		}
 		goto exit;
 	}

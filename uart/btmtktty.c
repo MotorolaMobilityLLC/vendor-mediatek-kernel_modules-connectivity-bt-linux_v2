@@ -164,8 +164,6 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 		return -1;
 	}
 
-	/* event may be fragment in uart */
-	bdev->recv_evt_len = skb->len;
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		skb->len >= event_need_compare_len) {
 		memset(bdev->io_buf, 0, IO_BUF_SIZE);
@@ -196,6 +194,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			 * or mstar member said we can also use dsb(ISHST);
 			 */
 			msleep(IO_BUF_DELAY_TIME);
+			bdev->recv_evt_len = skb->len;
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 			BTMTK_DBG("%s, compare success", __func__);
 		} else {
@@ -1182,7 +1181,6 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	}
 
 	/* add hci device part */
-	bdev->recv_evt_len = count;
 	ret = btmtk_recv(bdev->hdev, data, count);
 	if (ret < 0)
 		BTMTK_ERR("%s, ret = %d", __func__, ret);
