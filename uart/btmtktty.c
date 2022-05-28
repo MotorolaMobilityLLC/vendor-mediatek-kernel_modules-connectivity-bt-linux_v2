@@ -164,8 +164,6 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 		return -1;
 	}
 
-	/* event may be fragment in uart */
-	bdev->recv_evt_len = skb->len;
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		skb->len >= event_need_compare_len) {
 		memset(bdev->io_buf, 0, IO_BUF_SIZE);
@@ -196,6 +194,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			 * or mstar member said we can also use dsb(ISHST);
 			 */
 			msleep(IO_BUF_DELAY_TIME);
+			bdev->recv_evt_len = skb->len;
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 			BTMTK_DBG("%s, compare success", __func__);
 		} else {
@@ -1182,7 +1181,6 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	}
 
 	/* add hci device part */
-	bdev->recv_evt_len = count;
 	ret = btmtk_recv(bdev->hdev, data, count);
 	if (ret < 0)
 		BTMTK_ERR("%s, ret = %d", __func__, ret);
@@ -1201,7 +1199,6 @@ static void btmtk_uart_tty_wakeup(struct tty_struct *tty)
 	BTMTK_INFO("%s: tty %p", __func__, tty);
 }
 
-#if (USE_DEVICE_NODE == 0)
 static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 {
 	int ret;
@@ -1238,7 +1235,6 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 	return ret;
 }
-#endif
 
 static int btmtk_cif_probe(struct tty_struct *tty)
 {
@@ -1392,16 +1388,15 @@ static int btmtk_cif_suspend(void)
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
-#if (USE_DEVICE_NODE == 0) //temp for resolve fw/driver own fail in sp
+#if (USE_DEVICE_NODE == 0)
 	ret = btmtk_woble_suspend(bt_woble);
 	if (ret < 0)
 		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
-
+#endif
 
 	ret = btmtk_uart_fw_own(bdev);
 	if (ret < 0)
 		BTMTK_ERR("%s: set fw own return fail %d", __func__, ret);
-#endif
 
 	/* Set End/Error state */
 	if (ret == 0)
@@ -1417,7 +1412,7 @@ static int btmtk_cif_resume(void)
 	struct tty_struct *tty = g_tty;
 	struct btmtk_dev *bdev = dev_get_drvdata(tty->dev);
 	struct btmtk_cif_state *cif_state = NULL;
-	int ret = 0;
+	int ret;
 
 #if (USE_DEVICE_NODE == 0)
 	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
@@ -1441,11 +1436,10 @@ static int btmtk_cif_resume(void)
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
-#if (USE_DEVICE_NODE == 0) //temp for resolve fw/driver own fail in sp
 	ret = btmtk_uart_driver_own(bdev);
 	if (ret < 0)
 		BTMTK_ERR("%s: set driver own return fail %d", __func__, ret);
-
+#if (USE_DEVICE_NODE == 0)
 	ret = btmtk_woble_resume(bt_woble);
 	if (ret < 0)
 		BTMTK_ERR("%s: btmtk_woble_resume return fail %d", __func__, ret);
