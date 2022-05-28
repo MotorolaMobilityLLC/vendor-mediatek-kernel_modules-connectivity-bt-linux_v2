@@ -176,6 +176,7 @@ int32_t btmtk_intcmd_set_fw_log(uint8_t flag)
 {
 	u8 fw_log_cmd[8] = { 0x01, 0x5D, 0xFC, 0x04, 0x02, 0x00, 0x02, 0x03 };
 	int ret;
+
 	BTMTK_INFO("%s send flag[0x%02X]", __func__, flag);
 	fw_log_cmd[7] = flag;
 	ret = btmtk_main_send_cmd(g_sbdev,
@@ -1478,7 +1479,7 @@ int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb)
 	 * }
 	 */
 
-	BTMTK_DBG_RAW(skb->data, skb->len, "%s, recv evt(hci_recv_frame)", __func__);
+	//BTMTK_DBG_RAW(skb->data, skb->len, "%s, recv evt(hci_recv_frame)", __func__);
 
 	skb_queue_tail(&bdev->rx_q, skb);
 	queue_work(bdev->workqueue, &bdev->rx_work);
@@ -4088,10 +4089,8 @@ static int bt_close(struct hci_dev *hdev)
 #if (USE_DEVICE_NODE == 1)
 	if (state == BTMTK_STATE_FW_DUMP) {
 		BTMTK_WARN("%s: fw dump ongoing, can't close yet", __func__);
-		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(15000))) {
+		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT)))
 			BTMTK_ERR("%s: uanble to finish coredump in 15s", __func__);
-			connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump fail");
-		}
 		goto exit;
 	}
 #endif
@@ -4127,7 +4126,7 @@ static int bt_close(struct hci_dev *hdev)
 	bdev->power_state = BTMTK_DONGLE_STATE_POWER_OFF;
 	BTMTK_INFO("%s, SKIP btmtk_send_deinit_cmds", __func__);
 #else
-	if (state != BTMTK_STATE_STANDBY && main_info.reset_stack_flag == HW_ERR_CODE_CORE_DUMP) {
+	if (state != BTMTK_STATE_STANDBY && main_info.reset_stack_flag != HW_ERR_CODE_CORE_DUMP) {
 		ret = btmtk_send_deinit_cmds(bdev);
 		if (ret < 0) {
 			BTMTK_ERR("%s, btmtk_send_deinit_cmds failed", __func__);
@@ -4150,14 +4149,20 @@ unlock:
 	if (main_info.hif_hook.cif_mutex_unlock)
 		main_info.hif_hook.cif_mutex_unlock(bdev);
 exit:
+	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
+	/* after fops set closed, would not get any rx data */
+	/* so if chip_state still fw_dump, need to release wakelock and coredump end*/
+	state = btmtk_get_chip_state(bdev);
 #if (USE_DEVICE_NODE == 1)
+	if (state == BTMTK_STATE_FW_DUMP) {
+		BTMTK_ERR("%s: end with chip_state still dumping", __func__);
+		//btmtk_fwdump_wake_unlock();
+		connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump fail");
+	}
 	btmtk_reset_pin_off();
 	if (connv3_pwr_off(CONNV3_DRV_TYPE_BT))
 		BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
 #endif
-	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
-	state = btmtk_get_chip_state(bdev);
-
 
 err:
 	main_info.reset_stack_flag = HW_ERR_NONE;
@@ -4467,6 +4472,7 @@ void btmtk_reg_hif_hook(struct hif_hook_ptr *hook)
 static void btmtk_dynamic_fwdl_work(struct work_struct *work)
 {
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, dynamic_fwdl_work);
+
 	BTMTK_INFO("%s enter", __func__);
 	btmtk_dynamic_load_rom_patch(bdev, bdev->fw_bin_info);
 }

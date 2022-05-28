@@ -712,7 +712,7 @@ exit:
 int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		const int cmd_len, int retry, int delay)
 {
-	int ret = -1, len = 0;
+	int ret = -1, len = 0, retry_send = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
 
 	if (bdev == NULL) {
@@ -721,13 +721,15 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
-	BTMTK_DBG_RAW(cmd, cmd_len, "%s, len = %d Send CMD : ", __func__, cmd_len);
+
 	/* BTMTK_INFO("%s: tty %p\n", __func__, bdev->tty); */
 	while (len != cmd_len) {
 		ret = cif_dev->tty->ops->write(cif_dev->tty, cmd + len, cmd_len - len);
 		len += ret;
-		BTMTK_DBG("%s, len = %d, tty[%s]", __func__, len, cif_dev->tty->name);
+		retry_send++;
 	}
+
+	BTMTK_INFO_RAW(cmd, cmd_len, "%s, len[%d] retry[%d] CMD : ", __func__, cmd_len, retry_send);
 
 	return ret;
 }
@@ -1174,9 +1176,16 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 {
 	int ret = -1;
 	struct btmtk_dev *bdev = tty->disc_data;
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return;
+	}
+
+	fstate = btmtk_fops_get_state(bdev);
+	if (fstate == BTMTK_FOPS_STATE_CLOSED) {
+		BTMTK_DBG_RAW(data, count, "[SKIP] %s: count[%d]", __func__, count);
 		return;
 	}
 
