@@ -63,7 +63,7 @@ static inline int btmtk_pinctrl_exec(const char *name)
 
 	return 0;
 }
-static int btmtk_pre_power_on_handler(void)
+int btmtk_pre_power_on_handler(void)
 {
 	/*
 	 * Set BT_RST PU/OUPUT
@@ -84,14 +84,12 @@ int btmtk_reset_pin_off(void)
 	return btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 }
 
-
-int btmtk_post_power_on_handler(void)
+int btmtk_set_uart_auxFunc(void)
 {
-	/* Set PCM pin function */
-	if (!btmtk_pinctrl_exec(POWER_ON_PINCTRL_NAME))
-		return -1;
+	BTMTK_DBG("%s: start", __func__);
 
-	return btmtk_read_pmic_state(NULL);
+	return btmtk_pinctrl_exec(POWER_ON_PINCTRL_NAME);
+	//return btmtk_read_pmic_state(NULL);
 }
 
 static int btmtk_power_on_notify_handler(void)
@@ -265,6 +263,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct tty_struct *tty = NULL;
 	struct connv3_sub_drv_ops_cb btmtk_drv_cbs;
+	int ret;
 
 	btmtk_drv_cbs.pwr_on_cb = btmtk_pwr_on_cb;
 	btmtk_drv_cbs.rst_cb = btmtk_whole_chip_rst_cb;
@@ -290,6 +289,10 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	if (!tty->dev->of_node)
 		BTMTK_ERR("[ERR] %s: mediatek,bt of_node not found", __func__);
 
+	ret = of_property_read_u32(tty->dev->of_node,"baudrate", &cif_dev->baudrate);
+	if(ret < 0)
+		BTMTK_ERR("[ERR] %s: mediatek,bt baudrate ret[%d]", __func__, ret);
+
 	pinctrl_ptr = devm_pinctrl_get(tty->dev);
 	if (IS_ERR(pinctrl_ptr)) {
 		BTMTK_ERR("[ERR] %s: fail to get bt pinctrl", __func__);
@@ -297,7 +300,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	}
 	//btmtk_pinctrl_exec(INIT_STATE_PINCTRL_NAME);
 	connv3_sub_drv_ops_register(CONNV3_DRV_TYPE_BT, &btmtk_drv_cbs);
-	BTMTK_INFO("%s end", __func__);
+	BTMTK_INFO("%s end, baudrate[%d]", __func__, cif_dev->baudrate);
 	return 0;
 }
 

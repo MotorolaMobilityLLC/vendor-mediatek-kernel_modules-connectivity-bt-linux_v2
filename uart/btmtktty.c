@@ -550,6 +550,7 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 		//tty->ldisc->ops->flush_buffer(tty);
 
 	BTMTK_INFO("%s flush 0", __func__);
+	btmtk_set_uart_auxFunc();
 
 	/* set tty host baud and flowcontrol to default value */
 	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);
@@ -557,6 +558,10 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	new_termios.c_cflag &= ~(CRTSCTS);
 	new_termios.c_iflag &= ~(NOFLSH|CRTSCTS);
 	tty_set_termios(tty, &new_termios);
+
+	/* update baurdrate from dts */
+	if (cif_dev->baudrate)
+		uart_cfg.iBaudrate = cif_dev->baudrate;
 
 	/* set chip baud and flowcontrol to config setting */
 	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
