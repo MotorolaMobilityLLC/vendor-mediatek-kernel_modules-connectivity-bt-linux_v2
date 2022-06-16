@@ -248,6 +248,11 @@ int32_t btmtk_send_data(struct hci_dev *hdev, u8 *buf, u32 count)
 {
 	struct sk_buff *skb = NULL;
 
+	if (hdev == NULL) {
+		BTMTK_ERR("%s hdev is NULL", __func__);
+		return -1;
+	}
+
 	if (count <= 0 || buf == NULL) {
 		BTMTK_ERR("%s: error input length (%d) or buffer (%p)", count, buf);
 		return -1;
