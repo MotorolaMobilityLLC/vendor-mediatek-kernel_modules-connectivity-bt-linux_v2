@@ -99,8 +99,10 @@ endif
 
 ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
 ccflags-y += -DUSE_DEVICE_NODE=1
+ccflags-y += -DSLEEP_ENABLE=1
 else
 ccflags-y += -DUSE_DEVICE_NODE=0
+ccflags-y += -DSLEEP_ENABLE=0
 endif
 
 $(info [BT_Drv] MTK_PROJ_TYPE = $(MTK_PROJ_TYPE) src = $(src))

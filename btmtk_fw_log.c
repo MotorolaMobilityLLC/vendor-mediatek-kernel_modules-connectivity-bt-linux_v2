@@ -793,7 +793,7 @@ static void btmtk_fwdump_wake_lock(void)
 	BTMTK_INFO("%s: exit", __func__);
 }
 
-static void btmtk_fwdump_wake_unlock(void)
+void btmtk_fwdump_wake_unlock(void)
 {
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
