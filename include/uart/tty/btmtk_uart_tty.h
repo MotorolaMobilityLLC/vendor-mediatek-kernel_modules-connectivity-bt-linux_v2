@@ -28,9 +28,6 @@
 #include <linux/pinctrl/consumer.h>
 #include <linux/clk.h>
 #include <linux/suspend.h>
-#if (USE_DEVICE_NODE == 1)
-#include "btmtk_proj_sp.h"
-#endif
 
 #define HCI_HEADER_LEN	4
 
@@ -194,11 +191,6 @@ struct btmtk_uart_dev {
 
 	/* sempaphore to compare event */
 	struct semaphore	evt_comp_sem;
-
-#if (USE_DEVICE_NODE == 1)
-	/* dynamic tx power control */
-	struct btmtk_dypwr_st dy_pwr;
-#endif
 };
 
 #define btmtk_uart_is_standalone(bdev)	\
@@ -222,6 +214,13 @@ struct btmtk_uart_dev {
 #define HCIUARTLOADPATCH _IOW('U', 204, int)
 #define HCIUARTSETWAKEUP _IOW('U', 205, int)
 #define HCIUARTINIT _IOW('U', 206, int)
+
+/**
+ * parameter settings
+ */
+#define BTMTK_HUB_EN		(1 << 0)
+#define BTMTK_SLEEP_EN		(1 << 1)
+
 
 //int btmtk_cif_send_calibration(struct hci_dev *hdev);
 #endif

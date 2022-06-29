@@ -438,6 +438,17 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
+	if (strncmp(i_fwlog_buf, "set_para=", strlen("set_para=")) == 0) {
+		u8 val = *(i_fwlog_buf + strlen("set_para=")) - '0';
+
+		if (bmain_info->hif_hook.set_para)
+			bmain_info->hif_hook.set_para(pp_bdev[hci_idx], val);
+		else
+			BTMTK_WARN("%s: not support set_para", __func__);
+		ret = count;
+		goto exit;
+	}
+
 	if (strncmp(i_fwlog_buf, "chip_reset=", strlen("chip_reset=")) == 0) {
 		u8 val = *(i_fwlog_buf + strlen("chip_reset=")) - '0';
 
@@ -1113,7 +1124,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		/* print dump data to console */
 		if (dump_data_counter < 20)
 			BTMTK_INFO("%s: FW dump data (%d): %s",
-					__func__, dump_data_counter, skb->data);
+					__func__, dump_data_counter, &skb->data);
 		line = __LINE__;
 		ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "[M]", skb->data, skb->len);
 		if (ret)
