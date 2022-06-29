@@ -140,7 +140,7 @@ static void btmtk_uart_update_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_INIT);
 		mod_timer(&cif_dev->fw_own_timer, jiffies + msecs_to_jiffies(FW_OWN_TIMEOUT));
 	} else
-		BTMTK_WARN("%s: not create yet", __func__);
+		BTMTK_WARN_LIMITTED("%s: not create yet", __func__);
 }
 
 static void btmtk_uart_create_fw_own_timer(struct btmtk_uart_dev *cif_dev)
@@ -163,7 +163,7 @@ static void btmtk_uart_delete_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
 		BTMTK_WARN("%s timer deleted", __func__);
 	} else
-		BTMTK_WARN("%s: not create yet", __func__);
+		BTMTK_WARN_LIMITTED("%s: not create yet", __func__);
 }
 #endif //(SLEEP_ENABLE == 1)
 
@@ -207,7 +207,7 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 
 	btmtk_tx_thread_exit(bdev->cif_dev);
 
-	btmtk_reset_pin_off();
+	btmtk_set_gpio_default();
 	if (connv3_pwr_off(CONNV3_DRV_TYPE_BT))
 		BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
 	btmtk_pwrctrl_post_off();
@@ -1219,7 +1219,10 @@ static int btmtk_uart_tx_thread(void *data)
 		if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
 			|| state == BTMTK_STATE_SUBSYS_RESET) {
 			//BTMTK_DBG("%s: no fw/driver own, no tx when dumping", __func__);
-			thread_flag &= ~(BTMTK_THREAD_FW_OWN | BTMTK_THREAD_TX);
+			/* if disable tx would not send rhw debug sop */
+			thread_flag &= ~(BTMTK_THREAD_FW_OWN);
+			/* incase of aftrer fw coredump, send fw own fail and trigger assert again */
+			btmtk_uart_delete_fw_own_timer(cif_dev);
 		}
 
 		if (thread_flag & (BTMTK_THREAD_TX | BTMTK_THREAD_RX)) {
