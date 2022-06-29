@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "8.0.2022061701"
+#define VERSION "8.0.2022062001"
 #define SUBVER ":connac3_dev"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -137,8 +137,7 @@
 
 #define HCI_SNOOP_ENTRY_NUM	30
 #define HCI_SNOOP_BUF_SIZE	32
-//#define HCI_SNOOP_MAX_BUF_SIZE	66
-#define HCI_SNOOP_MAX_BUF_SIZE	128
+#define HCI_SNOOP_MAX_BUF_SIZE	64
 #define HCI_SNOOP_TS_STR_LEN	24
 #define WMT_OVER_HCI_HEADER_SIZE	3
 #define READ_ISO_PACKET_CMD_SIZE	4
