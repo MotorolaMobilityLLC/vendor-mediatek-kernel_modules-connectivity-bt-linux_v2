@@ -178,6 +178,7 @@ struct btmtk_uart_dev {
 	u32			baudrate;
 	u32			hub_en;
 	u32			sleep_en;
+	u32			flush_en;
 
 	/* For uarthub setting */
 	u8			fw_hub_en;
