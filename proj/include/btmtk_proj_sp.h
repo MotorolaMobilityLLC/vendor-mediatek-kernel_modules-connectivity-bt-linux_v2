@@ -16,6 +16,53 @@
 #if (USE_DEVICE_NODE == 1)
 #include "conn_power_throttling.h"
 
+/* connv3 API */
+#include "connv3_debug_utility.h"
+#include "connv3_mcu_log.h"
+#include "connv3.h"
+
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+/* uarthub API */
+
+enum UARTHUB_irq_err_type {
+	//uarthub_unknown_irq_err = -1,
+	dev0_crc_err = 0,
+	dev1_crc_err,
+	dev2_crc_err,
+	dev0_tx_timeout_err,
+	dev1_tx_timeout_err,
+	dev2_tx_timeout_err,
+	dev0_tx_pkt_type_err,
+	dev1_tx_pkt_type_err,
+	dev2_tx_pkt_type_err,
+	dev0_rx_timeout_err,
+	dev1_rx_timeout_err,
+	dev2_rx_timeout_err,
+	rx_pkt_type_err,
+	intfhub_restore_err,
+	intfhub_dev_rx_err,
+	intfhub_dev0_tx_err,
+	intfhub_dev1_tx_err,
+	intfhub_dev2_tx_err,
+
+	UARTHUB_irq_err_type_count,
+};
+
+typedef void (*UARTHUB_IRQ_CB) (unsigned int err_type);
+
+extern int mtk8250_uart_hub_enable_bypass_mode(int bypass);
+extern int mtk8250_uart_hub_is_ready(void);
+extern int mtk8250_uart_hub_set_request(void);
+extern int mtk8250_uart_hub_clear_request(void);
+extern int mtk8250_uart_hub_fifo_ctrl(int ctrl);
+extern int mtk8250_uart_hub_dump_with_tag(const char *tag);
+extern int mtk8250_uart_hub_reset(void);
+extern int mtk8250_uart_hub_register_cb(UARTHUB_IRQ_CB irq_callback);
+extern int mtk8250_uart_hub_assert_bit_ctrl(int ctrl);
+extern int mtk8250_uart_dump(struct tty_struct *tty);
+#endif
+
 #define HCI_EVT_COMPLETE_EVT		0x0E
 #define HCI_EVT_STATUS_EVT			0x0F
 #define HCI_EVT_CC_STATUS_SUCCESS	0x00
@@ -57,6 +104,9 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev);
 //int btmtk_connv3_sub_drv_init(struct platform_device *pdev);
 
 int btmtk_connv3_sub_drv_deinit(void);
+
+void btmtk_sp_coredump_start(void);
+void btmtk_sp_coredump_end(void);
 
 /* Debug sop api */
 void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev);
