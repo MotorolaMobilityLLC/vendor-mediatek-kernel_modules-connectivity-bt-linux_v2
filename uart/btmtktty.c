@@ -831,10 +831,8 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	/* set chip baud and flowcontrol to config setting */
 	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
 	if (ret < 0) {
-		BTMTK_WARN("%s retry send cmd", __func__);
-		ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
-		if (ret < 0)
-			goto exit;
+		BTMTK_WARN("%s set uart cmd fail", __func__);
+		goto exit;
 	}
 
 	/* set tty host baud and flowcontrol to config setting */
@@ -1755,6 +1753,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	/* if flag is BTMTK_FW_OWNING not set driver own , because data is fw own event */
 	if (data != NULL && (count > 1 || data[0] != 0x00) && cif_dev->own_state != BTMTK_FW_OWNING) {
 		atomic_set(&cif_dev->need_drv_own, 1);
+		atomic_set(&cif_dev->fw_wake, 1);
 		wake_up_interruptible(&tx_wait_q);
 	}
 #endif
@@ -1841,6 +1840,8 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		goto unlock;
 	} else {
 		cif_dev->own_state = BTMTK_FW_OWN;
+		atomic_set(&cif_dev->fw_wake, 0);
+
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 		/* Clr TX,RX request, let uarthub can sleep */
 		if (cif_dev->hub_en && cif_dev->sleep_en) {
@@ -1892,13 +1893,16 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 	if (cif_dev->sleep_en) {
 		do {
-			/* no need to wait event */
-			ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
-					DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT);
-			if (ret < 0)
-				BTMTK_ERR("%s wakeup_cmd fail retry[%d]", __func__, retry);
-			/* wait a while for fw wakeup */
-			usleep_range(5000, 5100);
+			/* if fw already wake, no need to send 0xFF and wait 5ms before clr fw own */
+			if (!atomic_read(&cif_dev->fw_wake)){
+				/* no need to wait event */
+				ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
+						DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT);
+				if (ret < 0)
+					BTMTK_ERR("%s wakeup_cmd fail retry[%d]", __func__, retry);
+				/* wait a while for fw wakeup */
+				usleep_range(5000, 5100);
+			}
 			/* fw own clr cmd for notice is wakeup by bt driver */
 			ret = btmtk_main_send_cmd(bdev, fw_own_clr_cmd, 10, evt, OWNTYPE_EVT_LEN,
 					DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT);
