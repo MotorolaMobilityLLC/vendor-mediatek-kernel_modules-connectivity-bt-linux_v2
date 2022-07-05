@@ -24,9 +24,7 @@
 #include "btmtk_chip_if.h"
 
 #if (USE_DEVICE_NODE == 1)
-#include "connv3_debug_utility.h"
 #include "btmtk_queue.h"
-#include "connv3.h"
 #include "btmtk_proj_sp.h"
 #endif
 
@@ -919,9 +917,10 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 			if (!skb) {
 				BTMTK_ERR("%s,skb is invalid, buffer[0] = 0x%02X, count[%d]", __func__,
 					buffer[0], count);
-				if (is_mt66xx(bdev->chip_id))
+				if (is_mt66xx(bdev->chip_id)) {
+					BTMTK_INFO_RAW(buffer, count, "%s, len[%d]", __func__, count);
 					btmtk_set_sleep(hdev, FALSE);
-				else {
+				} else {
 					btmtk_hci_snoop_print(buffer_dbg, count_dbg);
 					btmtk_hci_snoop_print(buffer, count);
 					btmtk_hci_snoop_print_to_log();
@@ -4211,6 +4210,7 @@ exit:
 		BTMTK_ERR("%s: end with chip_state still dumping", __func__);
 		btmtk_fwdump_wake_unlock();
 		connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump fail");
+		btmtk_sp_coredump_end();
 	}
 	if (state != BTMTK_STATE_DISCONNECT)
 		btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
@@ -4343,6 +4343,21 @@ int bt_open(struct hci_dev *hdev)
 
 failed:
 #if (USE_DEVICE_NODE == 1)
+
+	state = btmtk_get_chip_state(bdev);
+
+	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
+			|| state == BTMTK_STATE_SUBSYS_RESET) {
+		BTMTK_WARN("%s: fw dump or assert ongoing , can't close yet state[%d]", __func__, state);
+		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
+			BTMTK_ERR("%s: uanble to finish coredump in 15s", __func__);
+			btmtk_fwdump_wake_unlock();
+			connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump fail");
+			btmtk_sp_coredump_end();
+
+		}
+	}
+
 	main_info.hif_hook.close(hdev);
 	state = btmtk_get_chip_state(bdev);
 	/* if state is disconnect means uart_launcher is disconnected, not set to close state */
@@ -4532,7 +4547,7 @@ static void btmtk_rx_work(struct work_struct *work)
 			continue;
 		}
 		BTMTK_INFO_RAW(skb->data, skb->len, "%s: len[%d] %02x", __func__,
-							skb->len, hci_skb_pkt_type(skb));
+							skb->len + 1, hci_skb_pkt_type(skb));
 		if (hci_skb_pkt_type(skb) == HCI_EVENT_PKT) {
 			/* save hci evt pkt for debug */
 			if (skb->data[0] == 0x3E)
