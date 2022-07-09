@@ -4714,6 +4714,7 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 	INIT_WORK(&bdev->dynamic_fwdl_work, btmtk_dynamic_fwdl_work);
 #if (USE_DEVICE_NODE == 1)
 	INIT_WORK(&bdev->async_trx_work, btmtk_async_trx_work);
+	INIT_WORK(&bdev->pwr_on_uds_work, btmtk_pwr_on_uds_work);
 #endif
 	skb_queue_head_init(&bdev->rx_q);
 	bdev->workqueue = alloc_workqueue("BTMTK_RX_WQ", WQ_HIGHPRI | WQ_UNBOUND |
