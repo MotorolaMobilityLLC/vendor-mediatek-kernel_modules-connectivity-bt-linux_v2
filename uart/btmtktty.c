@@ -167,8 +167,9 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 	btmtk_tx_thread_exit(bdev->cif_dev);
 
 	btmtk_set_gpio_default();
-	if (connv3_pwr_off(CONNV3_DRV_TYPE_BT))
-		BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
+	if (!cif_dev->is_pre_cal)
+		if (connv3_pwr_off(CONNV3_DRV_TYPE_BT))
+			BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
 	btmtk_pwrctrl_post_off();
 #endif
 	BTMTK_INFO("%s end!", __func__);
@@ -740,10 +741,11 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	new_termios = tty->termios;
 
 	btmtk_pwrctrl_pre_on(bdev);
-	if (connv3_pwr_on(CONNV3_DRV_TYPE_BT)) {
-		BTMTK_ERR("ConnInfra power on failed!");
-		return -EFAULT;
-	}
+	if (!cif_dev->is_pre_cal)
+		if (connv3_pwr_on(CONNV3_DRV_TYPE_BT)) {
+			BTMTK_ERR("ConnInfra power on failed!");
+			return -EFAULT;
+		}
 
 	/* start tx_thread */
 	if (btmtk_tx_thread_start(bdev))
@@ -908,8 +910,9 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 #endif
 
 #if (USE_DEVICE_NODE == 1)
-	if (connv3_pwr_on_done(CONNV3_DRV_TYPE_BT))
-		BTMTK_ERR("%s: ConnInfra power done failed!", __func__);
+	if (!cif_dev->is_pre_cal)
+		if (connv3_pwr_on_done(CONNV3_DRV_TYPE_BT))
+			BTMTK_ERR("%s: ConnInfra power done failed!", __func__);
 #endif
 
 }
