@@ -688,6 +688,7 @@ typedef void (*cif_dump_debug_sop_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_waker_notify_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_enter_standby_ptr)(void);
 typedef int (*cif_set_para_ptr)(struct btmtk_dev *bdev, int val);
+typedef void (*cif_trigger_assert_ptr)(struct btmtk_dev *bdev);
 
 struct hif_hook_ptr {
 #if (USE_DEVICE_NODE == 1)
@@ -721,6 +722,7 @@ struct hif_hook_ptr {
 	cif_waker_notify_ptr		waker_notify;
 	cif_enter_standby_ptr		enter_standby;
 	cif_set_para_ptr		set_para;
+	cif_trigger_assert_ptr		trigger_assert;
 	void				*coredump_handler;
 };
 

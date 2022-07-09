@@ -939,6 +939,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 		if (!skb_tmp) {
 			BTMTK_ERR("%s, skb_put failed. Len = %d!", __func__, len);
 			kfree_skb(skb);
+			skb = NULL;
 			return ERR_PTR(-ENOMEM);
 		}
 		memcpy(skb_tmp, buffer, len);
@@ -967,6 +968,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				btmtk_hci_snoop_print_to_log();
 			}
 			kfree_skb(skb);
+			skb = NULL;
 			return ERR_PTR(-EILSEQ);
 		}
 
@@ -1000,6 +1002,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 						btmtk_hci_snoop_print_to_log();
 					}
 					kfree_skb(skb);
+					skb = NULL;
 					return ERR_PTR(-EMSGSIZE);
 				}
 				break;
@@ -1026,6 +1029,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 						btmtk_hci_snoop_print_to_log();
 					}
 					kfree_skb(skb);
+					skb = NULL;
 					return ERR_PTR(-EMSGSIZE);
 				}
 				break;
@@ -1040,6 +1044,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 					btmtk_hci_snoop_print_to_log();
 				}
 				kfree_skb(skb);
+				skb = NULL;
 				return ERR_PTR(-EILSEQ);
 			}
 
@@ -1472,6 +1477,7 @@ int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb)
 	if (bdev == NULL || bdev->workqueue == NULL) {
 		BTMTK_ERR("%s, bdev or workqueue is invalid!", __func__);
 		kfree_skb(skb);
+		skb = NULL;
 		return -EINVAL;
 	}
 
@@ -1517,6 +1523,7 @@ int btmtk_recv_iso(struct hci_dev *hdev, struct sk_buff *skb)
 	if (bdev == NULL || bdev->workqueue == NULL) {
 		BTMTK_ERR("%s, bdev or workqueue is invalid!", __func__);
 		kfree_skb(skb);
+		skb = NULL;
 		return -EINVAL;
 	}
 
@@ -1540,6 +1547,7 @@ int btmtk_recv_rhw(struct hci_dev *hdev, struct sk_buff *skb)
 	if (bdev == NULL || bdev->workqueue == NULL) {
 		BTMTK_ERR("%s, bdev or workqueue is invalid!", __func__);
 		kfree_skb(skb);
+		skb = NULL;
 		return -EINVAL;
 	}
 
@@ -1612,7 +1620,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		 * but wait related event failed, in this case, we don't need to free skb here,
 		 * otherwise, it will be double free.
 		 */
-		if (ret != -ERRNUM) {
+		if (ret != -ERRNUM && skb) {
 			kfree_skb(skb);
 			skb = NULL;
 		}
@@ -4133,9 +4141,13 @@ static int bt_close(struct hci_dev *hdev)
 #if (USE_DEVICE_NODE == 1)
 	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
 			|| state == BTMTK_STATE_SUBSYS_RESET) {
-		BTMTK_WARN("%s: fw dump or assert ongoing , can't close yet state[%d]", __func__, state);
-		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT)))
-			BTMTK_ERR("%s: uanble to finish coredump in 15s", __func__);
+		BTMTK_WARN("%s: wait dump_comp , can't close yet state[%d]", __func__, state);
+		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
+			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
+			btmtk_fwdump_wake_unlock();
+			connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump not complete");
+			btmtk_sp_coredump_end();
+		}
 		goto exit;
 	}
 #endif
@@ -4207,14 +4219,7 @@ exit:
 	btmtk_reset_timer_del(bdev);
 	main_info.hif_hook.close(hdev);
 	state = btmtk_get_chip_state(bdev);
-	/* after fops set closed, would not get any rx data */
-	/* so if chip_state still fw_dump, need to release wakelock and coredump end*/
-	if (state == BTMTK_STATE_FW_DUMP) {
-		BTMTK_ERR("%s: end with chip_state still dumping", __func__);
-		btmtk_fwdump_wake_unlock();
-		connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump fail");
-		btmtk_sp_coredump_end();
-	}
+
 	if (state != BTMTK_STATE_DISCONNECT)
 		btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
 
@@ -4351,9 +4356,9 @@ failed:
 
 	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
 			|| state == BTMTK_STATE_SUBSYS_RESET) {
-		BTMTK_WARN("%s: fw dump or assert ongoing , can't close yet state[%d]", __func__, state);
+		BTMTK_WARN("%s: wait dump_comp, can't close yet state[%d]", __func__, state);
 		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
-			BTMTK_ERR("%s: uanble to finish coredump in 15s", __func__);
+			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
 			btmtk_fwdump_wake_unlock();
 			connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump fail");
 			btmtk_sp_coredump_end();
@@ -4459,55 +4464,52 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	skb = mtk_add_stp(bdev, skb);
 #endif
 
-	if (!is_mt66xx(bdev->chip_id)) {
-		/* For Ble ISO packet size */
-		if (memcmp(skb->data, main_info.read_iso_packet_size_cmd,
-			READ_ISO_PACKET_SIZE_CMD_HDR_LEN) == 0) {
-			bdev->iso_threshold = skb->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN] +
-						(skb->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN + 1]  << 8);
-			BTMTK_INFO("%s: Ble iso pkt size is %d", __func__, bdev->iso_threshold);
-		}
+	/* For Ble ISO packet size */
+	if (memcmp(skb->data, main_info.read_iso_packet_size_cmd,
+		READ_ISO_PACKET_SIZE_CMD_HDR_LEN) == 0) {
+		bdev->iso_threshold = skb->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN] +
+					(skb->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN + 1]  << 8);
+		BTMTK_INFO("%s: Ble iso pkt size is %d", __func__, bdev->iso_threshold);
+	}
 
-		if (hci_skb_pkt_type(skb) == HCI_COMMAND_PKT) {
+	if (hci_skb_pkt_type(skb) == HCI_COMMAND_PKT) {
 #if (USE_DEVICE_NODE == 0)
-			if (bdev->get_hci_reset == 1) {
-				ret = btmtk_set_audio_setting(bdev);
-				bdev->get_hci_reset = 0;
-				if (ret < 0) {
-					BTMTK_ERR("%s btmtk_set_audio_setting failed!!", __func__);
-					goto exit;
-				}
+		if (bdev->get_hci_reset == 1) {
+			ret = btmtk_set_audio_setting(bdev);
+			bdev->get_hci_reset = 0;
+			if (ret < 0) {
+				BTMTK_ERR("%s btmtk_set_audio_setting failed!!", __func__);
+				goto exit;
 			}
+		}
 #endif
-			/* save hci cmd pkt for debug */
-			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD_STACK, skb->data, skb->len);
-			if (skb->len == FW_COREDUMP_CMD_LEN &&
-				!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
-				BTMTK_INFO("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
-				fw_coredump_flag = 1;
-				btmtk_reset_timer_update(bdev);
-				btmtk_hci_snoop_print_to_log();
-			} else if (skb->len == HCI_RESET_CMD_LEN &&
-					!memcmp(skb->data, reset_cmd, HCI_RESET_CMD_LEN))
-				BTMTK_INFO("%s: got command: 0x03 0C 00 (HCI_RESET)", __func__);
-		} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
-			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ACL_STACK, skb->data, skb->len);
-		} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
-			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ISO_STACK, skb->data, skb->len);
-		}
+		/* save hci cmd pkt for debug */
+		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD_STACK, skb->data, skb->len);
+		if (skb->len == FW_COREDUMP_CMD_LEN &&
+			!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
+			BTMTK_WARN("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
+			fw_coredump_flag = 1;
+			btmtk_reset_timer_update(bdev);
+			btmtk_hci_snoop_print_to_log();
 
-		BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d ", __func__, skb->len);
-		ret = main_info.hif_hook.send_cmd(bdev, skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST);
-		if (ret < 0) {
-			BTMTK_ERR("%s failed!!", __func__);
-			goto exit;
-		}
-	} else {
-		ret = main_info.hif_hook.send_cmd(bdev, skb, 0, 5, (int)BTMTK_TX_PKT_FROM_HOST);
-		if (ret < 0) {
-			BTMTK_ERR("%s failed!!", __func__);
-			goto exit;
-		}
+			if(main_info.hif_hook.trigger_assert) {
+				main_info.hif_hook.trigger_assert(g_sbdev);
+				goto exit;
+			}
+		} else if (skb->len == HCI_RESET_CMD_LEN &&
+				!memcmp(skb->data, reset_cmd, HCI_RESET_CMD_LEN))
+			BTMTK_INFO("%s: got command: 0x03 0C 00 (HCI_RESET)", __func__);
+	} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
+		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ACL_STACK, skb->data, skb->len);
+	} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
+		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ISO_STACK, skb->data, skb->len);
+	}
+
+	//BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d ", __func__, skb->len);
+	ret = main_info.hif_hook.send_cmd(bdev, skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST);
+	if (ret < 0) {
+		BTMTK_ERR("%s failed!!", __func__);
+		goto exit;
 	}
 
 exit:
@@ -4547,6 +4549,7 @@ static void btmtk_rx_work(struct work_struct *work)
 		if (skip_pkt != 0) {
 			/* kfree_skb should be moved to btmtk_dispach_pkt */
 			kfree_skb(skb);
+			skb = NULL;
 			continue;
 		}
 		BTMTK_INFO_RAW(skb->data, skb->len, "%s: len[%d] %02x", __func__,
@@ -4575,6 +4578,7 @@ static void btmtk_rx_work(struct work_struct *work)
 				BTMTK_DBG_RAW(skb->data, skb->len, "%s: Get dynamic DL EVENT- ", __func__);
 				/* Drop by driver, don't send to stack */
 				kfree_skb(skb);
+				skb = NULL;
 				continue;
 			}
 
@@ -4582,6 +4586,7 @@ static void btmtk_rx_work(struct work_struct *work)
 				BTMTK_DBG("%s Drop by driver, don't send to stack", __func__);
 				/* Drop by driver, don't send to stack */
 				kfree_skb(skb);
+				skb = NULL;
 				continue;
 			}
 		} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
@@ -4599,6 +4604,7 @@ static void btmtk_rx_work(struct work_struct *work)
 			BTMTK_DBG("%s Drop by driver, don't send to stack", __func__);
 			/* Drop by driver, don't send to stack */
 			kfree_skb(skb);
+			skb = NULL;
 			continue;
 #endif
 		}
@@ -4607,6 +4613,7 @@ static void btmtk_rx_work(struct work_struct *work)
 		if (fstate != BTMTK_FOPS_STATE_OPENED) {
 			/* BT close case, drop by driver, don't send to stack */
 			kfree_skb(skb);
+			skb = NULL;
 			continue;
 		}
 
@@ -4623,6 +4630,7 @@ static void btmtk_rx_work(struct work_struct *work)
 			if (bdev->bt_cfg.reset_stack_after_woble &&
 				(state == BTMTK_STATE_SUSPEND || state == BTMTK_STATE_RESUME)) {
 				kfree_skb(skb);
+				skb = NULL;
 				continue;
 			}
 
