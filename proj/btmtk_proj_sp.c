@@ -77,6 +77,31 @@ void btmtk_uarthub_err_cb(unsigned int err_type)
 	}
 	return;
 }
+
+int btmtk_wakeup_uarthub(void) {
+	int ready_retry = 50, ret = 0;
+
+	/* Set TX,RX request */
+	ret = mtk8250_uart_hub_set_request();
+	if (ret) {
+		BTMTK_ERR("%s mtk8250_uart_hub_set_request fail ret[%d]", __func__, ret);
+		return -1;
+	}
+
+	/* Polling UARTHUB is ready state */
+	while (mtk8250_uart_hub_is_ready() <= 0 && --ready_retry) {
+		BTMTK_WARN("%s ready_retry[%d]", __func__, ready_retry);
+		usleep_range(1000, 1100);
+	}
+
+	if (ready_retry <= 0) {
+		ret = mtk8250_uart_hub_dump_with_tag("BT driver own");
+		BTMTK_ERR("%s mtk8250_uart_hub_dump_with_tag ready_retry[%d] ret[%d]", __func__, ready_retry, ret);
+		return -1;
+	}
+	return 0;
+}
+
 #endif
 
 void btmtk_sp_coredump_start(void)
@@ -171,10 +196,33 @@ int btmtk_pre_power_on_handler(void)
 	int ret = 0;
 
 	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
-	ret = btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
+	btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+
+	/* use uarthub multi-host mode (default) */
+	ret = mtk8250_uart_hub_enable_bypass_mode(0);
+	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
+
+	ret = btmtk_wakeup_uarthub();
+
+	if(ret < 0)
+		return ret;
+
+	/* disable ADSP,MD when fw dl */
+	ret = mtk8250_uart_hub_fifo_ctrl(1);
+	BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(1) ret[%d]", __func__, ret);
+
+	/* use uarthub bypass mode */
+	ret = mtk8250_uart_hub_enable_bypass_mode(1);
+	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
+
+#endif
+	btmtk_pinctrl_exec(POWER_ON_PINCTRL_NAME);
+
 	msleep(100);
 	BTMTK_DBG("%s: wait 100ms", __func__);
-	return ret;
+	return 0;
 }
 
 int btmtk_reset_pin_off(void)
@@ -189,14 +237,6 @@ int btmtk_set_gpio_default(void)
 	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 	msleep(10);
 	return btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
-}
-
-int btmtk_set_uart_auxFunc(void)
-{
-	BTMTK_DBG("%s: start", __func__);
-
-	return btmtk_pinctrl_exec(POWER_ON_PINCTRL_NAME);
-	//return btmtk_read_pmic_state(NULL);
 }
 
 static int btmtk_power_on_notify_handler(void)
