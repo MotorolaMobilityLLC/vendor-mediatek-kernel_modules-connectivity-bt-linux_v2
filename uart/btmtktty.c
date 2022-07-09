@@ -233,7 +233,7 @@ int btmtk_uart_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 
 		/* in normal case, cif_send success would kfree_skb in tx_thread */
 		/* but in this case, would not pass by tx_thread, so need not kfree_skb */
-		if (ret >= 0) {
+		if (ret >= 0 && skb) {
 			kfree_skb(skb);
 			skb = NULL;
 		}
@@ -365,6 +365,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	unsigned long comp_event_timo = 0, start_time = 0;
 	int ret = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -430,7 +431,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 	if (ret < 0) {
 		BTMTK_ERR("%s btmtk_uart_send_cmd failed!!", __func__);
-		goto fw_assert;
+		goto exit;
 	}
 
 	do {
@@ -455,26 +456,23 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
 
 	if (ret == -1) {
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
-		if (cif_dev->hub_en)
-			ret = mtk8250_uart_dump(cif_dev->tty);
-#endif
 		BTMTK_ERR("%s wait event timeout, ret[%d]", __func__, ret);
 		bdev->recv_evt_len = 0;
 		ret = -ERRNUM;
-		goto fw_assert;
 	}
 
+
+exit:
 	if (event)
 		up(&cif_dev->evt_comp_sem);
 
-	return ret;
+	if (ret < 0) {
+		if(bmain_info->hif_hook.trigger_assert) {
+			bmain_info->hif_hook.trigger_assert(bdev);
+		} else
+			btmtk_send_assert_cmd(bdev);
+	}
 
-
-fw_assert:
-	if (event)
-		up(&cif_dev->evt_comp_sem);
-	//btmtk_send_assert_cmd(bdev);
 	return ret;
 }
 
@@ -720,6 +718,56 @@ static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 	return 0;
 }
 
+static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	int state = BTMTK_STATE_INIT;
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+
+	state = btmtk_get_chip_state(bdev);
+	fstate = btmtk_fops_get_state(bdev);
+
+	if (state == BTMTK_STATE_DISCONNECT) {
+		BTMTK_WARN("%s: uart disconnected, complete dump_comp", __func__);
+		/* if uart disconnected during coredump, no need to wait */
+		complete_all(&bdev->dump_comp);
+		return;
+	}
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	if (cif_dev->hub_en)
+		mtk8250_uart_dump(cif_dev->tty);
+#endif
+
+	if (state == BTMTK_STATE_INIT || state == BTMTK_STATE_CLOSED
+		|| state == BTMTK_STATE_PROBE || fstate == BTMTK_FOPS_STATE_CLOSING
+		|| cif_dev->assert_state) {
+		BTMTK_WARN("%s: state[%d] bt assert_state[%d], not trigger coredump",
+				__func__, state, cif_dev->assert_state);
+		return;
+	}
+
+	/* set this bt on is already asserted, not trigger assert anymore */
+	BTMTK_INFO("%s: set bt assert_state[1]", __func__);
+	cif_dev->assert_state = 1;
+
+	/* dump debug sop before coredump */
+	if (bmain_info->hif_hook.dump_debug_sop)
+		bmain_info->hif_hook.dump_debug_sop(bdev);
+
+	atomic_set(&cif_dev->need_drv_own, 1);
+	atomic_set(&cif_dev->need_assert, 1);
+	wake_up_interruptible(&tx_wait_q);
+}
+
 static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 {
 	struct ktermios new_termios;
@@ -729,6 +777,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	int ret = -1;
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -758,6 +807,14 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		BTMTK_ERR("connv3_ext_32k_on failed!");
 		return -EFAULT;
 	}
+
+	/* reinit state */
+	BTMTK_INFO("%s: init bt assert_state[0], dump_comp", __func__);
+	atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+	atomic_set(&bmain_info->subsys_reset, BTMTK_RESET_DONE);
+	bmain_info->chip_reset_flag = 0;
+	cif_dev->assert_state = 0;
+	reinit_completion(&bdev->dump_comp);
 
 	/* set tty host baud and flowcontrol to default value */
 	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);
@@ -821,16 +878,6 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		goto exit;
 
 	ret = btmtk_load_rom_patch(bdev);
-	cif_event = HIF_EVENT_PROBE;
-	cif_state = &bdev->cif_state[cif_event];
-	/* Set End/Error state */
-	if (ret == 0) {
-		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
-	} else {
-		BTMTK_ERR("%s: btmtk_load_rom_patch failed (%d)", __func__, ret);
-		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
-		return ret;
-	}
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en) {
@@ -861,9 +908,22 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	}
 #endif
 
+	/* bt on success, reset subsys count */
+	atomic_set(&bmain_info->subsys_reset_conti_count, 0);
+
 	BTMTK_INFO("%s done", __func__);
 
 exit:
+	cif_event = HIF_EVENT_PROBE;
+	cif_state = &bdev->cif_state[cif_event];
+	/* Set End/Error state */
+	if (ret == 0) {
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	} else {
+		BTMTK_ERR("%s: btmtk_load_rom_patch failed (%d)", __func__, ret);
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+	}
+
 	return ret;
 }
 
@@ -1032,7 +1092,6 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 {
 	int ret = -1, len = 0, count = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
-	u8 assert_cmd[ASSERT_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -1054,15 +1113,6 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	}
 
 	count = 0;
-
-	if(cmd_len == ASSERT_CMD_LEN && memcmp(assert_cmd, cmd, ASSERT_CMD_LEN) == 0) {
-		BTMTK_INFO("%s: trigger assert", __func__);
-		btmtk_set_chip_state(bdev, BTMTK_STATE_SEND_ASSERT);
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
-		if (cif_dev->hub_en)
-			mtk8250_uart_dump(cif_dev->tty);
-#endif
-	}
 
 	while (len != cmd_len && count < BTMTK_MAX_SEND_RETRY) {
 		ret = cif_dev->tty->ops->write(cif_dev->tty, cmd + len, cmd_len - len);
@@ -1116,6 +1166,12 @@ static u32 btmtk_thread_wait_for_msg(struct btmtk_dev *bdev)
 		ret |= BTMTK_THREAD_FW_OWN;
 	}
 #endif
+
+	if (atomic_read(&cif_dev->need_assert)) {
+		BTMTK_DBG("%s: need_assert", __func__);
+		atomic_set(&cif_dev->need_assert, 0);
+		ret |= BTMTK_THREAD_ASSERT;
+	}
 
 	if (kthread_should_stop()) {
 		BTMTK_DBG("%s: kthread_should_stop", __func__);
@@ -1180,9 +1236,7 @@ static int btmtk_uart_tx_thread(void *data)
 			ret = btmtk_uart_driver_own(bdev);
 			if (ret) {
 				BTMTK_ERR("%s: set driver own return fail", __func__);
-				//btmtk_reset_trigger(bdev);
-				btmtk_send_assert_cmd(bdev);
-				break;
+				ret |= BTMTK_THREAD_ASSERT;
 			}
 
 		/* if bt fw closed, no need to send fw own */
@@ -1190,12 +1244,15 @@ static int btmtk_uart_tx_thread(void *data)
 			ret = btmtk_uart_fw_own(bdev);
 			if (ret) {
 				BTMTK_ERR("%s: set fw own return fail", __func__);
-				//btmtk_reset_trigger(bdev);
-				btmtk_send_assert_cmd(bdev);
-				break;
+				ret |= BTMTK_THREAD_ASSERT;
 			}
 		}
 #endif
+
+		if (thread_flag & BTMTK_THREAD_ASSERT) {
+			BTMTK_WARN("%s: trigger assert", __func__);
+			btmtk_send_assert_cmd(bdev);
+		}
 
 		if (thread_flag & BTMTK_THREAD_TX) {
 			if (cif_dev->own_state != BTMTK_DRV_OWN) {
@@ -2243,6 +2300,8 @@ int btmtk_cif_register(void)
 	hook.log_handler = btmtk_connsys_log_handler;
 	hook.init = btmtk_chardev_init;
 	hook.dump_debug_sop = btmtk_uart_sp_dump_debug_sop;
+	hook.whole_reset = btmtk_sp_whole_chip_reset;
+	hook.trigger_assert = btmtk_uart_trigger_assert;
 #endif
 	hook.open = btmtk_uart_open;
 	hook.close = btmtk_uart_close;
