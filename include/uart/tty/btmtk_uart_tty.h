@@ -200,6 +200,9 @@ struct btmtk_uart_dev {
 #if (USE_DEVICE_NODE == 1)
 	/* dynamic tx power control */
 	struct btmtk_dypwr_st dy_pwr;
+
+	/* pre-cal flag */
+	bool 		is_pre_cal;
 #endif
 };
 
