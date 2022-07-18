@@ -458,6 +458,8 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 	btmtk_dump_cryto_debug_flags();
 	BTMTK_INFO("%s: connv3_conninfra_bus_dump start", __func__);
 	connv3_conninfra_bus_dump(CONNV3_DRV_TYPE_BT, &btmtk_connv3_cr_cb, NULL);
+	if (g_rhw_fail >= BT_RHW_MAX_ERR_COUNT)
+		cif_dev->is_rhw_fail = 1;
 	BTMTK_INFO("%s: end, g_rhw_fail[%d] ", __func__, g_rhw_fail);
 }
 
