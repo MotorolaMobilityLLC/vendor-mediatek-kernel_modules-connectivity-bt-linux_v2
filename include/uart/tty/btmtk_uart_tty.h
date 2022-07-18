@@ -110,6 +110,7 @@ struct mtk_stp_hdr {
 #endif
 
 #define BTMTK_MAX_SEND_RETRY 10000
+#define BTMTK_MAX_WAIT_RETRY 300
 
 #define BT_UART_DEFAULT_BAUD 115200
 
