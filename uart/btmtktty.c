@@ -766,8 +766,8 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 		/* Todo: through wifi trigger assert */
 
 		/* direct send hw_err event notify host to close bt */
-		if (bmain_info->hif_hook.waker_notify)
-			bmain_info->hif_hook.waker_notify(bdev);
+		bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
+		btmtk_send_hw_err_to_host(bdev);
 		return;
 	}
 
@@ -932,7 +932,8 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s done", __func__);
 
 exit:
-	if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT)
+	if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT
+		|| btmtk_get_chip_state(bdev) == BTMTK_STATE_FW_DUMP)
 		return ret;
 
 	cif_event = HIF_EVENT_PROBE;
@@ -1942,7 +1943,8 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 #endif
 
 	retry = BTMTK_MAX_WAKEUP_RETRY;
-	if (cif_dev->sleep_en) {
+	/* if fw already coredump, no need to send drv own cmd */
+	if (cif_dev->sleep_en && btmtk_get_chip_state(bdev) != BTMTK_STATE_FW_DUMP) {
 		do {
 			/* if fw already wake, no need to send 0xFF and wait 5ms before clr fw own */
 			if (!atomic_read(&cif_dev->fw_wake)){
