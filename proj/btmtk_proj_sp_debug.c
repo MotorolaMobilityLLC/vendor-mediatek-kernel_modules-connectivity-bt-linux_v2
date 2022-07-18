@@ -95,7 +95,7 @@ int RHW_WRITE(uint32_t addr, uint32_t val)
 	memcpy(&evt[RHW_ADDR_OFFSET_CMD], &addr, RHW_ADDR_LEN);
 
 	ret = btmtk_main_send_cmd(g_dump_bdev, cmd, RHW_PKT_LEN, evt, RHW_PKT_COMP_LEN, DELAY_TIMES,
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT);
 	if (ret < 0)
 		BTMTK_ERR("%s failed, g_rhw_fail[%d]", __func__, ++g_rhw_fail);
 
@@ -124,7 +124,7 @@ int RHW_READ(uint32_t addr, uint32_t *val)
 	memcpy(&evt[RHW_ADDR_OFFSET_CMD], &addr, sizeof(addr));
 
 	ret = btmtk_main_send_cmd(g_dump_bdev, cmd, RHW_PKT_LEN, evt, RHW_PKT_COMP_LEN, DELAY_TIMES,
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT);
 
 	if (ret >= 0) {
 		memcpy(val, g_dump_bdev->io_buf + RHW_PKT_COMP_LEN, sizeof(u32));
