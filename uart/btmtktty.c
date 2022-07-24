@@ -363,6 +363,11 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		return -1;
 	}
 
+	if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT) {
+		BTMTK_ERR("%s: BTMTK_STATE_DISCONNECT", __func__);
+		return -1;
+	}
+
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
 #if (SLEEP_ENABLE == 1)
