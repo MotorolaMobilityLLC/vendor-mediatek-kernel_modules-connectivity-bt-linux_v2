@@ -816,6 +816,8 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	/* temp solution wait pmic enable */
 	msleep(100);
 
+	btmtk_set_uart_rx_aux();
+
 	if (connv3_ext_32k_on()) {
 		BTMTK_ERR("connv3_ext_32k_on failed!");
 		return -EFAULT;
