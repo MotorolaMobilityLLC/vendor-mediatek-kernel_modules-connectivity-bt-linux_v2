@@ -2224,7 +2224,6 @@ static int btmtk_cif_suspend(void)
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 #endif
 
-	bdev->suspend_state = TRUE;
 	return 0;
 }
 
@@ -2280,7 +2279,6 @@ static int btmtk_cif_resume(void)
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 #endif
 
-	bdev->suspend_state = FALSE;
 	return 0;
 }
 
@@ -2435,6 +2433,8 @@ int btmtk_cif_register(void)
 		return ret;
 	}
 
+	btmtk_platform_driver_init();
+
 	BTMTK_INFO("%s: Done", __func__);
 	return 0;
 }
@@ -2444,6 +2444,7 @@ int btmtk_cif_deregister(void)
 	int ret = -1;
 
 	BTMTK_INFO("%s", __func__);
+	btmtk_platform_driver_deinit();
 	ret = uart_deregister();
 	if (ret < 0) {
 		BTMTK_ERR("*** UART deregistration fail(%d)! ***", ret);
