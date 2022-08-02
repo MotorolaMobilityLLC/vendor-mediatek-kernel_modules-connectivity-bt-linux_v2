@@ -1076,6 +1076,8 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		flush_retry = 0;
 		/* wait tty buffer clean */
 		if (cif_dev->flush_en) {
+			unsigned long start_time = jiffies, time_diff = 0;
+
 			do {
 				if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT) {
 					BTMTK_ERR("%s: BTMTK_STATE_DISCONNECT", __func__);
@@ -1087,6 +1089,10 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			} while (count != 0 && flush_retry++ < BTMTK_MAX_WAIT_RETRY);
 			if (flush_retry < BTMTK_MAX_WAIT_RETRY)
 				tty_driver_flush_buffer(cif_dev->tty);
+
+			time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
+			if (time_diff >= TIME_BOUND_OF_TTY_FLUSH)
+				BTMTK_ERR("%s: flush time takes %lu ms", __func__, time_diff);
 		}
 
 		if (sent_len > 0) {
@@ -1144,6 +1150,8 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 
 	/* wait tty buffer clean */
 	if (cif_dev->flush_en) {
+		unsigned long start_time = jiffies, time_diff = 0;
+		
 		do {
 			if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT) {
 				BTMTK_ERR("%s: BTMTK_STATE_DISCONNECT", __func__);
@@ -1156,6 +1164,10 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 
 		if (flush_retry < BTMTK_MAX_WAIT_RETRY)
 			tty_driver_flush_buffer(cif_dev->tty);
+
+		time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
+		if (time_diff >= TIME_BOUND_OF_TTY_FLUSH)
+			BTMTK_ERR("%s: flush time takes %lu ms", __func__, time_diff);		
 	}
 
 	count = 0;
