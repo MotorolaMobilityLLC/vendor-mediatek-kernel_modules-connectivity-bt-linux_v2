@@ -593,6 +593,7 @@ struct btmtk_dev {
 	int	isoc_altsetting;
 
 	int	suspend_count;
+	bool	suspend_state;
 
 	/* For tx queue */
 	unsigned long	tx_state;
