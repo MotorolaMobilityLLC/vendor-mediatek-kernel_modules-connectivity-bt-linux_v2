@@ -2182,19 +2182,21 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 
 static int btmtk_cif_suspend(void)
 {
+#if (USE_DEVICE_NODE == 0)
 	int cif_event = 0, state;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct tty_struct *tty = g_tty;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
-#if (USE_DEVICE_NODE == 0)
 	int ret = 0;
-	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
-	struct btmtk_woble *bt_woble = &cif_dev->bt_woble;
+	struct btmtk_uart_dev *cif_dev = NULL;
+	struct btmtk_woble *bt_woble = NULL;
 #endif
+
 	BTMTK_INFO("%s", __func__);
 
+#if (USE_DEVICE_NODE == 0)
 	if (tty == NULL) {
 		BTMTK_ERR("%s: tty is NULL, maybe not run btmtk_cif_probe yet", __func__);
 		return -EAGAIN;
@@ -2239,10 +2241,11 @@ static int btmtk_cif_suspend(void)
 
 	cif_state = &bdev->cif_state[cif_event];
 
-#if (USE_DEVICE_NODE == 0) //suspend/resume not set state in sp
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	bt_woble = &cif_dev->bt_woble;
 	ret = btmtk_woble_suspend(bt_woble);
 	if (ret < 0)
 		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
@@ -2264,17 +2267,18 @@ static int btmtk_cif_suspend(void)
 
 static int btmtk_cif_resume(void)
 {
+#if (USE_DEVICE_NODE == 0)
 	struct tty_struct *tty = g_tty;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_cif_state *cif_state = NULL;
-#if (USE_DEVICE_NODE == 0)
 	int ret = 0;
-	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
-	struct btmtk_woble *bt_woble = &cif_dev->bt_woble;
+	struct btmtk_uart_dev *cif_dev = NULL;
+	struct btmtk_woble *bt_woble = NULL;
 #endif
 
 	BTMTK_INFO("%s", __func__);
 
+#if (USE_DEVICE_NODE == 0)
 	if (tty == NULL) {
 		BTMTK_ERR("%s: tty is NULL, maybe not run btmtk_cif_probe yet", __func__);
 		return -EAGAIN;
@@ -2295,7 +2299,6 @@ static int btmtk_cif_resume(void)
 
 	cif_state = &bdev->cif_state[HIF_EVENT_RESUME];
 
-#if (USE_DEVICE_NODE == 0) //suspend/resume not set state in sp
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
@@ -2303,6 +2306,8 @@ static int btmtk_cif_resume(void)
 	if (ret < 0)
 		BTMTK_ERR("%s: set driver own return fail %d", __func__, ret);
 
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	bt_woble = &cif_dev->bt_woble;
 	ret = btmtk_woble_resume(bt_woble);
 	if (ret < 0)
 		BTMTK_ERR("%s: btmtk_woble_resume return fail %d", __func__, ret);
