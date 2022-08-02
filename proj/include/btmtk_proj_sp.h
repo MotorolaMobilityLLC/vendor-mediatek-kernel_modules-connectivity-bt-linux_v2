@@ -64,6 +64,9 @@ extern int mtk8250_uart_dump(struct tty_struct *tty);
 int btmtk_wakeup_uarthub(void);
 void btmtk_release_uarthub(bool force);
 
+void mtk8250_uart_start_record(struct tty_struct *tty);
+void mtk8250_uart_end_record(struct tty_struct *tty);
+
 #endif
 
 #define HCI_EVT_COMPLETE_EVT		0x0E
