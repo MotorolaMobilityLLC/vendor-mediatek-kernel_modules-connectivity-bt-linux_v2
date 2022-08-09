@@ -763,9 +763,6 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	if(ret < 0)
 		BTMTK_ERR("[ERR] %s: mediatek,bt sleep-en ret[%d]", __func__, ret);
 
-	/* temp: for disable sleep */
-	cif_dev->sleep_en = 0;
-
 	pinctrl_ptr = devm_pinctrl_get(tty->dev);
 	if (IS_ERR(pinctrl_ptr)) {
 		BTMTK_ERR("[ERR] %s: fail to get bt pinctrl", __func__);
