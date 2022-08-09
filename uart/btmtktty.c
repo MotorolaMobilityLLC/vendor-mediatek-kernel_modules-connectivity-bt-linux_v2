@@ -235,7 +235,8 @@ int btmtk_uart_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 
 	/* send pkt through tx_thread or not */
 	/* if want to send_and_recv cmd in tx_thread would not be able to send the pkt */
-	if (pkt_type == BTMTK_TX_PKT_SEND_DIRECT || pkt_type == BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT) {
+	if (pkt_type == BTMTK_TX_PKT_SEND_DIRECT || pkt_type == BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT
+			|| pkt_type == BTMTK_TX_PKT_SEND_DIRECT_NO_WAIT_OWN) {
 		BTMTK_WARN("%s send pkt not through tx_thread", __func__);
 		ret = btmtk_cif_send_cmd(bdev, skb->data, skb->len, delay, retry);
 
@@ -398,11 +399,10 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	/* however btmtk_uart_driver_own would be triggered before wmt cmd sended */
 	/* then driver_own cmd would not get evt_comp_sem */
 
-	/* can not wait BTMTK_FW_OWNING because would wait for itself */
-	/* use pkt_type to recongize drv own cmd */
-	/* block cmd in fw own state and cmd in drv owning state except for drv own cmd */
-	if ((cif_dev->own_state == BTMTK_DRV_OWNING && pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT)
-			|| cif_dev->own_state == BTMTK_FW_OWN) {
+	/* use pkt_type to recongize drv/fw own cmd */
+	/* block cmd not in drv own state except for drv/fw own cmd */
+	if (!(pkt_type == BTMTK_TX_PKT_SEND_DIRECT_NO_WAIT_OWN || pkt_type == BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT)
+			&& cif_dev->own_state != BTMTK_DRV_OWN) {
 		BTMTK_INFO("%s: wait driver own", __func__);
 		reinit_completion(&bdev->drv_own_comp);
 		atomic_set(&cif_dev->need_drv_own, 1);
@@ -1889,8 +1889,6 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 
 	/* add hci device part */
 	ret = btmtk_recv(bdev->hdev, data, count);
-	if (ret < 0)
-		BTMTK_ERR("%s, ret = %d", __func__, ret);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	/* debug for invalid buffer */
@@ -1968,7 +1966,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 	if (cif_dev->sleep_en) {
 		/* two different event for fw allow sleep or not */
 		ret = btmtk_main_send_cmd(bdev, cmd, FWOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN - 3,
-				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT);
+				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_WAIT_OWN);
 		/* evt[7] = 1 for no sleep */
 		no_sleep = bdev->io_buf[7];
 	} else
@@ -2071,8 +2069,8 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		goto unlock;
 	} else if (cif_dev->no_fw_own == 0) {
-		btmtk_uart_update_fw_own_timer(cif_dev);
 		cif_dev->own_state = BTMTK_DRV_OWN;
+		btmtk_uart_update_fw_own_timer(cif_dev);
 		complete_all(&bdev->drv_own_comp);
 		BTMTK_INFO("%s success", __func__);
 	}
