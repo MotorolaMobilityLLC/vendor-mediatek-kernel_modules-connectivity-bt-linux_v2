@@ -460,6 +460,11 @@ restart:
             return 0;
         }
     }
+    err = ioctl(gTtyFd, HCIUARTDEINIT, NULL);
+    if (err < 0) {
+        BPRINT_E("set HCIUARTDEINIT error %d", err);
+        return 0;
+    }
 
 exit:
     /* unlock ttyFd */

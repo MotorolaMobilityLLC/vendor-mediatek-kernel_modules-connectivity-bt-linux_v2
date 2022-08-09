@@ -883,10 +883,14 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	cif_dev->fw_dl_ready = 0;
 	cif_dev->flush_en = 1;
 
+	/* Flush any pending characters in the driver and discipline. */
+	tty_ldisc_flush(tty);
+
 	/* set chip baud and flowcontrol to config setting */
 	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
 	if (ret < 0) {
 		BTMTK_WARN("%s retry send cmd", __func__);
+		tty_ldisc_flush(tty);
 		ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
 		if (ret < 0)
 			goto exit;
@@ -1733,6 +1737,10 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 		BTMTK_INFO("%s: <!!> Set HCIUARTINIT <!!>", __func__);
 		err = btmtk_uart_init(bdev);
 		break;
+	case HCIUARTDEINIT:
+		BTMTK_INFO("%s: <!!> Set HCIUARTDEINIT <!!>", __func__);
+		btmtk_set_chip_state(bdev, BTMTK_STATE_DISCONNECT);
+		break;
 	default:
 		/* pr_info("<!!> n_tty_ioctl_helper <!!>\n"); */
 		err = n_tty_ioctl_helper(tty, file, cmd, arg);
@@ -1816,6 +1824,10 @@ static int btmtk_uart_tty_compat_ioctl(struct tty_struct *tty, struct file *file
 	case HCIUARTINIT:
 		BTMTK_INFO("%s: <!!> Set HCIUARTINIT <!!>", __func__);
 		err = btmtk_uart_init(bdev);
+		break;
+	case HCIUARTDEINIT:
+		BTMTK_INFO("%s: <!!> Set HCIUARTDEINIT <!!>", __func__);
+		btmtk_set_chip_state(bdev, BTMTK_STATE_DISCONNECT);
 		break;
 	default:
 		/* pr_info("<!!> n_tty_ioctl_helper <!!>\n"); */
