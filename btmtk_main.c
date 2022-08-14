@@ -356,7 +356,7 @@ static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.vendor_cmd, VENDOR_CMD_COUNT);
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.audio_cmd, 1);
 
-	BTMTK_INFO("%s end", __func__);
+	BTMTK_DBG("%s end", __func__);
 }
 
 u8 btmtk_get_chip_state(struct btmtk_dev *bdev)
@@ -924,9 +924,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 
 			/* Check for invalid packet type */
 			if (!skb) {
-				BTMTK_WARN("%s: buffer[0] = 0x%02X, drop data count[%d]", __func__, buffer[0], count);
+				BTMTK_INFO_RAW(buffer, count, "%s: drop pkt len[%d]: ", __func__, count);
 				if (is_mt66xx(bdev->chip_id)) {
-					BTMTK_INFO_RAW(buffer, count, "%s, len[%d]", __func__, count);
 					btmtk_set_sleep(hdev, FALSE);
 				} else {
 					btmtk_hci_snoop_print(buffer_dbg, count_dbg);
@@ -1652,7 +1651,7 @@ int btmtk_load_code_from_bin(u8 **image, char *bin_name, struct device *dev,
 		BTMTK_ERR("%s, invalid parameters!", __func__);
 		return -1;
 	}
-	BTMTK_INFO("%s: load %s", __func__, bin_name);
+	BTMTK_DBG("%s: load %s", __func__, bin_name);
 
 	do {
 		err = request_firmware(&fw_entry, bin_name, dev);
@@ -1847,7 +1846,7 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 		} else
 			memcpy(&cmd[PATCH_HEADER_SIZE], (u8 *)(sectionMap->u4SecSpec), SEC_MAP_NEED_SEND_SIZE);
 
-		BTMTK_INFO_RAW(cmd, cmd_len, "%s: CMD: len[%d]", __func__, cmd_len);
+		BTMTK_DBG_RAW(cmd, cmd_len, "%s: CMD: len[%d]", __func__, cmd_len);
 
 		ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
 				event, event_len, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
@@ -2054,8 +2053,8 @@ static int btmtk_parsing_fw_rom_patch(struct btmtk_dev *bdev,
 			bin_index = (le2cpu32(sectionMap->bin_info_spec.u4DLModeCrcType) >> 16) & 0xFF;
 			bin_type = sectionMap->bin_info_spec.u4SecType;
 		}
-		BTMTK_INFO("%s: loop_count = %d, section_offset = 0x%08x, download patch_len = 0x%08x, "
-				"dl mode = %d, section bin_type = 0x%08x, bin_index =%d\n",
+		BTMTK_DBG("%s: loop_count = %d, section_offset = 0x%08x, download patch_len = 0x%08x, "
+				"dl mode = %d, section bin_type = 0x%08x, bin_index =%d",
 				__func__, loop_count, section_offset, dl_size, dma_flag, bin_type, bin_index);
 		memcpy(&bdev->sectionMap_table[loop_count], sectionMap, sizeof(struct _Section_Map));
 	} while (++loop_count < section_num);
@@ -2087,7 +2086,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 	 * flag 0 for bin_index u8
 	 * flag 1 for bin_type u32
 	 */
-	BTMTK_INFO("%s enter : mode %d expected bin_info = 0x%08x", __func__, mode, binInfo);
+	BTMTK_DBG("%s enter : mode %d expected bin_info = 0x%08x", __func__, mode, binInfo);
 
 	if (fwbuf == NULL) {
 		BTMTK_WARN("%s, fwbuf is NULL!", __func__);
@@ -2110,12 +2109,12 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 		temp_type = le2cpu32(sectionMap->bin_info_spec.u4SecType);
 		if (mode == DOWNLOAD_BY_TYPE) {
 			if (temp_type == binInfo) {
-				BTMTK_INFO("%s, download by bin type", __func__);
+				BTMTK_DBG("%s, download by bin type", __func__);
 				break;
 			}
 		} else {
 			if (temp_index == (binInfo & 0xFF)) {
-				BTMTK_INFO("%s, download by bin index", __func__);
+				BTMTK_DBG("%s, download by bin index", __func__);
 				break;
 			}
 		}
@@ -2150,15 +2149,15 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 		dma_flag = PATCH_DOWNLOAD_USING_WMT;
 	}
 
-	BTMTK_INFO("%s: section_count = %d, section bin_type = 0x%08x, bin_index = %d\n",
-			__func__, loop_count, temp_type, temp_index);
+	BTMTK_INFO("%s:bin_type[0x%08x] mode[%d] bin_info[0x%08x] section_index[%d] bin_index[%d]",
+			__func__, temp_type, mode, binInfo, loop_count, temp_index);
 
 	if (dl_size > 0) {
 		retry = 20;
 		do {
 			patch_status = btmtk_send_wmt_download_cmd(bdev, pos, 0,
 					event, LD_PATCH_EVT_LEN - 1, sectionMap, 0, dma_flag, BT_DOWNLOAD);
-			BTMTK_INFO("%s: patch_status %d", __func__, patch_status);
+			BTMTK_DBG("%s: patch_status %d", __func__, patch_status);
 
 			if (patch_status > PATCH_READY || patch_status == PATCH_ERR) {
 				BTMTK_ERR("%s: patch_status error", __func__);
@@ -2168,6 +2167,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 				BTMTK_INFO("%s: no need to load rom patch section%d", __func__, loop_count);
 				goto err;
 			} else if (patch_status == PATCH_IS_DOWNLOAD_BY_OTHER) {
+				BTMTK_INFO("%s: PATCH_IS_DOWNLOAD_BY_OTHER", __func__);
 				msleep(100);
 				retry--;
 			} else if (patch_status == PATCH_NEED_DOWNLOAD) {
@@ -2182,7 +2182,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 		}
 
 		if (dma_flag == PATCH_DOWNLOAD_USING_DMA && main_info.hif_hook.dl_dma) {
-			BTMTK_INFO("%s: btmtk_load_fw_patch_using_dma!", __func__);
+			BTMTK_DBG("%s: btmtk_load_fw_patch_using_dma!", __func__);
 			/* using DMA to download fw patch*/
 			ret = main_info.hif_hook.dl_dma(bdev,
 				pos, fwbuf,
@@ -2201,7 +2201,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 				goto err;
 			}
 		}
-		BTMTK_INFO("%s end", __func__);
+		BTMTK_DBG("%s end", __func__);
 	}
 
 err:
@@ -2458,8 +2458,6 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag)
 			0x00000090, 0x00010000};
 	//u32 wf_bin_type[] = {0x00000100};
 
-	BTMTK_INFO("%s, patch_flag = %d!", __func__, patch_flag);
-
 	if (!bdev) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
 		return -EINVAL;
@@ -2486,7 +2484,7 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag)
 					"ZB_RAM_CODE_MT%04x_1_%x_hdr.bin",
 					bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
 	} else if (patch_flag == BT_DOWNLOAD) {
-		BTMTK_INFO("%s: BT_DOWNLOAD %u", __func__, bdev->chip_id);
+		BTMTK_DBG("%s: BT_DOWNLOAD %u", __func__, bdev->chip_id);
 		if (is_mt6639(bdev->chip_id) || is_mt66xx(bdev->chip_id))
 			(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 #if (USE_DEVICE_NODE == 0)
@@ -2499,8 +2497,8 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag)
 	} else
 		BTMTK_ERR("%s: unknow patch_flag", __func__);
 
-	BTMTK_INFO("%s: rom patch file name is %s, bt_cfg_file_name is %s", __func__,
-			bdev->rom_patch_bin_file_name, bdev->bt_cfg_file_name);
+	BTMTK_INFO("%s: rom patch[%s], bt_cfg_file_name[%s] patch_flag[%d]", __func__,
+			bdev->rom_patch_bin_file_name, bdev->bt_cfg_file_name, patch_flag);
 
 	btmtk_load_code_from_bin(&rom_patch, bdev->rom_patch_bin_file_name, NULL,
 							&rom_patch_len, 10);
@@ -3504,7 +3502,7 @@ static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
 	}
 
 exit:
-	BTMTK_INFO("%s exit", __func__);
+	BTMTK_DBG("%s exit", __func__);
 	return ret;
 }
 
@@ -3536,7 +3534,7 @@ static int btmtk_send_phase1_wmt_cfg(struct btmtk_dev *bdev)
 	}
 
 exit:
-	BTMTK_INFO("%s exit", __func__);
+	BTMTK_DBG("%s exit", __func__);
 	return ret;
 }
 
@@ -4594,7 +4592,7 @@ static void btmtk_rx_work(struct work_struct *work)
 				 * rx_work thread, so here we create a new thread for dynamic fwdl.
 				 */
 				schedule_work(&bdev->dynamic_fwdl_work);
-				BTMTK_DBG_RAW(skb->data, skb->len, "%s: Get dynamic DL EVENT- ", __func__);
+				BTMTK_INFO_RAW(skb->data, skb->len, "%s: Get dynamic DL EVENT- ", __func__);
 				/* Drop by driver, don't send to stack */
 				kfree_skb(skb);
 				skb = NULL;
@@ -4754,7 +4752,7 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 
 	bdev->get_hci_reset = 0;
 
-	BTMTK_INFO("%s done", __func__);
+	BTMTK_DBG("%s done", __func__);
 	return 0;
 
 err0:
@@ -4866,7 +4864,7 @@ static int btmtk_main_allocate_memory(struct btmtk_dev *bdev)
 			goto err0;
 		}
 	}
-	BTMTK_INFO("%s Done", __func__);
+	BTMTK_DBG("%s Done", __func__);
 	return 0;
 
 err0:
