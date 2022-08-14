@@ -1153,6 +1153,11 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 				/* only wait 3ms for tty buffer clean */
 				usleep_range(10, 20);
 			} while (count != 0 && flush_retry++ < BTMTK_MAX_WAIT_RETRY);
+
+			time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
+			if (time_diff > TIMT_BOUND_OF_CHARS_WAIT)
+				BTMTK_ERR("%s: chars in buffer takes %lu ms to clear", __func__, time_diff);
+
 			if (flush_retry < BTMTK_MAX_WAIT_RETRY) {
 				/* stop uart auto send next pkt to avoid flush conflict with send pkt */
 				cif_dev->tty->flow.stopped = true;
@@ -1160,8 +1165,13 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 				cif_dev->tty->flow.stopped = false;
 			}
 			time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
-			if (time_diff >= TIME_BOUND_OF_TTY_FLUSH)
+			if (time_diff >= TIME_BOUND_OF_TTY_FLUSH) {
 				BTMTK_ERR("%s: flush time takes %lu ms", __func__, time_diff);
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+				if (cif_dev->hub_en)
+					mtk8250_uart_dump(cif_dev->tty);
+#endif
+			}
 		}
 
 		if (sent_len > 0) {
@@ -1238,6 +1248,10 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 			usleep_range(10, 20);
 		} while (count != 0 && flush_retry++ < BTMTK_MAX_WAIT_RETRY);
 
+		time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
+		if (time_diff > TIMT_BOUND_OF_CHARS_WAIT)
+			BTMTK_ERR("%s: chars in buffer take %lu ms to clear", __func__, time_diff);
+
 		if (flush_retry < BTMTK_MAX_WAIT_RETRY) {
 			/* stop uart auto send next pkt to avoid flush conflict with send pkt */
 			cif_dev->tty->flow.stopped = true;
@@ -1246,8 +1260,13 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		}
 
 		time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
-		if (time_diff >= TIME_BOUND_OF_TTY_FLUSH)
+		if (time_diff >= TIME_BOUND_OF_TTY_FLUSH) {
 			BTMTK_ERR("%s: flush time takes %lu ms", __func__, time_diff);
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+			if (cif_dev->hub_en)
+				mtk8250_uart_dump(cif_dev->tty);
+#endif
+		}
 	}
 
 	count = 0;
