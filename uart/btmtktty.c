@@ -235,8 +235,7 @@ int btmtk_uart_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 
 	/* send pkt through tx_thread or not */
 	/* if want to send_and_recv cmd in tx_thread would not be able to send the pkt */
-	if (pkt_type == BTMTK_TX_PKT_SEND_DIRECT || pkt_type == BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT
-			|| pkt_type == BTMTK_TX_PKT_SEND_DIRECT_NO_WAIT_OWN) {
+	if (pkt_type == BTMTK_TX_PKT_SEND_DIRECT || pkt_type == BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT) {
 		BTMTK_WARN("%s send pkt not through tx_thread", __func__);
 		ret = btmtk_cif_send_cmd(bdev, skb->data, skb->len, delay, retry);
 
@@ -401,8 +400,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 	/* use pkt_type to recongize drv/fw own cmd */
 	/* block cmd not in drv own state except for drv/fw own cmd */
-	if (!(pkt_type == BTMTK_TX_PKT_SEND_DIRECT_NO_WAIT_OWN || pkt_type == BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT)
-			&& cif_dev->own_state != BTMTK_DRV_OWN) {
+	if (pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT && cif_dev->own_state != BTMTK_DRV_OWN) {
 		BTMTK_INFO("%s: wait driver own", __func__);
 		reinit_completion(&bdev->drv_own_comp);
 		atomic_set(&cif_dev->need_drv_own, 1);
@@ -422,6 +420,14 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 	/* if just protect event, another cmd would reinit event_compare_status */
 	down(&cif_dev->evt_comp_sem);
+	/* if send cmd with fw owning, not direct send cmd incase of tx_thread cant not do drv own with send_and_recv */
+	if ((cif_dev->own_state == BTMTK_FW_OWN || cif_dev->own_state == BTMTK_FW_OWNING )
+		&& pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT) {
+		BTMTK_ERR("%s: wait driver own retry", __func__);
+		up(&cif_dev->evt_comp_sem);
+		return -EAGAIN;
+	}
+
 	if (event) {
 		if (event_len > EVENT_COMPARE_SIZE) {
 			BTMTK_ERR("%s, event_len (%d) > EVENT_COMPARE_SIZE(%d), error",
@@ -466,7 +472,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 #if (USE_DEVICE_NODE == 1)
 	/* 4 round and dump cif status each round (500ms), total 2 secs */
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < retry; i++) {
 #endif
 		do {
 			ret = -1;
@@ -496,7 +502,8 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
 
 	if (ret < 0) {
-		BTMTK_ERR("%s wait event timeout [0x%02x%02x], ret[%d]", __func__,opcode[1], opcode[0], ret);
+		BTMTK_ERR("%s wait event timeout [0x%02x%02x], ret[%d], wait_retry[%d]",
+				__func__,opcode[1], opcode[0], ret, retry);
 		bdev->recv_evt_len = 0;
 		ret = -ERRNUM;
 	}
@@ -596,7 +603,7 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, SETBAUD_CMD_LEN, event, SETBAUD_EVT_LEN,
-			0, 0, BTMTK_TX_CMD_FROM_DRV);
+			0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
 		return ret;
@@ -651,10 +658,10 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 	if (is_mt6639(bdev->chip_id) || is_mt66xx(bdev->chip_id)) {
 		if (cif_dev->fw_dl_ready)
 			ret = btmtk_main_send_cmd(bdev, cmd+4, 1, event2, WAKEUP_EVT_LEN + 1,
-					0, 0, BTMTK_TX_CMD_FROM_DRV);
+					0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 		else
 			ret = btmtk_main_send_cmd(bdev, cmd+4, 1, event, WAKEUP_EVT_LEN,
-					0, 0, BTMTK_TX_CMD_FROM_DRV);
+					0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 	} else
 		ret = btmtk_main_send_cmd(bdev, cmd, WAKEUP_CMD_LEN, event, WAKEUP_EVT_LEN,
 				0, 0, BTMTK_TX_CMD_FROM_DRV);
@@ -1357,7 +1364,7 @@ static int btmtk_uart_tx_thread(void *data)
 		if (thread_flag & (BTMTK_THREAD_TX | BTMTK_THREAD_RX)) {
 			ret = btmtk_uart_driver_own(bdev);
 			if (ret) {
-				BTMTK_ERR("%s: set driver own return fail", __func__);
+				BTMTK_ERR("%s: set driver own return fail, ret[%d]", __func__, ret);
 				/* trigger by cmd timeout */
 				//thread_flag |= BTMTK_THREAD_ASSERT;
 			}
@@ -1366,7 +1373,7 @@ static int btmtk_uart_tx_thread(void *data)
 		} else if (thread_flag & BTMTK_THREAD_FW_OWN) {
 			ret = btmtk_uart_fw_own(bdev);
 			if (ret) {
-				BTMTK_ERR("%s: set fw own return fail", __func__);
+				BTMTK_ERR("%s: set fw own return fail, ret[%d]", __func__, ret);
 				/* trigger by cmd timeout */
 				//thread_flag |= BTMTK_THREAD_ASSERT;
 			}
@@ -1949,7 +1956,6 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 {
 	int ret = 0;
-	u8 no_sleep = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x03, 0x02, 0x00, 0x01, 0x01 };
 	u8 evt[] = { 0x04, 0xE4, 0x07, 0x02, 0x03, 0x03, 0x00, 0x00, 0x01, 0x01 };
@@ -1972,16 +1978,25 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 	if (cif_dev->sleep_en) {
 		/* two different event for fw allow sleep or not */
 		ret = btmtk_main_send_cmd(bdev, cmd, FWOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN - 3,
-				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_WAIT_OWN);
+				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
 		/* evt[7] = 1 for no sleep */
-		no_sleep = bdev->io_buf[7];
+		if (bdev->io_buf[7]) {
+			BTMTK_WARN("%s fw not allow sleep, keep drv own", __func__);
+			cif_dev->own_state = BTMTK_DRV_OWN;
+			goto unlock;
+		}
 	} else
 		ret = 0;
 
-	if (ret < 0 || no_sleep) {
-		BTMTK_ERR("%s failed, keep drv own, ret[%d], no_sleep[%d]", __func__, ret, no_sleep);
+
+	if (ret < 0) {
+		BTMTK_ERR("%s failed, keep drv own, ret[%d]", __func__, ret);
+		if (bdev->assert_reason[0] == '\0') {
+			strncpy(bdev->assert_reason, "[BT_FW assert] fw own failed", strlen("[BT_FW assert] fw own failed"));
+			BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+		}
 		cif_dev->own_state = BTMTK_DRV_OWN;
-		btmtk_uart_update_fw_own_timer(cif_dev);
+		btmtk_uart_trigger_assert(bdev);
 		goto unlock;
 	} else {
 		cif_dev->own_state = BTMTK_FW_OWN;
@@ -1991,7 +2006,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		btmtk_release_uarthub(false);
 #endif
 		__pm_relax(bt_trx_wakelock);
-		BTMTK_INFO("%s success, no_sleep[%d]", __func__, no_sleep);
+		BTMTK_INFO("%s success", __func__);
 	}
 unlock:
 	UART_OWN_MUTEX_UNLOCK();
@@ -2050,15 +2065,16 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			if (!atomic_read(&cif_dev->fw_wake)){
 				/* no need to wait event */
 				ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
-						DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+						DELAY_TIMES, 1, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
 				if (ret < 0)
 					BTMTK_ERR("%s wakeup_cmd fail retry[%d]", __func__, retry);
 				/* wait a while for fw wakeup */
 				usleep_range(5000, 5100);
 			}
 			/* fw own clr cmd for notice is wakeup by bt driver */
+			/* let retry = 0 for only wait for event 500ms */
 			ret = btmtk_main_send_cmd(bdev, fw_own_clr_cmd, 10, evt, OWNTYPE_EVT_LEN,
-					DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+					DELAY_TIMES, 1, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
 			if (ret < 0)
 				BTMTK_ERR("%s fw_own_clr_cmd fail retry[%d]", __func__, retry);
 		} while (ret < 0 && --retry);
@@ -2071,8 +2087,8 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			memcpy(bdev->assert_reason, "[BT_FW assert] drv own failed", 29);
 			BTMTK_WARN("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 		}
-		btmtk_uart_trigger_assert(bdev);
 		cif_dev->own_state = BTMTK_DRV_OWN;
+		btmtk_uart_trigger_assert(bdev);
 		goto unlock;
 	} else if (cif_dev->no_fw_own == 0) {
 		cif_dev->own_state = BTMTK_DRV_OWN;
