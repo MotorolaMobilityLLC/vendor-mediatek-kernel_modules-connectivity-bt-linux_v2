@@ -121,8 +121,9 @@ struct mtk_stp_hdr {
 /* Delay time after write data to io_buf */
 #define IO_BUF_DELAY_TIME 50
 
-/* Time bound for flush tty: 300ms */
-#define TIME_BOUND_OF_TTY_FLUSH	300
+/* Time bound for flush tty: 100ms */
+#define TIMT_BOUND_OF_CHARS_WAIT 10
+#define TIME_BOUND_OF_TTY_FLUSH	100
 
 typedef int (*pdwnc_func) (u8 fgReset);
 typedef int (*reset_func_ptr2) (unsigned int gpio, int init_value);
