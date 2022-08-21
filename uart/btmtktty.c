@@ -146,6 +146,10 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s, cif_dev is NULL", __func__);
+		return -EINVAL;
+	}
 	ret = 0;
 
 #if (SLEEP_ENABLE == 1)
@@ -153,6 +157,8 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 #endif
 
 #if (USE_DEVICE_NODE == 1)
+	cif_dev->is_pre_on_done = FALSE;
+
 	/* wait coredump end */
 	state = btmtk_get_chip_state(bdev);
 	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
@@ -868,8 +874,6 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 			BTMTK_ERR("ConnInfra power on failed!");
 			return -EFAULT;
 		}
-
-	cif_dev->is_pre_on_done = FALSE;
 
 	/* start tx_thread */
 	if (btmtk_tx_thread_start(bdev))
