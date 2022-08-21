@@ -353,6 +353,7 @@ static inline int btmtk_pinctrl_exec(const char *name)
 
 	return 0;
 }
+
 int btmtk_pre_power_on_handler(void)
 {
 	/*
@@ -382,14 +383,11 @@ int btmtk_pre_power_on_handler(void)
 
 	btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
 
-	/* reopen tty */
-	cif_dev->tty->ops->open(cif_dev->tty, NULL);
-
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 
-	/* use uarthub bypass mode (default) */
-	ret = mtk8250_uart_hub_enable_bypass_mode(1);
-	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
+	/* use uarthub multi-host mode (default) */
+	ret = mtk8250_uart_hub_enable_bypass_mode(0);
+	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
 
 	ret = mtk8250_uart_hub_dev0_set_rx_request();
 	BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_rx_request ret[%d]", __func__, ret);
@@ -405,6 +403,10 @@ int btmtk_pre_power_on_handler(void)
 	ret = mtk8250_uart_hub_fifo_ctrl(1);
 	BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(1) ret[%d]", __func__, ret);
 
+	/* use uarthub bypass mode*/
+	ret = mtk8250_uart_hub_enable_bypass_mode(1);
+	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
+
 #endif
 	btmtk_pinctrl_exec(POWER_ON_TX_PINCTRL_NAME);
 	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
@@ -416,8 +418,26 @@ int btmtk_pre_power_on_handler(void)
 
 int btmtk_set_uart_rx_aux(void)
 {
+	struct btmtk_uart_dev *cif_dev = NULL;
+	int ret = 0;
+
 	BTMTK_DBG("%s: start", __func__);
-	return btmtk_pinctrl_exec(POWER_ON_RX_PINCTRL_NAME);
+	if (!g_sbdev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	ret = btmtk_pinctrl_exec(POWER_ON_RX_PINCTRL_NAME);
+
+	/* reopen tty */
+	cif_dev->tty->ops->open(cif_dev->tty, NULL);
+	return ret;
 }
 
 int btmtk_reset_pin_off(void)
