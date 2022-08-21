@@ -2207,6 +2207,7 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 #endif
 
+	BTMTK_INFO("%s: start", __func__);
 	bdev = dev_get_drvdata(tty->dev);
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
