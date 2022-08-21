@@ -354,9 +354,30 @@ int btmtk_pre_power_on_handler(void)
 	 * Setup BT UART
 	 */
 	int ret = 0;
+	struct btmtk_uart_dev *cif_dev = NULL;
 
-	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
+	BTMTK_INFO("%s: start", __func__);
+
+	if (!g_sbdev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	if (cif_dev->is_pre_on_done) {
+		BTMTK_INFO("%s: alredy do pre_on_cb", __func__);
+		return 0;
+	}
+
 	btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
+
+	/* reopen tty */
+	cif_dev->tty->ops->open(cif_dev->tty, NULL);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 
@@ -378,6 +399,9 @@ int btmtk_pre_power_on_handler(void)
 
 #endif
 	btmtk_pinctrl_exec(POWER_ON_TX_PINCTRL_NAME);
+	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
+
+	cif_dev->is_pre_on_done = TRUE;
 
 	return 0;
 }
