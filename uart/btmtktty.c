@@ -1465,7 +1465,7 @@ static int btmtk_tx_thread_start(struct btmtk_dev *bdev)
 			BTMTK_INFO("%s: wait btmtk_uart_tx_thread start, retry[%d]", __func__, i);
 			usleep_range(2000, 2100);
 			i++;
-			if (i == RETRY_TIMES - 1) {
+			if (i == TX_THREAD_RETRY - 1) {
 				BTMTK_INFO("%s: wait btmtk_uart_tx_thread start failed", __func__);
 				return -1;
 			}
@@ -1499,7 +1499,7 @@ static int btmtk_tx_thread_exit(struct btmtk_uart_dev *cif_dev)
 			BTMTK_INFO("%s: wait btmtk_uart_tx_thread stop, retry[%d]", __func__, i);
 			usleep_range(2000, 2100);
 			i++;
-			if (i == RETRY_TIMES - 1) {
+			if (i == TX_THREAD_RETRY - 1) {
 				BTMTK_INFO("%s: wait btmtk_uart_tx_thread stop failed", __func__);
 				break;
 			}
