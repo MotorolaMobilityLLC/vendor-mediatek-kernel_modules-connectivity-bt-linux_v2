@@ -213,9 +213,10 @@ int btmtk_wakeup_uarthub(void) {
 	int ready_retry = 50, ret = 0;
 
 	/* Set TX,RX request */
-	ret = mtk8250_uart_hub_set_request();
+	ret = mtk8250_uart_hub_dev0_set_tx_request();
+	BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_tx_request, ret[%d]", __func__, ret);
 	if (ret) {
-		BTMTK_ERR("%s mtk8250_uart_hub_set_request fail ret[%d]", __func__, ret);
+		BTMTK_ERR("%s mtk8250_uart_hub_dev0_set_tx_request fail ret[%d]", __func__, ret);
 		return -1;
 	}
 
@@ -251,10 +252,15 @@ void btmtk_release_uarthub(bool force)
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
 		return;
 	}
-
+	/* ensure hub tx/rx all clear when bt off*/
+	if (cif_dev->hub_en && force) {
+		ret = mtk8250_uart_hub_dev0_clear_tx_request();
+		BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_tx_request ret[%d]", __func__, ret);
+	}
 	/* Clr TX,RX request, let uarthub can sleep */
 	if (cif_dev->hub_en && (cif_dev->sleep_en || force)) {
-		ret =  mtk8250_uart_hub_clear_request();
+		ret =  mtk8250_uart_hub_dev0_clear_rx_request();
+		BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_rx_request ret[%d]", __func__, ret);
 		if (ret)
 			BTMTK_ERR("%s  mtk8250_uart_hub_clear_request fail ret[%d]", __func__, ret);
 	}
@@ -385,6 +391,8 @@ int btmtk_pre_power_on_handler(void)
 	ret = mtk8250_uart_hub_enable_bypass_mode(1);
 	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
 
+	ret = mtk8250_uart_hub_dev0_set_rx_request();
+	BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_rx_request ret[%d]", __func__, ret);
 	ret = btmtk_wakeup_uarthub();
 
 	if(ret < 0)

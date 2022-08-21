@@ -1127,11 +1127,65 @@ static void btmtk_uart_chip_reset_notify(struct btmtk_dev *bdev)
 	//struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 }
 
+
+static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+	int count = 0, flush_retry = 0;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	if (cif_dev->flush_en) {
+		unsigned long start_time = jiffies, time_diff = 0;
+
+		do {
+			if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT) {
+				BTMTK_ERR("%s: BTMTK_STATE_DISCONNECT", __func__);
+				return -1;
+			}
+			count = tty_chars_in_buffer(cif_dev->tty);
+			/* only wait 3ms for tty buffer clean */
+			usleep_range(10, 20);
+		} while (count != 0 && flush_retry++ < BTMTK_MAX_WAIT_RETRY);
+		time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
+		if (time_diff > TIMT_BOUND_OF_CHARS_WAIT)
+			BTMTK_ERR("%s: chars in buffer takes %lu ms to clear, remain count[%d]",
+				__func__, time_diff, count);
+
+		if (flush_retry < BTMTK_MAX_WAIT_RETRY) {
+			/* stop uart auto send next pkt to avoid flush conflict with send pkt */
+			cif_dev->tty->flow.stopped = true;
+			tty_driver_flush_buffer(cif_dev->tty);
+			cif_dev->tty->flow.stopped = false;
+		}
+		time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
+		if (time_diff >= TIME_BOUND_OF_TTY_FLUSH) {
+			BTMTK_ERR("%s: flush time takes %lu ms", __func__, time_diff);
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+			if (cif_dev->hub_en)
+				mtk8250_uart_dump(cif_dev->tty);
+#endif
+		}
+	}
+
+	return flush_retry;
+
+}
+
+
 static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset)
 {
 	int cur_len = 0;
-	int count = 0, flush_retry = 0, max_pkt_cnt = 0, write_zero_retry = 0;
+	int flush_retry = 0, max_pkt_cnt = 0, write_zero_retry = 0;
 	int ret = -1;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	s32 sent_len;
@@ -1148,40 +1202,9 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	while (1) {
 		sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT) ?
 				(UPLOAD_PATCH_UNIT) : (section_dl_size - cur_len);
-		flush_retry = 0;
+
 		/* wait tty buffer clean */
-		if (cif_dev->flush_en) {
-			unsigned long start_time = jiffies, time_diff = 0;
-
-			do {
-				if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT) {
-					BTMTK_ERR("%s: BTMTK_STATE_DISCONNECT", __func__);
-					return -1;
-				}
-				count = tty_chars_in_buffer(cif_dev->tty);
-				/* only wait 3ms for tty buffer clean */
-				usleep_range(10, 20);
-			} while (count != 0 && flush_retry++ < BTMTK_MAX_WAIT_RETRY);
-
-			time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
-			if (time_diff > TIMT_BOUND_OF_CHARS_WAIT)
-				BTMTK_ERR("%s: chars in buffer takes %lu ms to clear", __func__, time_diff);
-
-			if (flush_retry < BTMTK_MAX_WAIT_RETRY) {
-				/* stop uart auto send next pkt to avoid flush conflict with send pkt */
-				cif_dev->tty->flow.stopped = true;
-				tty_driver_flush_buffer(cif_dev->tty);
-				cif_dev->tty->flow.stopped = false;
-			}
-			time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
-			if (time_diff >= TIME_BOUND_OF_TTY_FLUSH) {
-				BTMTK_ERR("%s: flush time takes %lu ms", __func__, time_diff);
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
-				if (cif_dev->hub_en)
-					mtk8250_uart_dump(cif_dev->tty);
-#endif
-			}
-		}
+		flush_retry = btmtk_uart_wait_tty_buffer_clean(bdev);
 
 		if (sent_len > 0) {
 			memcpy(image, fwbuf + section_offset + cur_len, sent_len);
@@ -1195,8 +1218,8 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 				write_zero_retry++;
 			else {
 				write_zero_retry = 0;
-				BTMTK_DBG("%s, sent_len[%d] tty_write[%d], flush_retry[%d] buffer_chars[%d] max_pkt_cnt[%d]",
-							__func__, sent_len, ret, flush_retry, count, max_pkt_cnt);
+				BTMTK_DBG("%s, sent_len[%d] tty_write[%d], flush_retry[%d] max_pkt_cnt[%d]",
+							__func__, sent_len, ret, flush_retry, max_pkt_cnt);
 			}
 			if (ret < 0 || write_zero_retry > BTMTK_MAX_WAIT_RETRY) {
 				BTMTK_ERR("%s: send patch failed, terminate, ret[%d]", __func__, ret);
@@ -1244,41 +1267,7 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	/* BTMTK_INFO("%s: tty %p\n", __func__, bdev->tty); */
 
 	/* wait tty buffer clean */
-	if (cif_dev->flush_en) {
-		unsigned long start_time = jiffies, time_diff = 0;
-		
-		do {
-			if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT) {
-				BTMTK_ERR("%s: BTMTK_STATE_DISCONNECT", __func__);
-				return -1;
-			}
-			count = tty_chars_in_buffer(cif_dev->tty);
-			/* only wait 3ms for tty buffer clean */
-			usleep_range(10, 20);
-		} while (count != 0 && flush_retry++ < BTMTK_MAX_WAIT_RETRY);
-
-		time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
-		if (time_diff > TIMT_BOUND_OF_CHARS_WAIT)
-			BTMTK_ERR("%s: chars in buffer take %lu ms to clear", __func__, time_diff);
-
-		if (flush_retry < BTMTK_MAX_WAIT_RETRY) {
-			/* stop uart auto send next pkt to avoid flush conflict with send pkt */
-			cif_dev->tty->flow.stopped = true;
-			tty_driver_flush_buffer(cif_dev->tty);
-			cif_dev->tty->flow.stopped = false;
-		}
-
-		time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
-		if (time_diff >= TIME_BOUND_OF_TTY_FLUSH) {
-			BTMTK_ERR("%s: flush time takes %lu ms", __func__, time_diff);
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
-			if (cif_dev->hub_en)
-				mtk8250_uart_dump(cif_dev->tty);
-#endif
-		}
-	}
-
-	count = 0;
+	flush_retry = btmtk_uart_wait_tty_buffer_clean(bdev);
 
 	while (len != cmd_len && count < BTMTK_MAX_SEND_RETRY
 			&& btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT) {
@@ -2014,12 +2003,20 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 	cif_dev->own_state = BTMTK_FW_OWNING;
 
 	if (cif_dev->sleep_en) {
+		ret = mtk8250_uart_hub_dev0_clear_tx_request();
+		BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_tx_request, ret[%d]", __func__, ret);
+
+		/* record host wakeup info to fw, b[4] = AP, b[5] = MD, b[6] = ADSP */
+		cmd[9] = cmd[9] | ((mtk8250_uart_hub_get_host_wakeup_status() & 0xf) << 4);
+
 		/* two different event for fw allow sleep or not */
 		ret = btmtk_main_send_cmd(bdev, cmd, FWOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN - 3,
 				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
 		/* evt[7] = 1 for no sleep */
 		if (bdev->io_buf[7]) {
-			BTMTK_WARN("%s fw not allow sleep, keep drv own", __func__);
+			/* re-set tx request */
+			btmtk_wakeup_uarthub();
+			BTMTK_WARN("%s fw not allow sleep, keep drv own, cmd[9] = 0x%02x", __func__, cmd[9]);
 			cif_dev->own_state = BTMTK_DRV_OWN;
 			goto unlock;
 		}
@@ -2037,7 +2034,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		btmtk_release_uarthub(false);
 #endif
 		__pm_relax(bt_trx_wakelock);
-		BTMTK_INFO("%s success", __func__);
+		BTMTK_INFO("%s success, cmd[9] = 0x%02x", __func__, cmd[9]);
 	}
 unlock:
 	UART_OWN_MUTEX_UNLOCK();
@@ -2101,8 +2098,12 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 						DELAY_TIMES, 1, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
 				if (ret < 0)
 					BTMTK_ERR("%s wakeup_cmd fail retry[%d]", __func__, retry);
+
+				/* wait 0xff sended */
+				btmtk_uart_wait_tty_buffer_clean(bdev);
+
 				/* wait a while for fw wakeup */
-				usleep_range(5000, 5100);
+				usleep_range(6000, 6100);
 			}
 			/* fw own clr cmd for notice is wakeup by bt driver */
 			/* let retry = 0 for only wait for event 500ms */
@@ -2118,6 +2119,8 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		goto unlock;
 	} else if (cif_dev->no_fw_own == 0) {
+		mtk8250_uart_hub_dev0_set_rx_request();
+		BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_rx_request", __func__);
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		btmtk_uart_update_fw_own_timer(cif_dev);
 		BTMTK_INFO("%s success", __func__);
