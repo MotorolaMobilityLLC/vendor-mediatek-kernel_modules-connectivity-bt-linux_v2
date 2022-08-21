@@ -68,6 +68,7 @@ int setup_uart_param (int hComPort, int iBaudrate, struct UART_CONFIG *sUartConf
 
 static int gTtyFd = -1;
 static int cont = 1;    /** loop continue running */
+struct flock fl;
 
 //---------------------------------------------------------------------------
 /* Used as host uart param setup callback */
@@ -256,6 +257,13 @@ static void uart_launcher_sig_handler(int signum)
 {
     BPRINT_I("%s: %d", __func__, signum);
     cont = 0;
+    if (gTtyFd > 0 && (signum == SIGKILL || signum == SIGTERM)) {
+        if (ioctl(gTtyFd, HCIUARTDEINIT, NULL) < 0)
+            BPRINT_E("set HCIUARTDEINIT error");
+        BPRINT_I("unlock_flock");
+        unlock_flock(gTtyFd, &fl, F_UNLCK, SEEK_SET);
+        close(gTtyFd);
+    }
 }
 
 //---------------------------------------------------------------------------
@@ -274,7 +282,6 @@ int main(int argc, char *argv[])
     char *tty_path = "/dev/ttyUSB0";
     struct UART_CONFIG sUartConfig;
     struct sigaction sigact;
-    struct flock fl;
 
     memset(&sUartConfig, 0, sizeof(struct UART_CONFIG));
     memset(&fds, 0, sizeof(struct pollfd));
@@ -387,13 +394,13 @@ restart:
     err = ioctl(gTtyFd, HCIUARTINIT, NULL);
     if (err < 0) {
         BPRINT_E("set HCIUARTINIT error %d", err);
-        return 0;
+        goto exit;
     }
 
     err = ioctl(gTtyFd, HCIUARTGETBAUD, NULL);
     if (err < 0) {
         BPRINT_E("set HCIUARTGETBAUD error %d", err);
-        return 0;
+        goto exit;
     }
 
     /* chang baud rate */
@@ -403,7 +410,7 @@ restart:
         err = ioctl(gTtyFd, HCIUARTSETBAUD, &sUartConfig);
         if (err < 0) {
             BPRINT_E("set HCIUARTSETBAUD error %d", err);
-            return 0;
+            goto exit;
         }
 
         BPRINT_I("set baudtate %d", baudrate);
@@ -412,13 +419,13 @@ restart:
         err = ioctl(gTtyFd, HCIUARTSETWAKEUP, NULL);
         if (err < 0) {
             BPRINT_E("set HCIUARTSETWAKEUP error %d", err);
-            return 0;
+            goto exit;
         }
     }
 
     if (ioctl(gTtyFd, HCIUARTLOADPATCH, NULL) < 0) {
         BPRINT_E("set HCIUARTLOADPATCH error");
-        return 0;
+        goto exit;
     }
 
     while (cont) {
@@ -448,7 +455,7 @@ restart:
         err = ioctl(gTtyFd, HCIUARTSETBAUD, &sUartConfig);
         if (err < 0) {
             BPRINT_E("set HCIUARTSETBAUD error %d", err);
-            return 0;
+            goto exit;
         }
 
         BPRINT_I("set baudtate %d", CUST_BAUDRATE_DFT);
@@ -457,18 +464,16 @@ restart:
         err = ioctl(gTtyFd, HCIUARTSETWAKEUP, NULL);
         if (err < 0) {
             BPRINT_E("set HCIUARTSETWAKEUP error %d", err);
-            return 0;
+            goto exit;
         }
-    }
-    err = ioctl(gTtyFd, HCIUARTDEINIT, NULL);
-    if (err < 0) {
-        BPRINT_E("set HCIUARTDEINIT error %d", err);
-        return 0;
     }
 
 exit:
     /* unlock ttyFd */
     if (gTtyFd > 0) {
+        err = ioctl(gTtyFd, HCIUARTDEINIT, NULL);
+        if (err < 0)
+            BPRINT_E("set HCIUARTDEINIT error %d", err);
         BPRINT_I("unlock_flock");
         unlock_flock(gTtyFd, &fl, F_UNLCK, SEEK_SET);
         close(gTtyFd);
