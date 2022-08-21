@@ -101,6 +101,7 @@
 #define RETRY_TIMES 4
 #endif
 
+#define TX_THREAD_RETRY	100
 #define BT_OPEN_MAX_RETRY	100
 
 /* Expected minimum supported interface */
