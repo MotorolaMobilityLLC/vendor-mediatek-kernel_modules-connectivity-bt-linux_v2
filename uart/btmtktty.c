@@ -294,8 +294,10 @@ static int btmtk_uart_write_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 
 int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
+#if (USE_DEVICE_NODE == 0)
 	const u8 read_address_event[READ_ADDRESS_EVT_HDR_LEN] = { 0x4, 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00 };
 	const u8 get_baudrate_event[GETBAUD_EVT_LEN] = { 0x04, 0xE4, 0x0A, 0x02, 0x04, 0x06, 0x00, 0x00, 0x02 };
+#endif
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -305,6 +307,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		skb->len >= event_need_compare_len) {
 		memset(bdev->io_buf, 0, IO_BUF_SIZE);
+#if (USE_DEVICE_NODE == 0)
 		if ((skb->len == (GETBAUD_EVT_LEN - HCI_TYPE_SIZE + BAUD_SIZE)) &&
 			memcmp(skb->data, &get_baudrate_event[1], GETBAUD_EVT_LEN - 1) == 0) {
 			BTMTK_INFO("%s: GET BAUD = %02X %02X %02X, FC = %02X", __func__,
@@ -315,11 +318,12 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			memcpy(bdev->bdaddr, &skb->data[READ_ADDRESS_EVT_PAYLOAD_OFFSET - 1], BD_ADDRESS_SIZE);
 			BTMTK_DBG("%s: GET BDADDR = "MACSTR, __func__, MAC2STR(bdev->bdaddr));
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
-#if (USE_DEVICE_NODE == 1)
+
 			/* SP project need to send to stack */
-			return 0;
+			//return 0;
+		} else
 #endif
-		} else if (memcmp(skb->data, event_need_compare,
+		if (memcmp(skb->data, event_need_compare,
 					event_need_compare_len) == 0) {
 			/* if it is wobx debug event, just print in kernel log, drop it
 			 * by driver, don't send to stack
@@ -364,9 +368,6 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	u8 opcode[2] = {0};
-#if (USE_DEVICE_NODE == 1)
-	int i = 0;
-#endif
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -427,7 +428,13 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 #if (USE_DEVICE_NODE == 0)
 		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_COMP_EVENT_TIMO);
 #else
-		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
+		if (retry == SEND_RETRY_ONE_TIMES_30MS) {
+			/* for query cmd in bt on */
+			BTMTK_INFO("%s: query cmd, just wait 30ms", __func__);
+			comp_event_timo = jiffies + msecs_to_jiffies(30);
+			retry = 1;
+		} else
+			comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
 #endif
 		BTMTK_DBG("event_need_compare_len %d, event_compare_status %d",
 			event_need_compare_len, event_compare_status);
@@ -452,7 +459,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 #if (USE_DEVICE_NODE == 1)
 	/* 4 round and dump cif status each round (500ms), total 2 secs */
-	for (i = 0; i < retry; i++) {
+	do {
 #endif
 		do {
 			ret = -1;
@@ -477,12 +484,12 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
 			mtk8250_uart_end_record(cif_dev->tty);
 		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
-	}
+	} while (--retry > 0);
 #endif
 
 	if (ret < 0) {
-		BTMTK_ERR("%s wait event timeout [0x%02x%02x], ret[%d], wait_retry[%d]",
-				__func__,opcode[1], opcode[0], ret, retry);
+		BTMTK_ERR("%s wait event timeout [0x%02x%02x], ret[%d]",
+				__func__,opcode[1], opcode[0], ret);
 		bdev->recv_evt_len = 0;
 		ret = -ERRNUM;
 	}
@@ -582,8 +589,13 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 	cmd[13] = (cif_dev->fw_hub_en << 4 | !cif_dev->rhw_en << 1 | !cif_dev->crc_en << 0);
 
 	ret = btmtk_main_send_cmd(bdev,
-			cmd, SETBAUD_CMD_LEN, event, SETBAUD_EVT_LEN,
-			0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			cmd, SETBAUD_CMD_LEN, event, SETBAUD_EVT_LEN, 0,
+#if (USE_DEVICE_NODE == 0)
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+#else
+			SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_CMD_FROM_DRV);
+#endif
+
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
 		return ret;
@@ -603,7 +615,11 @@ static int btmtk_uart_send_query_uart_cmd(struct hci_dev *hdev)
 	int ret = -1;
 
 	ret = btmtk_main_send_cmd(bdev, cmd, GETBAUD_CMD_LEN, event, GETBAUD_EVT_LEN, DELAY_TIMES,
+#if (USE_DEVICE_NODE == 0)
 			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+#else
+			SEND_RETRY_ONE_TIMES_30MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+#endif
 	if (ret < 0) {
 		BTMTK_ERR("%s btmtk_uart_send_query_uart_cmd failed!!", __func__);
 		return ret;
@@ -846,6 +862,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	int query_retry = 10;
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -915,15 +932,24 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	/* Flush any pending characters in the driver and discipline. */
 	tty_ldisc_flush(tty);
 
+	/* query cmd, make sure can communicate with fw */
+	do {
+		/* clean rx queues */
+		skb_queue_purge(&bdev->rx_q);
+		if (!IS_ERR_OR_NULL(bdev->rx_skb))
+			kfree_skb(bdev->rx_skb);
+		bdev->rx_skb = NULL;
+
+		ret = btmtk_uart_send_query_uart_cmd(bdev->hdev);
+	} while (ret < 0 && query_retry --);
+	if (ret < 0) {
+		btmtk_uart_trigger_assert(bdev);
+		goto exit;
+	}
 	/* set chip baud and flowcontrol to config setting */
 	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
-	if (ret < 0) {
-		BTMTK_WARN("%s retry send cmd", __func__);
-		tty_ldisc_flush(tty);
-		ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
-		if (ret < 0)
-			goto exit;
-	}
+	if (ret < 0)
+		goto exit;
 
 	/* set tty host baud and flowcontrol to config setting */
 	BTMTK_INFO("Set config baud: %d, flowcontrol: %d", uart_cfg.iBaudrate, uart_cfg.fc);
@@ -2118,7 +2144,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			} else {
 				/* no need to wait event */
 				ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
-						DELAY_TIMES, 1, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+						DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
 				if (ret < 0)
 					BTMTK_ERR("%s wakeup_cmd fail retry[%d]", __func__, retry);
 
@@ -2134,7 +2160,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			/* fw own clr cmd for notice is wakeup by bt driver */
 			/* let retry = 0 for only wait for event 500ms */
 			ret = btmtk_main_send_cmd(bdev, fw_own_clr_cmd, 10, evt, OWNTYPE_EVT_LEN,
-					DELAY_TIMES, 1, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+					DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
 			if (ret < 0)
 				BTMTK_ERR("%s fw_own_clr_cmd fail retry[%d]", __func__, retry);
 		} while (ret < 0 && --retry);
