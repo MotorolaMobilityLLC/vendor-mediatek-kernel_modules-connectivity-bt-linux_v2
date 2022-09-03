@@ -157,7 +157,6 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 #endif
 
 #if (USE_DEVICE_NODE == 1)
-	cif_dev->is_pre_on_done = FALSE;
 
 	/* wait coredump end */
 	state = btmtk_get_chip_state(bdev);
@@ -901,6 +900,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	bmain_info->chip_reset_flag = 0;
 	cif_dev->assert_state = 0;
 	cif_dev->is_rhw_fail = 0;
+	bdev->is_whole_chip_reset = FALSE;
 	reinit_completion(&bdev->dump_comp);
 	memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
 

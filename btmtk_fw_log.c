@@ -1198,9 +1198,10 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 					__func__, dump_data_counter, skb->data);
 		line = __LINE__;
 		ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "[M]", skb->data, skb->len);
-		if (ret)
+		if (ret) {
+			BTMTK_INFO_RAW(skb->data, skb->len, "%s: send fail, len[%d]", __func__, skb->len);
 			goto coredump_fail_unlock;
-
+		}
 		/* In the new generation, we will check the keyword of coredump (; coredump end)
 		 * Such as : 79xx
 		 */
@@ -1223,9 +1224,11 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 			ret = connv3_coredump_end(bmain_info->hif_hook.coredump_handler, bdev->assert_reason);
 
-			if (ret)
-				goto coredump_fail;
-
+			if (ret) {
+				BTMTK_ERR("%s: coredump_end fail ret[%d]", __func__, ret);
+				btmtk_fwdump_wake_unlock();
+				return 1;
+			}
 			/* if do complete and bt close with btmtk_reset_waker start
 			 * no need to wait hw_err event, cause bt already start close
 			 */
@@ -1237,7 +1240,9 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				bmain_info->hif_hook.waker_notify(bdev);
 
 		}
+
 		return 1;
+
 coredump_fail_unlock:
 		btmtk_fwdump_wake_unlock();
 coredump_fail:
