@@ -41,6 +41,8 @@ static struct pinctrl *pinctrl_ptr;
 extern struct btmtk_dev *g_sbdev;
 int g_bt_state;
 
+static inline int btmtk_pinctrl_exec(const char *name);
+
 static int __maybe_unused btmtk_char_suspend(struct device *dev)
 {
 	//BTMTK_INFO("%s", __func__);
@@ -252,8 +254,11 @@ void btmtk_release_uarthub(bool force)
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
 		return;
 	}
-	/* ensure hub tx/rx all clear when bt off*/
+	/* for only bt off flow */
 	if (cif_dev->hub_en && force) {
+		/* set tx/rx gpio PU */
+		btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
+
 		ret = mtk8250_uart_hub_dev0_clear_tx_request();
 		BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_tx_request ret[%d]", __func__, ret);
 	}
@@ -377,7 +382,7 @@ int btmtk_pre_power_on_handler(void)
 	}
 
 	if (cif_dev->is_pre_on_done) {
-		BTMTK_INFO("%s: alredy do pre_on_cb", __func__);
+		BTMTK_INFO("%s: already do pre_on_cb", __func__);
 		return 0;
 	}
 
@@ -408,6 +413,9 @@ int btmtk_pre_power_on_handler(void)
 	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
 
 #endif
+	/* reopen tty */
+	cif_dev->tty->ops->open(cif_dev->tty, NULL);
+
 	btmtk_pinctrl_exec(POWER_ON_TX_PINCTRL_NAME);
 	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
 
@@ -418,26 +426,8 @@ int btmtk_pre_power_on_handler(void)
 
 int btmtk_set_uart_rx_aux(void)
 {
-	struct btmtk_uart_dev *cif_dev = NULL;
-	int ret = 0;
-
 	BTMTK_DBG("%s: start", __func__);
-	if (!g_sbdev) {
-		BTMTK_ERR("%s: cif_dev is NULL", __func__);
-		return -1;
-	}
-
-	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
-	if (!cif_dev) {
-		BTMTK_ERR("%s: cif_dev is NULL", __func__);
-		return -1;
-	}
-
-	ret = btmtk_pinctrl_exec(POWER_ON_RX_PINCTRL_NAME);
-
-	/* reopen tty */
-	cif_dev->tty->ops->open(cif_dev->tty, NULL);
-	return ret;
+	return btmtk_pinctrl_exec(POWER_ON_RX_PINCTRL_NAME);
 }
 
 int btmtk_reset_pin_off(void)
@@ -448,11 +438,48 @@ int btmtk_reset_pin_off(void)
 
 int btmtk_set_gpio_default(void)
 {
+	struct btmtk_uart_dev *cif_dev = NULL;
+
 	BTMTK_DBG("%s: start", __func__);
+
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
 	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 	msleep(10);
 	return btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
 }
+
+/* for bt close flow, add tty close */
+int btmtk_set_gpio_default_for_close(void)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_DBG("%s: start", __func__);
+
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
+	msleep(10);
+	cif_dev->tty->ops->close(cif_dev->tty, NULL);
+	return btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
+}
+
 
 static int btmtk_power_on_notify_handler(void)
 {
