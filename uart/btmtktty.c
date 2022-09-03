@@ -395,7 +395,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	}
 
 #endif
-
+	btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD_HIF, skb->data, skb->len);
 	BTMTK_INFO_RAW(skb->data, skb->len, "%s: len[%d]", __func__, skb->len);
 
 	/* if just protect event, another cmd would reinit event_compare_status */
@@ -443,7 +443,6 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		opcode[0] = skb->data[1];
 		opcode[1] = skb->data[2];
 	}
-	btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD_HIF, skb->data, skb->len);
 	ret = btmtk_uart_send_cmd(bdev, skb, delay, retry, pkt_type);
 
 	if (ret < 0) {
@@ -1292,7 +1291,8 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		BTMTK_ERR("%s: retry[%d] fail", __func__, count);
 		ret = -1;
 	}
-
+	/* use HCI_SNOOP_TYPE_TX_ISO_HIF to record data sended to tty */
+	btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ISO_HIF, cmd, cmd_len);
 	BTMTK_INFO_RAW(cmd, cmd_len, "%s, len[%d] write_retry[%d] room[%d] flush_retry[%d] CMD :", __func__, cmd_len,
 						count, tty_write_room(cif_dev->tty), flush_retry);
 
@@ -1927,7 +1927,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 
 	fstate = btmtk_fops_get_state(bdev);
 	if (fstate == BTMTK_FOPS_STATE_CLOSED) {
-		BTMTK_DBG_RAW(data, count, "[SKIP] %s: count[%d]", __func__, count);
+		BTMTK_INFO_RAW(data, count, "[SKIP] %s: count[%d]", __func__, count);
 		return;
 	}
 
