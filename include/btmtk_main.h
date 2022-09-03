@@ -100,6 +100,8 @@
 #else
 #define RETRY_TIMES 4
 #endif
+#define SEND_RETRY_ONE_TIMES_30MS 0xFF
+#define SEND_RETRY_ONE_TIMES_500MS 1
 
 #define TX_THREAD_RETRY	100
 #define BT_OPEN_MAX_RETRY	100
