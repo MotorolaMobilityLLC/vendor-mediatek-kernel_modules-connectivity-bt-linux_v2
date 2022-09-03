@@ -835,9 +835,16 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 		if (bmain_info->hif_hook.dump_hif_debug_sop)
 			bmain_info->hif_hook.dump_hif_debug_sop(bdev);
 
-		/* direct send hw_err event notify host to close bt */
-		bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
-		btmtk_send_hw_err_to_host(bdev);
+		complete_all(&bdev->dump_comp);
+
+		/* if during btmtk_pre_chip_rst_handler
+		 * leave hw_err to btmtk_post_chip_rst_handler
+		 */
+		if (atomic_read(&bmain_info->chip_reset) == BTMTK_RESET_DONE) {
+			/* direct send hw_err event notify host to close bt */
+			bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
+			btmtk_send_hw_err_to_host(bdev);
+		}
 		return;
 	}
 
@@ -977,10 +984,6 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en) {
-		/* enable ADSP,MD when fw dl done*/
-		ret = mtk8250_uart_hub_fifo_ctrl(0);
-		BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(0) ret[%d]", __func__, ret);
-
 		/* uarhub setting */
 		cif_dev->fw_hub_en = 1;
 		cif_dev->crc_en = 1;
@@ -1080,6 +1083,14 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 		if (connv3_pwr_on_done(CONNV3_DRV_TYPE_BT))
 			BTMTK_ERR("%s: ConnInfra power done failed!", __func__);
 
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	if (cif_dev->hub_en) {
+		int ret = 0;
+		/* enable ADSP,MD when fw dl done*/
+		ret = mtk8250_uart_hub_fifo_ctrl(0);
+		BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(0) ret[%d]", __func__, ret);
+	}
+#endif
 	btmtk_read_pmic_state(bdev);
 #endif
 
@@ -2129,6 +2140,9 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		ret = 0;
 
 	if (ret < 0) {
+		/* set driver own state and hub request for trigger rhw debug sop */
+		mtk8250_uart_hub_dev0_set_rx_request();
+		BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_rx_request", __func__);
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		goto unlock;
 	} else if (cif_dev->no_fw_own == 0) {
