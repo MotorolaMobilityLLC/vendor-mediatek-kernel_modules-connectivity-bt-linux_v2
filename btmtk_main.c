@@ -4158,7 +4158,11 @@ static int bt_flush(struct hci_dev *hdev)
 		return 0;
 }
 
+#if (USE_DEVICE_NODE == 0)
 static int bt_close(struct hci_dev *hdev)
+#else
+int bt_close(struct hci_dev *hdev)
+#endif
 {
 	int ret = -1;
 	int state = BTMTK_STATE_INIT;
@@ -4272,7 +4276,11 @@ err:
 	return 0;
 }
 
+#if (USE_DEVICE_NODE == 0)
+static int bt_open(struct hci_dev *hdev)
+#else
 int bt_open(struct hci_dev *hdev)
+#endif
 {
 	int ret = -1;
 	int state = BTMTK_STATE_INIT;
@@ -4443,7 +4451,11 @@ static int bt_setup(struct hci_dev *hdev)
 	return 0;
 }
 
+#if (USE_DEVICE_NODE == 0)
 static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
+#else
+int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
+#endif
 {
 	int ret = -1;
 	int state = BTMTK_STATE_INIT;

@@ -272,7 +272,7 @@ int32_t btmtk_send_data(struct hci_dev *hdev, u8 *buf, u32 count)
 	memcpy(skb->data, buf + 1, count - 1);
 	skb->len = count - 1;
 
-	if (hdev->send(hdev, skb) < 0 && skb != NULL) {
+	if (skb != NULL && bt_send_frame(hdev, skb) < 0) {
 		BTMTK_ERR_LIMITTED("%s send fail, free skb", __func__);
 		kfree_skb(skb);
 		skb = NULL;
