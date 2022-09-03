@@ -431,6 +431,7 @@ int btmtk_pre_power_on_handler(void)
 
 #endif
 	/* reopen tty */
+	BTMTK_INFO("%s tty_port[%p]", __func__, cif_dev->tty->port);
 	cif_dev->tty->ops->open(cif_dev->tty, NULL);
 
 	btmtk_pinctrl_exec(POWER_ON_TX_PINCTRL_NAME);
