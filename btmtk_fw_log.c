@@ -1084,8 +1084,10 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		skb_pull(skb, 4);
 
 		state = btmtk_get_chip_state(bdev);
-		/* coredump info */
-		if (state != BTMTK_STATE_FW_DUMP) {
+		/* BTMTK_STATE_FW_DUMP for coredump start
+		 * BTMTK_STATE_SUBSYS_RESET for coredump end
+		 */
+		if (state != BTMTK_STATE_FW_DUMP && state != BTMTK_STATE_SUBSYS_RESET) {
 			BTMTK_INFO("%s: msg: %s len[%d]", __func__, skb->data, skb->len);
 			/* drop "Disable Cache" */
 			if (skb->len > 6 &&
