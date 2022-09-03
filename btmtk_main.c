@@ -161,11 +161,17 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc)
 	utc->sec = tv.tv_sec;
 #else
 	struct timespec64 ts;
+	struct timespec64 kerneltime;
 
 	ktime_get_real_ts64(&ts);
 	rtc_time64_to_tm(ts.tv_sec, &utc->tm);
 	utc->usec = ts.tv_nsec/1000;
 	utc->sec = ts.tv_sec;
+
+	/* kernel time */
+	ktime_get_ts64(&kerneltime);
+	utc->ksec = kerneltime.tv_sec;
+	utc->knsec = kerneltime.tv_nsec;
 #endif
 	utc->tm.tm_year += 1900;
 	utc->tm.tm_mon += 1;
@@ -196,10 +202,10 @@ void btmtk_get_UTC_time_str(char *ts_str)
 
 	memset(ts_str, 0, HCI_SNOOP_TS_STR_LEN);
 	(void)snprintf(ts_str, HCI_SNOOP_TS_STR_LEN,
-			"%04d%02d%02d-%02d%02d%02d.%06u",
+			"%04d%02d%02d-%02d%02d%02d.%06u/Kernel:%6d.%09u",
 			utc.tm.tm_year, utc.tm.tm_mon, utc.tm.tm_mday,
-			utc.tm.tm_hour, utc.tm.tm_min, utc.tm.tm_sec, utc.usec);
-
+			utc.tm.tm_hour+8, utc.tm.tm_min, utc.tm.tm_sec, utc.usec,
+			utc.ksec, utc.knsec);
 }
 
 /*get 1 byte only*/
@@ -749,14 +755,11 @@ void btmtk_hci_snoop_print_to_log(void)
 {
 	u8 counter, index, snoop_index;
 	char *snoop_str[HCI_SNOOP_TYPE_MAX] = {
+#if (USE_DEVICE_NODE == 0)
 		"Command from stack",
 		"Command to FW",
 		"Event to stack",
-#if (USE_DEVICE_NODE == 0)
 		"Event From FW",
-#else
-		"Data From TTY",
-#endif
 		"ADV Event to stack",
 		"ADV Event From FW",
 		"NOCP Event to stack",
@@ -768,10 +771,30 @@ void btmtk_hci_snoop_print_to_log(void)
 		"TX ISO from stack",
 		"TX ISO to FW",
 		"RX ISO to stack",
-		"RX ISO From FW"};
+		"RX ISO From FW"
+#else
+		"Command from stack",
+		"Tx from Driver",		/* for sp uart */
+		"Event to stack",
+		"Data From TTY",		/* for sp uart */
+		"ADV Event to stack",
+		"ADV Event From FW",
+		"NOCP Event to stack",
+		"NOCP Event From FW",
+		"TX ACL from stack",
+		"TX ACL to FW",
+		"RX ACL to stack",
+		"RX ACL From FW",
+		"TX ISO from stack",
+		"Data to TTY",		/* for sp uart */
+		"RX ISO to stack",
+		"RX ISO From FW"
+#endif
+		};
+
 
 	for (snoop_index = 0; snoop_index < HCI_SNOOP_TYPE_MAX; snoop_index++) {
-		BTMTK_INFO("HCI %s Dump: Using A5 A5 to separator the head 31 bytes and the tail 31 bytes data",
+		BTMTK_INFO("HCI %s Dump: Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data",
 			snoop_str[snoop_index]);
 		if (main_info.snoop[snoop_index].index >= (HCI_SNOOP_ENTRY_NUM - 1))
 			index = 0;
@@ -815,8 +838,8 @@ void btmtk_hci_snoop_save(unsigned int type, const u8 *buf, u32 len)
 		btmtk_get_UTC_time_str(main_info.snoop[type].timestamp[main_info.snoop[type].index]);
 		memset(main_info.snoop[type].buf[main_info.snoop[type].index], 0, HCI_SNOOP_MAX_BUF_SIZE);
 		memcpy(main_info.snoop[type].buf[main_info.snoop[type].index], buf, copy_len & 0xff);
-		/* save less then 31 bytes data in the buffer tail, using A5 A5 to
-		 * separator the head 31 bytes data and the tail 31 bytes data
+		/* save less then 32 bytes data in the buffer tail, using A5 A5 to
+		 * separator the head 32 bytes data and the tail 32 bytes data
 		 */
 		if (copy_tail_len > 0) {
 			copy_tail_buf = buf + len - copy_tail_len;
@@ -4507,9 +4530,9 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				goto exit;
 			}
 		}
-#endif
 		/* save hci cmd pkt for debug */
 		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD_STACK, skb->data, skb->len);
+#endif
 		if (skb->len == FW_COREDUMP_CMD_LEN &&
 			!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
 			BTMTK_WARN("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
@@ -4528,10 +4551,12 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		} else if (skb->len == HCI_RESET_CMD_LEN &&
 				!memcmp(skb->data, reset_cmd, HCI_RESET_CMD_LEN))
 			BTMTK_INFO("%s: got command: 0x03 0C 00 (HCI_RESET)", __func__);
+#if (USE_DEVICE_NODE == 0)
 	} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
 		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ACL_STACK, skb->data, skb->len);
 	} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
 		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ISO_STACK, skb->data, skb->len);
+#endif
 	}
 
 	//BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d ", __func__, skb->len);
