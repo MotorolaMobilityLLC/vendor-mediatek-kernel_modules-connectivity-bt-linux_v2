@@ -148,7 +148,7 @@ static void btmtk_proc_create_new_entry(void)
 	struct proc_dir_entry *proc_show_chip_reset_count_entry = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	BTMTK_INFO("%s, proc initialized", __func__);
+	BTMTK_DBG("%s, proc initialized", __func__);
 
 	bmain_info->proc_dir = proc_mkdir("stpbt", NULL);
 	if (bmain_info->proc_dir == NULL) {

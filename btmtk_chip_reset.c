@@ -35,7 +35,7 @@ static void btmtk_reset_timer(struct timer_list *timer)
 
 void btmtk_reset_timer_add(struct btmtk_dev *bdev)
 {
-	BTMTK_INFO("%s: create chip_reset timer", __func__);
+	BTMTK_DBG("%s: create chip_reset timer", __func__);
 #if (KERNEL_VERSION(4, 15, 0) > LINUX_VERSION_CODE)
 	init_timer(&bdev->chip_reset_timer);
 	bdev->chip_reset_timer.function = btmtk_reset_timer;
