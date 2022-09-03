@@ -815,8 +815,8 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 	 * then would trigger hif debug sop
 	 */
 	state = btmtk_get_chip_state(bdev);
-	if (cif_dev->is_rhw_fail && state != BTMTK_STATE_FW_DUMP) {
-		BTMTK_WARN("%s: rhw can't trigger assert", __func__);
+	if (cif_dev->rhw_fail_cnt > BT_RHW_MAX_ERR_COUNT && state != BTMTK_STATE_FW_DUMP) {
+		BTMTK_WARN("%s: rhw[%d] can't trigger assert", __func__, cif_dev->rhw_fail_cnt);
 		/* hif dump */
 		if (bmain_info->hif_hook.dump_hif_debug_sop)
 			bmain_info->hif_hook.dump_hif_debug_sop(bdev);
@@ -890,7 +890,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	atomic_set(&bmain_info->subsys_reset, BTMTK_RESET_DONE);
 	bmain_info->chip_reset_flag = 0;
 	atomic_set(&bdev->assert_state, BTMTK_ASSERT_NONE);
-	cif_dev->is_rhw_fail = 0;
+	cif_dev->rhw_fail_cnt = 0;
 	bdev->is_whole_chip_reset = FALSE;
 	reinit_completion(&bdev->dump_comp);
 	memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);

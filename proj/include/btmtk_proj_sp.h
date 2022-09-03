@@ -79,6 +79,7 @@ void mtk8250_uart_end_record(struct tty_struct *tty);
 #define HCI_EVT_CC_STATUS_SUCCESS	0x00
 #define HCI_CMD_DY_ADJ_PWR_QUERY	0x01
 #define HCI_CMD_DY_ADJ_PWR_SET		0x02
+#define BT_RHW_MAX_ERR_COUNT		(2)
 
 typedef int (*BT_RX_EVT_HANDLER_CB) (uint8_t *buf, int len);
 
