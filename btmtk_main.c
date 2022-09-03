@@ -1002,7 +1002,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				if (skb_tailroom(skb) < dlen) {
 					BTMTK_ERR("%s, maxlen[%d] skb_tailroom[%d] is not enough, dlen:%d!",
 						__func__, (&pkts[i])->maxlen, skb_tailroom(skb), dlen);
-					BTMTK_INFO_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
+					BTMTK_INFO_RAW(skb->data, skb->len, "%s, drop pkt len[%d]:", __func__, skb->len);
 					if (is_mt66xx(bdev->chip_id))
 						btmtk_set_sleep(hdev, FALSE);
 					else {
@@ -1030,7 +1030,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				if (skb_tailroom(skb) < dlen) {
 					BTMTK_ERR("%s, maxlen[%d] skb_tailroom[%d] is not enough, dlen:%d!",
 						__func__, (&pkts[i])->maxlen, skb_tailroom(skb), dlen);
-					BTMTK_INFO_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
+					BTMTK_INFO_RAW(skb->data, skb->len, "%s, drop pkt len[%d]:", __func__, skb->len);
 					if (is_mt66xx(bdev->chip_id))
 						btmtk_set_sleep(hdev, FALSE);
 					else {
@@ -1047,7 +1047,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 			default:
 				/* Unsupported variable length */
 				BTMTK_ERR("%s, Unsupported variable length!", __func__);
-				BTMTK_INFO_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
+				BTMTK_INFO_RAW(skb->data, skb->len, "%s, drop pkt len[%d]:", __func__, skb->len);
 				if (is_mt66xx(bdev->chip_id))
 					btmtk_set_sleep(hdev, FALSE);
 				else {
