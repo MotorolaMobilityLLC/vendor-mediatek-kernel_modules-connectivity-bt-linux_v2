@@ -592,6 +592,7 @@ struct btmtk_dev {
 	struct work_struct	work;
 	struct work_struct	waker;
 	struct work_struct	reset_waker;
+	struct work_struct	hif_dump_work;
 
 	struct timer_list chip_reset_timer;
 

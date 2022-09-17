@@ -1090,9 +1090,9 @@ static inline void btmtk_hif_dump_cirq_eint(void) {
 	BT_DUMP_CR_PRINT(value);
 }
 
-
-void btmtk_hif_sp_dump_debug_sop(struct btmtk_dev *bdev)
+void btmtk_hif_dump_work(struct work_struct *work)
 {
+	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, hif_dump_work);
 	struct btmtk_uart_dev *cif_dev = NULL;
 	int ret = 0;
 
@@ -1105,7 +1105,7 @@ void btmtk_hif_sp_dump_debug_sop(struct btmtk_dev *bdev)
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
 		return;
 	}
-
+	BTMTK_INFO("%s: start", __func__);
 	/*
 	 * connv3_drv_type
 	 *
@@ -1153,6 +1153,13 @@ void btmtk_hif_sp_dump_debug_sop(struct btmtk_dev *bdev)
 
 	ret = connv3_hif_dbg_end(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI);
 }
-
-
-
+void btmtk_hif_sp_dump_debug_sop(struct btmtk_dev *bdev)
+{
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return;
+	}
+	BTMTK_INFO("%s: start", __func__);
+	/* use schedule_work, cause connv3 may trigger assert and do hif debug sop */
+	schedule_work(&bdev->hif_dump_work);
+}
