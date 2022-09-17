@@ -394,20 +394,17 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	struct btmtk_dev **pp_bdev = btmtk_get_pp_bdev();
 
-	/* only 7xxx will use writefwlog, 66xx not used */
-	/*if (is_mt66xx(bdev->chip_id)) {
-	 * BTMTK_WARN("%s: not implement!", __func__);
-	 * return 0;
-	 * }
-	 */
-
+#if (CFG_ENABLE_DEBUG_WRITE == 0)
+	return -ENODEV;
+#else
 	i_fwlog_buf = kmalloc(HCI_MAX_COMMAND_BUF_SIZE, GFP_KERNEL);
 	if (!i_fwlog_buf) {
 		BTMTK_ERR("%s: alloc i_fwlog_buf failed", __func__);
 		return -ENOMEM;
 	}
 
-	o_fwlog_buf = kmalloc(HCI_MAX_COMMAND_SIZE, GFP_KERNEL);
+	/* allocate 16 more bytes for header part */
+	o_fwlog_buf = kmalloc(HCI_MAX_COMMAND_SIZE + 16, GFP_KERNEL);
 	if (!o_fwlog_buf) {
 		BTMTK_ERR("%s: alloc o_fwlog_buf failed", __func__);
 		ret = -ENOMEM;
@@ -423,7 +420,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	}
 
 	memset(i_fwlog_buf, 0, HCI_MAX_COMMAND_BUF_SIZE);
-	memset(o_fwlog_buf, 0, HCI_MAX_COMMAND_SIZE);
+	memset(o_fwlog_buf, 0, HCI_MAX_COMMAND_SIZE + 16);
 
 	if (buf == NULL || count == 0) {
 		BTMTK_ERR("%s: worng input data", __func__);
@@ -601,7 +598,12 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 			BTMTK_ERR("%s: There is an invalid input(%c)", __func__, *pos);
 			ret = -EINVAL;
 			goto exit;
+		} else if (len + 1 >= HCI_MAX_COMMAND_SIZE) {
+			BTMTK_ERR("%s: input data exceed maximum command length (%d)", __func__, len);
+			ret = -EINVAL;
+			goto exit;
 		}
+
 		temp_str[0] = *pos;
 		temp_str[1] = *(pos + 1);
 		i++;
@@ -743,6 +745,7 @@ exit:
 	kfree(o_fwlog_buf);
 
 	return ret;	/* If input is correct should return the same length */
+#endif // CFG_ENABLE_DEBUG_WRITE == 0
 }
 
 int btmtk_fops_openfwlog(struct inode *inode, struct file *file)
