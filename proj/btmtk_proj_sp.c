@@ -42,6 +42,11 @@ static struct pinctrl *pinctrl_ptr;
 extern struct btmtk_dev *g_sbdev;
 int g_bt_state;
 
+/* dump gpio */
+static void __iomem *vir_0x1000_5000 = NULL; /* GPIO */
+#define CONSYS_REG_READ(addr) (*((volatile unsigned int *)(addr)))
+static void btmtk_dump_gpio_state(void);
+
 static inline int btmtk_pinctrl_exec(const char *name);
 
 static int __maybe_unused btmtk_char_suspend(struct device *dev)
@@ -448,6 +453,7 @@ int btmtk_pre_power_on_handler(void)
 
 	btmtk_pinctrl_exec(POWER_ON_TX_PINCTRL_NAME);
 	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
+	btmtk_dump_gpio_state();
 
 	cif_dev->is_pre_on_done = TRUE;
 	BTMTK_DBG("%s: is_pre_on_done true", __func__);
@@ -459,12 +465,6 @@ int btmtk_set_uart_rx_aux(void)
 {
 	BTMTK_DBG("%s: start", __func__);
 	return btmtk_pinctrl_exec(POWER_ON_RX_PINCTRL_NAME);
-}
-
-int btmtk_reset_pin_off(void)
-{
-	BTMTK_DBG("%s: start", __func__);
-	return btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 }
 
 int btmtk_set_gpio_default(void)
@@ -484,6 +484,7 @@ int btmtk_set_gpio_default(void)
 	}
 
 	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
+	btmtk_dump_gpio_state();
 	msleep(10);
 	return btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
 }
@@ -508,6 +509,7 @@ int btmtk_set_gpio_default_for_close(void)
 	BTMTK_DBG("%s: is_pre_on_done false", __func__);
 
 	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
+	btmtk_dump_gpio_state();
 	msleep(50);
 	cif_dev->tty->ops->close(cif_dev->tty, NULL);
 	return btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
@@ -1341,6 +1343,51 @@ int32_t btmtk_intcmd_wmt_utc_sync(void)
 	return 0;
 }
 
+
+static void btmtk_dump_gpio_state(void)
+{
+#define GET_BIT(V, INDEX) ((V & (0x1U << INDEX)) >> INDEX)
+
+	unsigned int aux, dir, out;
+
+	if (vir_0x1000_5000 == NULL)
+		vir_0x1000_5000 = ioremap(0x10005000, 0x500);
+
+	if (vir_0x1000_5000 == NULL) {
+		BTMTK_ERR("%s: vir_0x1000_5000[%lx]", __func__, vir_0x1000_5000);
+		return;
+	}
+
+	/* 0x1000_5000
+	 * 	0x0070	GPIO_DIR7
+	 * 		0: GPIO Dir. as Input; 1: GPIO Dir. as Output
+	 * 		GPIO_DIR register for GPIO224~GPIO241; GPIO242~GPIO255:
+	 * 		2: 226
+	 * 		3: 227
+	 * 		4: 228
+	 * 		5: 229
+	 * 		16: 240
+	 * 	0x04E0	GPIO_MODE30
+	 * 		[2:0]    Aux mode of PAD_COEX_UTXD
+	 * 		000:B:GPIO240;
+	 * 		001:I1:URXD3;
+	 * 		010:O:PCM1_DO2;
+	 * 		011:I1:URXD2;
+	 * 		100:O:I2S8_LRCK;
+	 * 		101:;110:;111:;
+	 * 	0x0170	GPIO_DOUT7
+	 * 		0: GPIO output low; 1: GPIO output high;
+	 * 		16: 240
+	 */
+	aux = CONSYS_REG_READ(vir_0x1000_5000 + 0x04E0);
+	dir = CONSYS_REG_READ(vir_0x1000_5000 + 0x0070);
+	out = CONSYS_REG_READ(vir_0x1000_5000 + 0x0170);
+
+	BTMTK_INFO("%s: aux[0x%08x] dir[0x%08x] out[0x%08x]", __func__,aux, dir, out);
+	BTMTK_INFO("%s: GPIO_240 aux=[%d] dir=[%s] out[%d]", __func__,
+		((aux & 0x07)), (GET_BIT(dir, 16) ? "OUT" : "IN"), GET_BIT(out, 16));
+
+}
 
 #endif // (USE_DEVICE_NODE == 1)
 
