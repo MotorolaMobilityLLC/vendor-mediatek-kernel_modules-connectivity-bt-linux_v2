@@ -821,16 +821,16 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 		return;
 	}
 
+	/* set this bt on is already asserted, not trigger assert anymore */
+	BTMTK_INFO("%s: set bt assert_state[1]", __func__);
+	atomic_set(&bdev->assert_state, BTMTK_ASSERT_START);
+
 	if (cif_dev->rhw_en == 0) {
 		/* not enable rhw yet, do hif dump */
 		if (bmain_info->hif_hook.dump_hif_debug_sop)
 			bmain_info->hif_hook.dump_hif_debug_sop(bdev);
 		return;
 	}
-
-	/* set this bt on is already asserted, not trigger assert anymore */
-	BTMTK_INFO("%s: set bt assert_state[1]", __func__);
-	atomic_set(&bdev->assert_state, BTMTK_ASSERT_START);
 
 	/* dump debug sop before coredump */
 	if (bmain_info->hif_hook.dump_debug_sop)
@@ -845,9 +845,6 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 		/* hif dump */
 		if (bmain_info->hif_hook.dump_hif_debug_sop)
 			bmain_info->hif_hook.dump_hif_debug_sop(bdev);
-
-		BTMTK_INFO("%s: set bt assert_state end", __func__);
-		atomic_set(&bdev->assert_state, BTMTK_ASSERT_END);
 
 		/* if during btmtk_pre_chip_rst_handler (BTMTK_RESET_DOING)
 		 * leave hw_err to btmtk_post_chip_rst_handler
