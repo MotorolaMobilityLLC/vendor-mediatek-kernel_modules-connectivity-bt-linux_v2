@@ -51,7 +51,7 @@ static inline int BT_DUMP_CR_PRINT(uint32_t value)
 	ret = snprintf(g_btmtk_cr_dump.pos,
 				  (g_btmtk_cr_dump.end - g_btmtk_cr_dump.pos + 1),
 				  "%08x ", value);
-	if (ret < 0 || ret >= (g_btmtk_cr_dump.end - g_btmtk_cr_dump.pos + 1)) {
+	if (ret >= (g_btmtk_cr_dump.end - g_btmtk_cr_dump.pos + 1)) {
 		BTMTK_ERR("%s %s: error in sprintf while dumping cr", DBG_TAG, __func__);
 		if (g_btmtk_cr_dump.count)
 			BTMTK_WARN("%s %s",DBG_TAG, g_btmtk_cr_dump.buffer);
