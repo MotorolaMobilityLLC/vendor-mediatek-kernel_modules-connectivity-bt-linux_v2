@@ -2199,27 +2199,22 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	retry = BTMTK_MAX_WAKEUP_RETRY;
 	/* if fw already coredump, no need to send drv own cmd */
 	if (cif_dev->sleep_en && btmtk_get_chip_state(bdev) != BTMTK_STATE_FW_DUMP) {
-		do {
-			/* if fw already wake, no need to send 0xFF and wait 6ms before clr fw own */
-			if (atomic_read(&cif_dev->fw_wake)) {
-				/* wait a while for avoid rx pkt error */
-				usleep_range(4000, 4100);
-			} else {
+		/* if fw already wake, no need to send 0xFF and wait 6ms before clr fw own */
+		if (atomic_read(&cif_dev->fw_wake)) {
+			/* wait a while for avoid rx pkt error */
+			usleep_range(4000, 4100);
+		} else {
+			int i = 0;
+			for (i = 0; i < 3; i++) {
 				/* no need to wait event */
 				ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
 						DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
-				if (ret < 0)
-					BTMTK_ERR("%s wakeup_cmd fail retry[%d]", __func__, retry);
-
-				/* wait 0xff sended */
-				if (btmtk_uart_wait_tty_buffer_clean(bdev, FALSE) < 0) {
-					ret = -1;
-					break;
-				}
-
 				/* wait a while for fw wakeup */
 				usleep_range(6000, 6100);
 			}
+		}
+
+		do {
 			/* fw own clr cmd for notice is wakeup by bt driver */
 			/* let retry = 0 for only wait for event 500ms */
 			ret = btmtk_main_send_cmd(bdev, fw_own_clr_cmd, 10, evt, OWNTYPE_EVT_LEN,
