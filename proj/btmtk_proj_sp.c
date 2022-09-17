@@ -536,9 +536,11 @@ int btmtk_sp_whole_chip_reset(struct btmtk_dev *bdev)
 	BTMTK_DBG("%s: bt_state[%d]", __func__, g_bt_state);
 
 	/* happen when whole chip reset is triggered by fw node */
-	if (g_sbdev->assert_reason[0] == '\0')
-		strncpy(g_sbdev->assert_reason, "[BT_DRV assert] BT whole chip reset\0"
-			, strlen("[BT_DRV assert] BT whole chip reset\0"));
+	if (g_sbdev->assert_reason[0] == '\0') {
+		memset(g_sbdev->assert_reason, 0, ASSERT_REASON_SIZE);
+		strncpy(g_sbdev->assert_reason, "[BT_DRV assert] BT whole chip reset"
+			, strlen("[BT_DRV assert] BT whole chip reset"));
+	}
 
 	return connv3_trigger_whole_chip_rst(CONNV3_DRV_TYPE_BT , g_sbdev->assert_reason);
 }
