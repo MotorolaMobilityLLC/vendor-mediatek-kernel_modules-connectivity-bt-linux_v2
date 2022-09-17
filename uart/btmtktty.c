@@ -2099,6 +2099,11 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		goto unlock;
 	}
 
+	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE) {
+		BTMTK_WARN("%s: during send_and_recv, keep drv own", __func__);
+		goto unlock;
+	}
+
 	cif_dev->own_state = BTMTK_FW_OWNING;
 
 	if (cif_dev->sleep_en) {
