@@ -163,9 +163,12 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 
 	btmtk_tx_thread_exit(bdev->cif_dev);
 
-	if (!cif_dev->is_pre_cal)
-		if (connv3_pwr_off(CONNV3_DRV_TYPE_BT))
-			BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
+	if (!cif_dev->is_pre_cal) {
+		int ret = 0;
+		ret = connv3_pwr_off(CONNV3_DRV_TYPE_BT);
+		if (ret)
+			BTMTK_ERR("%s: ConnInfra power off failed, ret[%d]", __func__, ret);
+	}
 	btmtk_pwrctrl_post_off();
 #endif
 
@@ -860,9 +863,12 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 		return;
 	}
 
-	atomic_set(&cif_dev->need_drv_own, 1);
-	atomic_set(&cif_dev->need_assert, 1);
-	wake_up_interruptible(&tx_wait_q);
+	/* rhw already do driver own
+	 * not through tx_thread for block before set is_whole_chip_reset
+	 */
+	BTMTK_WARN("%s: trigger assert", __func__);
+	btmtk_send_assert_cmd(bdev);
+
 }
 
 static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
@@ -888,11 +894,16 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	new_termios = tty->termios;
 
 	btmtk_pwrctrl_pre_on(bdev);
-	if (!cif_dev->is_pre_cal)
-		if (connv3_pwr_on(CONNV3_DRV_TYPE_BT)) {
-			BTMTK_ERR("ConnInfra power on failed!");
-			return -EFAULT;
+	if (!cif_dev->is_pre_cal) {
+		ret = connv3_pwr_on(CONNV3_DRV_TYPE_BT);
+		if(ret) {
+			BTMTK_ERR("%s: ConnInfra power on failed, ret[%d]", __func__, ret);
+			if(ret == CONNV3_ERR_RST_ONGOING)
+				return CONNV3_ERR_RST_ONGOING;
+			else
+				return -EFAULT;
 		}
+	}
 
 	/* start tx_thread */
 	if (btmtk_tx_thread_start(bdev))
@@ -900,11 +911,6 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 
 	/* temp solution wait pmic enable */
 	msleep(100);
-
-	if (bmain_info->reset_stack_flag == HW_ERR_CODE_CHIP_RESET) {
-		BTMTK_ERR("%s: reset_stack_flag[%02x]", __func__, bmain_info->reset_stack_flag);
-		goto exit;
-	}
 
 	btmtk_set_uart_rx_aux();
 
@@ -920,9 +926,9 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	bmain_info->chip_reset_flag = 0;
 	atomic_set(&bdev->assert_state, BTMTK_ASSERT_NONE);
 	cif_dev->rhw_fail_cnt = 0;
-	bdev->is_whole_chip_reset = FALSE;
 	reinit_completion(&bdev->dump_comp);
 	memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
+	bdev->is_whole_chip_reset = FALSE;
 
 	/* set tty host baud and flowcontrol to default value */
 	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);
@@ -1097,10 +1103,12 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
 #if (USE_DEVICE_NODE == 1)
-	if (!cif_dev->is_pre_cal)
-		if (connv3_pwr_on_done(CONNV3_DRV_TYPE_BT))
-			BTMTK_ERR("%s: ConnInfra power done failed!", __func__);
-
+	if (!cif_dev->is_pre_cal) {
+		int ret = 0;
+		ret = connv3_pwr_on_done(CONNV3_DRV_TYPE_BT);
+		if (ret)
+			BTMTK_ERR("%s: ConnInfra power done failed, ret[%d]", __func__, ret);
+	}
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en) {
 		int ret = 0;
@@ -1237,10 +1245,16 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	}
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	BTMTK_DBG("%s: loading rom patch... start", __func__);
+
 	down(&cif_dev->tty_flush_sem);
 	while (1) {
 		sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT) ?
 				(UPLOAD_PATCH_UNIT) : (section_dl_size - cur_len);
+		if (bdev->is_whole_chip_reset) {
+			BTMTK_WARN("%s: whole chip reset happened, don't send cmd", __func__);
+			ret = -1;
+			goto exit;
+		}
 
 		/* wait tty buffer clean */
 		flush_retry = btmtk_uart_wait_tty_buffer_clean(bdev, TRUE);
@@ -1309,7 +1323,10 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
-	/* BTMTK_INFO("%s: tty %p\n", __func__, bdev->tty); */
+	if (bdev->is_whole_chip_reset) {
+		BTMTK_WARN("%s: whole chip reset happened, don't send cmd", __func__);
+		return -1;
+	}
 
 	down(&cif_dev->tty_flush_sem);
 	/* wait tty buffer clean */
@@ -1378,12 +1395,6 @@ static u32 btmtk_thread_wait_for_msg(struct btmtk_dev *bdev)
 	}
 #endif
 
-	if (atomic_read(&cif_dev->need_assert)) {
-		BTMTK_DBG("%s: need_assert", __func__);
-		atomic_set(&cif_dev->need_assert, 0);
-		ret |= BTMTK_THREAD_ASSERT;
-	}
-
 	if (kthread_should_stop()) {
 		BTMTK_DBG("%s: kthread_should_stop", __func__);
 		ret |= BTMTK_THREAD_STOP;
@@ -1446,19 +1457,12 @@ static int btmtk_uart_tx_thread(void *data)
 			ret = btmtk_uart_driver_own(bdev);
 			if (ret < 0)
 				btmtk_uart_trigger_assert(bdev);
-
-		/* if bt fw closed, no need to send fw own */
 		} else if (thread_flag & BTMTK_THREAD_FW_OWN) {
 			ret = btmtk_uart_fw_own(bdev);
 			if (ret < 0)
 				btmtk_uart_trigger_assert(bdev);
 		}
 #endif
-
-		if (thread_flag & BTMTK_THREAD_ASSERT) {
-			BTMTK_WARN("%s: trigger assert", __func__);
-			btmtk_send_assert_cmd(bdev);
-		}
 
 		if (thread_flag & BTMTK_THREAD_TX) {
 			if (cif_dev->own_state != BTMTK_DRV_OWN) {

@@ -200,8 +200,6 @@ struct btmtk_uart_dev {
 	atomic_t		need_drv_own;
 	atomic_t		fw_wake;
 
-	/* trigger assert */
-	atomic_t		need_assert;
 	u32			rhw_fail_cnt;
 
 	/* sempaphore to compare event */

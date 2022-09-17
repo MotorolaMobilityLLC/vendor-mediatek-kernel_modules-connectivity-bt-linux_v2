@@ -546,11 +546,6 @@ int btmtk_sp_close(void)
 		return -EINVAL;
 	}
 
-	if (g_sbdev->is_whole_chip_reset) {
-		BTMTK_WARN("%s: whole chip already do, return", __func__);
-		return -EINVAL;
-	}
-
 	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
 	if (cif_dev == NULL) {
 		BTMTK_ERR("%s, cif_dev is NULL", __func__);
@@ -584,6 +579,7 @@ int btmtk_sp_close(void)
 static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 {
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 
 	if (g_sbdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -596,15 +592,17 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 	}
 
 	g_bt_state = btmtk_get_chip_state(g_sbdev);
+	fstate = btmtk_fops_get_state(g_sbdev);
+	/* let bt close not send power off cmd */
+	bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 
 	/* Ask FW to do coredump */
 	BTMTK_ERR("%s: state[%d], reason[%s]", __func__, g_bt_state, reason);
-	if (g_bt_state < BTMTK_STATE_WORKING || g_bt_state == BTMTK_STATE_CLOSED) {
-		BTMTK_WARN("%s: BT is not on state, no need to trigger whole chip reset", __func__);
+	if (fstate == BTMTK_FOPS_STATE_CLOSED) {
+		BTMTK_WARN("%s: BT fops is closed, no need to trigger whole chip reset", __func__);
 		return 0;
 	} else if (drv == CONNV3_DRV_TYPE_CONNV3 && strncmp(reason, "PMIC Fault", strlen("PMIC Fault")) == 0) {
 		BTMTK_WARN("%s: PMIC Fault, no need to wait coredump", __func__);
-		bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 		goto exit;
 	} else {
 		if (g_sbdev->assert_reason[0] == '\0') {
@@ -620,8 +618,8 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 	}
 
 exit:
-	btmtk_sp_close();
 	g_sbdev->is_whole_chip_reset = TRUE;
+	bt_close(g_sbdev->hdev);
 
 	return 0;
 }
@@ -631,13 +629,12 @@ static int btmtk_post_chip_rst_handler(void)
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	BTMTK_INFO("%s: state[%d]", __func__, g_bt_state);
-	if (g_bt_state < BTMTK_STATE_WORKING || g_bt_state == BTMTK_STATE_CLOSED)
-		BTMTK_WARN("%s: BT is not on state, no need to send hw err", __func__);
-	else {
+	if (g_sbdev->is_whole_chip_reset) {
 		/* for let hw err evt can send event */
 		bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 		btmtk_send_hw_err_to_host(g_sbdev);
-	}
+	} else
+		BTMTK_WARN("%s: BT is not on state, no need to send hw err", __func__);
 
 	/* move to bt open flow, ensure hw err event send to stack restart bt*/
 	//atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);

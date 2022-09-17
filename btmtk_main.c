@@ -930,7 +930,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 		if (!skb) {
 			/* ignore first byte as 0xFF (FW wakeup) & 0x00 (noise from uart) */
 			while (count > 1 && (*buffer == 0xFF || *buffer == 0x00)) {
-				BTMTK_DBG("%s, receive 0x%02X in pkt head, pkt_len[%d]", __func__, buffer[0], count);
+				BTMTK_INFO("%s, receive 0x%02X in pkt head, pkt_len[%d]", __func__, buffer[0], count);
 				buffer++;
 				count--;
 			}
@@ -4182,6 +4182,13 @@ int bt_close(struct hci_dev *hdev)
 		return ret;
 	}
 
+	if(bdev->is_whole_chip_reset) {
+		BTMTK_WARN("%s: is_whole_chip_reset, fstate(%d)", __func__, fstate);
+		if (main_info.hif_hook.cif_mutex_lock)
+			main_info.hif_hook.cif_mutex_lock(bdev);
+		goto unlock;
+	}
+
 	fstate = btmtk_fops_get_state(bdev);
 	if (fstate != BTMTK_FOPS_STATE_OPENED) {
 		BTMTK_WARN("%s: fops is not allow close(%d)", __func__, fstate);
@@ -4207,6 +4214,7 @@ int bt_close(struct hci_dev *hdev)
 		 * It must return with this,
 		 * otherwise the below cif_mutex_lock will cause deadlock
 		 */
+
 		BTMTK_WARN("%s: not in working state and standby state(%d).", __func__, state);
 		goto exit;
 	}
@@ -4248,7 +4256,11 @@ int bt_close(struct hci_dev *hdev)
 	flush_work(&bdev->dynamic_fwdl_work);
 
 unlock:
-	main_info.hif_hook.close(hdev);
+	fstate = btmtk_fops_get_state(bdev);
+	if (fstate == BTMTK_FOPS_STATE_CLOSED)
+		BTMTK_WARN("%s: fops is already close", __func__);
+	else
+		main_info.hif_hook.close(hdev);
 
 	if (main_info.hif_hook.cif_mutex_unlock)
 		main_info.hif_hook.cif_mutex_unlock(bdev);
@@ -4274,7 +4286,7 @@ err:
 		kfree_skb(bdev->rx_skb);
 	bdev->rx_skb = NULL;
 
-	BTMTK_INFO("%s: state[%d], reset_stack_flag[%d]", __func__, state, main_info.reset_stack_flag);
+	BTMTK_INFO("%s end state[%d], reset_stack_flag[%d]", __func__, state, main_info.reset_stack_flag);
 	return 0;
 }
 
@@ -4420,7 +4432,12 @@ int bt_open(struct hci_dev *hdev)
 failed:
 
 #if (USE_DEVICE_NODE == 1)
-	main_info.hif_hook.close(hdev);
+	if (ret != CONNV3_ERR_RST_ONGOING)
+		main_info.hif_hook.close(hdev);
+	else {
+		BTMTK_WARN("%s: whole chip reset going, not do close when bt on fail", __func__);
+		ret = -EAGAIN;
+	}
 	state = btmtk_get_chip_state(bdev);
 	/* if state is disconnect means uart_launcher is disconnected, not set to close state */
 	if (state != BTMTK_STATE_DISCONNECT)
@@ -4678,7 +4695,8 @@ static void btmtk_rx_work(struct work_struct *work)
 		}
 
 		fstate = btmtk_fops_get_state(bdev);
-		if (fstate != BTMTK_FOPS_STATE_OPENED) {
+		/* is_whole_chip_reset need to send hw err event after bt close */
+		if (fstate != BTMTK_FOPS_STATE_OPENED && !bdev->is_whole_chip_reset) {
 			/* BT close case, drop by driver, don't send to stack */
 			BTMTK_WARN("%s Drop by driver, fops(%d) state is not opened", __func__, fstate);
 			kfree_skb(skb);
