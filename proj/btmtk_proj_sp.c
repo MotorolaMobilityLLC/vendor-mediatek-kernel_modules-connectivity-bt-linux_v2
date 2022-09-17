@@ -438,8 +438,12 @@ int btmtk_pre_power_on_handler(void)
 
 #endif
 	/* reopen tty */
-	BTMTK_INFO("%s tty_port[%p]", __func__, cif_dev->tty->port);
-	cif_dev->tty->ops->open(cif_dev->tty, NULL);
+	if(cif_dev != NULL && cif_dev->tty != NULL && cif_dev->tty->port != NULL) {
+		BTMTK_INFO("%s tty_port[%p], port_count[%d]",
+				__func__, cif_dev->tty->port, cif_dev->tty->port->count);
+		if (cif_dev->tty->port->count == 0)
+			cif_dev->tty->ops->open(cif_dev->tty, NULL);
+	}
 
 	btmtk_pinctrl_exec(POWER_ON_TX_PINCTRL_NAME);
 	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
