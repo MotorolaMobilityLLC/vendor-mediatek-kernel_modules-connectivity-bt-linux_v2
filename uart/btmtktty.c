@@ -440,7 +440,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 	}
 
-#if (USE_DEVICE_NODE == 1)
+#if (USE_DEVICE_NODE == 1) && IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
 		mtk8250_uart_start_record(cif_dev->tty);
 #endif
@@ -479,8 +479,10 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 #if (USE_DEVICE_NODE == 1)
 		if (ret != -1)	/* successfully received event or coredump case */
 			break;
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
 		if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
 			mtk8250_uart_end_record(cif_dev->tty);
+#endif
 		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
 	} while (--retry > 0);
 #endif
@@ -2055,11 +2057,14 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 	cif_dev->own_state = BTMTK_FW_OWNING;
 
 	if (cif_dev->sleep_en) {
-		ret = mtk8250_uart_hub_dev0_clear_tx_request();
-		BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_tx_request, ret[%d]", __func__, ret);
-
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+		if (cif_dev->hub_en) {
+			ret = mtk8250_uart_hub_dev0_clear_tx_request();
+			BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_tx_request, ret[%d]", __func__, ret);
+		}
 		/* record host wakeup info to fw, b[4] = AP, b[5] = MD, b[6] = ADSP */
 		cmd[9] = cmd[9] | ((mtk8250_uart_hub_get_host_wakeup_status() & 0xf) << 4);
+#endif
 
 		/* two different event for fw allow sleep or not */
 		ret = btmtk_main_send_cmd(bdev, cmd, FWOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN - 3,
@@ -2067,7 +2072,9 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		/* evt[7] = 1 for no sleep */
 		if (bdev->io_buf[7]) {
 			/* re-set tx request */
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
 			btmtk_wakeup_uarthub();
+#endif
 			BTMTK_WARN("%s fw not allow sleep, keep drv own, cmd[9] = 0x%02x", __func__, cmd[9]);
 			cif_dev->own_state = BTMTK_DRV_OWN;
 			goto unlock;
@@ -2173,15 +2180,19 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	} else
 		ret = 0;
 
-	if (ret < 0) {
-		/* set driver own state and hub request for trigger rhw debug sop */
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	/* no mattter success or not, all need to set rx request */
+	if (cif_dev->hub_en) {
 		mtk8250_uart_hub_dev0_set_rx_request();
 		BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_rx_request", __func__);
+	}
+#endif
+
+	if (ret < 0) {
+		/* set driver own state and hub request for trigger rhw debug sop */
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		goto unlock;
 	} else if (cif_dev->no_fw_own == 0) {
-		mtk8250_uart_hub_dev0_set_rx_request();
-		BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_rx_request", __func__);
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		btmtk_uart_update_fw_own_timer(cif_dev);
 		BTMTK_INFO("%s success", __func__);
