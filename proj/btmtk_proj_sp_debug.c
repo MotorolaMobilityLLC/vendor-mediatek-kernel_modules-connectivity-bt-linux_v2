@@ -162,6 +162,97 @@ int RHW_READ(uint32_t addr, uint32_t *val)
 
 }
 
+int CONNV3_RHW_WRITE(uint32_t addr, uint32_t val)
+{
+	int ret = -1;
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	/* ex: write dummy CR 0x022121cc = 0x44332222 */
+	u8 cmd[RHW_PKT_LEN] = {0x40, 0x00, 0x00, 0x08, 0x00,
+				0xCC, 0x21, 0x21, 0x02,
+				0x22, 0x22, 0x33, 0x44};
+	u8 evt[RHW_PKT_LEN] = {0x40, 0x00, 0x00, 0x08, 0x00,
+				0xCC, 0x21, 0x21, 0x02,
+				0x22, 0x22, 0x33, 0x44};
+
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev is NULL", __func__);
+		return -1;
+	}
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	if (cif_dev->rhw_fail_cnt > BT_RHW_MAX_ERR_COUNT) {
+		BTMTK_WARN_LIMITTED("%s skip, rhw_fail_cnt[%d]", __func__, cif_dev->rhw_fail_cnt);
+		return ret;
+	}
+
+	BTMTK_DBG("%s: write addr[%x], value[0x%08x]", __func__, addr, val);
+	memcpy(&cmd[RHW_ADDR_OFFSET_CMD], &addr, RHW_ADDR_LEN);
+	memcpy(&cmd[RHW_VAL_OFFSET_CMD], &val, RHW_VAL_LEN);
+
+	memcpy(&evt[RHW_ADDR_OFFSET_CMD], &addr, RHW_ADDR_LEN);
+
+	ret = btmtk_main_send_cmd(g_sbdev, cmd, RHW_PKT_LEN, evt, RHW_PKT_COMP_LEN, DELAY_TIMES,
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+	if (ret < 0)
+		BTMTK_ERR("%s failed, rhw_fail_cnt[%d]", __func__, ++cif_dev->rhw_fail_cnt);
+
+	return ret ;
+
+}
+
+int CONNV3_RHW_READ(uint32_t addr, uint32_t *val)
+{
+	int ret = -1;
+	struct btmtk_uart_dev *cif_dev = NULL;
+	/* ex: read dummy CR 0x022121cc */
+	u8 cmd[RHW_PKT_LEN] = {0x41, 0x00, 0x00, 0x08, 0x00,
+				0xCC, 0x21, 0x21, 0x02,
+				0x00, 0x00, 0x00, 0x00};
+
+	u8 evt[RHW_PKT_LEN] = {0x41, 0x00, 0x00, 0x08, 0x00,
+				0xCC, 0x21, 0x21, 0x02,
+				0x00, 0x00, 0x00, 0x00};
+
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev is NULL", __func__);
+		return -1;
+	}
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	if (cif_dev->rhw_fail_cnt > BT_RHW_MAX_ERR_COUNT) {
+		*val = 0xdeaddead;
+		BTMTK_WARN_LIMITTED("%s skip, rhw_fail_cnt[%d]", __func__, cif_dev->rhw_fail_cnt);
+		return ret;
+	}
+	memcpy(&cmd[RHW_ADDR_OFFSET_CMD], &addr, sizeof(addr));
+	memcpy(&evt[RHW_ADDR_OFFSET_CMD], &addr, sizeof(addr));
+
+	ret = btmtk_main_send_cmd(g_sbdev, cmd, RHW_PKT_LEN, evt, RHW_PKT_COMP_LEN, DELAY_TIMES,
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+
+	if (ret >= 0) {
+		memcpy(val, g_sbdev->io_buf + RHW_PKT_COMP_LEN, sizeof(u32));
+		*val = le32_to_cpu(*val);
+	} else {
+		*val = 0xdeaddead;
+		BTMTK_ERR("%s failed, rhw_fail_cnt[%d]", __func__, ++cif_dev->rhw_fail_cnt);
+	}
+	BTMTK_DBG("%s: addr[%x], val[0x%08x]", __func__, addr, *val);
+
+	return ret;
+
+}
+
+
 static inline void btmtk_dump_bg_mcu_core(void)
 {
 	uint32_t i = 0, org_value, value, cr_count = 0x26 + 4;
@@ -418,19 +509,19 @@ static inline void btmtk_dump_cryto_debug_flags(void)
 
 static int btmtk_connv3_cr_read_cb(void* priv_data, unsigned int addr, unsigned int *value)
 {
-	return RHW_READ(addr, value);
+	return CONNV3_RHW_READ(addr, value);
 }
 
 static int btmtk_connv3_cr_write_cb(void* priv_data, unsigned int addr, unsigned int value)
 {
-	return RHW_WRITE(addr, value);
+	return CONNV3_RHW_WRITE(addr, value);
 }
 
 static int btmtk_connv3_cr_write_mask_cb(void* priv_data, unsigned int addr, unsigned int mask, unsigned int value)
 {
 	int ret = 0;
 	uint32_t org_value;
-	ret = RHW_READ(addr, &org_value);
+	ret = CONNV3_RHW_READ(addr, &org_value);
 	if (ret < 0) {
 		BTMTK_ERR("%s: read [%x] err", __func__, addr);
 		return ret;
@@ -438,7 +529,7 @@ static int btmtk_connv3_cr_write_mask_cb(void* priv_data, unsigned int addr, uns
 
 	org_value = (org_value & ~mask ) | value;
 
-	return RHW_WRITE(addr, org_value);
+	return CONNV3_RHW_WRITE(addr, org_value);
 }
 
 struct connv3_cr_cb btmtk_connv3_cr_cb = {
@@ -481,8 +572,7 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 	btmtk_dump_bus_debug_flags();
 	btmtk_dump_dma_uart_debug_flags();
 	btmtk_dump_cryto_debug_flags();
-	BTMTK_INFO("%s: connv3_conninfra_bus_dump", __func__);
-	connv3_conninfra_bus_dump(CONNV3_DRV_TYPE_BT);
+	/* cannot call connv3_conninfra_bus_dump at here, connv3_cored may trigger assert */
 	BTMTK_INFO("%s: end", __func__);
 }
 
