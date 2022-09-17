@@ -81,7 +81,7 @@
 #define BTMTK_THREAD_TX			(1 << 1)
 #define BTMTK_THREAD_RX			(1 << 2)
 #define BTMTK_THREAD_FW_OWN		(1 << 3)
-
+#define BTMTK_THREAD_ASSERT		(1 << 4)
 
 /**
  * Maximum rom patch file name length

@@ -1405,6 +1405,11 @@ static u32 btmtk_thread_wait_for_msg(struct btmtk_dev *bdev)
 		ret |= BTMTK_THREAD_FW_OWN;
 	}
 #endif
+	if (atomic_read(&cif_dev->need_assert)) {
+		BTMTK_INFO("%s: need_assert", __func__);
+		atomic_set(&cif_dev->need_assert, 0);
+		ret |= BTMTK_THREAD_ASSERT;
+	}
 
 	if (kthread_should_stop()) {
 		BTMTK_DBG("%s: kthread_should_stop", __func__);
@@ -1467,13 +1472,15 @@ static int btmtk_uart_tx_thread(void *data)
 		if (thread_flag & (BTMTK_THREAD_TX | BTMTK_THREAD_RX)) {
 			ret = btmtk_uart_driver_own(bdev);
 			if (ret < 0)
-				btmtk_uart_trigger_assert(bdev);
+				thread_flag |= BTMTK_THREAD_ASSERT;
 		} else if (thread_flag & BTMTK_THREAD_FW_OWN) {
 			ret = btmtk_uart_fw_own(bdev);
 			if (ret < 0)
-				btmtk_uart_trigger_assert(bdev);
+				thread_flag |= BTMTK_THREAD_ASSERT;
 		}
 #endif
+		if (thread_flag & BTMTK_THREAD_ASSERT)
+			btmtk_uart_trigger_assert(bdev);
 
 		if (thread_flag & BTMTK_THREAD_TX) {
 			if (cif_dev->own_state != BTMTK_DRV_OWN) {
@@ -1969,6 +1976,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	struct btmtk_uart_dev *cif_dev = NULL;
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	struct btmtk_dev *bdev = tty->disc_data;
+	static u32 recv_fail_cnt;
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -2000,12 +2008,30 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	/* add hci device part */
 	ret = btmtk_recv(bdev->hdev, data, count);
 
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	/* debug for invalid buffer */
-	if (cif_dev->hub_en && ret == -EILSEQ && count > 1
-			&& btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
-		mtk8250_uart_dump(cif_dev->tty);
+	if ((ret == -EILSEQ || ret == -EMSGSIZE) && count > 1
+			&& btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT) {
+		if (!atomic_read(&bdev->assert_state) && recv_fail_cnt == BTMTK_MAX_RECV_ERR_CNT) {
+			if (bdev->assert_reason[0] == '\0') {
+				strncpy(bdev->assert_reason, "[BT_DRV assert] recv unknown data\0",
+						strlen("[BT_DRV assert] recv unknown data\0"));
+				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+			}
+			BTMTK_WARN("%s: trigger assert, recv_fail_cnt[%d] count[%d]",
+					__func__, ++recv_fail_cnt, count);
+			/* can not trigger assert in this thread, would block event of debug sop */
+			atomic_set(&cif_dev->need_assert, 1);
+			wake_up_interruptible(&tx_wait_q);
+		}
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+		else if (recv_fail_cnt < BTMTK_MAX_RECV_ERR_CNT) {
+			BTMTK_WARN("%s: recv error data, recv_fail_cnt[%d] count[%d]",
+					__func__, ++recv_fail_cnt, count);
+			mtk8250_uart_dump(cif_dev->tty);
+		}
 #endif
+	} else
+		recv_fail_cnt = 0;
 }
 
 /* btmtk_uart_tty_wakeup()

@@ -112,6 +112,7 @@ struct mtk_stp_hdr {
 #define BTMTK_MAX_SEND_RETRY 10000
 #define BTMTK_MAX_WAIT_RETRY 30000
 #define BTMTK_MAX_WAKEUP_RETRY 4
+#define BTMTK_MAX_RECV_ERR_CNT 3
 
 #define BT_UART_DEFAULT_BAUD 115200
 
@@ -199,6 +200,8 @@ struct btmtk_uart_dev {
 	atomic_t		fw_own_timer_flag;
 	atomic_t		need_drv_own;
 	atomic_t		fw_wake;
+
+	atomic_t		need_assert;
 
 	u32			rhw_fail_cnt;
 
