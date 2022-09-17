@@ -267,14 +267,14 @@ void btmtk_release_uarthub(bool force)
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
 		return;
 	}
-	/* for only bt off flow */
+	/* force is for only bt off flow */
 	if (cif_dev->hub_en && force) {
 		/* set tx/rx gpio PU */
 		btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
-
 		ret = mtk8250_uart_hub_dev0_clear_tx_request();
 		BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_tx_request ret[%d]", __func__, ret);
 	}
+
 	/* Clr TX,RX request, let uarthub can sleep */
 	if (cif_dev->hub_en && (cif_dev->sleep_en || force)) {
 		ret =  mtk8250_uart_hub_dev0_clear_rx_request(cif_dev->tty);
@@ -282,6 +282,7 @@ void btmtk_release_uarthub(bool force)
 		if (ret)
 			BTMTK_ERR("%s mtk8250_uart_hub_dev0_clear_rx_request fail ret[%d]", __func__, ret);
 	}
+
 	return;
 }
 
@@ -410,7 +411,7 @@ int btmtk_pre_power_on_handler(void)
 		return 0;
 	}
 
-	btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
+	ret = btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 
@@ -438,8 +439,12 @@ int btmtk_pre_power_on_handler(void)
 
 #endif
 	/* reopen tty */
-	BTMTK_INFO("%s tty_port[%p]", __func__, cif_dev->tty->port);
-	cif_dev->tty->ops->open(cif_dev->tty, NULL);
+	if(cif_dev != NULL && cif_dev->tty != NULL && cif_dev->tty->port != NULL) {
+		BTMTK_INFO("%s tty_port[%p], port_count[%d]",
+				__func__, cif_dev->tty->port, cif_dev->tty->port->count);
+		if (cif_dev->tty->port->count == 0)
+			cif_dev->tty->ops->open(cif_dev->tty, NULL);
+	}
 
 	btmtk_pinctrl_exec(POWER_ON_TX_PINCTRL_NAME);
 	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);

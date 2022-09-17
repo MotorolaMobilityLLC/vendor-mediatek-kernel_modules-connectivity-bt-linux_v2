@@ -377,8 +377,8 @@ struct bt_utc_struct {
 	struct rtc_time tm;
 	u32 usec;
 	u32 sec;
-	u32 ksec;
-	u32 knsec;
+	unsigned long ksec;
+	unsigned long knsec;
 };
 
 #define BT_DOWNLOAD	1

@@ -55,6 +55,10 @@ static DEFINE_MUTEX(btmtk_uart_ops_mutex);
 static DEFINE_MUTEX(btmtk_uart_own_mutex);
 #define UART_OWN_MUTEX_LOCK()	mutex_lock(&btmtk_uart_own_mutex)
 #define UART_OWN_MUTEX_UNLOCK()	mutex_unlock(&btmtk_uart_own_mutex)
+static DEFINE_MUTEX(btmtk_tx_thread_mutex);
+#define TX_THREAD_MUTEX_LOCK()	mutex_lock(&btmtk_tx_thread_mutex)
+#define TX_THREAD_MUTEX_UNLOCK()	mutex_unlock(&btmtk_tx_thread_mutex)
+
 static struct wakeup_source *bt_trx_wakelock;
 
 static char event_need_compare[EVENT_COMPARE_SIZE] = {0};
@@ -385,7 +389,15 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	/* update fw own timer or wait fw own done then do drv own */
 	/* this case is not called by tx_thread(fw own/drv own) */
 	if (pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT) {
-		btmtk_uart_driver_own(bdev);
+		/* normal case for keep drv own 
+		 * rhw dump (wifi, connv3) would use this to do drv own
+		 */
+		ret = btmtk_uart_driver_own(bdev);
+		if (ret < 0) {
+			BTMTK_ERR("%s: driver own failed, return", __func__);
+			bmain_info->hif_hook.trigger_assert(bdev);
+			return -1;
+		}
 		/* for cancel fw own if fw own timer just complete */
 		atomic_set(&cif_dev->need_drv_own, 1);
 	}
@@ -436,7 +448,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 	}
 
-#if (USE_DEVICE_NODE == 1)
+#if (USE_DEVICE_NODE == 1) && IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
 		mtk8250_uart_start_record(cif_dev->tty);
 #endif
@@ -475,8 +487,10 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 #if (USE_DEVICE_NODE == 1)
 		if (ret != -1)	/* successfully received event or coredump case */
 			break;
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
 		if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
 			mtk8250_uart_end_record(cif_dev->tty);
+#endif
 		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
 	} while (--retry > 0);
 #endif
@@ -831,6 +845,9 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 		/* hif dump */
 		if (bmain_info->hif_hook.dump_hif_debug_sop)
 			bmain_info->hif_hook.dump_hif_debug_sop(bdev);
+
+		BTMTK_INFO("%s: set bt assert_state end", __func__);
+		atomic_set(&bdev->assert_state, BTMTK_ASSERT_END);
 
 		/* if during btmtk_pre_chip_rst_handler (BTMTK_RESET_DOING)
 		 * leave hw_err to btmtk_post_chip_rst_handler
@@ -1391,10 +1408,15 @@ static int btmtk_uart_tx_thread(void *data)
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return -1;
 	}
-	/* avoid unused var for USE_DEVICE_NODE == 0*/
+	/* avoid unused var for USE_DEVICE_NODE == 0 */
 	ret = 0;
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
 
 	atomic_set(&cif_dev->thread_status, 1);
 
@@ -1422,26 +1444,14 @@ static int btmtk_uart_tx_thread(void *data)
 
 		if (thread_flag & (BTMTK_THREAD_TX | BTMTK_THREAD_RX)) {
 			ret = btmtk_uart_driver_own(bdev);
-			if (ret < 0) {
-				BTMTK_ERR("%s: set driver own return fail, ret[%d]", __func__, ret);
-				if (bdev->assert_reason[0] == '\0') {
-					strncpy(bdev->assert_reason, "[BT_FW assert] drv own failed", strlen("[BT_FW assert] drv own failed"));
-					BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
-				}
+			if (ret < 0)
 				btmtk_uart_trigger_assert(bdev);
-			}
 
 		/* if bt fw closed, no need to send fw own */
 		} else if (thread_flag & BTMTK_THREAD_FW_OWN) {
 			ret = btmtk_uart_fw_own(bdev);
-			if (ret < 0) {
-				BTMTK_ERR("%s: set fw own return fail, ret[%d]", __func__, ret);
-				if (bdev->assert_reason[0] == '\0') {
-					strncpy(bdev->assert_reason, "[BT_FW assert] fw own failed", strlen("[BT_FW assert] fw own failed"));
-					BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
-				}
+			if (ret < 0)
 				btmtk_uart_trigger_assert(bdev);
-			}
 		}
 #endif
 
@@ -1525,7 +1535,7 @@ static int btmtk_tx_thread_exit(struct btmtk_uart_dev *cif_dev)
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
 		return -1;
 	}
-
+	TX_THREAD_MUTEX_LOCK();
 	if (!IS_ERR(cif_dev->tx_task) && atomic_read(&cif_dev->thread_status)) {
 		kthread_stop(cif_dev->tx_task);
 
@@ -1539,6 +1549,7 @@ static int btmtk_tx_thread_exit(struct btmtk_uart_dev *cif_dev)
 			}
 		}
 	}
+	TX_THREAD_MUTEX_UNLOCK();
 	skb_queue_purge(&cif_dev->tx_queue);
 
 	BTMTK_INFO("%s done", __func__);
@@ -1609,6 +1620,8 @@ static int btmtk_uart_init(struct btmtk_dev *bdev)
 		BTMTK_ERR("btmtk_uart_set_pinmux failed!");
 		goto free_hci;
 	}
+#else
+	INIT_WORK(&bdev->hif_dump_work, btmtk_hif_dump_work);
 #endif
 
 	INIT_WORK(&bdev->reset_waker, btmtk_reset_waker);
@@ -2045,11 +2058,14 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 	cif_dev->own_state = BTMTK_FW_OWNING;
 
 	if (cif_dev->sleep_en) {
-		ret = mtk8250_uart_hub_dev0_clear_tx_request();
-		BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_tx_request, ret[%d]", __func__, ret);
-
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+		if (cif_dev->hub_en) {
+			ret = mtk8250_uart_hub_dev0_clear_tx_request();
+			BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_tx_request, ret[%d]", __func__, ret);
+		}
 		/* record host wakeup info to fw, b[4] = AP, b[5] = MD, b[6] = ADSP */
 		cmd[9] = cmd[9] | ((mtk8250_uart_hub_get_host_wakeup_status() & 0xf) << 4);
+#endif
 
 		/* two different event for fw allow sleep or not */
 		ret = btmtk_main_send_cmd(bdev, cmd, FWOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN - 3,
@@ -2057,7 +2073,9 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		/* evt[7] = 1 for no sleep */
 		if (bdev->io_buf[7]) {
 			/* re-set tx request */
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
 			btmtk_wakeup_uarthub();
+#endif
 			BTMTK_WARN("%s fw not allow sleep, keep drv own, cmd[9] = 0x%02x", __func__, cmd[9]);
 			cif_dev->own_state = BTMTK_DRV_OWN;
 			goto unlock;
@@ -2067,6 +2085,11 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 
 	if (ret < 0) {
 		cif_dev->own_state = BTMTK_DRV_OWN;
+		BTMTK_ERR("%s: set fw own return fail, ret[%d]", __func__, ret);
+		if (bdev->assert_reason[0] == '\0') {
+			strncpy(bdev->assert_reason, "[BT_FW assert] fw own failed", strlen("[BT_FW assert] fw own failed"));
+			BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+		}
 		goto unlock;
 	} else {
 		cif_dev->own_state = BTMTK_FW_OWN;
@@ -2163,15 +2186,24 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	} else
 		ret = 0;
 
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	/* no mattter success or not, all need to set rx request */
+	if (cif_dev->hub_en) {
+		mtk8250_uart_hub_dev0_set_rx_request();
+		BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_rx_request", __func__);
+	}
+#endif
+
 	if (ret < 0) {
 		/* set driver own state and hub request for trigger rhw debug sop */
-		mtk8250_uart_hub_dev0_set_rx_request();
-		BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_rx_request", __func__);
 		cif_dev->own_state = BTMTK_DRV_OWN;
+		BTMTK_ERR("%s: set driver own return fail, ret[%d]", __func__, ret);
+		if (bdev->assert_reason[0] == '\0') {
+			strncpy(bdev->assert_reason, "[BT_FW assert] drv own failed", strlen("[BT_FW assert] drv own failed"));
+			BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+		}
 		goto unlock;
 	} else if (cif_dev->no_fw_own == 0) {
-		mtk8250_uart_hub_dev0_set_rx_request();
-		BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_rx_request", __func__);
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		btmtk_uart_update_fw_own_timer(cif_dev);
 		BTMTK_INFO("%s success", __func__);
