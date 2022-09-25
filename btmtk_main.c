@@ -182,16 +182,17 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc)
 
 int32_t btmtk_intcmd_set_fw_log(uint8_t flag)
 {
-	u8 fw_log_cmd[8] = { 0x01, 0x5D, 0xFC, 0x04, 0x02, 0x00, 0x02, 0x03 };
+	u8 fw_log_cmd[8] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x03 };
+	u8 evt[] = {0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00};
 	int ret;
 
-	BTMTK_INFO("%s send flag[0x%02X]", __func__, flag);
+	BTMTK_INFO("%s log level[0x%02X]", __func__, flag);
 	fw_log_cmd[7] = flag;
 	ret = btmtk_main_send_cmd(g_sbdev,
-			fw_log_cmd, 8, NULL, 0,
-			0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			fw_log_cmd, sizeof(fw_log_cmd), evt, sizeof(evt),
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
 	if (ret < 0)
-		BTMTK_ERR("%s faill to send flag[0x%02X]", __func__, flag);
+		BTMTK_ERR("%s faill to send log level[0x%02X]", __func__, flag);
 
 	return ret;
 }
