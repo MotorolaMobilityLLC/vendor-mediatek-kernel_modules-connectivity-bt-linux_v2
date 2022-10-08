@@ -227,7 +227,7 @@ void btmtk_uarthub_err_cb(unsigned int err_type)
 	if (((1 << rx_pkt_type_err) | (1 << dev0_rx_timeout_err)) & err_type) {
 		if (g_sbdev->assert_reason[0] == '\0') {
 			strncpy(g_sbdev->assert_reason, "[BT_DRV assert] uarthub rx error",
-					strlen("[BT_DRV assert] uarthub rx error"));
+					strlen("[BT_DRV assert] uarthub rx error") + 1);
 			BTMTK_ERR("%s: [assert_reason] %s", __func__, g_sbdev->assert_reason);
 		}
 
@@ -558,7 +558,7 @@ int btmtk_sp_whole_chip_reset(struct btmtk_dev *bdev)
 	if (g_sbdev->assert_reason[0] == '\0') {
 		memset(g_sbdev->assert_reason, 0, ASSERT_REASON_SIZE);
 		strncpy(g_sbdev->assert_reason, "[BT_DRV assert] BT whole chip reset"
-			, strlen("[BT_DRV assert] BT whole chip reset"));
+			, strlen("[BT_DRV assert] BT whole chip reset") + 1);
 	}
 
 	return connv3_trigger_whole_chip_rst(CONNV3_DRV_TYPE_BT , g_sbdev->assert_reason);
@@ -634,9 +634,9 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 		goto exit;
 	} else {
 		if (g_sbdev->assert_reason[0] == '\0') {
-			unsigned int len = strlen(reason);
+			unsigned int len = strlen(reason) + 1;
 
-			len = (len >= ASSERT_REASON_SIZE) ? ASSERT_REASON_SIZE - 1 : len;
+			len = (len >= ASSERT_REASON_SIZE) ? ASSERT_REASON_SIZE : len;
 			reason[len] = '\0';
 			strncpy(g_sbdev->assert_reason, reason, len);
 			BTMTK_ERR("%s: [assert_reason] %s", __func__, g_sbdev->assert_reason);
