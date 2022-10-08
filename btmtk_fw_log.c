@@ -614,16 +614,28 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 			BTMTK_ERR("%s: Convert %s failed(%d)", __func__, temp_str, ret);
 	}
 
-	if (o_fwlog_buf[0] != HCI_COMMAND_PKT && o_fwlog_buf[0] != FWLOG_TYPE) {
+	if (o_fwlog_buf[0] != HCI_COMMAND_PKT
+#if (USE_DEVICE_NODE == 0)
+			&& o_fwlog_buf[0] != FWLOG_TYPE
+#endif
+		) {
 		BTMTK_ERR("%s: Not support 0x%02X yet", __func__, o_fwlog_buf[0]);
 		ret = -EPROTONOSUPPORT;
 		goto exit;
 	}
 	/* check HCI command length */
-	if (len > HCI_MAX_COMMAND_SIZE) {
-		BTMTK_ERR("%s: command is larger than max buf size, length = %d", __func__, len);
-		ret = -ENOMEM;
+	if (len < HCI_CMD_HEADER_SIZE) {
+		BTMTK_ERR("%s: command is too short for hci cmd, length = %d", __func__, len);
+		ret = -EINVAL;
 		goto exit;
+	}
+	if (o_fwlog_buf[0] == HCI_COMMAND_PKT) {
+		BTMTK_DBG("%s: hci_cmd_len[%d], input_len[%d]", __func__, o_fwlog_buf[3], len);
+		if (o_fwlog_buf[3] + HCI_CMD_HEADER_SIZE != len) {
+			BTMTK_ERR("%s: pkt format error, hci_cmd_len[%d], input_len[%d]", __func__, o_fwlog_buf[3], len);
+			ret = -EINVAL;
+			goto exit;
+		}
 	}
 
 	skb = alloc_skb(count + BT_SKB_RESERVE, GFP_KERNEL);
