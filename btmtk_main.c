@@ -2679,12 +2679,13 @@ struct btmtk_dev *btmtk_get_dev(void)
 #if (USE_DEVICE_NODE == 1)
 			/* only use g_bdev[0] in SP project */
 			i = 0;
-#endif
+			g_bdev[i]->dongle_index = i;
+#else
 			if (i == 0)
 				g_bdev[i]->dongle_index = i;
 			else
 				g_bdev[i]->dongle_index = g_bdev[i - 1]->dongle_index + 1;
-
+#endif
 			/* reset pin initial value need to be -1, used to judge after
 			 * disconnected before probe, can't do chip reset
 			 */
@@ -4459,7 +4460,7 @@ failed:
 	if (++bdev->on_fail_count > BTMTK_MAX_SUBSYS_RESET_COUNT && main_info.hif_hook.whole_reset) {
 		memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
 		strncpy(bdev->assert_reason, "[BT_DRV assert] on fail more than 3 times",
-							 strlen("[BT_DRV assert] on fail more than 3 times"));
+							 strlen("[BT_DRV assert] on fail more than 3 times") + 1);
 		BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 		bdev->on_fail_count = 0;
 		main_info.hif_hook.whole_reset(bdev);
@@ -4593,7 +4594,8 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			btmtk_hci_snoop_print_to_log();
 			if (bdev->assert_reason[0] == '\0') {
 				memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
-				strncpy(bdev->assert_reason, "[BT_DRV assert] host trigger", strlen("[BT_DRV assert] host trigger"));
+				strncpy(bdev->assert_reason, "[BT_DRV assert] host trigger",
+						strlen("[BT_DRV assert] host trigger") + 1);
 				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 			}
 
