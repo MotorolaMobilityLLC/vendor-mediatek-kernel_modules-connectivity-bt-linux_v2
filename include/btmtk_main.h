@@ -91,6 +91,7 @@
 #define PATCH_DOWNLOAD_PHASE3_SECURE_BOOT_DELAY_TIME 200
 #define TIME_MULTIPL 1000
 #define TIME_US_OFFSET_RANGE 2000
+#define TIME_BOUND_OF_REQ_FW	500
 
 /* * delay and retrey for main_send_cmd */
 #define WMT_DELAY_TIMES 100
