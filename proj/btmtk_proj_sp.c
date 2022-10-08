@@ -637,8 +637,8 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 			unsigned int len = strlen(reason) + 1;
 
 			len = (len >= ASSERT_REASON_SIZE) ? ASSERT_REASON_SIZE : len;
-			reason[len] = '\0';
 			strncpy(g_sbdev->assert_reason, reason, len);
+			reason[len] = '\0';
 			BTMTK_ERR("%s: [assert_reason] %s", __func__, g_sbdev->assert_reason);
 		}
 		atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DOING);
@@ -1415,7 +1415,7 @@ static void btmtk_dump_gpio_state(void)
 	dir = CONSYS_REG_READ(vir_0x1000_5000 + 0x0070);
 	out = CONSYS_REG_READ(vir_0x1000_5000 + 0x0170);
 
-	BTMTK_INFO("%s: aux[0x%08x] dir[0x%08x] out[0x%08x]", __func__,aux, dir, out);
+	BTMTK_DBG("%s: aux[0x%08x] dir[0x%08x] out[0x%08x]", __func__,aux, dir, out);
 	BTMTK_INFO("%s: GPIO_240 aux=[%d] dir=[%s] out[%d]", __func__,
 		((aux & 0x07)), (GET_BIT(dir, 16) ? "OUT" : "IN"), GET_BIT(out, 16));
 
