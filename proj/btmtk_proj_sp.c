@@ -1421,5 +1421,94 @@ static void btmtk_dump_gpio_state(void)
 
 }
 
+
+/*******************************************************************************
+*                           bt host debug information for low power
+********************************************************************************
+*/
+#define BTHOST_INFO_MAX	16
+#define BTHOST_DESC_LEN 16
+
+struct bthost_info{
+	uint32_t		id; //0 for not used
+	char 		desc[BTHOST_DESC_LEN];
+	uint32_t		value;
+};
+struct bthost_info bthost_info_table[BTHOST_INFO_MAX];
+
+void bthost_debug_init(void)
+{
+	uint32_t i = 0;
+	for (i = 0; i < BTHOST_INFO_MAX; i++){
+		bthost_info_table[i].id = 0;
+		bthost_info_table[i].desc[0] = '\0';
+		bthost_info_table[i].value = 0;
+	}
+}
+
+void bthost_debug_print(void)
+{
+	uint32_t i = 0;
+	int32_t ret = 0;
+	uint8_t *pos = NULL, *end = NULL;
+	uint8_t dump_buffer[700]={0};
+
+	pos = &dump_buffer[0];
+	end = pos + 700 - 1;
+
+	ret = snprintf(pos, (end - pos + 1), "[bt host info] ");
+	if (ret < 0 || ret >= (end - pos + 1)) {
+		BTMTK_ERR("snprintf [bt host info] fail");
+	} else {
+		pos += ret;
+	}
+
+	for (i = 0; i < BTHOST_INFO_MAX; i++){
+		if (bthost_info_table[i].id == 0){
+			ret = snprintf(pos, (end - pos + 1),"[%d-%d] not set", i, BTHOST_INFO_MAX);
+			if (ret < 0 || ret >= (end - pos + 1)){
+				BTMTK_ERR("%s: snprintf fail i[%d] ret[%d]", __func__, i, ret);
+				break;
+			}
+			pos += ret;
+			break;
+		}
+		else {
+			ret = snprintf(pos, (end - pos + 1),"[%d][%s : 0x%08x] ", i,
+			bthost_info_table[i].desc,
+			bthost_info_table[i].value);
+			if (ret < 0 || ret >= (end - pos + 1)){
+				BTMTK_ERR("%s: snprintf fail i[%d] ret[%d]", __func__, i, ret);
+				break;
+			}
+			pos += ret;
+		}
+	}
+	BTMTK_INFO("%s", dump_buffer);
+}
+
+void bthost_debug_save(uint32_t id, uint32_t value, char* desc)
+{
+	uint32_t i = 0;
+	if (id == 0) {
+		BTMTK_WARN("%s: id (%d) must > 0\n", __func__, id);
+		return;
+	}
+	for (i = 0; i < BTHOST_INFO_MAX; i++){
+		// if the id is existed, save to the same column
+		if (bthost_info_table[i].id == id){
+			bthost_info_table[i].value = value;
+			return;
+		}
+		// save to the new column
+		if (bthost_info_table[i].id == 0){
+			bthost_info_table[i].id = id;
+			strncpy(bthost_info_table[i].desc, desc, BTHOST_DESC_LEN - 1);
+			bthost_info_table[i].value = value;
+			return;
+		}
+	}
+	BTMTK_WARN("%s: no space for %d\n", __func__, id);
+}
 #endif // (USE_DEVICE_NODE == 1)
 
