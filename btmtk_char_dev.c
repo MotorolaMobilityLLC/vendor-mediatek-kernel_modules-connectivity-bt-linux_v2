@@ -72,11 +72,8 @@ static uint8_t o_buf[BT_BUFFER_SIZE]; /* Output buffer for write */
 static uint8_t ioc_buf[IOCTL_BT_HOST_INTTRX_SIZE];
 
 extern struct btmtk_dev *g_sbdev;
-#if 0 // Simfex
-extern struct btmtk_btif_dev g_btif_dev;
 extern void bthost_debug_init(void);
 extern void bthost_debug_save(uint32_t id, uint32_t value, char *desc);
-#endif
 static struct semaphore wr_mtx, rd_mtx;
 static struct wakeup_source *bt_wakelock;
 /* Wait queue for poll and read */
@@ -464,9 +461,7 @@ static long BT_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long
 			uint32_t *pint32 = (uint32_t *)&ioc_buf[0];
 
 			BTMTK_INFO("%s: id[%x], value[0x%08x], desc[%s]", __func__, pint32[0], pint32[1], &ioc_buf[8]);
-#if 0
 			bthost_debug_save(pint32[0], pint32[1], (char *)&ioc_buf[8]);
-#endif
 		}
 		break;
 	case COMBO_IOCTL_BT_INTTRX:
@@ -550,9 +545,9 @@ static int BT_open(struct inode *inode, struct file *file)
 	bt_ftrace_flag = 1;
 	hw_err_retry = 0;
 	__pm_relax(bt_wakelock);
-#if 0 // Simfex
+
 	bthost_debug_init();
-#endif
+
 	BTMTK_INFO("BT turn on OK!");
 	return 0;
 }
@@ -584,9 +579,7 @@ static int BT_close(struct inode *inode, struct file *file)
 	ret = bt_close(g_sbdev->hdev);
 	__pm_relax(bt_wakelock);
 
-#if 0 // Simfex
 	bthost_debug_init();
-#endif
 
 	if (ret) {
 		BTMTK_ERR("BT turn off fail!");
@@ -621,11 +614,6 @@ int BT_init(void)
 
 	/* Initialize wake lock for I/O operation */
 	bt_wakelock = wakeup_source_register(NULL, "bt_drv_io");
-
-#if 0
-	g_btif_dev.state_change_cb[0] = fw_log_bt_state_cb;
-	g_btif_dev.state_change_cb[1] = bt_state_cb;
-#endif
 
 	/* Allocate char device */
 	alloc_err = register_chrdev_region(dev, BT_devs, BT_DRIVER_NAME);
@@ -682,11 +670,6 @@ void BT_exit(void)
 
 	cdev_del(&BT_cdev);
 	unregister_chrdev_region(dev, BT_devs);
-
-#if 0 // Simfex
-	g_btif_dev.state_change_cb[0] = NULL;
-	g_btif_dev.state_change_cb[1] = NULL;
-#endif
 
 	/* Destroy wake lock */
 	wakeup_source_unregister(bt_wakelock);
