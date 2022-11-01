@@ -1367,7 +1367,7 @@ int32_t btmtk_intcmd_wmt_utc_sync(void)
 	memcpy(cmd + 6 + sizeof(uint32_t), &utc.usec, sizeof(uint32_t));
 
 	ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd),
-		evt, sizeof(evt), DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+		evt, sizeof(evt), DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
 
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
