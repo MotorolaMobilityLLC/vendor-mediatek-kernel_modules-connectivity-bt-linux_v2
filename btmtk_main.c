@@ -4667,7 +4667,7 @@ static void btmtk_rx_work(struct work_struct *work)
 			skb = NULL;
 			continue;
 		}
-		BTMTK_INFO_RAW(skb->data, skb->len, "%s: len[%d] %02x", __func__,
+		BTMTK_DBG_RAW(skb->data, skb->len, "%s: len[%d] %02x", __func__,
 							skb->len + 1, hci_skb_pkt_type(skb));
 		if (hci_skb_pkt_type(skb) == HCI_EVENT_PKT) {
 			/* save hci evt pkt for debug */
