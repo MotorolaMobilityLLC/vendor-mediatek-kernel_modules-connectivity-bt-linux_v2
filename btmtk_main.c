@@ -4756,7 +4756,7 @@ static void btmtk_rx_work(struct work_struct *work)
 		if (err < 0) {
 			if (err != -ENXIO)
 				BTMTK_ERR("%s btmtk_rx_work failed, err = %d", __func__, err);
-			return;
+			continue;
 		}
 	}
 }
