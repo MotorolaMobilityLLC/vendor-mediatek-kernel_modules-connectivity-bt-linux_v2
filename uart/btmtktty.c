@@ -20,6 +20,7 @@
 #include "btmtk_define.h"
 #include "btmtk_uart_tty.h"
 #include "btmtk_main.h"
+#include "conn_dbg.h"
 
 #if (USE_DEVICE_NODE == 1)
 #include "btmtk_proj_sp.h"
@@ -929,6 +930,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		ret = connv3_pwr_on(CONNV3_DRV_TYPE_BT);
 		if(ret) {
 			BTMTK_ERR("%s: ConnInfra power on failed, ret[%d]", __func__, ret);
+			conn_dbg_add_log(CONN_DBG_LOG_TYPE_HW_ERR, "[bt] ConnInfra power on failed");
 			if(ret == CONNV3_ERR_RST_ONGOING) {
 				bdev->on_fail_count = 0;
 				return CONNV3_ERR_RST_ONGOING;

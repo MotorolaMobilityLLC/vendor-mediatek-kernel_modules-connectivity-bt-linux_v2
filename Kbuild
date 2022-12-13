@@ -123,7 +123,7 @@ endif
 
 CFILES += btmtk_main.c btmtk_fw_log.c
 
-ccflags-y += -I$(KO_CODE_PATH)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth -I$(KO_CODE_PATH)/proj/include/
+ccflags-y += -I$(KO_CODE_PATH)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth -I$(KO_CODE_PATH)/proj/include/ -I$(KERNEL_SRC)/drivers/misc/mediatek/connectivity/common/
 
 ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
   $(info [BT_Drv] TOP = $(TOP))
