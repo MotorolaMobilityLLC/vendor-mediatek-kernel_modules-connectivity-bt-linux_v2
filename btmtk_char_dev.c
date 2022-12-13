@@ -103,7 +103,7 @@ extern void main_driver_exit(void);
 
 static int32_t ftrace_print(const uint8_t *str, ...)
 {
-#ifdef CONFIG_TRACING
+#if defined (BT_CONFIG_TRACING) && defined (CONFIG_TRACING)
 	va_list args;
 	uint8_t temp_string[FTRACE_STR_LOG_SIZE];
 
