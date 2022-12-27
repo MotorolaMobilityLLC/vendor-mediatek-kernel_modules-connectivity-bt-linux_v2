@@ -802,6 +802,7 @@ struct btmtk_main_info {
 	char fw_version_str[FW_VERSION_BUF_SIZE];
 
 	atomic_t fwlog_ref_cnt;
+	u8 find_my_phone_mode;
 };
 
 static inline int is_mt6639(u32 chip_id)
