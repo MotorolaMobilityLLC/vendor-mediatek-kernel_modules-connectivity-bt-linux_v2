@@ -55,12 +55,11 @@ static int btmtk_send_to_tx_queue(struct btmtk_uart_dev *cif_dev, struct sk_buff
 {
 	ulong flags = 0;
 
-	BTMTK_DBG("%s: start", __func__);
 	spin_lock_irqsave(&cif_dev->tx_lock, flags);
 	skb_queue_tail(&cif_dev->tx_queue, skb);
 	spin_unlock_irqrestore(&cif_dev->tx_lock, flags);
 	wake_up_interruptible(&tx_wait_q);
-	BTMTK_DBG("%s: end", __func__);
+
 	return 0;
 }
 
@@ -400,6 +399,7 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 	return ret;
 }
 
+#if (USE_DEVICE_NODE == 0)
 static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 {
 	struct ktermios new_termios;
@@ -480,6 +480,14 @@ static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 exit:
 	return ret;
 }
+#else
+static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
+{
+	BTMTK_DBG("%s sp no need to reset flow, bt on/off directly", __func__);
+	return 0;
+}
+
+#endif
 
 #if (USE_DEVICE_NODE == 1)
 static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
@@ -640,9 +648,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 
 		if (sent_len > 0) {
 			memcpy(image, fwbuf + section_offset + cur_len, sent_len);
-			// pinhao comment for test log too much
-		    // BTMTK_DBG("%s: sent_len = %d, cur_len = %d", __func__,
-					     //sent_len, cur_len);
+
 			cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 			ret = cif_dev->tty->ops->write(cif_dev->tty, image, sent_len);
 
@@ -1111,8 +1117,6 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, char 
 	int ret = -1;
 	struct btmtk_dev *bdev = tty->disc_data;
 
-	BTMTK_DBG_RAW(data, count, "%s: count[%d]", __func__, count);
-
 	/* add hci device part */
 	bdev->recv_evt_len = count;
 	ret = btmtk_recv(bdev->hdev, data, count);
@@ -1166,6 +1170,7 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_uart_dev *cif_dev;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	/* Mediatek Driver Version */
 	BTMTK_INFO("%s: MTK BT Driver Version: %s", __func__, VERSION);
@@ -1203,6 +1208,8 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 	ret = btmtk_uart_tty_probe(tty);
 #if (USE_DEVICE_NODE == 1)
 	btmtk_connv3_sub_drv_init(bdev);
+	/* Init coredump */
+	bmain_info->hif_hook.coredump_handler = connv3_coredump_init(CONNV3_DEBUG_TYPE_BT, NULL);
 #endif
 	return ret;
 }
