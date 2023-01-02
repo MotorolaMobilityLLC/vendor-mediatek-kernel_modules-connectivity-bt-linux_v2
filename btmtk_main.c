@@ -2050,6 +2050,11 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 	if (main_info.hif_hook.dl_dma)
 		dma_flag = le2cpu32(sectionMap->bin_info_spec.u4DLModeCrcType) & 0xFF;
 
+	if (mode == DOWNLOAD_BY_INDEX) {
+		/* daynamic download need downloaded by wmt cmd */
+		dma_flag = PATCH_DOWNLOAD_USING_WMT;
+	}
+
 	BTMTK_INFO("%s: section_count = %d, section bin_type = 0x%08x, bin_index = %d\n",
 			__func__, loop_count, temp_type, temp_index);
 
@@ -2079,11 +2084,6 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 			BTMTK_WARN("%s: Hold by another fun more than 2 seconds", __func__);
 			ret = -1;
 			goto err;
-		}
-
-		if (mode == DOWNLOAD_BY_INDEX) {
-			/* daynamic download need downloaded by wmt cmd */
-			dma_flag = PATCH_DOWNLOAD_USING_WMT;
 		}
 
 		if (dma_flag == PATCH_DOWNLOAD_USING_DMA && main_info.hif_hook.dl_dma) {
