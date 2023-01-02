@@ -939,6 +939,9 @@ ssize_t btmtk_connsys_log_read_to_user(char __user *buf, size_t count);
 unsigned int btmtk_connsys_log_get_buf_size(void);
 int32_t btmtk_intcmd_set_fw_log(uint8_t flag);
 int btmtk_send_connfem_cmd(struct btmtk_dev *bdev);
+int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb);
+int bt_open(struct hci_dev *hdev);
+int bt_close(struct hci_dev *hdev);
 #endif
 
 #endif /* __BTMTK_MAIN_H__ */
