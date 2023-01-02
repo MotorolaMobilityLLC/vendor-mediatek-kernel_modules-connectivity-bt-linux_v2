@@ -37,6 +37,7 @@
 
 #if (USE_DEVICE_NODE == 1)
 static struct pinctrl *pinctrl_ptr;
+extern struct btmtk_dev *g_sbdev;
 
 static inline int btmtk_pinctrl_exec(const char *name)
 {
@@ -320,5 +321,205 @@ int btmtk_connv3_sub_drv_deinit(void)
 {
 	return connv3_sub_drv_ops_unregister(CONNV3_DRV_TYPE_BT);
 }
+
+/*
+ *******************************************************************************
+ *                       bt power throttling feature
+ *******************************************************************************
+ */
+static inline bool btmtk_pwrctrl_support(void)
+{
+	return TRUE;
+}
+
+static void btmtk_send_set_tx_power_cmd(struct btmtk_dev *bdev)
+{
+	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	struct btmtk_dypwr_st *dy_pwr = &cif_dev->dy_pwr;
+	uint8_t cmd_set[6] = { 0x01, 0x2D, 0xFC, 0x02, 0x02, 0x00 };
+	uint8_t evt_set[] = { 0x04, 0x0E, 0x06, 0x01, 0x2D, 0xFC };
+
+	cmd_set[5] = dy_pwr->set_val;
+	btmtk_main_send_cmd(bdev, cmd_set, sizeof(cmd_set),
+				evt_set, sizeof(evt_set), 0, 0, BTMTK_TX_CMD_FROM_DRV);
+
+	if (bdev->io_buf[6] != HCI_EVT_CC_STATUS_SUCCESS)
+		BTMTK_ERR("%s: status error[0x%02x]!", __func__, bdev->io_buf[6]);
+	else {
+		dy_pwr->fw_sel_dbm = bdev->io_buf[8];
+		BTMTK_INFO("%s: fw_sel_dbm[%d]", __func__, dy_pwr->fw_sel_dbm);
+	}
+
+	if (dy_pwr->cb != NULL)
+		dy_pwr->cb(dy_pwr->buf, dy_pwr->len);
+}
+
+void btmtk_async_trx_work(struct work_struct *work)
+{
+	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, async_trx_work);
+
+	btmtk_send_set_tx_power_cmd(bdev);
+}
+
+int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb)
+{
+	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	uint8_t cmd_query[] = { 0x01, 0x2D, 0xFC, 0x01, 0x01 };
+	uint8_t evt_query[] = { 0x04, 0x0E, 0x08, 0x01, 0x2D, 0xFC };
+
+	if (!btmtk_pwrctrl_support())
+		return 0;
+
+	BTMTK_INFO("%s: lp_cur_lv[%d], dy_max_dbm[%d], dy_min_dbm[%d], lp_bdy_dbm[%d], fw_sel_dbm[%d]",
+		__func__,
+		cif_dev->dy_pwr.lp_cur_lv,
+		cif_dev->dy_pwr.dy_max_dbm,
+		cif_dev->dy_pwr.dy_min_dbm,
+		cif_dev->dy_pwr.lp_bdy_dbm,
+		cif_dev->dy_pwr.fw_sel_dbm);
+
+	/*
+	 * Query
+	 * Cmd: 01 2D FC 01 01
+	 * Evt: 04 0E 08 01 2D FC SS 01 XX YY ZZ
+	 * SS: Status
+	 * XX: Dynamic range Max dBm
+	 * YY: Dynamic range Min dBm
+	 * ZZ: Low power region boundary dBm
+	 */
+	btmtk_main_send_cmd(bdev, cmd_query, sizeof(cmd_query),
+				evt_query, sizeof(evt_query), 0, 0, BTMTK_TX_CMD_FROM_DRV);
+
+	if (bdev->io_buf[6] != HCI_EVT_CC_STATUS_SUCCESS)
+		BTMTK_ERR("%s: status error[0x%02x]!", __func__, bdev->io_buf[6]);
+	else {
+		cif_dev->dy_pwr.dy_max_dbm = bdev->io_buf[8];
+		cif_dev->dy_pwr.dy_min_dbm = bdev->io_buf[9];
+		cif_dev->dy_pwr.lp_bdy_dbm = bdev->io_buf[10];
+		BTMTK_INFO("%s: dy_max_dbm[%d], dy_min_dbm[%d], lp_bdy_dbm[%d]",
+				    __func__,
+				    cif_dev->dy_pwr.dy_max_dbm,
+				    cif_dev->dy_pwr.dy_min_dbm,
+				    cif_dev->dy_pwr.lp_bdy_dbm);
+	}
+
+	if (cb)
+		cb(cif_dev->dy_pwr.buf, cif_dev->dy_pwr.len);
+
+	return 0;
+}
+
+int btmtk_set_tx_power(struct btmtk_dev *bdev, int8_t req_val, BT_RX_EVT_HANDLER_CB cb)
+{
+	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	struct btmtk_dypwr_st *dy_pwr = &cif_dev->dy_pwr;
+	bool isblocking = (cb) ? TRUE : FALSE;
+
+	/*
+	 * Set
+	 * Cmd: 01 2D FC 02 02 RR
+	 * Evt: 04 0E 06 01 2D FC SS 02 XX
+	 * RR: Requested TX power upper limitation dBm
+	 * SS: Status
+	 * XX: Selected TX power upper limitation dBm
+	 */
+
+	/* do not send if not support */
+	if (dy_pwr->dy_max_dbm <= dy_pwr->dy_min_dbm) {
+		BTMTK_INFO("%s: invalid dbm range, skip set cmd", __func__);
+		return 1;
+	}
+
+	/* value select flow */
+	if (req_val >= dy_pwr->dy_min_dbm) {
+		dy_pwr->set_val = req_val;
+		/* check max limitation */
+		if (dy_pwr->set_val > dy_pwr->dy_max_dbm)
+			dy_pwr->set_val = dy_pwr->dy_max_dbm;
+		/* power throttling limitation */
+		if (dy_pwr->lp_cur_lv >= CONN_PWR_THR_LV_4) { //TODO_PWRCTRL
+			dy_pwr->set_val = dy_pwr->lp_bdy_dbm;
+			/* lp_bdy_dbm may be larger than dy_max_dbm, check again */
+			if (dy_pwr->set_val > dy_pwr->dy_max_dbm)
+				dy_pwr->set_val = dy_pwr->dy_max_dbm;
+		}
+	} else {
+		BTMTK_INFO("%s: invalid dbm value, skip set cmd", __func__);
+		return 1;
+	}
+
+	BTMTK_INFO("%s: set_val[%d]", __func__, dy_pwr->set_val);
+
+	dy_pwr->cb = cb;
+	if (isblocking)
+		btmtk_send_set_tx_power_cmd(bdev);
+	else
+		/* Don't block caller thread for set operation */
+		schedule_work(&bdev->async_trx_work);
+	return 0;
+}
+
+
+int btmtk_pwrctrl_level_change_cb(enum conn_pwr_event_type type, void *data)
+{
+	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	int8_t set_val = cif_dev->dy_pwr.dy_max_dbm;
+
+	BTMTK_INFO("%s", __func__);
+	switch (type) {
+	case CONN_PWR_EVENT_LEVEL:
+		cif_dev->dy_pwr.lp_cur_lv = *((int *) data);
+		BTMTK_INFO("%s: lp_cur_bat_lv = %d", __func__, cif_dev->dy_pwr.lp_cur_lv);
+		btmtk_set_tx_power(g_sbdev, set_val, NULL);
+		break;
+	case CONN_PWR_EVENT_MAX_TEMP:
+		BTMTK_ERR("Unsupport now");
+		break;
+	default:
+		BTMTK_ERR("Uknown type for power throttling callback");
+		break;
+	}
+
+	return 0;
+}
+
+int btmtk_pwrctrl_pre_on(struct btmtk_dev *bdev)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	if (!btmtk_pwrctrl_support())
+		return 0;
+
+	if (!bdev) {
+		BTMTK_ERR("[ERR] bdev is NULL");
+		return -1;
+	}
+
+	cif_dev = bdev->cif_dev;
+	memset(&cif_dev->dy_pwr, 0x00, sizeof(cif_dev->dy_pwr));
+	cif_dev->dy_pwr.lp_cur_lv = CONN_PWR_THR_LV_0;
+	conn_pwr_drv_pre_on(CONN_PWR_DRV_BT, &cif_dev->dy_pwr.lp_cur_lv);
+	BTMTK_INFO("%s: lp_cur_bat_lv = %d", __func__, cif_dev->dy_pwr.lp_cur_lv);
+	return 0;
+}
+
+void btmtk_pwrctrl_post_off(void)
+{
+	if (!btmtk_pwrctrl_support())
+		return;
+
+	conn_pwr_drv_post_off(CONN_PWR_DRV_BT);
+}
+
+void btmtk_pwrctrl_register_evt(void)
+{
+	if (!btmtk_pwrctrl_support())
+		return;
+
+	BTMTK_INFO("%s", __func__);
+	/* Register callbacks for power throttling feature */
+	conn_pwr_register_event_cb(CONN_PWR_DRV_BT, (CONN_PWR_EVENT_CB)btmtk_pwrctrl_level_change_cb);
+}
+
 #endif // (USE_DEVICE_NODE == 1)
 
