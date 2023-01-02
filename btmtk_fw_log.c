@@ -367,8 +367,10 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 		BTMTK_DBG("%s: socket buffer length error(count: %d, skb.len: %d)",
 			__func__, (int)count, skb->len);
 	}
-	kfree_skb(skb);
-
+	if (skb) {
+		kfree_skb(skb);
+		skb = NULL;
+	}
 	return copyLen;
 }
 ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos)
@@ -1053,13 +1055,12 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			skb->data[1] == 0xfc) {
 		static int dump_data_counter;
 		static int dump_data_length;
-		//static int ori_log_lvl;
 
 		/* remove acl header 6F FC LL LL */
 		skb_pull(skb, 4);
 
 		state = btmtk_get_chip_state(bdev);
-		/* coredump info*/
+		/* coredump info */
 		if (state != BTMTK_STATE_FW_DUMP) {
 			BTMTK_INFO("%s: msg: %s len[%d]", __func__, skb->data, skb->len);
 			/* drop "Disable Cache" */
@@ -1088,9 +1089,6 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				return 1;
 			}
 
-			//ori_log_lvl = btmtk_log_lvl;
-			//btmtk_log_lvl = BTMTK_LOG_LVL_INFO;
-			//BTMTK_INFO("%s: FW dump begin, change log level [%d]->[%d]", __func__, ori_log_lvl, btmtk_log_lvl);
 			DUMP_TIME_STAMP("FW_dump_start");
 			/* Print too much log, it may cause kernel panic. */
 			dump_data_counter = 0;
@@ -1170,11 +1168,19 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			btmtk_sp_coredump_end();
 
 			ret = connv3_coredump_end(bmain_info->hif_hook.coredump_handler, "BT assert");
-			if (bmain_info->hif_hook.waker_notify)
-				bmain_info->hif_hook.waker_notify(bdev);
-			BTMTK_DBG("%s: connv3_coredump_end", __func__);
+
 			if (ret)
 				goto coredump_fail;
+
+			/* if do complete and bt close with btmtk_reset_waker start
+			 * no need to wait hw_err event, cause bt already start close
+			 */
+
+			BTMTK_INFO("%s  complete dump_comp , coredump_end", __func__);
+			complete_all(&bdev->dump_comp);
+
+			bmain_info->hif_hook.waker_notify(bdev);
+
 
 		}
 		return 1;

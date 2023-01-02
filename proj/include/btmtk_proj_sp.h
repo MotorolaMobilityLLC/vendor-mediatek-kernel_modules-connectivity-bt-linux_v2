@@ -102,6 +102,8 @@ int btmtk_set_pcm_pin_mux(void);
 int btmtk_set_gpio_default(void);
 int btmtk_pre_power_on_handler(void);
 
+int btmtk_sp_whole_chip_reset(struct btmtk_dev *bdev);
+
 int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev);
 //int btmtk_connv3_sub_drv_init(struct platform_device *pdev);
 
