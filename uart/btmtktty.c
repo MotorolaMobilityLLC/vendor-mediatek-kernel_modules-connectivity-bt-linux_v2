@@ -905,9 +905,10 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		ret = connv3_pwr_on(CONNV3_DRV_TYPE_BT);
 		if(ret) {
 			BTMTK_ERR("%s: ConnInfra power on failed, ret[%d]", __func__, ret);
-			if(ret == CONNV3_ERR_RST_ONGOING)
+			if(ret == CONNV3_ERR_RST_ONGOING) {
+				bdev->on_fail_count = 0;
 				return CONNV3_ERR_RST_ONGOING;
-			else
+			} else
 				return -EFAULT;
 		}
 	}
