@@ -596,15 +596,18 @@ struct connv3_pre_calibration_cb btmtk_pre_cal_cb = {
 int btmtk_read_pmic_state(struct btmtk_dev *bdev)
 {
 	int ret = 0;
-	u8 read_pmic_state_cmd[READ_PMIC_STATE_CMD_LEN] = { 0x00 };
-	u8 read_pmic_state_event[READ_PMIC_STATE_EVENT_LEN] = { 0x00 };
+	u8 read_pmic_state_cmd[] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x16, 0x01, 0x00, 0x01 };
+	u8 read_pmic_state_event[] = { 0x04, 0xE4, 0x35, 0x02, 0x16, 0x31, 0x00, 0x00 };
 
 
 	BTMTK_INFO("%s enter", __func__);
-	ret = btmtk_main_send_cmd(bdev, read_pmic_state_cmd, READ_PMIC_STATE_CMD_LEN,
-			read_pmic_state_event, READ_PMIC_STATE_EVENT_LEN, 0, 0, BTMTK_TX_CMD_FROM_DRV);
+	ret = btmtk_main_send_cmd(bdev, read_pmic_state_cmd, sizeof(read_pmic_state_cmd),
+			read_pmic_state_event, sizeof(read_pmic_state_event), 0, 0, BTMTK_TX_CMD_FROM_DRV);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
+	else
+		connv3_update_pmic_state(CONNV3_DRV_TYPE_BT, bdev->io_buf + sizeof(read_pmic_state_event),
+									bdev->io_buf[5] - 1);
 
 	return ret;
 }
