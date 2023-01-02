@@ -127,7 +127,7 @@ static void btmtk_uart_delete_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 
 static int btmtk_uart_open(struct hci_dev *hdev)
 {
-	BTMTK_INFO("%s enter!", __func__);
+	BTMTK_DBG("%s enter!", __func__);
 	return 0;
 }
 
@@ -139,7 +139,7 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 	int state = BTMTK_STATE_INIT;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	BTMTK_INFO("%s enter!", __func__);
+	BTMTK_DBG("%s enter!", __func__);
 	if (bdev == NULL) {
 		BTMTK_ERR("%s, bdev is NULL", __func__);
 		return -EINVAL;
@@ -1018,7 +1018,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	/* bt on success, reset subsys count */
 	atomic_set(&bmain_info->subsys_reset_conti_count, 0);
 
-	BTMTK_INFO("%s done", __func__);
+	BTMTK_DBG("%s done", __func__);
 
 exit:
 	if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT
@@ -1050,7 +1050,7 @@ static int btmtk_uart_pre_open(struct btmtk_dev *bdev)
 		return -1;
 	}
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
-	BTMTK_INFO("%s init to driver own state", __func__);
+	BTMTK_DBG("%s init to driver own state", __func__);
 	/* not start fw_own_timer until bt open done */
 	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
 	__pm_stay_awake(bt_trx_wakelock);
@@ -1471,7 +1471,7 @@ static int btmtk_tx_thread_start(struct btmtk_dev *bdev)
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
-	BTMTK_INFO("%s start", __func__);
+	BTMTK_DBG("%s start", __func__);
 
 	if (!atomic_read(&cif_dev->thread_status)) {
 		cif_dev->tx_task = kthread_run(btmtk_uart_tx_thread,
@@ -1505,7 +1505,7 @@ static int btmtk_tx_thread_start(struct btmtk_dev *bdev)
 static int btmtk_tx_thread_exit(struct btmtk_uart_dev *cif_dev)
 {
 	int i = 0;
-	BTMTK_INFO("%s start", __func__);
+	BTMTK_DBG("%s start", __func__);
 
 	if (cif_dev == NULL) {
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
@@ -1607,7 +1607,7 @@ deinit:
 	btmtk_main_cif_uninitialize(bdev, HCI_UART);
 #endif
 end:
-	BTMTK_INFO("%s done", __func__);
+	BTMTK_DBG("%s done", __func__);
 	return err;
 }
 
@@ -1663,7 +1663,7 @@ static int btmtk_uart_tty_probe(struct tty_struct *tty)
 
 	tty_driver_flush_buffer(tty);
 
-	BTMTK_INFO("%s: tty done %p", __func__, tty);
+	BTMTK_DBG("%s: tty done %p", __func__, tty);
 
 	return 0;
 }
@@ -2594,7 +2594,7 @@ int btmtk_cif_register(void)
 
 	btmtk_platform_driver_init();
 
-	BTMTK_INFO("%s: Done", __func__);
+	BTMTK_DBG("%s: Done", __func__);
 	return 0;
 }
 
