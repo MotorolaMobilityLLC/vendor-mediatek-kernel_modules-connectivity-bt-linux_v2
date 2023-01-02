@@ -78,7 +78,7 @@ static void btmtk_fw_own_timer(unsigned long arg)
 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_RUNNING);
 		wake_up_interruptible(&tx_wait_q);
 	} else
-		BTMTK_WARN("%s: not create yet", __func__);
+		BTMTK_DBG_LIMITTED("%s: not create yet", __func__);
 }
 #else
 static void btmtk_fw_own_timer(struct timer_list *timer)
@@ -89,7 +89,7 @@ static void btmtk_fw_own_timer(struct timer_list *timer)
 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_RUNNING);
 		wake_up_interruptible(&tx_wait_q);
 	} else
-		BTMTK_WARN("%s: not create yet", __func__);
+		BTMTK_DBG_LIMITTED("%s: not create yet", __func__);
 
 }
 #endif
@@ -102,7 +102,7 @@ static void btmtk_uart_update_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_INIT);
 		mod_timer(&cif_dev->fw_own_timer, jiffies + msecs_to_jiffies(FW_OWN_TIMEOUT));
 	} else
-		BTMTK_WARN_LIMITTED("%s: not create yet", __func__);
+		BTMTK_DBG_LIMITTED("%s: not create yet", __func__);
 }
 
 static void btmtk_uart_create_fw_own_timer(struct btmtk_uart_dev *cif_dev)
@@ -125,7 +125,7 @@ static void btmtk_uart_delete_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
 		BTMTK_WARN("%s timer deleted", __func__);
 	} else
-		BTMTK_WARN_LIMITTED("%s: not create yet", __func__);
+		BTMTK_DBG_LIMITTED("%s: not create yet", __func__);
 }
 #endif //(SLEEP_ENABLE == 1)
 
@@ -1232,8 +1232,8 @@ static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev, bool do_flus
 				return -1;
 			}
 			count = tty_chars_in_buffer(cif_dev->tty);
-			/* only wait 3ms for tty buffer clean */
-			usleep_range(10, 20);
+			/* only wait 30ms for tty buffer clean */
+			usleep_range(1000, 1100);
 		} while (count != 0 && flush_retry++ < BTMTK_MAX_WAIT_RETRY);
 		time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
 		if (time_diff > TIMT_BOUND_OF_CHARS_WAIT)
@@ -1315,7 +1315,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 				write_zero_retry++;
 			else {
 				write_zero_retry = 0;
-				BTMTK_DBG("%s, sent_len[%d] tty_write[%d], flush_retry[%d] max_pkt_cnt[%d]",
+				BTMTK_INFO("%s, sent_len[%d] tty_write[%d], flush_retry[%d] max_pkt_cnt[%d]",
 							__func__, sent_len, ret, flush_retry, max_pkt_cnt);
 			}
 			if (ret < 0 || write_zero_retry > BTMTK_MAX_WAIT_RETRY) {

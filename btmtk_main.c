@@ -2243,7 +2243,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 				goto err;
 			}
 		}
-		BTMTK_DBG("%s end", __func__);
+		BTMTK_INFO("%s end", __func__);
 	}
 
 err:
