@@ -74,9 +74,15 @@ void btmtk_reset_waker(struct work_struct *work)
 		BTMTK_INFO("%s suspend state don't do chip reset!", __func__);
 		return;
 	}
+
 	if (state == BTMTK_STATE_PROBE) {
 		bmain_info->chip_reset_flag = 1;
 		BTMTK_INFO("%s just do whole chip reset in probe stage!", __func__);
+	}
+
+	if (state == BTMTK_STATE_CLOSED) {
+		BTMTK_WARN("%s: chip is closed(%d), not trigger reset", __func__, state);
+		return;
 	}
 
 	fstate = btmtk_fops_get_state(bdev);
@@ -93,8 +99,10 @@ void btmtk_reset_waker(struct work_struct *work)
 		return;
 	}
 
+#if (USE_DEVICE_NODE == 0)
 	if (bmain_info->hif_hook.dump_debug_sop)
 		bmain_info->hif_hook.dump_debug_sop(bdev);
+#endif
 
 	DUMP_TIME_STAMP("chip_reset_start");
 	cif_event = HIF_EVENT_SUBSYS_RESET;
@@ -109,12 +117,21 @@ void btmtk_reset_waker(struct work_struct *work)
 		BTMTK_ERR("%s chip_reset is not support", __func__);
 		return;
 	}
+#else
+	/* for only reset but no coredump */
+	reinit_completion(&bdev->dump_comp);
 #endif
 
 	cif_state = &bdev->cif_state[cif_event];
 
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+#if (USE_DEVICE_NODE == 1)
+	/* put after set chip state to avoid bt close without wait dump cr */
+	if (bmain_info->hif_hook.dump_debug_sop)
+		bmain_info->hif_hook.dump_debug_sop(bdev);
+#endif
 
 	BTMTK_INFO("%s: Receive a byte (0xFF)", __func__);
 	/* read interrupt EP15 CR */

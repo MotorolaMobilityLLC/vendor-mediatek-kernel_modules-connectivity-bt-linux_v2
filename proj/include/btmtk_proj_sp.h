@@ -14,7 +14,6 @@
 #if (USE_DEVICE_NODE == 1)
 int btmtk_read_pmic_state(struct btmtk_dev *bdev);
 
-
 int btmtk_set_pcm_pin_mux(void);
 
 int btmtk_reset_pin_off(void);
@@ -25,5 +24,8 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev);
 //int btmtk_connv3_sub_drv_init(struct platform_device *pdev);
 
 int btmtk_connv3_sub_drv_deinit(void);
+
+/* Debug sop api */
+void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev);
 #endif // (USE_DEVICE_NODE == 1)
 

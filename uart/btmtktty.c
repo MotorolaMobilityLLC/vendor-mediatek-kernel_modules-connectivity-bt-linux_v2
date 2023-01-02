@@ -377,7 +377,9 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			 * it might make uart pinmux been changed, add delay or print log can avoid this
 			 * or mstar member said we can also use dsb(ISHST);
 			 */
+#if (USE_DEVICE_NODE == 0)
 			msleep(IO_BUF_DELAY_TIME);
+#endif
 			bdev->recv_evt_len = skb->len;
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 			BTMTK_DBG("%s, compare success", __func__);
@@ -434,7 +436,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 #endif
 
-	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
+	BTMTK_DBG_RAW(skb->data, skb->len, "%s: len[%d] ", __func__, skb->len);
 
 	if (event) {
 		if (event_len > EVENT_COMPARE_SIZE) {
@@ -887,7 +889,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 
 		/* uarhub setting */
 		cif_dev->fw_hub_en = 1;
-		cif_dev->rhw_en = 0;
+		cif_dev->rhw_en = 1;
 		cif_dev->crc_en = 1;
 		cif_dev->fw_dl_ready = 1;
 
@@ -2220,6 +2222,7 @@ int btmtk_cif_register(void)
 	hook.log_deinit = btmtk_connsys_log_deinit;
 	hook.log_handler = btmtk_connsys_log_handler;
 	hook.init = btmtk_chardev_init;
+	hook.dump_debug_sop = btmtk_uart_sp_dump_debug_sop;
 #endif
 	hook.open = btmtk_uart_open;
 	hook.close = btmtk_uart_close;
