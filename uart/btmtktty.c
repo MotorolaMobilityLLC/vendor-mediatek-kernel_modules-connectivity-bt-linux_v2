@@ -181,13 +181,13 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 
 	btmtk_tx_thread_exit(bdev->cif_dev);
 
-	btmtk_set_gpio_default();
+	btmtk_set_gpio_default_for_close();
 	if (!cif_dev->is_pre_cal)
 		if (connv3_pwr_off(CONNV3_DRV_TYPE_BT))
 			BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
 	btmtk_pwrctrl_post_off();
 #endif
-	cif_dev->tty->ops->close(cif_dev->tty, NULL);
+
 	BTMTK_INFO("%s end!", __func__);
 
 	return 0;
