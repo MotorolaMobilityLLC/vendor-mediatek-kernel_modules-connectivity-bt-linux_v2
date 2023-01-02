@@ -181,7 +181,7 @@ int32_t btmtk_intcmd_set_fw_log(uint8_t flag)
 	fw_log_cmd[7] = flag;
 	ret = btmtk_main_send_cmd(g_sbdev,
 			fw_log_cmd, 8, NULL, 0,
-			0, 0, BTMTK_TX_CMD_FROM_DRV);
+			0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 	if (ret < 0)
 		BTMTK_ERR("%s faill to send flag[0x%02X]", __func__, flag);
 
@@ -1573,6 +1573,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	struct sk_buff *skb = NULL;
 	int ret = 0;
 	int state = BTMTK_STATE_INIT;
+	u8 drv_own_retry = 10;
 
 	if (bdev == NULL || bdev->hdev == NULL ||
 		cmd == NULL || cmd_len <= 0) {
@@ -1617,10 +1618,12 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	 * other HIF don't use this method to recv wmt event
 	 */
 
+	do {
 	ret = main_info.hif_hook.send_and_recv(bdev,
 			skb,
 			event, event_len,
 			delay, retry, pkt_type);
+	} while (ret == -EAGAIN && drv_own_retry--);
 
 	if (ret < 0) {
 		BTMTK_ERR("%s send_and_recv failed!!", __func__);
@@ -1954,7 +1957,7 @@ void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev)
 	struct sk_buff *skb = NULL;
 	u8 hwerr_event[HWERR_EVT_LEN] = { 0x04, 0x10, 0x01, 0xff };
 
-	BTMTK_ERR("%s reset_stack_flag = %d!!", __func__, main_info.reset_stack_flag);
+	BTMTK_WARN("%s reset_stack_flag = %d!!", __func__, main_info.reset_stack_flag);
 	if (main_info.reset_stack_flag) {
 		skb = alloc_skb(HWERR_EVT_LEN + BT_SKB_RESERVE, GFP_KERNEL);
 		if (skb == NULL) {
