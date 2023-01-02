@@ -1,5 +1,10 @@
 $(info [bt_drv] linux_v2/makefile start)
-
+# Support GKI mixed build
+ifeq ($(DEVICE_MODULES_PATH),)
+DEVICE_MODULES_PATH = $(DEVICE_MODULES_PATH)
+else
+LINUXINCLUDE := $(DEVCIE_MODULES_INCLUDE) $(LINUXINCLUDE)
+endif
 
 LOG_TAG := [BT_Drv][linux_v2]
 extra_symbols := $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/common/Module.symvers)
