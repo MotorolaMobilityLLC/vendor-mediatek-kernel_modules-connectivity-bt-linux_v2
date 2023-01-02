@@ -79,6 +79,7 @@ static int btmtk_pre_power_on_handler(void)
 
 int btmtk_reset_pin_off(void)
 {
+	BTMTK_DBG("%s: start", __func__);
 	return btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 }
 
@@ -229,8 +230,8 @@ int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 
 	/* config priority: epa_elna > elna > epa > bypass */
 	cmd[offset++] = (bt_flag.epa_elna) ? 3 :
-			(bt_flag.epa) ? 2:
-			(bt_flag.elna) ? 1: 0;
+			(bt_flag.epa) ? 2 :
+			(bt_flag.elna) ? 1 : 0;
 
 	cmd[offset++] = fem_info.part[CONNFEM_PORT_BT].vid;
 	cmd[offset++] = fem_info.part[CONNFEM_PORT_BT].pid;

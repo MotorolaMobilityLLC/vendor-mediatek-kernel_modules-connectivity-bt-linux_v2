@@ -167,7 +167,6 @@ static void bt_state_cb(u_int8_t state)
 static void BT_event_cb(void)
 {
 	ftrace_print("%s get called", __func__);
-	BTMTK_DBG("%s get called", __func__);
 
 	/*
 	 * Hold wakelock for 100ms to avoid system enter suspend in such case:
@@ -262,8 +261,6 @@ static ssize_t BT_write_iter(struct kiocb *iocb, struct iov_iter *from)
 
 	ftrace_print("%s get called, count %zd", __func__, count);
 	down(&wr_mtx);
-
-	BTMTK_DBG("count %zd", count);
 
 	if (rstflag != CHIP_RESET_NONE) {
 		BTMTK_ERR("whole chip reset occurs! rstflag=%d", rstflag);
@@ -525,8 +522,6 @@ static int BT_open(struct inode *inode, struct file *file)
 		return ret;
 	}
 
-	BTMTK_INFO("BT turn on OK!");
-
 	btmtk_register_rx_event_cb(BT_event_cb);
 
 	bt_ftrace_flag = 1;
@@ -534,6 +529,7 @@ static int BT_open(struct inode *inode, struct file *file)
 #if 0 // Simfex
 	bthost_debug_init();
 #endif
+	BTMTK_INFO("BT turn on OK!");
 	return 0;
 }
 

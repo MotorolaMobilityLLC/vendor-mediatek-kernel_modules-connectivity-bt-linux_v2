@@ -7,6 +7,7 @@
 #if (USE_DEVICE_NODE == 1)
 #include "connv3_debug_utility.h"
 #include "connv3_mcu_log.h"
+#include "connv3.h"
 #endif
 
 /*
@@ -20,6 +21,7 @@
  * - 0x03: Debug
  */
 #define BT_FWLOG_DEFAULT_LEVEL 0x02
+#define CONNV3_XML_SIZE	1024	/* according to connv3_dump_test.c */
 
 /* CTD BT log function and log status */
 static wait_queue_head_t BT_log_wq;
@@ -862,6 +864,8 @@ int btmtk_dispatch_fwlog_bluetooth_kpi(struct btmtk_dev *bdev, u8 *buf, int len,
 	return ret;
 }
 
+/* if modify the common part, please sync to another btmtk_dispatch_fwlog */
+#if (USE_DEVICE_NODE == 0)
 int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
 	static u8 fwlog_picus_blocking_warn;
@@ -871,7 +875,6 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	struct sk_buff *skb_opcode = NULL;
 
-	BTMTK_DBG("%s: Start.", __func__);
 	if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 			skb->data[0] == 0x6f &&
 			skb->data[1] == 0xfc) {
@@ -994,4 +997,133 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 	return 0;
 }
+
+#else // #if (USE_DEVICE_NODE == 0)
+
+/* if modify the common part, please sync to another btmtk_dispatch_fwlog*/
+int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
+{
+	char xml_log[CONNV3_XML_SIZE] = {0};
+	int state = BTMTK_STATE_INIT;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	struct connv3_issue_info issue_info;
+	int ret = 0, line = 0;
+
+	if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
+			skb->data[0] == 0x6f &&
+			skb->data[1] == 0xfc) {
+		static int dump_data_counter;
+		static int dump_data_length;
+		//static int ori_log_lvl;
+
+		/* remove acl header 6F FC LL LL */
+		skb_pull(skb, 4);
+
+		state = btmtk_get_chip_state(bdev);
+		/* coredump info*/
+		if (state != BTMTK_STATE_FW_DUMP) {
+			BTMTK_INFO("%s: msg: %s len[%d]", __func__, skb->data, skb->len);
+			/* drop "Disable Cache" */
+			if (skb->len > 6 &&
+				skb->data[skb->len - 6] == 'C' &&
+				skb->data[skb->len - 5] == 'a' &&
+				skb->data[skb->len - 4] == 'c' &&
+				skb->data[skb->len - 3] == 'h' &&
+				skb->data[skb->len - 2] == 'e') {
+				BTMTK_INFO("%s: drop", __func__, skb->data, skb->len);
+				return 1;
+			}
+
+			//ori_log_lvl = btmtk_log_lvl;
+			//btmtk_log_lvl = BTMTK_LOG_LVL_INFO;
+			//BTMTK_INFO("%s: FW dump begin, change log level [%d]->[%d]", __func__, ori_log_lvl, btmtk_log_lvl);
+			DUMP_TIME_STAMP("FW_dump_start");
+			/* Print too much log, it may cause kernel panic. */
+			dump_data_counter = 0;
+			dump_data_length = 0;
+			if (bmain_info->hif_hook.coredump_handler == NULL) {
+				BTMTK_ERR("%s: coredump_handler is NULL", __func__);
+				goto coredump_fail;
+			}
+			btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
+			btmtk_fwdump_wake_lock();
+			line = __LINE__;
+			ret = connv3_coredump_start(
+					bmain_info->hif_hook.coredump_handler, CONNV3_DRV_TYPE_BT,
+					"BT exception test", skb->data, bmain_info->fw_version_str);
+			if (ret)
+				goto coredump_fail;
+			line = __LINE__;
+			ret = connv3_coredump_get_issue_info(bmain_info->hif_hook.coredump_handler, &issue_info, xml_log, CONNV3_XML_SIZE);
+			if (ret)
+				goto coredump_fail;
+			BTMTK_INFO("%s: xml_log: %s, assert_info: %s ", __func__, xml_log, issue_info.assert_info);
+			line = __LINE__;
+			ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "INFO", xml_log, strlen(xml_log));
+			if (ret)
+				goto coredump_fail;
+		}
+
+		dump_data_counter++;
+		dump_data_length += skb->len;
+
+		/* coredump content*/
+		/* print dump data to console */
+		if (dump_data_counter % 1000 == 0) {
+			BTMTK_INFO("%s: FW dump on-going, total_packet = %d, total_length = %d",
+					__func__, dump_data_counter, dump_data_length);
+		}
+
+		/* print dump data to console */
+		if (dump_data_counter < 20)
+			BTMTK_INFO("%s: FW dump data (%d): %s",
+					__func__, dump_data_counter, &skb->data);
+		line = __LINE__;
+		ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "[M]", skb->data, skb->len);
+		if (ret)
+			goto coredump_fail;
+
+		/* In the new generation, we will check the keyword of coredump (; coredump end)
+		 * Such as : 79xx
+		 */
+		if (skb->len > 6 &&
+			skb->data[skb->len - 6] == 'p' &&
+			skb->data[skb->len - 5] == ' ' &&
+			skb->data[skb->len - 4] == 'e' &&
+			skb->data[skb->len - 3] == 'n' &&
+			skb->data[skb->len - 2] == 'd') {
+			/* TODO: Chip reset*/
+			bmain_info->reset_stack_flag = HW_ERR_CODE_CORE_DUMP;
+			btmtk_fwdump_wake_unlock();
+			DUMP_TIME_STAMP("FW_dump_end");
+			line = __LINE__;
+			/* This is the latest coredump packet. */
+			BTMTK_INFO("%s: FW dump end, dump_data_counter[%d], dump_data_length[%d]",
+						__func__, dump_data_counter, dump_data_length);
+			//btmtk_log_lvl = ori_log_lvl;
+			ret = connv3_coredump_end(bmain_info->hif_hook.coredump_handler, "BT assert");
+			if (bmain_info->hif_hook.waker_notify)
+				bmain_info->hif_hook.waker_notify(bdev);
+			BTMTK_DBG("%s: connv3_coredump_end", __func__);
+			if (ret)
+				goto coredump_fail;
+
+		}
+		return 1;
+coredump_fail:
+		BTMTK_ERR("%s: coredump fail ret[%d] line[%d]", __func__, ret, line);
+		return 1;
+	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
+				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
+				skb->data[1] == 0x05 && bmain_info->hif_hook.log_handler) {
+		/* picus or syslog */
+		/* remove acl header (FF 05 LL LL)*/
+		skb_pull(skb, 4);
+		bmain_info->hif_hook.log_handler(skb->data, skb->len);
+		return 1;
+	}
+
+	return 0;
+}
+#endif // #else (USE_DEVICE_NODE == 1)
 

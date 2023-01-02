@@ -66,6 +66,7 @@ void btmtk_reset_waker(struct work_struct *work)
 	int state = BTMTK_STATE_INIT;
 	int cif_event = 0, err = 0;
 	int cur = 0;
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 
 	/* Check chip state is ok to do reset or not */
 	state = btmtk_get_chip_state(bdev);
@@ -78,12 +79,13 @@ void btmtk_reset_waker(struct work_struct *work)
 		BTMTK_INFO("%s just do whole chip reset in probe stage!", __func__);
 	}
 
-	btmtk_reset_timer_del(bdev);
-	//pin-hao added for test
-	//BTMTK_INFO("%s sleep start", __func__);
-	//msleep(10000);
-	//BTMTK_INFO("%s sleep end", __func__);
+	fstate = btmtk_fops_get_state(bdev);
+	if (fstate == BTMTK_FOPS_STATE_CLOSED) {
+		BTMTK_WARN("%s: fops is closed(%d), not trigger reset", __func__, fstate);
+		return;
+	}
 
+	btmtk_reset_timer_del(bdev);
 	if (atomic_read(&bmain_info->chip_reset) ||
 		atomic_read(&bmain_info->subsys_reset)) {
 		BTMTK_INFO("%s return, chip_reset = %d, subsys_reset = %d!", __func__,
@@ -102,7 +104,7 @@ void btmtk_reset_waker(struct work_struct *work)
 		return;
 	}
 
-#if (USE_DEVICE_NODE == 0) //pinhao for subsys reset test
+#if (USE_DEVICE_NODE == 0)
 	if (!bdev->bt_cfg.support_dongle_reset) {
 		BTMTK_ERR("%s chip_reset is not support", __func__);
 		return;
@@ -133,7 +135,6 @@ void btmtk_reset_waker(struct work_struct *work)
 			 * Nothing is remain on memory after BT off, so leave do this at BT on
 			 * for SP platform
 			 */
-#if (USE_DEVICE_NODE == 0)
 			err = bmain_info->hif_hook.subsys_reset(bdev);
 			atomic_set(&bmain_info->subsys_reset, BTMTK_RESET_DONE);
 			if (err < 0) {
@@ -151,16 +152,13 @@ void btmtk_reset_waker(struct work_struct *work)
 				BTMTK_ERR("btmtk init failed!");
 				goto L0RESET;
 			}
+#if (USE_DEVICE_NODE == 0)
+
 			err = btmtk_load_rom_patch(bdev);
 			if (err < 0) {
 				BTMTK_INFO("btmtk load rom patch failed!");
 				goto L0RESET;
 			}
-#else
-			atomic_inc(&bmain_info->subsys_reset_count);
-			atomic_inc(&bmain_info->subsys_reset_conti_count);
-			DUMP_TIME_STAMP("subsys_chip_reset_end");
-			bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 #endif
 			btmtk_send_hw_err_to_host(bdev);
 			btmtk_woble_wake_unlock(bdev);

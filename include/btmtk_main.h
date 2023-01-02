@@ -665,6 +665,7 @@ struct hif_hook_ptr {
 	cif_dump_debug_sop_ptr		dump_debug_sop;
 	cif_waker_notify_ptr		waker_notify;
 	cif_enter_standby_ptr		enter_standby;
+	void				*coredump_handler;
 };
 
 struct hci_snoop {
