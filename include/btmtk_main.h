@@ -684,6 +684,7 @@ struct btmtk_dev {
 	/* completion */
 	struct completion	dump_comp;
 
+	unsigned int on_fail_count;
 };
 
 #if (USE_DEVICE_NODE == 1)
