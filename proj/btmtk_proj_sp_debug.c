@@ -1290,6 +1290,31 @@ static inline void btmtk_hif_dump_bt_mcusys_vlp(void)
 
 }
 
+static inline void btmtk_hif_dump_bt_hif_select(void)
+{
+	uint32_t value, cr_count = 3;
+
+	if (btmtk_connv3_readable_check()) {
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		return;
+	}
+
+	BT_DUMP_CR_INIT(cr_count);
+	BTMTK_INFO("%s [BT HIF SELECT] count[%d]", HIF_DBG_TAG, cr_count);
+
+	/* CBTOP_STRAP_03 */
+	HIF_READ(0x7001000C, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* COS_System_Config.host_bt_select */
+	HIF_READ(0x188C8288, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* DMA_MASTER */
+	HIF_READ(0x18810714, &value);
+	BT_DUMP_CR_PRINT(value);
+}
+
 void btmtk_hif_dump_work(struct work_struct *work)
 {
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, hif_dump_work);
@@ -1352,13 +1377,16 @@ void btmtk_hif_dump_work(struct work_struct *work)
 	btmtk_hif_dump_cirq_eint();
 	btmtk_hif_dump_bg_cfg();
 	btmtk_hif_dump_bt_mcusys_vlp();
+	btmtk_hif_dump_bt_hif_select();
 
 	ret = connv3_hif_dbg_end(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI);
 exit:
-	BTMTK_INFO("%s: set bt assert_state end", __func__);
-	atomic_set(&bdev->assert_state, BTMTK_ASSERT_END);
-	complete_all(&bdev->dump_comp);
-
+	if (atomic_read(&bdev->assert_state) == BTMTK_ASSERT_START) {
+		BTMTK_INFO("%s: set bt assert_state end", __func__);
+		atomic_set(&bdev->assert_state, BTMTK_ASSERT_END);
+		complete_all(&bdev->dump_comp);
+	} else
+		BTMTK_INFO("%s: not set bt assert_state start yet", __func__);
 }
 void btmtk_hif_sp_dump_debug_sop(struct btmtk_dev *bdev)
 {
