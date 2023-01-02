@@ -1072,7 +1072,7 @@ exit:
 int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		const int cmd_len, int retry, int delay)
 {
-	int ret = -1, len = 0, retry_send = 0;
+	int ret = -1, len = 0, count = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
 
 	if (bdev == NULL) {
@@ -1083,18 +1083,33 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
 	/* BTMTK_INFO("%s: tty %p\n", __func__, bdev->tty); */
-	while (len != cmd_len && retry_send < BTMTK_MAX_SEND_RETRY) {
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	if (cif_dev->hub_en) {
+		do {
+			count = tty_chars_in_buffer(cif_dev->tty);
+			//BTMTK_DBG("%s: char in buffer before flush count[%d]", __func__, count);
+		} while (count != 0);
+
+		tty_driver_flush_buffer(cif_dev->tty);
+	}
+#endif
+
+	count = 0;
+
+	while (len != cmd_len && count < BTMTK_MAX_SEND_RETRY) {
 		ret = cif_dev->tty->ops->write(cif_dev->tty, cmd + len, cmd_len - len);
 		len += ret;
-		retry_send++;
+		count++;
 	}
 
-	if (retry_send == BTMTK_MAX_SEND_RETRY) {
-		BTMTK_ERR("%s: retry[%d] fail", __func__, retry_send);
+	if (count == BTMTK_MAX_SEND_RETRY) {
+		BTMTK_ERR("%s: retry[%d] fail", __func__, count);
 		ret = -1;
 	}
 
-	BTMTK_INFO_RAW(cmd, cmd_len, "%s, len[%d] retry[%d] CMD : ", __func__, cmd_len, retry_send);
+	BTMTK_INFO_RAW(cmd, cmd_len, "%s, len[%d] retry[%d] room[%d] CMD : ", __func__, cmd_len,
+						count, tty_write_room(cif_dev->tty));
 
 	return ret;
 }
