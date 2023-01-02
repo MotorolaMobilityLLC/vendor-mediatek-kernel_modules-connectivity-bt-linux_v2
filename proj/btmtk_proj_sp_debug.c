@@ -52,8 +52,8 @@ static inline uint32_t btmtk_conninfra_view_remap(uint32_t pos)
 {
 	if ((pos & 0xffff0000) == 0x18020000)
 		return (pos & 0x00ffffff) | 0x7c000000;
-	else if (pos >= 0x1880000 && pos <= 0x18bfffff)
-		return (pos & 0x000fffff) | 0x18800000;
+	//else if (pos >= 0x1880000 && pos <= 0x18bfffff)
+		//return (pos & 0x000fffff) | 0x18800000;
 	return pos;
 }
 
@@ -1027,7 +1027,7 @@ static inline void btmtk_hif_dump_bg_sysram1(void) {
 		return;
 	}
 
-	/* dynamci mapping to 0x1890_0000 */
+	/* dynamic mapping to 0x1890_0000 */
 	value = (value & ~(0x3)) - 32;
 	HIF_WRITE(0x18815014, value);
 
@@ -1515,6 +1515,9 @@ static inline void btmtk_hif_dump_mcu_var1(void)
 	BTMTK_INFO("%s [MCU VAR1] ctrl_info_ram[0], g1_exp_counter, g_exp_type, g4_exp_1st_PC_log count[%d]"
 			, HIF_DBG_TAG, cr_count);
 
+	/* CACHE memory REMAP : 0xE0900000 -> 0x18C00000 for patch not enable yet */
+	HIF_WRITE(0x18815018, 0xE0900000);
+
 	/* ctrl_info_ram[0] */
 	HIF_READ(0x18B16F60, &value);
 	BT_DUMP_CR_PRINT(value);
@@ -1565,7 +1568,7 @@ static inline void btmtk_hif_dump_mcu_var2(void)
 
 static inline void btmtk_hif_dump_mcu_var3(void)
 {
-	uint32_t value, cr_count = 6;
+	uint32_t value, cr_count = 10;
 
 	if (btmtk_connv3_readable_check()) {
 		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
@@ -1599,11 +1602,27 @@ static inline void btmtk_hif_dump_mcu_var3(void)
 	HIF_READ(0x188C0038, &value);
 	BT_DUMP_CR_PRINT(value);
 
+	/* processing_irqx */
+	HIF_READ(0x188C96D2, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* processing_lisr */
+	HIF_READ(0x188C96D4, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* processing_eint_lisr */
+	HIF_READ(0x188C96CC, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* processing_eintx */
+	HIF_READ(0x188C96D0, &value);
+	BT_DUMP_CR_PRINT(value);
+
 }
 
 static inline void btmtk_hif_dump_mcu_var_stack(void)
 {
-	uint32_t i = 0, pos,value, cr_count = 64;
+	uint32_t i = 0, pos, value, cr_count = 64;
 
 	if (btmtk_connv3_readable_check()) {
 		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
@@ -1611,9 +1630,15 @@ static inline void btmtk_hif_dump_mcu_var_stack(void)
 	}
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s [MCU VAR STACK] count[%d]", HIF_DBG_TAG, cr_count);
 
 	HIF_READ(REMAP_DLM(0x02209764), &pos);
+	BTMTK_INFO("%s [MCU VAR STACK] 0x02209764[0x%08x] count[%d]", HIF_DBG_TAG, pos, cr_count);
+
+	if (pos == 0) {
+		BTMTK_WARN("%s %s: pos is invalid, skip", HIF_DBG_TAG, __func__);
+		return;
+	}
+
 	pos = REMAP_DLM(pos);
 	/* <Stack> */
 	for (i = 0; i < cr_count; i++) {
