@@ -148,13 +148,13 @@ static void btmtk_proc_create_new_entry(void)
 		BTMTK_ERR("Unable to creat dir");
 		return;
 	}
-	proc_show_entry =  proc_create("bt_fw_version", 0644, bmain_info->proc_dir, &BT_proc_fops);
+	proc_show_entry =  proc_create("bt_fw_version", 0640, bmain_info->proc_dir, &BT_proc_fops);
 	if (proc_show_entry == NULL) {
 		BTMTK_ERR("Unable to creat bt_fw_version node");
 		remove_proc_entry("stpbt", NULL);
 	}
 
-	proc_show_chip_reset_count_entry = proc_create(PROC_BT_CHIP_RESET_COUNT, 0660,
+	proc_show_chip_reset_count_entry = proc_create(PROC_BT_CHIP_RESET_COUNT, 0640,
 			bmain_info->proc_dir, &BT_proc_chip_reset_count_fops);
 	if (proc_show_chip_reset_count_entry == NULL) {
 		BTMTK_ERR("Unable to creat %s node", PROC_BT_CHIP_RESET_COUNT);
@@ -456,6 +456,20 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		ret = count;
 		goto exit;
 	}
+
+#ifdef BTMTK_DEBUG_SOP
+	if (strncmp(i_fwlog_buf, "dump test", strlen("dump test")) == 0) {
+		btmtk_load_debug_sop_register(pp_bdev[hci_idx]->debug_sop_file_name, pp_bdev[hci_idx]->intf_dev, pp_bdev[hci_idx]);
+		ret = count;
+		goto exit;
+	}
+
+	if (strncmp(i_fwlog_buf, "dump clean", strlen("dump clean")) == 0) {
+		btmtk_clean_debug_reg_file(pp_bdev[hci_idx]);
+		ret = count;
+		goto exit;
+	}
+#endif
 
 	if (strncmp(i_fwlog_buf, "dump_debug=", strlen("dump_debug")) == 0) {
 		u8 val = *(i_fwlog_buf + strlen("dump_debug=")) - '0';

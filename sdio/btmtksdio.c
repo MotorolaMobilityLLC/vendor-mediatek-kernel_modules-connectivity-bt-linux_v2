@@ -641,6 +641,9 @@ int btmtk_sdio_read_bt_mcu_pc(u32 *val)
 
 	SDIO_DEBUG_MUTEX_LOCK();
 
+	if (is_mt7902(g_sdio_dev.bdev->chip_id)) {
+		btmtk_sdio_writel(0x34, 0x01, g_sdio_dev.func);
+	}
 	btmtk_sdio_writel(0x30, 0xFD, g_sdio_dev.func);
 	btmtk_sdio_readl(0x2c, val, g_sdio_dev.func);
 
@@ -660,7 +663,11 @@ int btmtk_sdio_read_conn_infra_pc(u32 *val)
 
 	SDIO_DEBUG_MUTEX_LOCK();
 
-	btmtk_sdio_writel(0x44, 0, g_sdio_dev.func);
+	if (is_mt7902(g_sdio_dev.bdev->chip_id)) {
+		btmtk_sdio_writel(0x34, 0x04, g_sdio_dev.func);
+	} else {
+		btmtk_sdio_writel(0x44, 0, g_sdio_dev.func);
+	}
 	btmtk_sdio_writel(0x3C, 0x9F1E0000, g_sdio_dev.func);
 	btmtk_sdio_readl(0x38, val, g_sdio_dev.func);
 
@@ -2304,6 +2311,15 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 	u32 u32ReadCRValue = 0;
 	int retry = RETRY_TIMES;
 	u32 ret = 0;
+	atomic_t subreset_retry;
+
+	atomic_set(&subreset_retry, 0);
+reset_retry:
+	if (atomic_read(&subreset_retry) == BTMTK_MAX_SUBSYS_RESET_COUNT) {
+		BTMTK_ERR("%s, reset_retry == 3", __func__);
+		ret = -EIO;
+		goto free_thread;
+	}
 
 	do {
 		/* After WDT, CHLPCR maybe can't show driver/fw own status
@@ -2327,7 +2343,6 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 	 * subsys reset.
 	 */
 	skb_queue_purge(&cif_dev->tx_queue);
-
 	btmtk_sdio_set_wifi_driver_own(1);
 
 	/* write CHCR[3] 0 */
@@ -2361,10 +2376,11 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 	/* Poll subsys reset done */
 	if (btmtk_sdio_poll_subsys_done(cif_dev)) {
 		ret = -EIO;
+		BTMTK_ERR("%s btmtk_sdio_poll_subsys_done fail", __func__);
 		goto free_thread;
 	}
 
-	/* if thread stopped, we need to create a new thread before subsys reset*/
+	/* if thread stopped, we need to create a new thread before subsys reset */
 	if (!atomic_read(&cif_dev->sdio_thread.thread_status)) {
 		atomic_set(&cif_dev->tx_rdy, 1);
 		atomic_set(&cif_dev->int_count, 0);
@@ -2376,6 +2392,12 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 			goto exit;
 		}
 	}
+
+	/* make sure sdio enable func */
+	sdio_claim_host(cif_dev->func);
+	BTMTK_INFO("%s sdio_enable_func", __func__);
+	sdio_enable_func(cif_dev->func);
+	sdio_release_host(cif_dev->func);
 
 	/* Do-init cr */
 	/* Disable the interrupts on the card */
@@ -2412,6 +2434,19 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 		BTMTK_ERR("%s, read chipid fail(%d)", __func__, ret);
 		ret = -EIO;
 		goto free_thread;
+	}
+
+	if (u32ReadCRValue != (0xf00000 | bdev->chip_id)) {
+		BTMTK_ERR("%s, reset retry, u32ReadCRValue != 0x%06x", __func__, (0xf00000 | bdev->chip_id));
+		atomic_inc(&subreset_retry);
+		goto reset_retry;
+	}
+
+	ret = btmtk_cap_init(bdev);
+	if (ret < 0) {
+		BTMTK_ERR("btmtk init failed!");
+		atomic_inc(&subreset_retry);
+		goto reset_retry;
 	}
 	goto exit;
 
