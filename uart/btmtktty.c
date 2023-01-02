@@ -1109,7 +1109,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset)
 {
 	int cur_len = 0;
-	int count = 0, flush_retry = 0, max_pkt_cnt = 0;
+	int count = 0, flush_retry = 0, max_pkt_cnt = 0, write_zero_retry = 0;
 	int ret = -1;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	s32 sent_len;
@@ -1156,14 +1156,18 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
 				ret = cif_dev->tty->ops->write(cif_dev->tty, image, sent_len);
 
-			if (ret == UPLOAD_PATCH_UNIT)
+			if (ret == UPLOAD_PATCH_UNIT) {
 				max_pkt_cnt++;
-			else
+				write_zero_retry = 0;
+			} else if (ret == 0)
+				write_zero_retry++;
+			else {
+				write_zero_retry = 0;
 				BTMTK_DBG("%s, sent_len[%d] tty_write[%d], flush_retry[%d] buffer_chars[%d] max_pkt_cnt[%d]",
 							__func__, sent_len, ret, flush_retry, count, max_pkt_cnt);
-
-			if (ret < 0) {
-				BTMTK_ERR("%s: send patch failed, terminate", __func__);
+			}
+			if (ret < 0 || write_zero_retry > BTMTK_MAX_WAIT_RETRY) {
+				BTMTK_ERR("%s: send patch failed, terminate, ret[%d]", __func__, ret);
 				goto exit;
 			}
 			cur_len += ret;
