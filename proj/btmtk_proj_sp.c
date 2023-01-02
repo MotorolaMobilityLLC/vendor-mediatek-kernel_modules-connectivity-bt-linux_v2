@@ -21,6 +21,7 @@
 #include "connfem.h"
 #include "btmtk_proj_sp.h"
 #include "btmtk_uart_tty.h"
+#include "btmtk_fw_log.h"
 #include <linux/platform_device.h>
 
 
@@ -261,11 +262,6 @@ void btmtk_release_uarthub(bool force)
 		return;
 	}
 
-	if (g_sbdev->is_whole_chip_reset) {
-		BTMTK_WARN("%s: whole chip already do, return", __func__);
-		return;
-	}
-
 	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
 	if (!cif_dev) {
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
@@ -309,7 +305,7 @@ void btmtk_sp_coredump_start(void)
 		return;
 	}
 	BTMTK_INFO("%s: set bt assert_state[1]", __func__);
-	cif_dev->assert_state = 1;
+	atomic_set(&g_sbdev->assert_state, BTMTK_ASSERT_START);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	/* uarthub assert bit to avoid MD/ADSP send data */
@@ -325,6 +321,8 @@ void btmtk_sp_coredump_start(void)
 void btmtk_sp_coredump_end(void)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
+	int ret = 0;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	BTMTK_INFO("%s: start", __func__);
 
@@ -338,6 +336,17 @@ void btmtk_sp_coredump_end(void)
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
 		return;
 	}
+
+	ret = connv3_coredump_end(bmain_info->hif_hook.coredump_handler, g_sbdev->assert_reason);
+
+	if (ret)
+		BTMTK_ERR("%s: coredump_end fail ret[%d]", __func__, ret);
+
+	connv3_conninfra_bus_dump(CONNV3_DRV_TYPE_BT);
+
+	btmtk_fwdump_wake_unlock();
+
+	atomic_set(&g_sbdev->assert_state, BTMTK_ASSERT_END);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	/* uarthub reset */
@@ -482,10 +491,6 @@ int btmtk_set_gpio_default_for_close(void)
 	struct btmtk_uart_dev *cif_dev = NULL;
 
 	BTMTK_DBG("%s: start", __func__);
-	if (g_sbdev->is_whole_chip_reset) {
-		BTMTK_WARN("%s: whole chip already do, return", __func__);
-		return 0;
-	}
 
 	if (g_sbdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -528,6 +533,51 @@ int btmtk_sp_whole_chip_reset(struct btmtk_dev *bdev)
 	return connv3_trigger_whole_chip_rst(CONNV3_DRV_TYPE_BT , g_sbdev->assert_reason);
 }
 
+int btmtk_sp_close(void)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s enter!", __func__);
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s, bdev is NULL", __func__);
+		return -EINVAL;
+	}
+
+	if (g_sbdev->is_whole_chip_reset) {
+		BTMTK_WARN("%s: whole chip already do, return", __func__);
+		return -EINVAL;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s, cif_dev is NULL", __func__);
+		return -EINVAL;
+	}
+
+	/* wait coredump end */
+	if (atomic_read(&g_sbdev->assert_state) == BTMTK_ASSERT_START) {
+		BTMTK_WARN("%s: wait dump_comp , can't close yet", __func__);
+		if (!wait_for_completion_timeout(&g_sbdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
+			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
+			btmtk_sp_coredump_end();
+		}
+	}
+	if (atomic_read(&g_sbdev->assert_state) == BTMTK_ASSERT_START) {
+		BTMTK_WARN("%s: coredump not complete and without wait 15s", __func__);
+		btmtk_sp_coredump_end();
+	}
+
+	cancel_work_sync(&g_sbdev->reset_waker);
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	btmtk_release_uarthub(true);
+#endif
+	btmtk_set_gpio_default_for_close();
+
+	return 0;
+}
+
+
 static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 {
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
@@ -562,16 +612,8 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 		bmain_info->hif_hook.trigger_assert(g_sbdev);
 	}
 
-	BTMTK_INFO("%s: wait dump_comp ...", __func__);
-	if (!wait_for_completion_timeout(&g_sbdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
-		BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
-		/* for let hw err evt can send event */
-		bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
-	}
-
 exit:
-	btmtk_release_uarthub(true);
-	btmtk_set_gpio_default_for_close();
+	btmtk_sp_close();
 	g_sbdev->is_whole_chip_reset = TRUE;
 
 	return 0;
@@ -579,12 +621,14 @@ exit:
 
 static int btmtk_post_chip_rst_handler(void)
 {
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	BTMTK_INFO("%s: state[%d]", __func__, g_bt_state);
 	if (g_bt_state < BTMTK_STATE_WORKING || g_bt_state == BTMTK_STATE_CLOSED)
 		BTMTK_WARN("%s: BT is not on state, no need to send hw err", __func__);
 	else {
-		btmtk_set_chip_state(g_sbdev, BTMTK_STATE_WORKING);
+		/* for let hw err evt can send event */
+		bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 		btmtk_send_hw_err_to_host(g_sbdev);
 	}
 

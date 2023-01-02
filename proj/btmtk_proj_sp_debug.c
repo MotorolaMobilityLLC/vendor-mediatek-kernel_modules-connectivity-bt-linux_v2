@@ -442,14 +442,13 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 
 	state = btmtk_get_chip_state(bdev);
 	BTMTK_INFO("%s: start, bt assert_state[%d] rhw_en[%d] bt_state[%d]",
-				__func__, cif_dev->assert_state, cif_dev->rhw_en, state);
+				__func__, atomic_read(&bdev->assert_state), cif_dev->rhw_en, state);
 
 	if (cif_dev->rhw_en && state < BTMTK_STATE_PROBE && state > BTMTK_STATE_SEND_ASSERT) {
 		BTMTK_ERR("%s: not trigger debug_sop", __func__);
 		return;
 	}
 
-	//g_dump_bdev = bdev;
 	g_rhw_fail = 0;
 	btmtk_dump_bg_mcu_core();
 	btmtk_dump_dsp_debug_flags();
@@ -461,7 +460,6 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 	btmtk_dump_dma_uart_debug_flags();
 	btmtk_dump_cryto_debug_flags();
 	BTMTK_INFO("%s: connv3_conninfra_bus_dump start", __func__);
-	connv3_conninfra_bus_dump(CONNV3_DRV_TYPE_BT);
 	if (g_rhw_fail >= BT_RHW_MAX_ERR_COUNT)
 		cif_dev->is_rhw_fail = 1;
 	BTMTK_INFO("%s: end, g_rhw_fail[%d] ", __func__, g_rhw_fail);

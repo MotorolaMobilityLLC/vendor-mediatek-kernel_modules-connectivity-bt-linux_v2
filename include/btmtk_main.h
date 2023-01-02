@@ -421,6 +421,12 @@ enum {
 };
 
 enum {
+	BTMTK_ASSERT_NONE = 0,
+	BTMTK_ASSERT_START,
+	BTMTK_ASSERT_END,
+};
+
+enum {
 	BTMTK_EVENT_COMPARE_STATE_UNKNOWN,
 	BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE,
 	BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE,
@@ -625,6 +631,7 @@ struct btmtk_dev {
 	char	assert_reason[ASSERT_REASON_SIZE];
 	unsigned int	subsys_reset;
 	unsigned int	chip_reset;
+	atomic_t 		assert_state;
 
 	unsigned char	*rom_patch_bin_file_name;
 	unsigned int	chip_id;
@@ -670,6 +677,7 @@ struct btmtk_dev {
 #endif
 	/* completion */
 	struct completion	dump_comp;
+
 };
 
 #if (USE_DEVICE_NODE == 1)

@@ -1152,7 +1152,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			dump_data_length = 0;
 			if (bmain_info->hif_hook.coredump_handler == NULL) {
 				BTMTK_ERR("%s: coredump_handler is NULL", __func__);
-				goto coredump_fail;
+				return 1;
 			}
 
 			btmtk_sp_coredump_start();
@@ -1216,7 +1216,6 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			skb->data[skb->len - 2] == 'd') {
 			/* TODO: Chip reset*/
 			bmain_info->reset_stack_flag = HW_ERR_CODE_CORE_DUMP;
-			btmtk_fwdump_wake_unlock();
 			DUMP_TIME_STAMP("FW_dump_end");
 			line = __LINE__;
 			/* This is the latest coredump packet. */
@@ -1225,18 +1224,11 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 			btmtk_sp_coredump_end();
 
-			ret = connv3_coredump_end(bmain_info->hif_hook.coredump_handler, bdev->assert_reason);
-
-			if (ret) {
-				BTMTK_ERR("%s: coredump_end fail ret[%d]", __func__, ret);
-				btmtk_fwdump_wake_unlock();
-				return 1;
-			}
 			/* if do complete and bt close with btmtk_reset_waker start
 			 * no need to wait hw_err event, cause bt already start close
 			 */
 
-			BTMTK_INFO("%s  complete dump_comp , coredump_end", __func__);
+			BTMTK_INFO("%s: complete dump_comp , coredump_end", __func__);
 			complete_all(&bdev->dump_comp);
 
 			if (bmain_info->hif_hook.waker_notify)
@@ -1247,10 +1239,10 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		return 1;
 
 coredump_fail_unlock:
-		btmtk_fwdump_wake_unlock();
-coredump_fail:
-		BTMTK_ERR("%s: coredump fail ret[%d] line[%d]", __func__, ret, line);
-		connv3_coredump_end(bmain_info->hif_hook.coredump_handler, bdev->assert_reason);
+		//btmtk_fwdump_wake_unlock();
+		BTMTK_ERR("%s: coredump fail ret[%d] line[%d], complete dump_comp", __func__, ret, line);
+		btmtk_sp_coredump_end();
+		complete_all(&bdev->dump_comp);
 		return 1;
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&

@@ -135,9 +135,6 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
-	int ret;
-	int state = BTMTK_STATE_INIT;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	BTMTK_DBG("%s enter!", __func__);
 	if (bdev == NULL) {
@@ -150,37 +147,18 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 		BTMTK_ERR("%s, cif_dev is NULL", __func__);
 		return -EINVAL;
 	}
-	ret = 0;
 
 #if (SLEEP_ENABLE == 1)
 	btmtk_uart_delete_fw_own_timer(cif_dev);
 #endif
 
 #if (USE_DEVICE_NODE == 1)
+	btmtk_sp_close();
 
-	/* wait coredump end */
-	state = btmtk_get_chip_state(bdev);
-	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
-			|| state == BTMTK_STATE_SUBSYS_RESET) {
-		BTMTK_WARN("%s: wait dump_comp , can't close yet state[%d]", __func__, state);
-		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
-			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
-			btmtk_fwdump_wake_unlock();
-			connv3_coredump_end(bmain_info->hif_hook.coredump_handler, "BT coredump not complete");
-			btmtk_sp_coredump_end();
-		}
-	}
-
-	cancel_work_sync(&bdev->reset_waker);
-
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	btmtk_release_uarthub(true);
-#endif
 	__pm_relax(bt_trx_wakelock);
 
 	btmtk_tx_thread_exit(bdev->cif_dev);
 
-	btmtk_set_gpio_default_for_close();
 	if (!cif_dev->is_pre_cal)
 		if (connv3_pwr_off(CONNV3_DRV_TYPE_BT))
 			BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
@@ -812,9 +790,9 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 #endif
 
 	if (state == BTMTK_STATE_INIT || fstate == BTMTK_FOPS_STATE_CLOSED
-		|| fstate == BTMTK_FOPS_STATE_CLOSING || cif_dev->assert_state) {
+		|| fstate == BTMTK_FOPS_STATE_CLOSING || atomic_read(&bdev->assert_state)) {
 		BTMTK_WARN("%s: state[%d] fstate[%d] bt assert_state[%d], not trigger coredump",
-				__func__, state, fstate, cif_dev->assert_state);
+				__func__, state, fstate, atomic_read(&bdev->assert_state));
 		return;
 	}
 
@@ -827,21 +805,23 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 
 	/* set this bt on is already asserted, not trigger assert anymore */
 	BTMTK_INFO("%s: set bt assert_state[1]", __func__);
-	cif_dev->assert_state = 1;
+	atomic_set(&bdev->assert_state, BTMTK_ASSERT_START);
 
 	/* dump debug sop before coredump */
 	if (bmain_info->hif_hook.dump_debug_sop)
 		bmain_info->hif_hook.dump_debug_sop(bdev);
 
-	if (cif_dev->is_rhw_fail) {
+	/* incase of fw dump happened during rhw debug sop 
+	 * then would trigger hif debug sop
+	 */
+	state = btmtk_get_chip_state(bdev);
+	if (cif_dev->is_rhw_fail && state != BTMTK_STATE_FW_DUMP) {
 		BTMTK_WARN("%s: rhw can't trigger assert", __func__);
 		/* hif dump */
 		if (bmain_info->hif_hook.dump_hif_debug_sop)
 			bmain_info->hif_hook.dump_hif_debug_sop(bdev);
 
-		complete_all(&bdev->dump_comp);
-
-		/* if during btmtk_pre_chip_rst_handler
+		/* if during btmtk_pre_chip_rst_handler (BTMTK_RESET_DOING)
 		 * leave hw_err to btmtk_post_chip_rst_handler
 		 */
 		if (atomic_read(&bmain_info->chip_reset) == BTMTK_RESET_DONE) {
@@ -909,7 +889,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
 	atomic_set(&bmain_info->subsys_reset, BTMTK_RESET_DONE);
 	bmain_info->chip_reset_flag = 0;
-	cif_dev->assert_state = 0;
+	atomic_set(&bdev->assert_state, BTMTK_ASSERT_NONE);
 	cif_dev->is_rhw_fail = 0;
 	bdev->is_whole_chip_reset = FALSE;
 	reinit_completion(&bdev->dump_comp);
