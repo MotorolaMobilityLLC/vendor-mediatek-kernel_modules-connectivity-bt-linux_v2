@@ -1209,6 +1209,10 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 
 		/* wait tty buffer clean */
 		flush_retry = btmtk_uart_wait_tty_buffer_clean(bdev);
+		if (flush_retry < 0) {
+			ret = -1;
+			goto exit;
+		}
 
 		if (sent_len > 0) {
 			memcpy(image, fwbuf + section_offset + cur_len, sent_len);
@@ -1272,6 +1276,8 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 
 	/* wait tty buffer clean */
 	flush_retry = btmtk_uart_wait_tty_buffer_clean(bdev);
+	if (flush_retry < 0)
+		return -1;
 
 	while (len != cmd_len && count < BTMTK_MAX_SEND_RETRY
 			&& btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT) {
@@ -2104,7 +2110,10 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 					BTMTK_ERR("%s wakeup_cmd fail retry[%d]", __func__, retry);
 
 				/* wait 0xff sended */
-				btmtk_uart_wait_tty_buffer_clean(bdev);
+				if (btmtk_uart_wait_tty_buffer_clean(bdev) < 0) {
+					ret = -1;
+					break;
+				}
 
 				/* wait a while for fw wakeup */
 				usleep_range(6000, 6100);
