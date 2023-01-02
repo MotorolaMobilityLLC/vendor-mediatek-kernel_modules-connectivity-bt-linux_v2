@@ -152,9 +152,9 @@ extern uint8_t btmtk_log_lvl;
 				(void)snprintf(raw_buf+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
 			raw_buf[3*cnt_] = '\0';	\
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-				pr_cont("[btmtk_info] "fmt"%s\n", ##__VA_ARGS__, raw_buf);	\
+				pr_cont("[btmtk_info] "fmt" %s\n", ##__VA_ARGS__, raw_buf);	\
 			} else {	\
-				pr_cont("[btmtk_info] "fmt"%s (prtail)\n", ##__VA_ARGS__, raw_buf);	\
+				pr_cont("[btmtk_info] "fmt" %s (prtail)\n", ##__VA_ARGS__, raw_buf);	\
 			}	\
 		}	\
 	} while (0)

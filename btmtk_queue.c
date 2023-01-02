@@ -114,7 +114,6 @@ s32 rx_skb_enqueue(struct sk_buff *skb)
 {
 	s32 ret = 0;
 
-	BTMTK_DBG("%s: start", __func__);
 	if (!skb || skb->len == 0) {
 		BTMTK_WARN("Inavlid data event, skip, skb = NULL or skb len = 0");
 		ret = -1;
