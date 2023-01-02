@@ -1099,6 +1099,12 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			}
 
 			DUMP_TIME_STAMP("FW_dump_start");
+			if (bdev->assert_reason[0] == '\0') {
+				if (snprintf(bdev->assert_reason, ASSERT_REASON_SIZE, "[BT_FW assert] %s", skb->data) < 0)
+					memcpy(bdev->assert_reason, "[BT_FW assert]", 14);
+				BTMTK_WARN("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+			}
+
 			/* Print too much log, it may cause kernel panic. */
 			dump_data_counter = 0;
 			dump_data_length = 0;
@@ -1114,13 +1120,13 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			line = __LINE__;
 			ret = connv3_coredump_start(
 					bmain_info->hif_hook.coredump_handler, CONNV3_DRV_TYPE_BT,
-					"BT exception test", skb->data, bmain_info->fw_version_str);
+					bdev->assert_reason, skb->data, bmain_info->fw_version_str);
 			if (ret == CONNV3_COREDUMP_ERR_WRONG_STATUS) {
 				BTMTK_ERR("%s: BT previous not end", __func__);
 				connv3_coredump_end(bmain_info->hif_hook.coredump_handler, "BT previous not end");
 				ret = connv3_coredump_start(
 					bmain_info->hif_hook.coredump_handler, CONNV3_DRV_TYPE_BT,
-					"BT exception test", skb->data, bmain_info->fw_version_str);
+					bdev->assert_reason, skb->data, bmain_info->fw_version_str);
 			}
 			if (ret)
 				goto coredump_fail_unlock;
@@ -1176,7 +1182,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 			btmtk_sp_coredump_end();
 
-			ret = connv3_coredump_end(bmain_info->hif_hook.coredump_handler, "BT assert");
+			ret = connv3_coredump_end(bmain_info->hif_hook.coredump_handler, bdev->assert_reason);
 
 			if (ret)
 				goto coredump_fail;
@@ -1197,7 +1203,7 @@ coredump_fail_unlock:
 		btmtk_fwdump_wake_unlock();
 coredump_fail:
 		BTMTK_ERR("%s: coredump fail ret[%d] line[%d]", __func__, ret, line);
-		connv3_coredump_end(bmain_info->hif_hook.coredump_handler, "BT coredump fail");
+		connv3_coredump_end(bmain_info->hif_hook.coredump_handler, bdev->assert_reason);
 		return 1;
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
