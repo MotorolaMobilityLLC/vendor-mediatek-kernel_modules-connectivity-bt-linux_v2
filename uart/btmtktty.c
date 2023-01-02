@@ -400,14 +400,16 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 	BTMTK_DBG_RAW(skb->data, skb->len, "%s: len[%d] ", __func__, skb->len);
 
+	/* if just protect event, another cmd would reinit event_compare_status */
+	down(&cif_dev->evt_comp_sem);
 	if (event) {
 		if (event_len > EVENT_COMPARE_SIZE) {
 			BTMTK_ERR("%s, event_len (%d) > EVENT_COMPARE_SIZE(%d), error",
 				__func__, event_len, EVENT_COMPARE_SIZE);
+			up(&cif_dev->evt_comp_sem);
 			return -1;
 		}
 
-		down(&cif_dev->evt_comp_sem);
 		event_compare_status = BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE;
 		memcpy(event_need_compare, event + 1, event_len - 1);
 		event_need_compare_len = event_len - 1;
@@ -463,8 +465,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 
 exit:
-	if (event)
-		up(&cif_dev->evt_comp_sem);
+	up(&cif_dev->evt_comp_sem);
 
 	if (ret < 0) {
 		if(bmain_info->hif_hook.trigger_assert) {
