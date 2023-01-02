@@ -1263,6 +1263,11 @@ static int btmtk_tx_thread_exit(struct btmtk_uart_dev *cif_dev)
 	int i = 0;
 	BTMTK_INFO("%s start", __func__);
 
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
 	if (!IS_ERR(cif_dev->tx_task) && atomic_read(&cif_dev->thread_status)) {
 		kthread_stop(cif_dev->tx_task);
 
@@ -1928,20 +1933,12 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_uart_dev *cif_dev;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
-	int retry = 30;
 
 	bdev = dev_get_drvdata(tty->dev);
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return;
 	}
-	/* wait bt_close */
-	do {
-		fstate = btmtk_fops_get_state(bdev);
-		BTMTK_WARN("%s: fstate[%d], retry[%d]", __func__, fstate, retry);
-		msleep(100);
-	} while (retry-- && fstate != BTMTK_FOPS_STATE_CLOSED && fstate != BTMTK_FOPS_STATE_INIT);
 
 	cif_dev = bdev->cif_dev;
 
@@ -1958,6 +1955,10 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 	btmtk_uart_cif_mutex_lock(bdev);
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+	/* temp solution for disconnect at random time would KE */
+	BTMTK_INFO("%s wait", __func__);
+	msleep(3000);
 
 	/* Do HIF events */
 	btmtk_uart_tty_disconnect(tty);
