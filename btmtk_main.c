@@ -4577,12 +4577,11 @@ static void btmtk_rx_work(struct work_struct *work)
 #if (USE_DEVICE_NODE == 1)
 		} else if (hci_skb_pkt_type(skb) == RHW_WRITE_TYPE
 					|| hci_skb_pkt_type(skb) == RHW_READ_TYPE) {
-			if (main_info.hif_hook.event_filter(bdev, skb)) {
-				BTMTK_DBG("%s Drop by driver, don't send to stack", __func__);
-				/* Drop by driver, don't send to stack */
-				kfree_skb(skb);
-				continue;
-			}
+			main_info.hif_hook.event_filter(bdev, skb);
+			BTMTK_DBG("%s Drop by driver, don't send to stack", __func__);
+			/* Drop by driver, don't send to stack */
+			kfree_skb(skb);
+			continue;
 #endif
 		}
 
