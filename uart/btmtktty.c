@@ -389,7 +389,15 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	/* update fw own timer or wait fw own done then do drv own */
 	/* this case is not called by tx_thread(fw own/drv own) */
 	if (pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT) {
-		btmtk_uart_driver_own(bdev);
+		/* normal case for keep drv own 
+		 * rhw dump (wifi, connv3) would use this to do drv own
+		 */
+		ret = btmtk_uart_driver_own(bdev);
+		if (ret < 0) {
+			BTMTK_ERR("%s: driver own failed, return", __func__);
+			bmain_info->hif_hook.trigger_assert(bdev);
+			return -1;
+		}
 		/* for cancel fw own if fw own timer just complete */
 		atomic_set(&cif_dev->need_drv_own, 1);
 	}
@@ -1433,26 +1441,14 @@ static int btmtk_uart_tx_thread(void *data)
 
 		if (thread_flag & (BTMTK_THREAD_TX | BTMTK_THREAD_RX)) {
 			ret = btmtk_uart_driver_own(bdev);
-			if (ret < 0) {
-				BTMTK_ERR("%s: set driver own return fail, ret[%d]", __func__, ret);
-				if (bdev->assert_reason[0] == '\0') {
-					strncpy(bdev->assert_reason, "[BT_FW assert] drv own failed", strlen("[BT_FW assert] drv own failed"));
-					BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
-				}
+			if (ret < 0)
 				btmtk_uart_trigger_assert(bdev);
-			}
 
 		/* if bt fw closed, no need to send fw own */
 		} else if (thread_flag & BTMTK_THREAD_FW_OWN) {
 			ret = btmtk_uart_fw_own(bdev);
-			if (ret < 0) {
-				BTMTK_ERR("%s: set fw own return fail, ret[%d]", __func__, ret);
-				if (bdev->assert_reason[0] == '\0') {
-					strncpy(bdev->assert_reason, "[BT_FW assert] fw own failed", strlen("[BT_FW assert] fw own failed"));
-					BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
-				}
+			if (ret < 0)
 				btmtk_uart_trigger_assert(bdev);
-			}
 		}
 #endif
 
@@ -2084,6 +2080,11 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 
 	if (ret < 0) {
 		cif_dev->own_state = BTMTK_DRV_OWN;
+		BTMTK_ERR("%s: set fw own return fail, ret[%d]", __func__, ret);
+		if (bdev->assert_reason[0] == '\0') {
+			strncpy(bdev->assert_reason, "[BT_FW assert] fw own failed", strlen("[BT_FW assert] fw own failed"));
+			BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+		}
 		goto unlock;
 	} else {
 		cif_dev->own_state = BTMTK_FW_OWN;
@@ -2191,6 +2192,11 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	if (ret < 0) {
 		/* set driver own state and hub request for trigger rhw debug sop */
 		cif_dev->own_state = BTMTK_DRV_OWN;
+		BTMTK_ERR("%s: set driver own return fail, ret[%d]", __func__, ret);
+		if (bdev->assert_reason[0] == '\0') {
+			strncpy(bdev->assert_reason, "[BT_FW assert] drv own failed", strlen("[BT_FW assert] drv own failed"));
+			BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+		}
 		goto unlock;
 	} else if (cif_dev->no_fw_own == 0) {
 		cif_dev->own_state = BTMTK_DRV_OWN;
