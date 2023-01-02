@@ -840,6 +840,7 @@ int btmtk_connsys_log_handler(u8 *buf, u32 size);
 ssize_t btmtk_connsys_log_read_to_user(char __user *buf, size_t count);
 unsigned int btmtk_connsys_log_get_buf_size(void);
 int32_t btmtk_intcmd_set_fw_log(uint8_t flag);
+int btmtk_send_connfem_cmd(struct btmtk_dev *bdev);
 #endif
 
 #endif /* __BTMTK_MAIN_H__ */
