@@ -16,6 +16,12 @@
 
 #define DEFAULT_COUNTRY_TABLE_NAME "btPowerTable.dat"
 
+#ifdef CHIP_IF_USB
+#define DEFAULT_DEBUG_SOP_NAME "usb_debug"
+#elif defined(CHIP_IF_SDIO)
+#define DEFAULT_DEBUG_SOP_NAME "sdio_debug"
+#endif
+
 //static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb);
 
 #define hci_dev_test_and_clear_flag(hdev, nr)  test_and_clear_bit((nr), (hdev)->dev_flags)
@@ -572,8 +578,12 @@ struct btmtk_dev {
 
 	/* single sku */
 	unsigned char		*country_file_name;
-	u8 debug_type;
+
 	int get_hci_reset;
+
+	/* debug sop */
+	struct debug_reg_struct debug_sop_reg_dump;
+	unsigned char		debug_sop_file_name[MAX_BIN_FILE_NAME_LEN];
 };
 
 typedef int (*cif_bt_init_ptr)(void);
@@ -603,7 +613,7 @@ typedef void (*cif_log_deinit_ptr)(void);
 typedef void (*cif_open_done_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_dl_dma_ptr)(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset);
-typedef void (*cif_dump_debug_sop_ptr)(struct btmtk_dev *bdev, int type);
+typedef void (*cif_dump_debug_sop_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_waker_notify_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_enter_standby_ptr)(void);
 
@@ -787,6 +797,8 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 int btmtk_send_assert_cmd(struct btmtk_dev *bdev);
 void btmtk_free_fw_cfg_struct(struct fw_cfg_struct *fw_cfg, int count);
 struct btmtk_dev **btmtk_get_pp_bdev(void);
+void btmtk_load_debug_sop_register(char *debug_sop_name, struct device *dev, struct btmtk_dev *bdev);
+void btmtk_clean_debug_reg_file(struct btmtk_dev *bdev);
 
 
 int32_t btmtk_set_sleep(struct hci_dev *hdev, u_int8_t need_wait);

@@ -473,7 +473,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 					goto exit;
 				}
 			}
-			bmain_info->hif_hook.dump_debug_sop(pp_bdev[hci_idx], val);
+			bmain_info->hif_hook.dump_debug_sop(pp_bdev[hci_idx]);
 			if (fstate != BTMTK_FOPS_STATE_OPENED) {
 				ret = bmain_info->hif_hook.close(pp_bdev[hci_idx]->hdev);
 				if (ret < 0) {
