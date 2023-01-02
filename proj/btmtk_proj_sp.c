@@ -70,6 +70,7 @@ static int btmtk_pre_power_on_handler(void)
 	 * Setup BT UART
 	 */
 	int ret = 0;
+
 	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
 	ret = btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
 	msleep(100);
@@ -199,7 +200,7 @@ int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 	 * DDDDDDDD: 4 bytes SPDT info
 	 *
 	 * RX: 04 E4 06 02 55 02 00 01 SS (SS : status)
-	*/
+	 */
 	cmd_len = sizeof(cmd_header) + pin_info.count * pin_struct_size + 8;
 	cmd = vmalloc(cmd_len);
 	if (!cmd) {

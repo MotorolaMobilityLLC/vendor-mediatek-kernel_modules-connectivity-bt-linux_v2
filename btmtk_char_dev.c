@@ -243,7 +243,7 @@ static ssize_t __bt_write(uint8_t *buf, size_t count, uint32_t flags)
 		 * native program should not call write with no delay.
 		 */
 		if (flags & O_NONBLOCK) {
-			BTMTK_WARN("Non-blocking write, no space is available!");
+			BTMTK_WARN_LIMITTED("Non-blocking write, no space is available!");
 			retval = -EAGAIN;
 		} else {
 			/* TODO: blocking write case */
@@ -339,7 +339,7 @@ static ssize_t BT_read(struct file *filp, char __user *buf, size_t count, loff_t
 			 * O_NONBLOCK is specified during open().
 			 */
 			if (filp->f_flags & O_NONBLOCK) {
-				BTMTK_ERR("Non-blocking read, whole chip reset occurs! rstflag=%d", rstflag);
+				BTMTK_ERR_LIMITTED("Non-blocking read, whole chip reset occurs! rstflag=%d", rstflag);
 				retval = -EIO;
 				goto OUT;
 			}
@@ -383,7 +383,7 @@ static ssize_t BT_read(struct file *filp, char __user *buf, size_t count, loff_t
 			 * O_NONBLOCK is specified during open().
 			 */
 			if (filp->f_flags & O_NONBLOCK) {
-				BTMTK_ERR("Non-blocking read, no data is available!");
+				BTMTK_ERR_LIMITTED("Non-blocking read, no data is available!");
 				retval = -EAGAIN;
 				goto OUT;
 			}

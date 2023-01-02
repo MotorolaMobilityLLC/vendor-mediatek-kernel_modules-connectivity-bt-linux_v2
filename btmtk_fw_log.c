@@ -324,11 +324,12 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 	ulong flags = 0;
 	struct sk_buff *skb = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	static unsigned int fwlog_count;
 
 	//if (is_mt66xx(g_sbdev->chip_id)) {
 	if (bmain_info->hif_hook.log_read_to_user) {
 		copyLen = bmain_info->hif_hook.log_read_to_user(buf, count);
-		BTMTK_DBG("%s: BT F/W log from Connsys, len %d", __func__, copyLen);
+		BTMTK_DBG_LIMITTED("%s: fw log counter[%d]", __func__, fwlog_count++);
 		return copyLen;
 	}
 
@@ -379,15 +380,15 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	i_fwlog_buf = kmalloc(HCI_MAX_COMMAND_BUF_SIZE, GFP_KERNEL);
 	if (!i_fwlog_buf) {
 		BTMTK_ERR("%s: alloc i_fwlog_buf failed", __func__);
-		ret = -ENOMEM;
-		goto exit;
+		return -ENOMEM;
 	}
 
 	o_fwlog_buf = kmalloc(HCI_MAX_COMMAND_SIZE, GFP_KERNEL);
 	if (!o_fwlog_buf) {
 		BTMTK_ERR("%s: alloc o_fwlog_buf failed", __func__);
 		ret = -ENOMEM;
-		goto exit;
+		kfree(i_fwlog_buf);
+		return -ENOMEM;
 	}
 
 	if (count > HCI_MAX_COMMAND_BUF_SIZE) {
@@ -399,6 +400,13 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 	memset(i_fwlog_buf, 0, HCI_MAX_COMMAND_BUF_SIZE);
 	memset(o_fwlog_buf, 0, HCI_MAX_COMMAND_SIZE);
+
+	if (buf == NULL || count == 0) {
+		BTMTK_ERR("%s: worng input data", __func__);
+		ret = -ENODATA;
+		goto exit;
+	}
+
 	if (copy_from_user(i_fwlog_buf, buf, count) != 0) {
 		BTMTK_ERR("%s: Failed to copy data", __func__);
 		ret = -ENODATA;
@@ -411,7 +419,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 		if (val > BTMTK_LOG_LVL_MAX || val <= 0) {
 			BTMTK_ERR("Got incorrect value for log level(%d)", val);
-			count =  -EINVAL;
+			ret = -EINVAL;
 			goto exit;
 		}
 		btmtk_log_lvl = val;
@@ -604,8 +612,8 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 				goto exit;
 			}
 			memcpy(skb_opcode->data, (o_fwlog_buf + 1), 2);
-			skb_queue_tail(&g_fwlog->usr_opcode_queue, skb_opcode);
 			BTMTK_INFO("opcode is %02x,%02x", skb_opcode->data[0], skb_opcode->data[1]);
+			skb_queue_tail(&g_fwlog->usr_opcode_queue, skb_opcode);
 		}
 #endif
 	}
@@ -1033,7 +1041,22 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				skb->data[skb->len - 4] == 'c' &&
 				skb->data[skb->len - 3] == 'h' &&
 				skb->data[skb->len - 2] == 'e') {
-				BTMTK_INFO("%s: drop", __func__, skb->data, skb->len);
+				BTMTK_INFO("%s: drop Cache", __func__, skb->data, skb->len);
+				return 1;
+			}
+
+			/* drop "bt radio off" */
+			if (skb->len > 10 &&
+				skb->data[skb->len - 10] == 'r' &&
+				skb->data[skb->len - 9] == 'a' &&
+				skb->data[skb->len - 8] == 'd' &&
+				skb->data[skb->len - 7] == 'i' &&
+				skb->data[skb->len - 6] == 'o' &&
+				skb->data[skb->len - 5] == ' ' &&
+				skb->data[skb->len - 4] == 'o' &&
+				skb->data[skb->len - 3] == 'f' &&
+				skb->data[skb->len - 2] == 'f') {
+				BTMTK_INFO("%s: drop radio off", __func__, skb->data, skb->len);
 				return 1;
 			}
 
@@ -1065,12 +1088,14 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			if (ret)
 				goto coredump_fail_unlock;
 			line = __LINE__;
-			ret = connv3_coredump_get_issue_info(bmain_info->hif_hook.coredump_handler, &issue_info, xml_log, CONNV3_XML_SIZE);
+			ret = connv3_coredump_get_issue_info(bmain_info->hif_hook.coredump_handler,
+								&issue_info, xml_log, CONNV3_XML_SIZE);
 			if (ret)
 				goto coredump_fail_unlock;
 			BTMTK_INFO("%s: xml_log: %s, assert_info: %s ", __func__, xml_log, issue_info.assert_info);
 			line = __LINE__;
-			ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "INFO", xml_log, strlen(xml_log));
+			ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler,
+							"INFO", xml_log, strlen(xml_log));
 			if (ret)
 				goto coredump_fail_unlock;
 		}
