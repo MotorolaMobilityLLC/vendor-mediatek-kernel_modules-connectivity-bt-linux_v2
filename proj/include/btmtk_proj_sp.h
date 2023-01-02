@@ -62,6 +62,7 @@ extern int mtk8250_uart_hub_register_cb(UARTHUB_IRQ_CB irq_callback);
 extern int mtk8250_uart_hub_assert_bit_ctrl(int ctrl);
 extern int mtk8250_uart_dump(struct tty_struct *tty);
 int btmtk_wakeup_uarthub(void);
+void btmtk_release_uarthub(bool force);
 
 #endif
 
