@@ -484,12 +484,24 @@ struct _Section_Map {
 };
 #pragma pack()
 
+#if (USE_DEVICE_NODE == 1)
+#define BT_HCI_MAX_FRAME_SIZE	4096
+
 #define H4_RECV_ACL \
 	.type = HCI_ACLDATA_PKT, \
 	.hlen = HCI_ACL_HDR_SIZE, \
 	.loff = 2, \
 	.lsize = 2, \
-	.maxlen = HCI_MAX_FRAME_SIZE \
+	.maxlen = BT_HCI_MAX_FRAME_SIZE
+
+#else // (USE_DEVICE_NODE == 0)
+#define H4_RECV_ACL \
+	.type = HCI_ACLDATA_PKT, \
+	.hlen = HCI_ACL_HDR_SIZE, \
+	.loff = 2, \
+	.lsize = 2, \
+	.maxlen = HCI_MAX_FRAME_SIZE
+#endif
 
 #define H4_RECV_SCO \
 	.type = HCI_SCODATA_PKT, \

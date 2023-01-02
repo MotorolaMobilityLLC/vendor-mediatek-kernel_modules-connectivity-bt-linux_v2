@@ -971,8 +971,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				hci_skb_expect(skb) += dlen;
 
 				if (skb_tailroom(skb) < dlen) {
-					BTMTK_ERR("%s, skb_tailroom[%d] is not enough, dlen:%d!",
-						__func__, skb_tailroom(skb), dlen);
+					BTMTK_ERR("%s, maxlen[%d] skb_tailroom[%d] is not enough, dlen:%d!",
+						__func__, (&pkts[i])->maxlen, skb_tailroom(skb), dlen);
 					BTMTK_INFO_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
 					if (is_mt66xx(bdev->chip_id))
 						btmtk_set_sleep(hdev, FALSE);
@@ -998,8 +998,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				hci_skb_expect(skb) += dlen;
 
 				if (skb_tailroom(skb) < dlen) {
-					BTMTK_ERR("%s, skb_tailroom is not enough in case 2, dlen:%d!",
-						__func__, dlen);
+					BTMTK_ERR("%s, maxlen[%d] skb_tailroom[%d] is not enough, dlen:%d!",
+						__func__, (&pkts[i])->maxlen, skb_tailroom(skb), dlen);
 					if (is_mt66xx(bdev->chip_id))
 						btmtk_set_sleep(hdev, FALSE);
 					else {
