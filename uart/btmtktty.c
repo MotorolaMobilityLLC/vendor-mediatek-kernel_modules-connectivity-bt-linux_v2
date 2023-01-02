@@ -357,6 +357,9 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	int ret = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+#if (USE_DEVICE_NODE == 1)
+	int i = 0;
+#endif
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -417,7 +420,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 #if (USE_DEVICE_NODE == 0)
 		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_COMP_EVENT_TIMO);
 #else
-		comp_event_timo = jiffies + msecs_to_jiffies(2000);
+		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
 #endif
 		BTMTK_DBG("event_need_compare_len %d, event_compare_status %d",
 			event_need_compare_len, event_compare_status);
@@ -425,6 +428,10 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 	}
 
+#if (USE_DEVICE_NODE == 1)
+	if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
+		mtk8250_uart_start_record(cif_dev->tty);
+#endif
 	ret = btmtk_uart_send_cmd(bdev, skb, delay, retry, pkt_type);
 
 	if (ret < 0) {
@@ -432,29 +439,38 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		goto exit;
 	}
 
-	do {
-		ret = -1;
-
-		/* check if event_compare_success */
-		if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
-			ret = 0;
-			break;
-		}
-
-		/* error handle*/
-		if (btmtk_get_chip_state(bdev) == BTMTK_STATE_FW_DUMP || !atomic_read(&cif_dev->thread_status)) {
-			BTMTK_WARN("%s thread stopped or fw dumping, don't wait evt anymore!!", __func__);
+#if (USE_DEVICE_NODE == 1)
+	/* 4 round and dump cif status each round (500ms), total 2 secs */
+	for (i = 0; i < 4; i++) {
+#endif
+		do {
 			ret = -1;
+
+			/* check if event_compare_success */
+			if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
+				ret = 0;
+				break;
+			}
+
+			/* error handle*/
+			if (btmtk_get_chip_state(bdev) == BTMTK_STATE_FW_DUMP || !atomic_read(&cif_dev->thread_status)) {
+				BTMTK_WARN("%s thread stopped or fw dumping, don't wait evt anymore!!", __func__);
+				ret = -2;
+				break;
+			}
+			usleep_range(10, 100);
+		} while (time_before(jiffies, comp_event_timo));
+#if (USE_DEVICE_NODE == 1)
+		if (ret != -1)	/* successfully received event or coredump case */
 			break;
-		}
-
-		usleep_range(10, 100);
-	} while (time_before(jiffies, comp_event_timo));
-
-
+		if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
+			mtk8250_uart_end_record(cif_dev->tty);
+		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
+	}
+#endif
 	event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
 
-	if (ret == -1) {
+	if (ret < 0) {
 		BTMTK_ERR("%s wait event timeout, ret[%d]", __func__, ret);
 		bdev->recv_evt_len = 0;
 		ret = -ERRNUM;
