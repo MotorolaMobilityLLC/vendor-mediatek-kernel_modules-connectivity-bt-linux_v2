@@ -553,7 +553,7 @@ static int BT_close(struct inode *inode, struct file *file)
 	int32_t ret;
 
 	__pm_stay_awake(bt_wakelock);
-	BTMTK_INFO("major %d minor %d (pid %d)", imajor(inode), iminor(inode), current->pid);
+	BTMTK_INFO("%s: major %d minor %d (pid %d)", __func__, imajor(inode), iminor(inode), current->pid);
 	bt_ftrace_flag = 0;
 	//bt_core_unregister_rx_event_cb();
 

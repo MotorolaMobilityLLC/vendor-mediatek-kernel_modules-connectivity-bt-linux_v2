@@ -68,8 +68,12 @@ static int btmtk_pre_power_on_handler(void)
 	 * Set BT_RST PU/OUPUT
 	 * Setup BT UART
 	 */
+	int ret = 0;
 	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
-	return btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
+	ret = btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
+	msleep(100);
+	BTMTK_DBG("%s: wait 100ms", __func__);
+	return ret;
 }
 
 int btmtk_reset_pin_off(void)
