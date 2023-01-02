@@ -150,8 +150,10 @@ s32 rx_skb_enqueue(struct sk_buff *skb)
 		g_rx_event_cb();
 
 end:
-	if (skb)
+	if (skb) {
 		kfree_skb(skb);
+		skb = NULL;
+	}
 	return ret;
 }
 
