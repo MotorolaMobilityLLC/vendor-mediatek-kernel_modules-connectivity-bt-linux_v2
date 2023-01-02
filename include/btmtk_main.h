@@ -588,6 +588,10 @@ struct btmtk_dev {
 	unsigned char		debug_sop_file_name[MAX_BIN_FILE_NAME_LEN];
 
 	struct _Section_Map	*sectionMap_table;
+
+	/* dynamic fw download */
+	struct work_struct  dynamic_fwdl_work;
+	unsigned int		fw_bin_info;
 };
 
 #if (USE_DEVICE_NODE == 1)
