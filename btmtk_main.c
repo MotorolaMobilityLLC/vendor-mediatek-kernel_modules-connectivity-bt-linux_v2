@@ -4633,6 +4633,7 @@ static void btmtk_rx_work(struct work_struct *work)
 		fstate = btmtk_fops_get_state(bdev);
 		if (fstate != BTMTK_FOPS_STATE_OPENED) {
 			/* BT close case, drop by driver, don't send to stack */
+			BTMTK_WARN("%s Drop by driver, fops(%d) state is not opened", __func__, fstate);
 			kfree_skb(skb);
 			skb = NULL;
 			continue;

@@ -249,6 +249,11 @@ void btmtk_release_uarthub(bool force)
 		return;
 	}
 
+	if (g_sbdev->is_whole_chip_reset) {
+		BTMTK_WARN("%s: whole chip already do, return", __func__);
+		return;
+	}
+
 	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
 	if (!cif_dev) {
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
@@ -267,7 +272,7 @@ void btmtk_release_uarthub(bool force)
 		ret =  mtk8250_uart_hub_dev0_clear_rx_request();
 		BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_rx_request ret[%d]", __func__, ret);
 		if (ret)
-			BTMTK_ERR("%s  mtk8250_uart_hub_clear_request fail ret[%d]", __func__, ret);
+			BTMTK_ERR("%s mtk8250_uart_hub_dev0_clear_rx_request fail ret[%d]", __func__, ret);
 	}
 	return;
 }
@@ -328,7 +333,7 @@ void btmtk_sp_coredump_end(void)
 		mtk8250_uart_hub_assert_bit_ctrl(0);
 		BTMTK_DBG("%s mtk8250_uart_hub_assert_bit_ctrl(0)", __func__);
 		mtk8250_uart_hub_reset();
-		BTMTK_DBG("%s mtk8250_uart_hub_reset", __func__);
+		BTMTK_INFO("%s mtk8250_uart_hub_reset", __func__);
 	}
 #endif
 }
@@ -420,6 +425,7 @@ int btmtk_pre_power_on_handler(void)
 	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
 
 	cif_dev->is_pre_on_done = TRUE;
+	BTMTK_INFO("%s: is_pre_on_done true", __func__);
 
 	return 0;
 }
@@ -463,6 +469,10 @@ int btmtk_set_gpio_default_for_close(void)
 	struct btmtk_uart_dev *cif_dev = NULL;
 
 	BTMTK_DBG("%s: start", __func__);
+	if (g_sbdev->is_whole_chip_reset) {
+		BTMTK_WARN("%s: whole chip already do, return", __func__);
+		return 0;
+	}
 
 	if (g_sbdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -473,6 +483,8 @@ int btmtk_set_gpio_default_for_close(void)
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
 		return -1;
 	}
+	cif_dev->is_pre_on_done = FALSE;
+	BTMTK_INFO("%s: is_pre_on_done false", __func__);
 
 	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 	msleep(10);
@@ -527,8 +539,7 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 	} else if (drv == CONNV3_DRV_TYPE_CONNV3 && strncmp(reason, "PMIC Fault", strlen("PMIC Fault")) == 0) {
 		BTMTK_WARN("%s: PMIC Fault, no need to wait coredump", __func__);
 		bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
-		btmtk_set_gpio_default();
-		return 0;
+		goto exit;
 	} else {
 		if (g_sbdev->assert_reason[0] == '\0') {
 			strncpy(g_sbdev->assert_reason, reason, strlen(reason));
@@ -537,13 +548,19 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 		atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DOING);
 		bmain_info->hif_hook.trigger_assert(g_sbdev);
 	}
+
 	BTMTK_INFO("%s: wait dump_comp ...", __func__);
 	if (!wait_for_completion_timeout(&g_sbdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
 		BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
 		/* for let hw err evt can send event */
 		bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 	}
-	btmtk_set_gpio_default();
+
+exit:
+	btmtk_release_uarthub(true);
+	btmtk_set_gpio_default_for_close();
+	g_sbdev->is_whole_chip_reset = TRUE;
+
 	return 0;
 }
 
