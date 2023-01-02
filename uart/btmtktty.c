@@ -878,6 +878,10 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		goto exit;
 
 	ret = btmtk_load_rom_patch(bdev);
+	if (ret < 0) {
+		BTMTK_ERR("%s btmtk_load_rom_patch fail", __func__);
+		goto exit;
+	}
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en) {
@@ -894,7 +898,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		/* set chip baud and flowcontrol to config setting */
 		ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
 		if (ret < 0) {
-			BTMTK_WARN("%s after fwdl, send uarhub setting cmd", __func__);
+			BTMTK_ERR("%s after fwdl, send uarhub setting cmd fail", __func__);
 			goto exit;
 		}
 
@@ -1090,7 +1094,8 @@ exit:
 int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		const int cmd_len, int retry, int delay)
 {
-	int ret = -1, len = 0, count = 0;
+	int ret = -1;
+	u32 len = 0, count = 0, flush_retry = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
 
 	if (bdev == NULL) {
@@ -1103,18 +1108,23 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	/* BTMTK_INFO("%s: tty %p\n", __func__, bdev->tty); */
 
 	/* wait tty buffer clean */
-	if (cif_dev->flush_en && btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT) {
+	if (cif_dev->flush_en) {
 		do {
+			if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT) {
+				BTMTK_ERR("%s: BTMTK_STATE_DISCONNECT", __func__);
+				return -1;
+			}
 			count = tty_chars_in_buffer(cif_dev->tty);
-			//BTMTK_DBG("%s: char in buffer before flush count[%d]", __func__, count);
-		} while (count != 0);
+			/* only wait 3ms for tty buffer clean */
+			usleep_range(10, 20);
+		} while (count != 0 && flush_retry++ < BTMTK_MAX_WAIT_RETRY);
 
 		tty_driver_flush_buffer(cif_dev->tty);
 	}
 
 	count = 0;
 
-	while (len != cmd_len && count < BTMTK_MAX_SEND_RETRY 
+	while (len != cmd_len && count < BTMTK_MAX_SEND_RETRY
 			&& btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT) {
 		ret = cif_dev->tty->ops->write(cif_dev->tty, cmd + len, cmd_len - len);
 		len += ret;
@@ -1126,8 +1136,8 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		ret = -1;
 	}
 
-	BTMTK_INFO_RAW(cmd, cmd_len, "%s, len[%d] retry[%d] room[%d] CMD : ", __func__, cmd_len,
-						count, tty_write_room(cif_dev->tty));
+	BTMTK_INFO_RAW(cmd, cmd_len, "%s, len[%d] write_retry[%d] room[%d] flush_retry[%d] CMD : ", __func__, cmd_len,
+						count, tty_write_room(cif_dev->tty), flush_retry);
 
 	return ret;
 }
@@ -1219,13 +1229,8 @@ static int btmtk_uart_tx_thread(void *data)
 		fstate = btmtk_fops_get_state(bdev);
 
 #if (SLEEP_ENABLE == 1)
-		if (fstate == BTMTK_FOPS_STATE_CLOSING) {
-			//BTMTK_DBG("%s: no fw own when closing", __func__);
-			thread_flag &= ~BTMTK_THREAD_FW_OWN;
-		}
-
 		if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
-			|| state == BTMTK_STATE_SUBSYS_RESET) {
+			|| state == BTMTK_STATE_SUBSYS_RESET || fstate == BTMTK_FOPS_STATE_CLOSING) {
 			//BTMTK_DBG("%s: no fw/driver own, no tx when dumping", __func__);
 			/* if disable tx would not send rhw debug sop */
 			thread_flag &= ~(BTMTK_THREAD_FW_OWN);
