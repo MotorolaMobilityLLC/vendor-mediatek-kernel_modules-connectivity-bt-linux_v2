@@ -450,7 +450,7 @@ static long BT_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long
 {
 	int32_t retval = 0;
 
-	BTMTK_INFO("%s: cmd[0x%08x]", __func__, cmd);
+	BTMTK_DBG("%s: cmd[0x%08x]", __func__, cmd);
 	memset(ioc_buf, 0x00, sizeof(ioc_buf));
 	switch (cmd) {
 	case COMBO_IOCTL_BT_HOST_DEBUG:

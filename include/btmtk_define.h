@@ -133,7 +133,7 @@
 #define BTMTK_LOG_LVL_WARN	2
 #define BTMTK_LOG_LVL_INFO	3
 #define BTMTK_LOG_LVL_DBG	4
-#define BTMTK_LOG_LVL_MAX	BTMTK_LOG_LVL_DBG
+#define BTMTK_LOG_LVL_MAX	BTMTK_LOG_LVL_INFO
 #define BTMTK_LOG_LVL_DEF	BTMTK_LOG_LVL_MAX	/* default setting */
 
 #define HCI_SNOOP_ENTRY_NUM	30
@@ -185,13 +185,31 @@ extern uint8_t btmtk_log_lvl;
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
 				pr_warn("[btmtk_info] "fmt" %s\n", ##__VA_ARGS__, raw_buf);	\
 			} else {	\
-				pr_warn("[btmtk_info] "fmt" %s (prtail)\n", ##__VA_ARGS__, raw_buf);	\
+				pr_warn("[btmtk_info] "fmt" %s (partial)\n", ##__VA_ARGS__, raw_buf);	\
 			}	\
 		}	\
 	} while (0)
 
-//#undef BTMTK_INFO_RAW
+// dbg level print partial
+#define BTMTK_DBG_RAW(p, l, fmt, ...)						\
+	do {	\
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {	\
+			int cnt_ = 0;	\
+			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
+			uint8_t raw_buf[HCI_SNOOP_MAX_BUF_SIZE * 3 + 10];	\
+			const unsigned char *ptr = p;	\
+			for (cnt_ = 0; cnt_ < len_; ++cnt_) \
+				(void)snprintf(raw_buf+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
+			raw_buf[3*cnt_] = '\0'; \
+			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
+				pr_warn("[btmtk_debug] "fmt" %s\n", ##__VA_ARGS__, raw_buf); \
+			} else {	\
+				pr_warn("[btmtk_debug] "fmt" %s (partial)\n", ##__VA_ARGS__, raw_buf);	\
+			}	\
+		}	\
+	} while (0)
 
+#if 0 // dbg level print all data
 #define BTMTK_DBG_RAW(p, l, fmt, ...)						\
 	do {	\
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {	\
@@ -209,8 +227,7 @@ extern uint8_t btmtk_log_lvl;
 			}	\
 		}	\
 	} while (0)
-
-//#define BTMTK_INFO_RAW BTMTK_DBG_RAW
+#endif
 
 #define BTMTK_CIF_IS_NULL(bdev, cif_event) \
 	(!bdev || !(&bdev->cif_state[cif_event]))

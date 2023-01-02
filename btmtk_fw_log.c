@@ -196,7 +196,7 @@ static int btmtk_fops_initfwlog(void)
 	int cdevErr = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	BTMTK_INFO("%s: Start %s", __func__, BT_FWLOG_DEV_NODE);
+	BTMTK_DBG("%s: Start %s", __func__, BT_FWLOG_DEV_NODE);
 
 	if (g_fwlog == NULL) {
 		g_fwlog = kzalloc(sizeof(*g_fwlog), GFP_KERNEL);
@@ -261,7 +261,7 @@ static int btmtk_fops_initfwlog(void)
 	g_fwlog->g_devIDfwlog = devIDfwlog;
 
 	atomic_set(&bmain_info->fwlog_ref_cnt, 0);
-	BTMTK_INFO("%s: End", __func__);
+
 	return 0;
 
 create_node_error:
