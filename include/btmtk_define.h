@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "8.0.2022051702"
+#define VERSION "8.0.2022052501"
 #define SUBVER ":connac3_dev"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -135,10 +135,22 @@ extern uint8_t btmtk_log_lvl;
 #define BTMTK_DBG(fmt, ...)	 \
 	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) pr_warn("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__); } while (0)
 
+#define BTMTK_ERR_LIMITTED(fmt, ...)	\
+	do { \
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR)	\
+			printk_ratelimited(KERN_WARNING "[btmtk_err_limit] "fmt"\n", ##__VA_ARGS__);	\
+	} while (0)
+
 #define BTMTK_WARN_LIMITTED(fmt, ...)	\
 	do { \
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN)	\
 			printk_ratelimited(KERN_WARNING "[btmtk_warn_limit] "fmt"\n", ##__VA_ARGS__);	\
+	} while (0)
+
+#define BTMTK_DBG_LIMITTED(fmt, ...)	\
+	do { \
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG)	\
+			printk_ratelimited(KERN_WARNING "[btmtk_dbg_limit] "fmt"\n", ##__VA_ARGS__);	\
 	} while (0)
 
 #define BTMTK_INFO_RAW(p, l, fmt, ...)						\
