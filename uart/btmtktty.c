@@ -1868,6 +1868,9 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 	case HCIUARTDEINIT:
 		BTMTK_INFO("%s: <!!> Set HCIUARTDEINIT <!!>", __func__);
 		btmtk_set_chip_state(bdev, BTMTK_STATE_DISCONNECT);
+#if (USE_DEVICE_NODE == 1)
+		msleep(500); /* wait BT thread to finish its job */
+#endif
 		break;
 	default:
 		/* pr_info("<!!> n_tty_ioctl_helper <!!>\n"); */
