@@ -255,15 +255,17 @@ int osi_system(const char *cmd)
 //---------------------------------------------------------------------------
 static void uart_launcher_sig_handler(int signum)
 {
-    BPRINT_I("%s: %d", __func__, signum);
+    BPRINT_I("%s: sig[%d] fd[%d]", __func__, signum,gTtyFd);
     cont = 0;
-    if (gTtyFd > 0 && (signum == SIGKILL || signum == SIGTERM)) {
+    if (gTtyFd > 0) {
         if (ioctl(gTtyFd, HCIUARTDEINIT, NULL) < 0)
             BPRINT_E("set HCIUARTDEINIT error");
         BPRINT_I("unlock_flock");
         unlock_flock(gTtyFd, &fl, F_UNLCK, SEEK_SET);
         close(gTtyFd);
+        gTtyFd = -1;
     }
+    BPRINT_I("%s: exit fd[%d]", __func__, gTtyFd);
 }
 
 //---------------------------------------------------------------------------
@@ -294,7 +296,9 @@ int main(int argc, char *argv[])
     sigaction(SIGINT, &sigact, NULL);
     sigaction(SIGTERM, &sigact, NULL);
     sigaction(SIGQUIT, &sigact, NULL);
+    /* SIGKILL, SIGSTOP may not be catched */
     sigaction(SIGKILL, &sigact, NULL);
+    sigaction(SIGSTOP, &sigact, NULL);
     init_flock(&fl);
     ld = N_MTK;
 
@@ -448,6 +452,11 @@ restart:
         goto restart;
     }
 
+    if (gTtyFd < 0)
+        goto exit;
+
+    BPRINT_I("%s: reset to default baudrate fd[%d]", __func__, gTtyFd);
+
     /* before exit daemon, return baud to default */
     if (chang_baud_rate | flow_control) {
         sUartConfig.iBaudrate = CUST_BAUDRATE_DFT;
@@ -469,6 +478,7 @@ restart:
     }
 
 exit:
+    BPRINT_I("%s: exit fd[%d]", __func__, gTtyFd);
     /* unlock ttyFd */
     if (gTtyFd > 0) {
         err = ioctl(gTtyFd, HCIUARTDEINIT, NULL);
@@ -477,6 +487,7 @@ exit:
         BPRINT_I("unlock_flock");
         unlock_flock(gTtyFd, &fl, F_UNLCK, SEEK_SET);
         close(gTtyFd);
+        gTtyFd = -1;
     }
     BPRINT_I("uart_launcher stop");
     return 0;
