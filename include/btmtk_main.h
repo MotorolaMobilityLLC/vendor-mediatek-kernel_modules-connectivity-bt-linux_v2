@@ -382,6 +382,7 @@ enum {
 	BTMTK_STATE_STANDBY,
 	BTMTK_STATE_SUBSYS_RESET,
 	BTMTK_STATE_SEND_ASSERT,
+	BTMTK_STATE_ERR,
 
 	BTMTK_STATE_MSG_NUM
 };
@@ -604,6 +605,9 @@ struct btmtk_dev {
 	/* dynamic fw download */
 	struct work_struct  dynamic_fwdl_work;
 	unsigned int		fw_bin_info;
+
+	/* fw dump completion */
+	struct completion 	dump_comp;
 };
 
 #if (USE_DEVICE_NODE == 1)
