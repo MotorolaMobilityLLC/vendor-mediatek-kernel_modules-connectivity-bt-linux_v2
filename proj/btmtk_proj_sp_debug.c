@@ -1420,6 +1420,53 @@ static inline void btmtk_hif_dump_bt_hif_select(void)
 	BT_DUMP_CR_PRINT(value);
 }
 
+static inline void btmtk_hif_dump_bt_pos_check(void)
+{
+	uint32_t value, cr_count = 8;
+
+	if (btmtk_connv3_readable_check()) {
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		return;
+	}
+
+	BT_DUMP_CR_INIT(cr_count);
+	BTMTK_INFO("%s [BT POS CHECK] count[%d]", HIF_DBG_TAG, cr_count);
+
+	/* wifi radio off cnt */
+	HIF_READ(0x70025410, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* bt radio off cnt */
+	HIF_READ(0x70025414, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* BT 1st power on */
+	HIF_READ(0x18860000, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* UDS cnt */
+	HIF_READ(0x70003014, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* CBTOP_STRAP_03*/
+	HIF_READ(0x7001000C, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* CBTOP_STRAP_01 */
+	HIF_READ(0x70010004, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* GPIO_DIN0 */
+	HIF_READ(0x70005200, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* VLP_CR */
+	HIF_READ(0x70007204, &value);
+	BT_DUMP_CR_PRINT(value);
+
+}
+
+
 static inline void btmtk_hif_dump_cbtop(void)
 {
 	uint32_t i = 0, value, cr_count = 14;
@@ -1659,6 +1706,7 @@ void btmtk_hif_dump_work(struct work_struct *work)
 	btmtk_hif_dump_bg_cfg();
 	btmtk_hif_dump_bt_mcusys_vlp();
 	btmtk_hif_dump_bt_hif_select();
+	btmtk_hif_dump_bt_pos_check();
 	btmtk_hif_dump_cbtop();
 	btmtk_hif_dump_conninfra();
 	btmtk_hif_dump_mcu_var1();
