@@ -608,6 +608,7 @@ struct btmtk_dev {
 
 	/* pre-cal flag */
 	bool            is_pre_cal_done;
+	bool		is_whole_chip_reset;
 
 	/* For tx queue */
 	unsigned long	tx_state;
