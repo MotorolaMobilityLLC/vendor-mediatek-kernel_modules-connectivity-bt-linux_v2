@@ -1431,10 +1431,6 @@ static u32 btmtk_thread_wait_for_msg(struct btmtk_dev *bdev)
 	if (!skb_queue_empty(&cif_dev->tx_queue)) {
 		ret |= BTMTK_THREAD_TX;
 	}
-	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE) {
-		//BTMTK_DBG("%s: during send_and_recv, keep drv own", __func__);
-		ret |= BTMTK_THREAD_TX;
-	}
 
 #if (SLEEP_ENABLE == 1)
 	if (atomic_read(&cif_dev->need_drv_own)) {
@@ -2162,6 +2158,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE) {
 		BTMTK_WARN("%s: during send_and_recv, keep drv own", __func__);
+		btmtk_uart_update_fw_own_timer(cif_dev);
 		goto unlock;
 	}
 
