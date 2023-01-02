@@ -1334,7 +1334,7 @@ void btmtk_hif_dump_work(struct work_struct *work)
 	ret = connv3_hif_dbg_start(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI);
 	if (ret) {
 		BTMTK_ERR("%s: connv3_hif_dbg_start fail, ret[%d]", __func__, ret);
-		return;
+		goto exit;
 	}
 
 	/* HIF_MCU dump */
@@ -1360,6 +1360,11 @@ void btmtk_hif_dump_work(struct work_struct *work)
 	btmtk_hif_dump_bt_mcusys_vlp();
 
 	ret = connv3_hif_dbg_end(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI);
+exit:
+	BTMTK_INFO("%s: set bt assert_state end", __func__);
+	atomic_set(&bdev->assert_state, BTMTK_ASSERT_END);
+	complete_all(&bdev->dump_comp);
+
 }
 void btmtk_hif_sp_dump_debug_sop(struct btmtk_dev *bdev)
 {
