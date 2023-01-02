@@ -1266,12 +1266,13 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset)
 {
 	int cur_len = 0;
-	int flush_retry = 0, max_pkt_cnt = 0, write_zero_retry = 0;
+	int flush_retry = 0, max_pkt_cnt = 0;
 	int ret = -1;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	s32 sent_len;
 	u8 cmd[LD_PATCH_CMD_LEN] = {0x02, 0x6F, 0xFC, 0x05, 0x00, 0x01, 0x01, 0x01, 0x00, PATCH_PHASE3};
 	u8 event[LD_PATCH_EVT_LEN] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
+	unsigned long start_time = 0, time_diff = 0;
 
 	if (bdev == NULL || image == NULL || fwbuf == NULL) {
 		BTMTK_ERR("%s: invalid parameters!", __func__);
@@ -1282,6 +1283,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	BTMTK_DBG("%s: loading rom patch... start", __func__);
 
 	down(&cif_dev->tty_flush_sem);
+	start_time = jiffies;
 	while (1) {
 		sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT) ?
 				(UPLOAD_PATCH_UNIT) : (section_dl_size - cur_len);
@@ -1291,38 +1293,41 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			goto exit;
 		}
 
-		/* wait tty buffer clean */
-		flush_retry = btmtk_uart_wait_tty_buffer_clean(bdev, TRUE);
-		if (flush_retry < 0) {
-			ret = -1;
-			goto exit;
-		}
-
 		if (sent_len > 0) {
 			memcpy(image, fwbuf + section_offset + cur_len, sent_len);
-			if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT) {
+			/* get interface state without mutex */
+			if (bdev && bdev->interface_state != BTMTK_STATE_DISCONNECT) {
 				/* avoid uart_launcher get signal 9 close uart, and not notify driver */
 				if(cif_dev->tty == NULL || cif_dev->tty->port == NULL || cif_dev->tty->port->count == 0) {
 					BTMTK_WARN("%s: tty port count is 0", __func__);
 					goto exit;
 				}
 				ret = cif_dev->tty->ops->write(cif_dev->tty, image, sent_len);
-			}
-
-			if (ret == UPLOAD_PATCH_UNIT) {
-				max_pkt_cnt++;
-				write_zero_retry = 0;
-			} else if (ret == 0)
-				write_zero_retry++;
-			else {
-				write_zero_retry = 0;
-				BTMTK_INFO("%s, sent_len[%d] tty_write[%d], flush_retry[%d] max_pkt_cnt[%d]",
-							__func__, sent_len, ret, flush_retry, max_pkt_cnt);
-			}
-			if (ret < 0 || write_zero_retry > BTMTK_MAX_WAIT_RETRY) {
-				BTMTK_ERR("%s: send patch failed, terminate, ret[%d]", __func__, ret);
+			} else {
+				BTMTK_WARN("%s: tty is closing, skip download", __func__);
+				ret = -1;
 				goto exit;
 			}
+
+			time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
+			if (ret == UPLOAD_PATCH_UNIT) {
+				max_pkt_cnt++;
+				/* reset start time for next packet */
+				start_time = jiffies;
+			} else if (ret == 0)
+				udelay(500);
+			else if (time_diff >= TIME_BOUND_OF_FW_PKG_DL) {
+				BTMTK_ERR("%s:, download single packet more than 2s [%lu]",
+					__func__, time_diff);
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+				if (cif_dev->hub_en)
+					mtk8250_uart_dump(cif_dev->tty);
+#endif
+				ret = -1;
+				goto exit;
+			} else
+				BTMTK_DBG("%s, sent_len[%d] tty_write[%d], flush_retry[%d] max_pkt_cnt[%d]",
+							__func__, sent_len, ret, flush_retry, max_pkt_cnt);
 			cur_len += ret;
 		} else
 			break;
