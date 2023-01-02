@@ -744,6 +744,11 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 		return;
 	}
 
+#if (SLEEP_ENABLE == 1)
+	/* incase do fw own in debug sop flow */
+	btmtk_uart_delete_fw_own_timer(cif_dev);
+#endif
+
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en)
 		mtk8250_uart_dump(cif_dev->tty);
@@ -764,6 +769,16 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 	/* dump debug sop before coredump */
 	if (bmain_info->hif_hook.dump_debug_sop)
 		bmain_info->hif_hook.dump_debug_sop(bdev);
+
+	if (cif_dev->is_rhw_fail) {
+		BTMTK_WARN("%s: rhw can't trigger assert", __func__);
+		/* Todo: through wifi trigger assert */
+
+		/* direct send hw_err event notify host to close bt */
+		if (bmain_info->hif_hook.waker_notify)
+			bmain_info->hif_hook.waker_notify(bdev);
+		return;
+	}
 
 	atomic_set(&cif_dev->need_drv_own, 1);
 	atomic_set(&cif_dev->need_assert, 1);
@@ -816,6 +831,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	atomic_set(&bmain_info->subsys_reset, BTMTK_RESET_DONE);
 	bmain_info->chip_reset_flag = 0;
 	cif_dev->assert_state = 0;
+	cif_dev->is_rhw_fail = 0;
 	reinit_completion(&bdev->dump_comp);
 
 	/* set tty host baud and flowcontrol to default value */
@@ -893,26 +909,31 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 
 		/* uarhub setting */
 		cif_dev->fw_hub_en = 1;
-		cif_dev->rhw_en = 1;
 		cif_dev->crc_en = 1;
-		cif_dev->fw_dl_ready = 1;
+	}
+#endif
 
-		/* set chip baud and flowcontrol to config setting */
-		ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
-		if (ret < 0) {
-			BTMTK_ERR("%s after fwdl, send uarhub setting cmd fail", __func__);
-			goto exit;
-		}
+	cif_dev->fw_dl_ready = 1;
+	cif_dev->rhw_en = 1;
 
+	/* set chip baud and flowcontrol to config setting */
+	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
+	if (ret < 0) {
+		BTMTK_ERR("%s after fwdl, send uarhub setting cmd fail", __func__);
+		goto exit;
+	}
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	if (cif_dev->hub_en) {
 		/* after fw dl, use uarthub multi-host mode */
 		ret = mtk8250_uart_hub_enable_bypass_mode(0);
 		BTMTK_INFO("%s after fw dl, mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
-
-		ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
-		if (ret < 0)
-			goto exit;
 	}
 #endif
+
+	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
+	if (ret < 0)
+		goto exit;
 
 	/* bt on success, reset subsys count */
 	atomic_set(&bmain_info->subsys_reset_conti_count, 0);
