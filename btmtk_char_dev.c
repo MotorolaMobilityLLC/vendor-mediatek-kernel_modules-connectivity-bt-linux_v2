@@ -331,8 +331,6 @@ static ssize_t BT_read(struct file *filp, char __user *buf, size_t count, loff_t
 	ftrace_print("%s get called, count %zd", __func__, count);
 	down(&rd_mtx);
 
-	BTMTK_DBG("%s: count[%zd] f_pos[%lld] rd_offset[%lld]", __func__, count, *f_pos, rd_offset);
-
 	if (rstflag != CHIP_RESET_NONE) {
 		BTMTK_DBG("%s: rstflag != CHIP_RESET_NONE", __func__);
 		while (rstflag != CHIP_RESET_END && rstflag != CHIP_RESET_NONE) {
