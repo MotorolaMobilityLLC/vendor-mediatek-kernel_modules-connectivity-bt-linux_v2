@@ -1153,8 +1153,8 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				bmain_info->chip_reset_flag = 1;
 				if (bdev->assert_reason[0] == '\0') {
 					memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
-					strncpy(bdev->assert_reason, "[BT_FW assert] trigger whole chip reset"
-						, strlen("[BT_FW assert] trigger whole chip reset"));
+					strncpy(bdev->assert_reason, "[BT_FW assert] trigger whole chip reset",
+							strlen("[BT_FW assert] trigger whole chip reset") + 1);
 				}
 				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 				return 1;
@@ -1164,7 +1164,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			if (bdev->assert_reason[0] == '\0') {
 				memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
 				if (snprintf(bdev->assert_reason, ASSERT_REASON_SIZE, "[BT_FW assert] %s", skb->data) < 0)
-					strncpy(bdev->assert_reason, "[BT_FW assert]", strlen("[BT_FW assert]"));
+					strncpy(bdev->assert_reason, "[BT_FW assert]", strlen("[BT_FW assert]") + 1);
 				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 			}
 

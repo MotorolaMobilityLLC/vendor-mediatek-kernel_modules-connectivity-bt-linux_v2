@@ -515,7 +515,8 @@ exit:
 			if (bdev->assert_reason[0] == '\0') {
 				if (snprintf(bdev->assert_reason, ASSERT_REASON_SIZE , "[BT_DRV assert] cmd timeout 0x%02x%02x"
 						,opcode[1], opcode[0]) < 0)
-					strncpy(bdev->assert_reason, "[BT_DRV assert] cmd timeout", strlen("[BT_DRV assert] cmd timeout"));
+					strncpy(bdev->assert_reason, "[BT_DRV assert] cmd timeout",
+						strlen("[BT_DRV assert] cmd timeout") + 1);
 				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 			}
 			bmain_info->hif_hook.trigger_assert(bdev);
@@ -2066,8 +2067,8 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 			&& btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT) {
 		if (!atomic_read(&bdev->assert_state) && recv_fail_cnt == BTMTK_MAX_RECV_ERR_CNT) {
 			if (bdev->assert_reason[0] == '\0') {
-				strncpy(bdev->assert_reason, "[BT_DRV assert] recv unknown data\0",
-						strlen("[BT_DRV assert] recv unknown data\0"));
+				strncpy(bdev->assert_reason, "[BT_DRV assert] recv unknown data",
+						strlen("[BT_DRV assert] recv unknown data") + 1);
 				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 			}
 			BTMTK_WARN("%s: trigger assert, recv_fail_cnt[%d] count[%d]",
@@ -2186,7 +2187,8 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		BTMTK_ERR("%s: set fw own return fail, ret[%d]", __func__, ret);
 		if (bdev->assert_reason[0] == '\0') {
-			strncpy(bdev->assert_reason, "[BT_FW assert] fw own failed", strlen("[BT_FW assert] fw own failed"));
+			strncpy(bdev->assert_reason, "[BT_FW assert] fw own failed",
+					strlen("[BT_FW assert] fw own failed") + 1);
 			BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 		}
 		goto unlock;
@@ -2293,7 +2295,8 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		BTMTK_ERR("%s: set driver own return fail, ret[%d]", __func__, ret);
 		if (bdev->assert_reason[0] == '\0') {
-			strncpy(bdev->assert_reason, "[BT_FW assert] drv own failed", strlen("[BT_FW assert] drv own failed"));
+			strncpy(bdev->assert_reason, "[BT_FW assert] drv own failed",
+					strlen("[BT_FW assert] drv own failed") + 1);
 			BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 		}
 		goto unlock;
