@@ -4410,6 +4410,7 @@ int bt_open(struct hci_dev *hdev)
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENED);
 	main_info.reset_stack_flag = HW_ERR_NONE;
+	bdev->on_fail_count = 0;
 
 	if (bdev->bt_cfg.support_bt_single_sku) {
 		rlm_get_alpha2 = (void *)btmtk_kallsyms_lookup_name(wifi_func_name);
@@ -4449,6 +4450,15 @@ failed:
 	if (state != BTMTK_STATE_DISCONNECT)
 		btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
 #endif
+
+	if (++bdev->on_fail_count > BTMTK_MAX_SUBSYS_RESET_COUNT && main_info.hif_hook.whole_reset) {
+		memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
+		strncpy(bdev->assert_reason, "[BT_DRV assert] on fail more than 3 times",
+							 strlen("[BT_DRV assert] on fail more than 3 times"));
+		BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+		bdev->on_fail_count = 0;
+		main_info.hif_hook.whole_reset(bdev);
+	}
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
 	main_info.reset_stack_flag = HW_ERR_NONE;
@@ -4841,6 +4851,7 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 	}
 
 	bdev->get_hci_reset = 0;
+	bdev->on_fail_count = 0;
 
 	BTMTK_DBG("%s done", __func__);
 	return 0;
