@@ -34,12 +34,140 @@
 #define RST_ON_PINCTRL_NAME		("bt_rst_on")
 #define RST_OFF_PINCTRL_NAME		("bt_rst_off")
 #define INIT_STATE_PINCTRL_NAME		("bt_combo_gpio_init")
-
+#define BTMTK_UART_NAME			("btmtk_uart")
 
 #if (USE_DEVICE_NODE == 1)
 static struct pinctrl *pinctrl_ptr;
 extern struct btmtk_dev *g_sbdev;
 int g_bt_state;
+
+static int __maybe_unused btmtk_char_suspend(struct device *dev)
+{
+	//BTMTK_INFO("%s", __func__);
+	g_sbdev->suspend_state = TRUE;
+	return 0;
+}
+
+static int __maybe_unused btmtk_char_resume(struct device *dev)
+{
+	//BTMTK_INFO("%s", __func__);
+	g_sbdev->suspend_state = FALSE;
+	return 0;
+}
+
+static int __maybe_unused btmtk_char_runtime_suspend(struct device *dev)
+{
+	//BTMTK_INFO("%s", __func__);
+	return 0;
+}
+
+static int __maybe_unused btmtk_char_runtime_resume(struct device *dev)
+{
+	//BTMTK_INFO("%s", __func__);
+	return 0;
+}
+
+
+static const struct dev_pm_ops btmtk_char_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(btmtk_char_suspend, btmtk_char_resume)
+	SET_RUNTIME_PM_OPS(btmtk_char_runtime_suspend, btmtk_char_runtime_resume, NULL)
+};
+
+static struct platform_device *btmtk_uart_device;
+
+static int btmtk_uart_driver_probe(struct platform_device *pdev) {
+	BTMTK_DBG("%s", __func__);
+	btmtk_uart_device = pdev;
+	return 0;
+}
+
+static int btmtk_uart_driver_remove(struct platform_device *pdev) {
+	BTMTK_DBG("%s", __func__);
+	return 0;
+}
+
+static struct platform_driver btmtk_uart_driver = {
+	.driver = {
+		.name	= BTMTK_UART_NAME,
+		.owner	= THIS_MODULE,
+		.pm		= &btmtk_char_pm_ops,
+	},
+	.probe = btmtk_uart_driver_probe,
+	.remove = btmtk_uart_driver_remove,
+};
+
+static struct platform_device *btmtk_uart_device;
+
+
+void btmtk_platform_driver_init(void) {
+	int ret = 0;
+
+	BTMTK_DBG("%s", __func__);
+	ret = platform_driver_register(&btmtk_uart_driver);
+	BTMTK_INFO("%s: platform_driver_register ret = %d", __func__, ret);
+	btmtk_uart_device = platform_device_alloc(BTMTK_UART_NAME, 0);
+	if (btmtk_uart_device == NULL) {
+		platform_driver_unregister(&btmtk_uart_driver);
+		BTMTK_ERR("%s: platform_device_alloc device fail", __func__);
+		return;
+	}
+	ret = platform_device_add(btmtk_uart_device);
+	if (ret) {
+		platform_driver_unregister(&btmtk_uart_driver);
+		BTMTK_ERR("%s: platform_device_add fail", __func__);
+		return;
+	}
+
+}
+
+void btmtk_platform_driver_deinit(void) {
+	BTMTK_DBG("%s", __func__);
+	platform_driver_unregister(&btmtk_uart_driver);
+}
+
+void btmtk_dev_link_uart(void)
+{
+	unsigned int dl_flags = 0;
+	struct btmtk_uart_dev *cif_dev = NULL;
+	struct device_link	*link;
+
+	BTMTK_DBG("%s", __func__);
+	if (!g_sbdev) {
+		BTMTK_ERR("%s: g_sbdev is NULL", __func__);
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+
+	if (!cif_dev->tty) {
+		BTMTK_ERR("%s: tty is NULL", __func__);
+		return;
+	}
+	if (!btmtk_uart_device) {
+		BTMTK_ERR("%s: btmtk_uart_device is NULL", __func__);
+		return;
+	}
+	/* set up dl_flags */
+	dl_flags = DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS;
+
+	/* create device link by device_link_add */
+	link = device_link_add(&btmtk_uart_device->dev, cif_dev->tty->dev, dl_flags);
+
+	if (!link) {
+		BTMTK_WARN("%s: uart device link add fail. probe fail", __func__);
+		return;
+	}
+	/* supplier is not probed */
+	if (link->status == DL_STATE_DORMANT) {
+		BTMTK_WARN("%s: uart is not probed", __func__);
+		return;
+	}
+}
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 void btmtk_uarthub_err_cb(unsigned int err_type)
@@ -640,6 +768,8 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 
 	/* set gpio to default */
 	btmtk_set_gpio_default();
+
+	btmtk_dev_link_uart();
 
 	connv3_sub_drv_ops_register(CONNV3_DRV_TYPE_BT, &btmtk_drv_cbs);
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
