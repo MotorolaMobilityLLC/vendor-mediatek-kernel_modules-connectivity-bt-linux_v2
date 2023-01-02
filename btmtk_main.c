@@ -4479,6 +4479,8 @@ static void btmtk_rx_work(struct work_struct *work)
 			/* fw log for sp */
 			if ((skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
 				skb->data[1] == 0x05 && main_info.hif_hook.log_handler) {
+				/* remove acl header (FF 05 LL LL)*/
+				skb_pull(skb, 4);
 				main_info.hif_hook.log_handler(skb->data, skb->len);
 				kfree_skb(skb);
 				continue;
