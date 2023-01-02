@@ -263,6 +263,99 @@ static int btmtk_post_chip_rst_handler(void)
 	return 0;
 }
 
+
+int btmtk_pre_cal_pre_on_cb(void)
+{
+	BTMTK_INFO("%s start", __func__);
+	return btmtk_pre_power_on_handler();
+}
+
+int btmtk_pre_cal_pwr_on_cb(void)
+{
+	int ret = 0;
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s start", __func__);
+
+	/* Turn on BT */
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("g_sbdev == NULL");
+		return -1;
+	}
+
+	if (g_sbdev->hdev == NULL) {
+		BTMTK_ERR("g_sbdev->hdev == NULL");
+		return -1;
+	}
+
+	if (g_sbdev->hdev->open == NULL) {
+		BTMTK_ERR("g_sbdev->hdev->open == NULL");
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("[ERR] cif_dev is NULL");
+		return -1;
+	}
+	cif_dev->is_pre_cal = TRUE;
+
+	ret = g_sbdev->hdev->open(g_sbdev->hdev);
+	cif_dev->is_pre_cal = FALSE;
+	if (ret) {
+		BTMTK_ERR("%s: BT turn on fail!", __func__);
+		return ret;
+	}
+	BTMTK_INFO("%s: BT turn on ok!", __func__);
+
+	return ret;
+}
+int btmtk_pre_cal_do_cal_cb(void)
+{
+	int ret = 0;
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s start", __func__);
+
+	/* Todo pre-cal cmd */
+	/* Todo precal BK */
+
+	/* err handle for uart disconnect */
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev == NULL", __func__);
+		return -1;
+	}
+
+	if (g_sbdev->hdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev->hdev == NULL", __func__);
+		return -1;
+	}
+
+	if (g_sbdev->hdev->close == NULL) {
+		BTMTK_ERR("%s: g_sbdev->hdev->close == NULL", __func__);
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("[ERR] cif_dev is NULL");
+		return -1;
+	}
+
+	cif_dev->is_pre_cal = TRUE;
+	ret = g_sbdev->hdev->close(g_sbdev->hdev);
+	cif_dev->is_pre_cal = FALSE;
+	if (ret) {
+		BTMTK_ERR("%s: BT turn off fail!", __func__);
+		return ret;
+	}
+	BTMTK_INFO("%s: BT turn off ok!", __func__);
+
+	return 0;
+}
+
+
+
 struct connv3_whole_chip_rst_cb btmtk_whole_chip_rst_cb = {
 	.pre_whole_chip_rst = btmtk_pre_chip_rst_handler,
 	.post_whole_chip_rst = btmtk_post_chip_rst_handler,
@@ -273,6 +366,13 @@ struct connv3_power_on_cb btmtk_pwr_on_cb = {
 	.power_on_notify = btmtk_power_on_notify_handler,
 };
 
+struct connv3_pre_calibration_cb btmtk_pre_cal_cb = {
+	.pre_on_cb = btmtk_pre_cal_pre_on_cb,
+	.pwr_on_cb = btmtk_pre_cal_pwr_on_cb,
+	.do_cal_cb = btmtk_pre_cal_do_cal_cb,
+};
+
+
 /* connv3_sub_drv_ops_cb
  *
  *    All callbacks needs by conninfra driver, 3 types of callback functions
@@ -280,13 +380,7 @@ struct connv3_power_on_cb btmtk_pwr_on_cb = {
  *    2. chip reset
  *    3. pre-calibration
  */
-#if 0 // can not build
-struct connv3_sub_drv_ops_cb btmtk_drv_cbs = {
-	.pwr_on_cb = btmtk_pwr_on_cb,
-	.rst_cb = btmtk_whole_chip_rst_cb,
-	//.pre_cal_cb = NULL,
-};
-#endif
+
 
 int btmtk_read_pmic_state(struct btmtk_dev *bdev)
 {
@@ -417,6 +511,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 
 	btmtk_drv_cbs.pwr_on_cb = btmtk_pwr_on_cb;
 	btmtk_drv_cbs.rst_cb = btmtk_whole_chip_rst_cb;
+	btmtk_drv_cbs.pre_cal_cb = btmtk_pre_cal_cb;
 	BTMTK_INFO("%s start", __func__);
 	if (!bdev) {
 		BTMTK_ERR("[ERR] bdev is NULL");
