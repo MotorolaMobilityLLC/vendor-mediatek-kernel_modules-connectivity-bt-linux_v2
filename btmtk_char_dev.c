@@ -35,7 +35,7 @@ MODULE_LICENSE("Dual BSD/GPL");
 #define COMBO_IOCTL_BT_INTTRX		_IOW(COMBO_IOC_MAGIC, 5, void*)
 #define IOCTL_BT_HOST_DEBUG_BUF_SIZE	(32)
 #define IOCTL_BT_HOST_INTTRX_SIZE		(128)
-
+#define TRIGGER_HW_ERR_EVT_COUNT	(1000)
 /*
  *******************************************************************************
  *                             D A T A   T Y P E S
@@ -93,6 +93,7 @@ static int32_t bt_ftrace_flag;
 static uint32_t rstflag = CHIP_RESET_NONE;
 static uint8_t HCI_EVT_HW_ERROR[] = {0x04, 0x10, 0x01, 0x00};
 static loff_t rd_offset;
+static uint32_t hw_err_retry;
 
 /*
  *******************************************************************************
@@ -385,6 +386,15 @@ static ssize_t BT_read(struct file *filp, char __user *buf, size_t count, loff_t
 			if (filp->f_flags & O_NONBLOCK) {
 				BTMTK_ERR_LIMITTED("Non-blocking read, no data is available!");
 				retval = -EAGAIN;
+				if (hw_err_retry++ > TRIGGER_HW_ERR_EVT_COUNT){
+					BTMTK_ERR("%s: hw_err_retry[%d] > %d", __func__, hw_err_retry,TRIGGER_HW_ERR_EVT_COUNT);
+					retval = bt_report_hw_error(i_buf, count, &rd_offset);
+					if (rd_offset == sizeof(HCI_EVT_HW_ERROR))
+						rd_offset = 0;
+
+					if (copy_to_user(buf, i_buf, retval))
+						retval = -EFAULT;
+				}
 				goto OUT;
 			}
 
@@ -413,6 +423,7 @@ static ssize_t BT_read(struct file *filp, char __user *buf, size_t count, loff_t
 	}
 
 	if (copy_to_user(buf, i_buf, retval)) {
+		hw_err_retry = 0;
 		retval = -EFAULT;
 		if (rstflag == CHIP_RESET_NOTIFIED)
 			rstflag = CHIP_RESET_END;
@@ -523,6 +534,7 @@ static int BT_open(struct inode *inode, struct file *file)
 	btmtk_register_rx_event_cb(BT_event_cb);
 
 	bt_ftrace_flag = 1;
+	hw_err_retry = 0;
 	__pm_relax(bt_wakelock);
 #if 0 // Simfex
 	bthost_debug_init();
