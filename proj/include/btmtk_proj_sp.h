@@ -50,7 +50,7 @@ enum UARTHUB_irq_err_type {
 };
 
 typedef void (*UARTHUB_IRQ_CB) (unsigned int err_type);
-
+extern int mtk8250_uart_hub_reset_flow_ctrl(void);
 extern int mtk8250_uart_hub_enable_bypass_mode(int bypass);
 extern int mtk8250_uart_hub_is_ready(void);
 extern int mtk8250_uart_hub_set_request(void);
