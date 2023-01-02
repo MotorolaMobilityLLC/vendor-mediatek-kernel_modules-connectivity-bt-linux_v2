@@ -54,6 +54,7 @@ static DEFINE_MUTEX(btmtk_uart_ops_mutex);
 static DEFINE_MUTEX(btmtk_uart_own_mutex);
 #define UART_OWN_MUTEX_LOCK()	mutex_lock(&btmtk_uart_own_mutex)
 #define UART_OWN_MUTEX_UNLOCK()	mutex_unlock(&btmtk_uart_own_mutex)
+static struct wakeup_source *bt_trx_wakelock;
 
 static char event_need_compare[EVENT_COMPARE_SIZE] = {0};
 static char event_need_compare_len;
@@ -154,6 +155,7 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	btmtk_release_uarthub(true);
 #endif
+	__pm_relax(bt_trx_wakelock);
 
 	btmtk_tx_thread_exit(bdev->cif_dev);
 
@@ -987,6 +989,7 @@ static int btmtk_uart_pre_open(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s init to driver own state", __func__);
 	/* not start fw_own_timer until bt open done */
 	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
+	__pm_stay_awake(bt_trx_wakelock);
 	cif_dev->own_state = BTMTK_DRV_OWN;
 #endif
 
@@ -1931,6 +1934,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 		btmtk_release_uarthub(false);
 #endif
+		__pm_relax(bt_trx_wakelock);
 		BTMTK_INFO("%s success, no_sleep[%d]", __func__, no_sleep);
 	}
 unlock:
@@ -1960,6 +1964,11 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	}
 
 	cif_dev->own_state = BTMTK_DRV_OWNING;
+	__pm_stay_awake(bt_trx_wakelock);
+	while (bdev->suspend_state) {
+		usleep_range(1000, 1100);
+		BTMTK_DBG("%s wait system resume", __func__);
+	}
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en && cif_dev->sleep_en) {
@@ -2070,6 +2079,9 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 
 	/* Do HIF events */
 	ret = btmtk_uart_tty_probe(tty);
+
+	bt_trx_wakelock = wakeup_source_register(NULL, "bt_drv_trx");
+
 #if (USE_DEVICE_NODE == 1)
 	btmtk_connv3_sub_drv_init(bdev);
 	btmtk_pwrctrl_register_evt();
@@ -2125,7 +2137,7 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 #endif
 		devm_kfree(tty->dev, cif_dev);
 	}
-
+	wakeup_source_unregister(bt_trx_wakelock);
 	/* Set End/Error state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
 	btmtk_uart_cif_mutex_unlock(bdev);
@@ -2212,6 +2224,7 @@ static int btmtk_cif_suspend(void)
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 #endif
 
+	bdev->suspend_state = TRUE;
 	return 0;
 }
 
@@ -2267,6 +2280,7 @@ static int btmtk_cif_resume(void)
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 #endif
 
+	bdev->suspend_state = FALSE;
 	return 0;
 }
 
