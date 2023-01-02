@@ -40,7 +40,6 @@
 static struct pinctrl *pinctrl_ptr;
 extern struct btmtk_dev *g_sbdev;
 int g_bt_state;
-static struct wakeup_source *bt_trx_wakelock;
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 void btmtk_uarthub_err_cb(unsigned int err_type)
@@ -103,7 +102,6 @@ int btmtk_wakeup_uarthub(void) {
 		BTMTK_ERR("%s mtk8250_uart_hub_dump_with_tag ready_retry[%d] ret[%d]", __func__, ready_retry, ret);
 		return -1;
 	}
-	__pm_stay_awake(bt_trx_wakelock);
 
 	return 0;
 }
@@ -132,7 +130,6 @@ void btmtk_release_uarthub(bool force)
 		if (ret)
 			BTMTK_ERR("%s  mtk8250_uart_hub_clear_request fail ret[%d]", __func__, ret);
 	}
-	__pm_relax(bt_trx_wakelock);
 	return;
 }
 
@@ -645,7 +642,6 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	btmtk_set_gpio_default();
 
 	connv3_sub_drv_ops_register(CONNV3_DRV_TYPE_BT, &btmtk_drv_cbs);
-	bt_trx_wakelock = wakeup_source_register(NULL, "bt_drv_trx");
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en) {
 		ret = mtk8250_uart_hub_register_cb(btmtk_uarthub_err_cb);
@@ -659,7 +655,6 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 
 int btmtk_connv3_sub_drv_deinit(void)
 {
-	wakeup_source_unregister(bt_trx_wakelock);
 	return connv3_sub_drv_ops_unregister(CONNV3_DRV_TYPE_BT);
 }
 
