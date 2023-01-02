@@ -1055,6 +1055,8 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 	if (!cif_dev->is_pre_cal)
 		if (connv3_pwr_on_done(CONNV3_DRV_TYPE_BT))
 			BTMTK_ERR("%s: ConnInfra power done failed!", __func__);
+
+	btmtk_read_pmic_state(bdev);
 #endif
 
 }
