@@ -1234,7 +1234,9 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_uart_dev *cif_dev;
+#if (USE_DEVICE_NODE == 1)
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+#endif
 
 	/* Mediatek Driver Version */
 	BTMTK_INFO("%s: MTK BT Driver Version: %s", __func__, VERSION);
