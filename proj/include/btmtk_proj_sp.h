@@ -116,6 +116,9 @@ int btmtk_connv3_sub_drv_deinit(void);
 
 void btmtk_sp_coredump_start(void);
 void btmtk_sp_coredump_end(void);
+void btmtk_platform_driver_init(void);
+void btmtk_platform_driver_deinit(void);
+
 
 /* Debug sop api */
 void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev);
