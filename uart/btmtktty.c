@@ -893,7 +893,7 @@ static void btmtk_uart_tty_disconnect(struct tty_struct *tty)
 /*
  * We don't provide read/write/poll interface for user space.
  */
-#if (USE_DEVICE_NODE == 0)
+#if (defined(ANDROID_OS) && (KERNEL_VERSION(5, 10, 0) > LINUX_VERSION_CODE)) || defined(LINUX_OS)
 static ssize_t btmtk_uart_tty_read(struct tty_struct *tty, struct file *file,
 				 unsigned char *buf, size_t count)
 #else
@@ -1016,7 +1016,7 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 	return err;
 }
 
-#if (USE_DEVICE_NODE == 0)
+#if (defined(ANDROID_OS) && (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)) || defined(LINUX_OS)
 static long btmtk_uart_tty_compat_ioctl(struct tty_struct *tty, struct file *file,
 			      unsigned int cmd, unsigned long arg)
 #else

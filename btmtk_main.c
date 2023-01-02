@@ -415,7 +415,7 @@ static void btmtk_main_info_initialize(void)
 	main_info.irq_ws = wakeup_source_register(NULL, "btevent_irq");
 #endif
 #elif (defined(LINUX_OS) && (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)) ||	\
-	(defined(ANDROID_OS) && (KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE))
+	(defined(ANDROID_OS) && (KERNEL_VERSION(4, 14, 0) > LINUX_VERSION_CODE))
 	main_info.fwdump_ws = wakeup_source_register("btmtk_fwdump_wakelock");
 	main_info.woble_ws = wakeup_source_register("btmtk_woble_wakelock");
 	main_info.eint_ws = wakeup_source_register("btevent_eint");
