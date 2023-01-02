@@ -253,7 +253,9 @@
 #if (USE_DEVICE_NODE == 0)
 #define ASSERT_CMD_LEN 9
 #else
-#define ASSERT_CMD_LEN 4
+// #define ASSERT_CMD_LEN 4 // 5B FD through uart, BT UART IRQ priority can't higher then BT ISR
+#define ASSERT_CMD_LEN 13 //  uset RHW write CR to trigger NMI
+
 #endif
 #define TXPOWER_CMD_LEN 16
 #define TXPOWER_EVT_LEN 7
