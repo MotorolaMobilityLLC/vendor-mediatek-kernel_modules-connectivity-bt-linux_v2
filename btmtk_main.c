@@ -4215,12 +4215,9 @@ static int bt_close(struct hci_dev *hdev)
 		kfree_skb(bdev->rx_skb);
 	bdev->rx_skb = NULL;
 
-#if (USE_DEVICE_NODE == 0)
-	main_info.hif_hook.close(hdev);
-#endif
-
 unlock:
 	main_info.hif_hook.close(hdev);
+
 	if (main_info.hif_hook.cif_mutex_unlock)
 		main_info.hif_hook.cif_mutex_unlock(bdev);
 exit:

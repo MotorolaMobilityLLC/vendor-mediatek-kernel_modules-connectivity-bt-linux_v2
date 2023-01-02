@@ -413,7 +413,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 #endif
 
-	BTMTK_INFO_RAW(skb->data, skb->len, "%s: len[%d] ", __func__, skb->len);
+	BTMTK_INFO_RAW(skb->data, skb->len, "%s: len[%d]", __func__, skb->len);
 
 	/* if just protect event, another cmd would reinit event_compare_status */
 	down(&cif_dev->evt_comp_sem);
@@ -487,7 +487,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 				ret = -2;
 				break;
 			}
-			usleep_range(10, 100);
+			usleep_range(1000, 1100);
 		} while (time_before(jiffies, comp_event_timo));
 #if (USE_DEVICE_NODE == 1)
 		if (ret != -1)	/* successfully received event or coredump case */
@@ -1281,7 +1281,7 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		ret = -1;
 	}
 
-	BTMTK_INFO_RAW(cmd, cmd_len, "%s, len[%d] write_retry[%d] room[%d] flush_retry[%d] CMD : ", __func__, cmd_len,
+	BTMTK_INFO_RAW(cmd, cmd_len, "%s, len[%d] write_retry[%d] room[%d] flush_retry[%d] CMD :", __func__, cmd_len,
 						count, tty_write_room(cif_dev->tty), flush_retry);
 
 	return ret;
@@ -1457,9 +1457,9 @@ static int btmtk_tx_thread_start(struct btmtk_dev *bdev)
 			return -1;
 		}
 
-		while (!atomic_read(&cif_dev->thread_status) && i < RETRY_TIMES) {
-			BTMTK_INFO("%s: wait btmtk_uart_tx_thread start ...", __func__);
-			msleep(100);
+		while (!atomic_read(&cif_dev->thread_status) && i < TX_THREAD_RETRY) {
+			BTMTK_INFO("%s: wait btmtk_uart_tx_thread start, retry[%d]", __func__, i);
+			usleep_range(2000, 2100);
 			i++;
 			if (i == RETRY_TIMES - 1) {
 				BTMTK_INFO("%s: wait btmtk_uart_tx_thread start failed", __func__);
@@ -1491,9 +1491,9 @@ static int btmtk_tx_thread_exit(struct btmtk_uart_dev *cif_dev)
 	if (!IS_ERR(cif_dev->tx_task) && atomic_read(&cif_dev->thread_status)) {
 		kthread_stop(cif_dev->tx_task);
 
-		while (atomic_read(&cif_dev->thread_status) && i < RETRY_TIMES) {
-			BTMTK_INFO("%s: wait btmtk_uart_tx_thread stop ...", __func__);
-			msleep(100);
+		while (atomic_read(&cif_dev->thread_status) && i < TX_THREAD_RETRY) {
+			BTMTK_INFO("%s: wait btmtk_uart_tx_thread stop, retry[%d]", __func__, i);
+			usleep_range(2000, 2100);
 			i++;
 			if (i == RETRY_TIMES - 1) {
 				BTMTK_INFO("%s: wait btmtk_uart_tx_thread stop failed", __func__);
