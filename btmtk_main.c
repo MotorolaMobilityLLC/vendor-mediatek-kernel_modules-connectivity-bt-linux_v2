@@ -1741,8 +1741,9 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwb
 
 	BTMTK_INFO("[btmtk] =============== Patch Info ==============");
 
+	/* if not found version still need to do memset */
+	memset(main_info.fw_version_str, 0, FW_VERSION_BUF_SIZE);
 	if (fw_version) {
-		memset(main_info.fw_version_str, 0, FW_VERSION_BUF_SIZE);
 		fw_version_len = MIN(((u32)(fwbuf + fwbuf_len - fw_version)), FW_VERSION_BUF_SIZE);
 		memcpy(main_info.fw_version_str, fw_version, fw_version_len);
 		BTMTK_INFO("[btmtk] fw_version = %s", main_info.fw_version_str);
@@ -4910,7 +4911,9 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 {
 	int err = 0;
 
+#if (USE_DEVICE_NODE == 0)
 	btmtk_init_node();
+#endif
 
 	btmtk_reset_timer_add(bdev);
 
@@ -5196,6 +5199,10 @@ int __init main_driver_init(void)
 
 	if (main_info.hif_hook.init)
 		ret = main_info.hif_hook.init();
+
+#if (USE_DEVICE_NODE == 1)
+	btmtk_init_node();
+#endif
 
 	BTMTK_INFO("%s: Done", __func__);
 	return ret;

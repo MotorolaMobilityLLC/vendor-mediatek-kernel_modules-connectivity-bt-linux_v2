@@ -115,7 +115,10 @@ static int btmtk_proc_show(struct seq_file *m, void *v)
 {
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	(void)seq_printf(m, "patch version:%s driver version:%s\n", bmain_info->fw_version_str, VERSION);
+	if (strlen(bmain_info->fw_version_str))
+		(void)seq_printf(m, "patch version:%s\ndriver version:%s\n", bmain_info->fw_version_str, VERSION);
+	else
+		(void)seq_printf(m, "patch version:null\ndriver version:%s\n", VERSION);
 	return 0;
 }
 
