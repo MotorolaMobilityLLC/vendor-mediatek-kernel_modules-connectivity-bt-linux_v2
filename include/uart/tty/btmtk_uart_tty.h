@@ -192,6 +192,7 @@ struct btmtk_uart_dev {
 	struct timer_list	fw_own_timer;
 	atomic_t		fw_own_timer_flag;
 	atomic_t		need_drv_own;
+	atomic_t		fw_wake;
 
 	/* sempaphore to compare event */
 	struct semaphore	evt_comp_sem;
