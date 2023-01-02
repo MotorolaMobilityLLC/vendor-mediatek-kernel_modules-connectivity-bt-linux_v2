@@ -170,13 +170,13 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		skb->len >= event_need_compare_len) {
 		memset(bdev->io_buf, 0, IO_BUF_SIZE);
-		if (memcmp(skb->data, &get_baudrate_event[1], GETBAUD_EVT_LEN - 1) == 0
-			&& (skb->len == (GETBAUD_EVT_LEN - HCI_TYPE_SIZE + BAUD_SIZE))) {
+		if ((skb->len == (GETBAUD_EVT_LEN - HCI_TYPE_SIZE + BAUD_SIZE)) &&
+			memcmp(skb->data, &get_baudrate_event[1], GETBAUD_EVT_LEN - 1) == 0) {
 			BTMTK_INFO("%s: GET BAUD = %02X %02X %02X, FC = %02X", __func__,
 				skb->data[10], skb->data[9], skb->data[8], skb->data[11]);
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
-		} else if (memcmp(skb->data, &read_address_event[1], READ_ADDRESS_EVT_HDR_LEN - 1) == 0
-			&& (skb->len == (READ_ADDRESS_EVT_HDR_LEN - HCI_TYPE_SIZE + BD_ADDRESS_SIZE))) {
+		} else if ((skb->len == (READ_ADDRESS_EVT_HDR_LEN - HCI_TYPE_SIZE + BD_ADDRESS_SIZE)) &&
+					memcmp(skb->data, &read_address_event[1], READ_ADDRESS_EVT_HDR_LEN - 1) == 0) {
 			memcpy(bdev->bdaddr, &skb->data[READ_ADDRESS_EVT_PAYLOAD_OFFSET - 1], BD_ADDRESS_SIZE);
 			BTMTK_INFO("%s: GET BDADDR = "MACSTR, __func__, MAC2STR(bdev->bdaddr));
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
@@ -220,6 +220,8 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	unsigned long comp_event_timo = 0, start_time = 0;
 	int ret = -1;
 
+	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
+
 	if (event) {
 		if (event_len > EVENT_COMPARE_SIZE) {
 			BTMTK_ERR("%s, event_len (%d) > EVENT_COMPARE_SIZE(%d), error",
@@ -245,8 +247,6 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	} else {
 		event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 	}
-
-	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
 
 	ret = btmtk_uart_send_cmd(bdev, skb, delay, retry, pkt_type);
 	if (ret < 0) {
