@@ -668,7 +668,6 @@ struct btmtk_dev {
 #endif
 	/* completion */
 	struct completion	dump_comp;
-	struct completion	drv_own_comp;
 };
 
 #if (USE_DEVICE_NODE == 1)
