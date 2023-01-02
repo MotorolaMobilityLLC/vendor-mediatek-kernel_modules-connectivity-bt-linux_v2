@@ -642,6 +642,9 @@ struct btmtk_dev {
 #if (USE_DEVICE_NODE == 1)
 	/* asynchronize tx/rx */
 	struct work_struct  async_trx_work;
+
+	/* UDS work for only wifi on*/
+	struct work_struct  pwr_on_uds_work;
 #endif
 	/* completion */
 	struct completion	dump_comp;

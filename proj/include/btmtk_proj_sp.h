@@ -87,6 +87,7 @@ struct btmtk_dypwr_st {
 };
 
 void btmtk_async_trx_work(struct work_struct *work);
+void btmtk_pwr_on_uds_work(struct work_struct *work);
 int btmtk_pwrctrl_pre_on(struct btmtk_dev *bdev);
 void btmtk_pwrctrl_post_off(void);
 void btmtk_pwrctrl_register_evt(void);
