@@ -360,22 +360,21 @@ int btmtk_pre_power_on_handler(void)
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 
-	/* use uarthub multi-host mode (default) */
-	ret = mtk8250_uart_hub_enable_bypass_mode(0);
-	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
+	/* use uarthub bypass mode (default) */
+	ret = mtk8250_uart_hub_enable_bypass_mode(1);
+	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
 
 	ret = btmtk_wakeup_uarthub();
 
 	if(ret < 0)
 		return ret;
 
+	ret = mtk8250_uart_hub_reset_flow_ctrl();
+	BTMTK_INFO("%s mtk8250_uart_hub_reset_flow_ctrl ret[%d]", __func__, ret);
+
 	/* disable ADSP,MD when fw dl */
 	ret = mtk8250_uart_hub_fifo_ctrl(1);
 	BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(1) ret[%d]", __func__, ret);
-
-	/* use uarthub bypass mode */
-	ret = mtk8250_uart_hub_enable_bypass_mode(1);
-	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
 
 #endif
 	btmtk_pinctrl_exec(POWER_ON_TX_PINCTRL_NAME);
