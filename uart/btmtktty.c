@@ -61,36 +61,6 @@ static char event_compare_status;
 static struct tty_struct *g_tty;
 static struct tty_ldisc_ops btmtk_uart_ldisc;
 
-
-#if (USE_DEVICE_NODE == 1)
-
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
-static int btmtk_wakeup_uarthub(void) {
-	int ready_retry = 50, ret = 0;
-
-	/* Set TX,RX request */
-	ret = mtk8250_uart_hub_set_request();
-	if (ret) {
-		BTMTK_ERR("%s mtk8250_uart_hub_set_request fail ret[%d]", __func__, ret);
-		return -1;
-	}
-
-	/* Polling UARTHUB is ready state */
-	while (mtk8250_uart_hub_is_ready() <= 0 && --ready_retry) {
-		BTMTK_WARN("%s ready_retry[%d]", __func__, ready_retry);
-		usleep_range(1000, 1100);
-	}
-
-	if (ready_retry <= 0) {
-		ret = mtk8250_uart_hub_dump_with_tag("BT driver own");
-		BTMTK_ERR("%s mtk8250_uart_hub_dump_with_tag ready_retry[%d] ret[%d]", __func__, ready_retry, ret);
-		return -1;
-	}
-	return 0;
-}
-#endif // (CONFIG_MTK_UARTHUB)
-#endif //(USE_DEVICE_NODE == 1)
-
 #if (SLEEP_ENABLE == 1)
 
 #if (KERNEL_VERSION(4, 15, 0) > LINUX_VERSION_CODE)
@@ -779,8 +749,6 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	if (btmtk_tx_thread_start(bdev))
 		return -EFAULT;
 
-	btmtk_set_uart_auxFunc();
-
 	/* temp solution wait pmic enable */
 	msleep(100);
 
@@ -789,27 +757,6 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		return -EFAULT;
 	}
 
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	if (cif_dev->hub_en) {
-		/* use uarthub multi-host mode (default) */
-		ret = mtk8250_uart_hub_enable_bypass_mode(0);
-		BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
-
-		ret = btmtk_wakeup_uarthub();
-
-		/* reset uarthub assert bit */
-		ret = mtk8250_uart_hub_assert_bit_ctrl(0);
-		BTMTK_DBG("%s mtk8250_uart_hub_assert_bit_ctrl(0) ret[%d]", __func__, ret);
-
-		/* use uarthub bypass mode */
-		ret = mtk8250_uart_hub_enable_bypass_mode(1);
-		BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
-
-		/* disable ADSP,MD when fw dl, include reset uarthub */
-		ret = mtk8250_uart_hub_fifo_ctrl(1);
-		BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(1) ret[%d]", __func__, ret);
-	}
-#endif
 	/* set tty host baud and flowcontrol to default value */
 	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);
 	tty_termios_encode_baud_rate(&new_termios, BT_UART_DEFAULT_BAUD, BT_UART_DEFAULT_BAUD);
