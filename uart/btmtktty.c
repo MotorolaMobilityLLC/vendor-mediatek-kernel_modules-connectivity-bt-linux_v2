@@ -879,6 +879,11 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	/* temp solution wait pmic enable */
 	msleep(100);
 
+	if (bmain_info->reset_stack_flag == HW_ERR_CODE_CHIP_RESET) {
+		BTMTK_ERR("%s: reset_stack_flag[%02x]", __func__, bmain_info->reset_stack_flag);
+		goto exit;
+	}
+
 	btmtk_set_uart_rx_aux();
 
 	if (connv3_ext_32k_on()) {
