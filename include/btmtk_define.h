@@ -136,10 +136,11 @@
 #define BTMTK_LOG_LVL_MAX	BTMTK_LOG_LVL_DBG
 #define BTMTK_LOG_LVL_DEF	BTMTK_LOG_LVL_INFO	/* default setting */
 
+#define SEPARATOR_LEN 2
 #define HCI_SNOOP_ENTRY_NUM	30
-#define HCI_SNOOP_BUF_SIZE	31	/* not use 32 because of separator_char */
-#define HCI_SNOOP_MAX_BUF_SIZE	64
-#define HCI_SNOOP_TS_STR_LEN	24
+#define HCI_SNOOP_BUF_SIZE	32
+#define HCI_SNOOP_MAX_BUF_SIZE	(HCI_SNOOP_BUF_SIZE * 2 + SEPARATOR_LEN)
+#define HCI_SNOOP_TS_STR_LEN	50
 #define WMT_OVER_HCI_HEADER_SIZE	3
 #define READ_ISO_PACKET_CMD_SIZE	4
 
@@ -376,6 +377,8 @@ struct bt_utc_struct {
 	struct rtc_time tm;
 	u32 usec;
 	u32 sec;
+	u32 ksec;
+	u32 knsec;
 };
 
 #define BT_DOWNLOAD	1
