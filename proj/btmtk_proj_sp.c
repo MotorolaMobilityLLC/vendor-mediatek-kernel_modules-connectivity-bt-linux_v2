@@ -297,6 +297,13 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	if(ret < 0)
 		BTMTK_ERR("[ERR] %s: mediatek,bt hub-en ret[%d]", __func__, ret);
 
+	ret = of_property_read_u32(tty->dev->of_node, "sleep-en", &cif_dev->sleep_en);
+	if(ret < 0)
+		BTMTK_ERR("[ERR] %s: mediatek,bt sleep-en ret[%d]", __func__, ret);
+
+	/* temp: for disable sleep */
+	cif_dev->sleep_en = 0;
+
 	pinctrl_ptr = devm_pinctrl_get(tty->dev);
 	if (IS_ERR(pinctrl_ptr)) {
 		BTMTK_ERR("[ERR] %s: fail to get bt pinctrl", __func__);
@@ -304,7 +311,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	}
 	//btmtk_pinctrl_exec(INIT_STATE_PINCTRL_NAME);
 	connv3_sub_drv_ops_register(CONNV3_DRV_TYPE_BT, &btmtk_drv_cbs);
-	BTMTK_INFO("%s end, baudrate[%d] hub_en[%d]", __func__, cif_dev->baudrate, cif_dev->hub_en);
+	BTMTK_INFO("%s end, baudrate[%d] hub_en[%d] sleep_en[%d]", __func__, cif_dev->baudrate, cif_dev->hub_en, cif_dev->sleep_en);
 	return 0;
 }
 
