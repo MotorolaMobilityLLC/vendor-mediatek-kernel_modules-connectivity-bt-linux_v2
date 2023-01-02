@@ -213,9 +213,21 @@ void btmtk_uarthub_err_cb(unsigned int err_type)
 
 int btmtk_wakeup_uarthub(void) {
 	int ready_retry = 50, ret = 0;
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	if (!g_sbdev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
 
 	/* Set TX,RX request */
-	ret = mtk8250_uart_hub_dev0_set_tx_request();
+	ret = mtk8250_uart_hub_dev0_set_tx_request(cif_dev->tty);
 	BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_tx_request, ret[%d]", __func__, ret);
 	if (ret) {
 		BTMTK_ERR("%s mtk8250_uart_hub_dev0_set_tx_request fail ret[%d]", __func__, ret);
@@ -269,7 +281,7 @@ void btmtk_release_uarthub(bool force)
 	}
 	/* Clr TX,RX request, let uarthub can sleep */
 	if (cif_dev->hub_en && (cif_dev->sleep_en || force)) {
-		ret =  mtk8250_uart_hub_dev0_clear_rx_request();
+		ret =  mtk8250_uart_hub_dev0_clear_rx_request(cif_dev->tty);
 		BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_rx_request ret[%d]", __func__, ret);
 		if (ret)
 			BTMTK_ERR("%s mtk8250_uart_hub_dev0_clear_rx_request fail ret[%d]", __func__, ret);
