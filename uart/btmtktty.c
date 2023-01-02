@@ -38,6 +38,7 @@ static char event_need_compare[EVENT_COMPARE_SIZE] = {0};
 static char event_need_compare_len;
 static char event_compare_status;
 static struct tty_struct *g_tty;
+static struct tty_ldisc_ops btmtk_uart_ldisc;
 
 static int btmtk_uart_open(struct hci_dev *hdev)
 {
@@ -891,7 +892,9 @@ static int btmtk_uart_tty_probe(struct tty_struct *tty)
 
 	/* Init tty-related operation */
 	tty->receive_room = 65536;
+#if (defined(ANDROID_OS) && (KERNEL_VERSION(5, 15, 0) > LINUX_VERSION_CODE)) || defined(LINUX_OS)
 	tty->port->low_latency = 1;
+#endif
 
 	btmtk_uart_allocate_memory();
 
@@ -1014,7 +1017,9 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 	switch (cmd) {
 	case HCIUARTSETPROTO:
 		BTMTK_INFO("%s: <!!> Set low_latency to TRUE <!!>", __func__);
+#if (defined(ANDROID_OS) && (KERNEL_VERSION(5, 15, 0) > LINUX_VERSION_CODE)) || defined(LINUX_OS)
 		tty->port->low_latency = 1;
+#endif
 		break;
 	case HCIUARTSETBAUD:
 		if (copy_from_user(&uart_cfg, (struct UART_CONFIG __user *)arg,
@@ -1105,7 +1110,9 @@ static int btmtk_uart_tty_compat_ioctl(struct tty_struct *tty, struct file *file
 	switch (cmd) {
 	case HCIUARTSETPROTO:
 		BTMTK_INFO("%s: <!!> Set low_latency to TRUE <!!>", __func__);
+#if (defined(ANDROID_OS) && (KERNEL_VERSION(5, 15, 0) > LINUX_VERSION_CODE)) || defined(LINUX_OS)
 		tty->port->low_latency = 1;
+#endif
 		break;
 	case HCIUARTSETBAUD:
 		if (copy_from_user(&uart_cfg, (struct UART_CONFIG __user *)arg,
@@ -1160,7 +1167,11 @@ static int btmtk_uart_tty_compat_ioctl(struct tty_struct *tty, struct file *file
 	return err;
 }
 
+#if (defined(ANDROID_OS) && (KERNEL_VERSION(5, 15, 0) > LINUX_VERSION_CODE)) || defined(LINUX_OS)
 static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, char *flags, int count)
+#else
+static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const char *flags, int count)
+#endif
 {
 	int ret = -1;
 	struct btmtk_dev *bdev = tty->disc_data;
@@ -1484,14 +1495,17 @@ static struct notifier_block btmtk_pm_notifier = {
 
 static int uart_register(void)
 {
-	static struct tty_ldisc_ops btmtk_uart_ldisc;
 	u32 err = 0;
 
 	BTMTK_INFO("%s", __func__);
 
 	/* Register the tty discipline */
 	memset(&btmtk_uart_ldisc, 0, sizeof(btmtk_uart_ldisc));
+#if (defined(ANDROID_OS) && (KERNEL_VERSION(5, 15, 0) > LINUX_VERSION_CODE)) || defined(LINUX_OS)
 	btmtk_uart_ldisc.magic = TTY_LDISC_MAGIC;
+#else
+	btmtk_uart_ldisc.num = N_MTK;
+#endif
 	btmtk_uart_ldisc.name = "n_mtk";
 	btmtk_uart_ldisc.open = btmtk_cif_probe;
 	btmtk_uart_ldisc.close = btmtk_cif_disconnect;
@@ -1504,7 +1518,11 @@ static int uart_register(void)
 	btmtk_uart_ldisc.write_wakeup = btmtk_uart_tty_wakeup;
 	btmtk_uart_ldisc.owner = THIS_MODULE;
 
+#if (defined(ANDROID_OS) && (KERNEL_VERSION(5, 15, 0) > LINUX_VERSION_CODE)) || defined(LINUX_OS)
 	err = tty_register_ldisc(N_MTK, &btmtk_uart_ldisc);
+#else
+	err = tty_register_ldisc(&btmtk_uart_ldisc);
+#endif
 	if (err) {
 		BTMTK_ERR("MTK line discipline registration failed. (%d)", err);
 		return err;
@@ -1528,11 +1546,15 @@ static int uart_deregister(void)
 		return err;
 	}
 
+#if (defined(ANDROID_OS) && (KERNEL_VERSION(5, 15, 0) > LINUX_VERSION_CODE)) || defined(LINUX_OS)
 	err = tty_unregister_ldisc(N_MTK);
 	if (err) {
 		BTMTK_ERR("line discipline registration failed. (%d)", err);
 		return err;
 	}
+#else
+	tty_unregister_ldisc(&btmtk_uart_ldisc);
+#endif
 
 	return 0;
 }

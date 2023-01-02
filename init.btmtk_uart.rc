@@ -3,10 +3,13 @@
 #  insmod /vendor/lib/modules/btmtk_uart_unify.ko
 #  start uart_launcher
 
-on property:vendor.connsys.driver.ready=yes
+on property:vendor.connsys.driver.ready=yes && property:ro.vendor.bt.connac3=yes
   insmod /vendor/lib/modules/btmtk_uart_unify.ko
   #chown bluetooth bluetooth /proc/driver/bt_dbg
   start uart_launcher
+
+on property:ro.vendor.bt.connac3=no
+  stop uart_launcher
 
 on property:vendor.connsys.driver.ready=no
   stop uart_launcher
