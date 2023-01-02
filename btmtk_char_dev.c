@@ -505,6 +505,7 @@ static long BT_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long a
 static int BT_open(struct inode *inode, struct file *file)
 {
 	int32_t ret;
+	u8 retry = 0;
 
 	/* Turn on BT */
 	if (g_sbdev == NULL) {
@@ -522,13 +523,27 @@ static int BT_open(struct inode *inode, struct file *file)
 		return -1;
 	}
 
-	/* incase of rc with pwr_on_uds_work */
-	flush_work(&g_sbdev->pwr_on_uds_work);
-
 	__pm_stay_awake(bt_wakelock);
 	BTMTK_INFO("major %d minor %d (pid %d)", imajor(inode), iminor(inode), current->pid);
 
-	ret = g_sbdev->hdev->open(g_sbdev->hdev);
+	/* BT on in reboot conflict with pre-cal flow */
+	do {
+		ret = -EAGAIN;
+		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_DISCONNECT) {
+			BTMTK_WARN("%s: uart disconnected", __func__);
+			__pm_relax(bt_wakelock);
+			return -1;
+		}
+		/* wait pre-cal done */
+		if (g_sbdev->is_pre_cal_done)
+			ret = g_sbdev->hdev->open(g_sbdev->hdev);
+		if (ret) {
+			BTMTK_WARN_LIMITTED("%s: retry[%d] ret[%d] is_pre_cal_done[%d]"
+							, __func__, ret, retry, g_sbdev->is_pre_cal_done);
+			msleep(20);
+		}
+	} while ((ret == -EIO || ret == -EAGAIN) && retry++ < BT_OPEN_MAX_RETRY);
+
 	if (ret) {
 		BTMTK_ERR("BT turn on fail!");
 		__pm_relax(bt_wakelock);

@@ -4148,13 +4148,6 @@ static int bt_close(struct hci_dev *hdev)
 #if (USE_DEVICE_NODE == 1)
 	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
 			|| state == BTMTK_STATE_SUBSYS_RESET) {
-		BTMTK_WARN("%s: wait dump_comp , can't close yet state[%d]", __func__, state);
-		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
-			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
-			btmtk_fwdump_wake_unlock();
-			connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump not complete");
-			btmtk_sp_coredump_end();
-		}
 		if (main_info.hif_hook.cif_mutex_lock)
 			main_info.hif_hook.cif_mutex_lock(bdev);
 		goto unlock;
@@ -4223,7 +4216,6 @@ unlock:
 	if (main_info.hif_hook.cif_mutex_unlock)
 		main_info.hif_hook.cif_mutex_unlock(bdev);
 exit:
-	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
 #if (USE_DEVICE_NODE == 1)
 	/* avoid reset start at new bt on */
 	btmtk_reset_timer_del(bdev);
@@ -4233,6 +4225,7 @@ exit:
 		btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
 
 #endif
+	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
 
 err:
 	main_info.reset_stack_flag = HW_ERR_NONE;
@@ -4266,7 +4259,6 @@ int bt_open(struct hci_dev *hdev)
 		return -EFAULT;
 	}
 
-	fstate = btmtk_fops_get_state(bdev);
 	if (fstate == BTMTK_FOPS_STATE_OPENED) {
 		BTMTK_WARN("%s: fops opened!", __func__);
 		return -EIO;
@@ -4278,10 +4270,29 @@ int bt_open(struct hci_dev *hdev)
 		return -EAGAIN;
 	}
 
+	/* mutex with bt close and disconnect */
+	if (main_info.hif_hook.cif_mutex_lock)
+		main_info.hif_hook.cif_mutex_lock(bdev);
+
+	fstate = btmtk_fops_get_state(bdev);
+	if (fstate == BTMTK_FOPS_STATE_OPENED) {
+		BTMTK_WARN("%s: fops opened!", __func__);
+		ret = -EIO;
+		goto unlock;
+	}
+
+	if ((fstate == BTMTK_FOPS_STATE_CLOSING) ||
+		(fstate == BTMTK_FOPS_STATE_OPENING)) {
+		BTMTK_WARN("%s: fops open/close is on-going !", __func__);
+		ret = -EAGAIN;
+		goto unlock;
+	}
+
 	state = btmtk_get_chip_state(bdev);
 	if (state == BTMTK_STATE_INIT || state == BTMTK_STATE_DISCONNECT) {
 		BTMTK_WARN("%s: chip_state[%d] is init or disconnect!", __func__, state);
-		return -EAGAIN;
+		ret = -EAGAIN;
+		goto unlock;
 	}
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENING);
@@ -4356,34 +4367,24 @@ int bt_open(struct hci_dev *hdev)
 	}
 
 	DUMP_TIME_STAMP("open_end");
-	return 0;
+	ret = 0;
+	goto unlock;
 
 failed:
+
 #if (USE_DEVICE_NODE == 1)
-
-	state = btmtk_get_chip_state(bdev);
-
-	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
-			|| state == BTMTK_STATE_SUBSYS_RESET) {
-		BTMTK_WARN("%s: wait dump_comp, can't close yet state[%d]", __func__, state);
-		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
-			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
-			btmtk_fwdump_wake_unlock();
-			connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump fail");
-			btmtk_sp_coredump_end();
-
-		}
-	}
-
 	main_info.hif_hook.close(hdev);
 	state = btmtk_get_chip_state(bdev);
 	/* if state is disconnect means uart_launcher is disconnected, not set to close state */
 	if (state != BTMTK_STATE_DISCONNECT)
 		btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
-
 #endif
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
+
+unlock:
+	if (main_info.hif_hook.cif_mutex_unlock)
+		main_info.hif_hook.cif_mutex_unlock(bdev);
 
 	return ret;
 }
