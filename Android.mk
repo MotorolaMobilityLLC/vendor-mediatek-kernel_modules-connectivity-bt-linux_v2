@@ -68,17 +68,22 @@
 
 LOCAL_PATH := $(call my-dir)
 
+BT_PLATFORM:=$(subst MTK_CONSYS_MT,,$(MTK_BT_CHIP))
+$(info [BT_Drv] MTK_BT_SUPPORT = $(MTK_BT_SUPPORT))
+$(info [BT_Drv] MTK_BT_CHIP = $(MTK_BT_CHIP))
+
 ifeq ($(MTK_BT_SUPPORT),yes)
-ifneq ($(filter MTK_MT79%, $(MTK_BT_CHIP)),)
+#ifneq ($(filter MTK_MT79%, $(MTK_BT_CHIP)),)
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := btmtk_sdio_unify.ko
+LOCAL_MODULE := btmtk_uart_unify.ko
+LOCAL_REQUIRED_MODULES := conninfra.ko
 LOCAL_PROPRIETARY_MODULE := true
 LOCAL_MODULE_OWNER := mtk
-LOCAL_INIT_RC := init.btmtk_sdio.rc
+LOCAL_INIT_RC := init.btmtk_uart.rc
 LOCAL_SRC_FILES := $(patsubst $(LOCAL_PATH)/%,%,$(shell find $(LOCAL_PATH) -type f -name '*.[cho]')) Makefile
 
 include $(MTK_KERNEL_MODULE)
 
-endif
+#endif
 endif

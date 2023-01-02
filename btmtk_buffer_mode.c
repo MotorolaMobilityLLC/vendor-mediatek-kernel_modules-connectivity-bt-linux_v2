@@ -131,7 +131,7 @@ static int btmtk_buffer_mode_set_radio(struct btmtk_buffer_mode_struct *buffer_m
 	cmd[SET_RADIO_CMD_EDR_MAX_OFFSET] = buffer_mode->bt0_radio.radio_1 & 0x3F;		/* edr_max_pwr */
 	cmd[SET_RADIO_CMD_EDR_MODE_OFFSET] = (buffer_mode->bt0_radio.radio_0 & 0xC0) >> 6;	/* edr_pwr_mode */
 
-	BTMTK_INFO_RAW(cmd, SET_RADIO_CMD_LEN, "%s: Send", __func__);
+	BTMTK_INFO_RAW(cmd, SET_RADIO_CMD_LEN, "%s: Send len[%d]", __func__, SET_RADIO_CMD_LEN);
 	ret = btmtk_main_send_cmd(buffer_mode->bdev,
 			cmd, SET_RADIO_CMD_LEN,
 			event, SET_RADIO_EVT_LEN,
@@ -149,7 +149,7 @@ static int btmtk_buffer_mode_set_group_boundary(struct btmtk_buffer_mode_struct 
 
 	memcpy(&cmd[SET_GRP_CMD_PAYLOAD_OFFSET], buffer_mode->bt0_ant0_grp_boundary, BUFFER_MODE_GROUP_LENGTH);
 
-	BTMTK_INFO_RAW(cmd, SET_GRP_CMD_LEN, "%s: Send", __func__);
+	BTMTK_INFO_RAW(cmd, SET_GRP_CMD_LEN, "%s: Send len[%d]", __func__, SET_GRP_CMD_LEN);
 	ret = btmtk_main_send_cmd(buffer_mode->bdev,
 			cmd, SET_GRP_CMD_LEN,
 			event, SET_GRP_EVT_LEN,
@@ -168,7 +168,7 @@ static int btmtk_buffer_mode_set_power_offset(struct btmtk_buffer_mode_struct *b
 
 	memcpy(&cmd[SET_PWR_OFFSET_CMD_PAYLOAD_OFFSET], buffer_mode->bt0_ant0_pwr_offset, BUFFER_MODE_CAL_LENGTH);
 
-	BTMTK_INFO_RAW(cmd, SET_PWR_OFFSET_CMD_LEN, "%s: Send", __func__);
+	BTMTK_INFO_RAW(cmd, SET_PWR_OFFSET_CMD_LEN, "%s: Send len[%d]", __func__, SET_PWR_OFFSET_CMD_LEN);
 	ret = btmtk_main_send_cmd(buffer_mode->bdev,
 			cmd, SET_PWR_OFFSET_CMD_LEN,
 			event, SET_PWR_OFFSET_EVT_LEN,

@@ -73,7 +73,6 @@ struct mtk_stp_hdr {
 #define BT_NONE_FC 0x00
 #define BT_HW_FC 0x40
 #define BT_SW_FC 0x80
-#define BT_MTK_SW_FC 0xC0
 
 /**
  * Send cmd dispatch evt
@@ -87,7 +86,7 @@ struct mtk_stp_hdr {
 #define LD_PATCH_CMD_LEN 10
 #define LD_PATCH_EVT_LEN 8
 
-#define SETBAUD_CMD_LEN 13
+#define SETBAUD_CMD_LEN 14
 #define SETBAUD_EVT_LEN 9
 
 #define GETBAUD_CMD_LEN 9

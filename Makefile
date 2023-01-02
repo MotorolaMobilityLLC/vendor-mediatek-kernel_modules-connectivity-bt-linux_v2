@@ -8,6 +8,10 @@ CONFIG_SUPPORT_DVT=n
 CONFIG_SUPPORT_HW_DVT=n
 CONFIG_SUPPORT_MULTI_DEV_NODE=n
 
+ifndef TOP
+    TOP := $(srctree)/..
+endif
+
 ifneq ($(TARGET_BUILD_VARIANT), user)
     ccflags-y += -DBUILD_QA_DBG=1
 else
@@ -56,7 +60,7 @@ endif
 
 #################### Configurations ####################
 # For chip interface, driver supports "usb", "sdio", "uart_tty", "uart_serdev" and "btif"
-MTK_CHIP_IF := usb
+MTK_CHIP_IF := uart_tty
 
 ifeq ($(MTK_CHIP_IF), sdio)
     MOD_NAME = btmtk_sdio_unify
@@ -71,6 +75,7 @@ else ifeq ($(MTK_CHIP_IF), usb)
     ccflags-y += -I$(src)/include/usb
 else ifeq ($(MTK_CHIP_IF), uart_tty)
     MOD_NAME = btmtk_uart_unify
+    CONFIG_SUPPORT_DEVICE_NODE = y
     CFILES := uart/btmtktty.c btmtk_woble.c btmtk_chip_reset.c
     ccflags-y += -DCHIP_IF_UART_TTY
     ccflags-y += -I$(src)/include/uart/tty
@@ -80,7 +85,7 @@ else ifeq ($(MTK_CHIP_IF), uart_serdev)
     CFILES := uart/btmtkserdev.c
     ccflags-y += -I$(src)/include/uart/serdev
 else
-    MOD_NAME = btmtkbtif_unify
+    MOD_NAME = btmtk_btif_unify
     CFILES := btif/btmtk_btif.c
     ccflags-y += -DCHIP_IF_BTIF
     ccflags-y += -I$(src)/include/btif
@@ -88,15 +93,39 @@ endif
 
 MTK_PROJ_TYPE := ce
 
-ifeq ($(MTK_PROJ_TYPE), sp)
+ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
+CFILES += btmtk_queue.c btmtk_char_dev.c
+endif
+
+ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
+ccflags-y += -DUSE_DEVICE_NODE=1
+else
+ccflags-y += -DUSE_DEVICE_NODE=0
+endif
+
+$(info [BT_Drv] MTK_PROJ_TYPE = $(MTK_PROJ_TYPE) src = $(src))
+#ifeq ($(MTK_PROJ_TYPE), sp)
+ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
     CFILES += proj/btmtk_proj_sp.c
-else ifeq ($(MTK_PROJ_TYPE), ce)
+#else ifeq ($(MTK_PROJ_TYPE), ce)
+else
     CFILES += proj/btmtk_proj_ce.c
 endif
 
 CFILES += btmtk_main.c btmtk_fw_log.c
 
-ccflags-y += -I$(src)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth
+ccflags-y += -I$(src)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth -I$(src)/proj/include/
+
+ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
+  $(info [BT_Drv] TOP = $(TOP))
+  $(info [BT_Drv] KBUILD_EXTRA_SYMBOLS = $(KBUILD_EXTRA_SYMBOLS))
+  #KBUILD_EXTRA_SYMBOLS := /mfs/mtkslt1121/mtk24223/CAS_REAL/alps-dev-s0_bsp-connac3-1210--2022_03_08_12_00/merged/out_krn/target/product/mgk_64_k510/obj/ETC/conninfra.ko_intermediates/LINKED/Module.symvers
+  CONN_INFRA_SRC := $(TOP)/vendor/mediatek/kernel_modules/connectivity/conninfra
+  ccflags-y += -I$(CONN_INFRA_SRC)/include
+  ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility
+  ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/include
+  ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/connsyslog
+endif
 
 ccflags-y += -DLINUX_OS
 ccflags-y += -Werror
@@ -147,4 +176,5 @@ ccs:
 	./util/checkpatch.pl -f btmtk_buffer_mode.c
 	./util/checkpatch.pl -f btmtk_woble.c
 	./util/checkpatch.pl -f btmtk_chip_reset.c
-
+	./util/checkpatch.pl -f btmtk_queue.c
+	./util/checkpatch.pl -f btmtk_char_dev.c

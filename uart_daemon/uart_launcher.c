@@ -101,12 +101,12 @@ int setup_uart_param (
 
     cfmakeraw(&ti);
 
-    BPRINT_D("ti.c_cflag = 0x%08x", ti.c_cflag);
+    BPRINT_I("ti.c_cflag = 0x%08x", ti.c_cflag);
     ti.c_cflag |= CLOCAL;
-    BPRINT_D("CLOCAL = 0x%x", CLOCAL);
-    BPRINT_D("(ori)ti.c_iflag = 0x%08x", ti.c_iflag);
-    BPRINT_D("(ori)ti.c_cflag = 0x%08x", ti.c_cflag);
-    BPRINT_D("sUartConfig->fc= %d (0:none,sw,hw,linux)", sUartConfig->fc);
+    BPRINT_I("CLOCAL = 0x%x", CLOCAL);
+    BPRINT_I("(ori)ti.c_iflag = 0x%08x", ti.c_iflag);
+    BPRINT_I("(ori)ti.c_cflag = 0x%08x", ti.c_cflag);
+    BPRINT_I("sUartConfig->fc= %d (0:none,sw,hw,linux)", sUartConfig->fc);
 
     switch (sUartConfig->fc) {
      /* HW FC Enable */
@@ -289,8 +289,9 @@ int main(int argc, char *argv[])
     sigaction(SIGQUIT, &sigact, NULL);
     sigaction(SIGKILL, &sigact, NULL);
     init_flock(&fl);
+    ld = N_MTK;
 
-    while ((opt = getopt(argc, argv, "c:f:p:k::")) != -1) {
+    while ((opt = getopt(argc, argv, "c:f:p:k:l::")) != -1) {
         switch (opt) {
             /* change baudrate */
             case 'c':
@@ -317,6 +318,11 @@ int main(int argc, char *argv[])
                 osi_system("killall uart_launcher");
                 BPRINT_I("Kill uart_launcher");
                 return 0;
+            /* set ldisc */
+            case 'l':
+                ld = atoi(optarg);
+                BPRINT_I("set ldisc[%d]", ld);
+                break;
             case '?':
         default:
                 BPRINT_I("set baud:\t uart_launcher -c [baudrate]");
@@ -353,7 +359,6 @@ int main(int argc, char *argv[])
         goto exit;
     }
 
-    ld = N_MTK;
     /* to ensure driver register TIOCSETD, retry 20 times */
     retry = 0;
     while (1) {

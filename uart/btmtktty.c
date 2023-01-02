@@ -13,6 +13,12 @@
 #include "btmtk_define.h"
 #include "btmtk_uart_tty.h"
 #include "btmtk_main.h"
+//#include "connv3.h"
+#if (USE_DEVICE_NODE == 1)
+#include "btmtk_proj_sp.h"
+#include <linux/platform_device.h>
+#include <linux/of_device.h>
+#endif
 
 #define LOG TRUE
 
@@ -61,13 +67,16 @@ int btmtk_uart_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 	struct btmtk_uart_dev *cif_dev = NULL;
 	int ret = -1;
 
-	BTMTK_DBG("%s: start", __func__);
+	BTMTK_DBG("%s: skb_len[%d]", __func__, skb->len);
 
 	if (bdev == NULL) {
 		BTMTK_ERR("bdev is NULL");
 		ret = -1;
+		/* Removed: leave free to btmtk_main_send_cmd */
+#if 0
 		kfree_skb(skb);
 		skb = NULL;
+#endif
 		goto exit;
 	}
 
@@ -75,8 +84,11 @@ int btmtk_uart_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 	if (cif_dev == NULL) {
 		BTMTK_ERR("cif_dev is NULL, bdev=%p", bdev);
 		ret = -1;
+		/* Removed: leave free to btmtk_main_send_cmd */
+#if 0
 		kfree_skb(skb);
 		skb = NULL;
+#endif
 		goto exit;
 	}
 
@@ -89,7 +101,8 @@ exit:
 
 static int btmtk_uart_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 {
-	int ret;
+	int ret = 0;
+#if (USE_DEVICE_NODE == 0)
 	u8 cmd[READ_REGISTER_CMD_LEN] = {0x01, 0x6F, 0xFC, 0x0C,
 				0x01, 0x08, 0x08, 0x00,
 				0x02, 0x01, 0x00, 0x01,
@@ -110,13 +123,15 @@ static int btmtk_uart_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 	*val = le32_to_cpu(*val);
 
 	BTMTK_INFO("%s: reg=%x, value=0x%08x", __func__, reg, *val);
-
+#endif
 	return ret;
 }
 
+#if (USE_DEVICE_NODE == 0)
 static int btmtk_uart_write_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 {
-	int ret;
+	int ret = 0;
+
 	u8 cmd[WRITE_REGISTER_CMD_LEN] = { 0x01, 0x6F, 0xFC, 0x14,
 			0x01, 0x08, 0x10, 0x00,
 			0x01, 0x01, 0x00, 0x01,
@@ -136,6 +151,7 @@ static int btmtk_uart_write_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 
 	return ret;
 }
+#endif
 
 int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
@@ -179,7 +195,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 		} else {
 			BTMTK_INFO("%s compare fail", __func__);
 			BTMTK_INFO_RAW(event_need_compare, event_need_compare_len,
-				"%s: event_need_compare:", __func__);
+				"%s: event_need_compare_len[%d]", __func__, event_need_compare_len);
 			BTMTK_INFO_RAW(skb->data, skb->len, "%s: skb->data:", __func__);
 			return 0;
 		}
@@ -248,26 +264,27 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
 	goto exit;
 fw_assert:
-	btmtk_send_assert_cmd(bdev);
+	//btmtk_send_assert_cmd(bdev);
 exit:
 	return ret;
 }
 
 int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_cfg)
 {
-	u8 cmd_115200[] = { 0x01, 0x6F, 0xFC, 0x09,
-		0x01, 0x04, 0x05, 0x00, 0x01, 0x00, 0xC2, 0x01, 0x00};
-	u8 cmd_230400[] = { 0x01, 0x6F, 0xFC, 0x09,
-		0x01, 0x04, 0x05, 0x00, 0x01, 0x00, 0x84, 0x03, 0x00};
-	u8 cmd_921600[] = { 0x01, 0x6F, 0xFC, 0x09,
-		0x01, 0x04, 0x05, 0x00, 0x01, 0x00, 0x10, 0x0E, 0x00};
-	u8 cmd_2M[] = { 0x01, 0x6F, 0xFC, 0x09,
-		0x01, 0x04, 0x05, 0x00, 0x01, 0x80, 0x84, 0x1E, 0x00};
-	u8 cmd_3M[] = { 0x01, 0x6F, 0xFC, 0x09,
-		0x01, 0x04, 0x05, 0x00, 0x01, 0xC0, 0xC6, 0x2D, 0x00};
-	u8 cmd_4M[] = { 0x01, 0x6F, 0xFC, 0x09,
-		0x01, 0x04, 0x05, 0x00, 0x01, 0x00, 0x09, 0x3D, 0x00};
-
+	u8 baud_115200[] = { 0x01, 0x6F, 0xFC, 0x0A, 0x01, 0x04,
+				 0x06, 0x00, 0x01, 0x01, 0xC2, 0x01, 0x00, 0x03 };
+	u8 baud_921600[] = { 0x01, 0x6F, 0xFC, 0x0A, 0x01, 0x04,
+				 0x06, 0x00, 0x01, 0x00, 0x10, 0x0E, 0x00, 0x03 };
+	u8 baud_3M[] = { 0x01, 0x6F, 0xFC, 0x0A, 0x01, 0x04,
+				 0x06, 0x00, 0x01, 0xC0, 0xC6, 0x2D, 0x00, 0x03 };
+	u8 baud_4M[] = { 0x01, 0x6F, 0xFC, 0x0A, 0x01, 0x04,
+				 0x06, 0x00, 0x01, 0x00, 0x09, 0x3D, 0x00, 0x03 };
+	u8 baud_8M[] = { 0x01, 0x6F, 0xFC, 0x0A, 0x01, 0x04,
+				 0x06, 0x00, 0x01, 0x00, 0x12, 0x7A, 0x00, 0x03 };
+	u8 baud_10M[] = { 0x01, 0x6F, 0xFC, 0x0A, 0x01, 0x04,
+				 0x06, 0x00, 0x01, 0x80, 0x96, 0x98, 0x00, 0x03 };
+	u8 baud_12M[] = { 0x01, 0x6F, 0xFC, 0x0A, 0x01, 0x04,
+				 0x06, 0x00, 0x01, 0x00, 0x1B, 0xB7, 0x00, 0x03 };
 	u8 event[] = {0x04, 0xE4, 0x06, 0x02, 0x04, 0x02, 0x00, 0x00, 0x01};
 	u8 *cmd = NULL;
 	struct btmtk_uart_dev *cif_dev = NULL;
@@ -277,24 +294,29 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
 	switch (uart_cfg->iBaudrate) {
-	case 230400:
-		cmd = cmd_230400;
-		break;
 	case 921600:
-		cmd = cmd_921600;
-		break;
-	case 2000000:
-		cmd = cmd_2M;
+		cmd = baud_921600;
 		break;
 	case 3000000:
-		cmd = cmd_3M;
+		cmd = baud_3M;
 		break;
 	case 4000000:
-		cmd = cmd_4M;
+		cmd = baud_4M;
+		break;
+	case 8000000:
+		cmd = baud_8M;
+		break;
+	case 10000000:
+		cmd = baud_10M;
+		break;
+	case 12000000:
+		cmd = baud_12M;
 		break;
 	default:
 		/* default chip baud is 115200 */
-		cmd = cmd_115200;
+		cmd = baud_115200;
+		return 0;
+		//break;
 	}
 
 	switch (uart_cfg->fc) {
@@ -303,9 +325,6 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 		break;
 	case UART_LINUX_FC:
 		cmd[BT_FLOWCTRL_OFFSET] = BT_SW_FC;
-		break;
-	case UART_MTK_SW_FC:
-		cmd[BT_FLOWCTRL_OFFSET] = BT_MTK_SW_FC;
 		break;
 	default:
 		/* default disable flow control */
@@ -316,12 +335,13 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 			cmd, SETBAUD_CMD_LEN, event, SETBAUD_EVT_LEN,
 			0, 0, BTMTK_TX_CMD_FROM_DRV);
 	if (ret < 0) {
-		BTMTK_ERR("%s btmtk_uart_send_set_uart_cmd failed!!", __func__);
+		BTMTK_ERR("%s failed!!", __func__);
 		return ret;
 	}
 
 	cif_dev->uart_baudrate_set = 1;
 	BTMTK_INFO("%s done", __func__);
+
 	return 0;
 }
 
@@ -357,10 +377,15 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 		BTMTK_INFO("%s uart baudrate is 115200, no need", __func__);
 		return 0;
 	}
-	ret = btmtk_main_send_cmd(bdev, cmd, WAKEUP_CMD_LEN, event, WAKEUP_EVT_LEN,
-			0, 0, BTMTK_TX_CMD_FROM_DRV);
+	if (is_mt6639(bdev->chip_id) || is_mt66xx(bdev->chip_id))
+		ret = btmtk_main_send_cmd(bdev, cmd+4, 1, event, WAKEUP_EVT_LEN,
+				0, 0, BTMTK_TX_CMD_FROM_DRV);
+	else
+		ret = btmtk_main_send_cmd(bdev, cmd, WAKEUP_CMD_LEN, event, WAKEUP_EVT_LEN,
+				0, 0, BTMTK_TX_CMD_FROM_DRV);
+
 	if (ret < 0) {
-		BTMTK_ERR("%s btmtk_uart_send_query_uart_cmd failed!!", __func__);
+		BTMTK_ERR("%s failed!!", __func__);
 		return ret;
 	}
 
@@ -449,6 +474,121 @@ exit:
 	return ret;
 }
 
+#if (USE_DEVICE_NODE == 1)
+static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
+{
+	struct ktermios new_termios;
+	struct tty_struct *tty;
+	struct UART_CONFIG uart_cfg;
+	struct btmtk_uart_dev *cif_dev = NULL;
+	int ret = -1;
+	int cif_event = 0;
+	struct btmtk_cif_state *cif_state = NULL;
+
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	uart_cfg = cif_dev->uart_cfg;
+	tty = cif_dev->tty;
+	new_termios = tty->termios;
+
+	BTMTK_INFO("%s start", __func__);
+# if 0
+	BTMTK_INFO("%s tigger reset pin: %d", __func__, bdev->bt_cfg.dongle_reset_gpio_pin);
+	gpio_set_value(bdev->bt_cfg.dongle_reset_gpio_pin, 0);
+	msleep(SUBSYS_RESET_GPIO_DELAY_TIME);
+	gpio_set_value(bdev->bt_cfg.dongle_reset_gpio_pin, 1);
+	/* Basically, we need to polling the cr (BT_MISC) untill the subsys reset is completed
+	 * However, there is no uart_hw mechnism in buzzard, we can't read the info from controller now
+	 * use msleep instead currently
+	 */
+	msleep(SUBSYS_RESET_GPIO_DELAY_TIME);
+#endif
+	/* Flush any pending characters in the driver and discipline. */
+	//tty_ldisc_flush(tty);
+	//tty_driver_flush_buffer(tty);
+
+	//if (tty->ldisc->ops->flush_buffer)
+		//tty->ldisc->ops->flush_buffer(tty);
+
+	BTMTK_INFO("%s flush 0", __func__);
+
+	/* set tty host baud and flowcontrol to default value */
+	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);
+	tty_termios_encode_baud_rate(&new_termios, BT_UART_DEFAULT_BAUD, BT_UART_DEFAULT_BAUD);
+	new_termios.c_cflag &= ~(CRTSCTS);
+	new_termios.c_iflag &= ~(NOFLSH);
+	tty_set_termios(tty, &new_termios);
+
+	/* set chip baud and flowcontrol to config setting */
+	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
+	if (ret < 0) {
+		BTMTK_ERR("%s btmtk_uart_send_set_uart_cmd failed!!", __func__);
+		goto exit;
+	}
+
+
+	/* set tty host baud and flowcontrol to config setting */
+	BTMTK_INFO("Set config baud: %d, flowcontrol: %d", uart_cfg.iBaudrate, uart_cfg.fc);
+
+	tty_termios_encode_baud_rate(&new_termios, uart_cfg.iBaudrate, uart_cfg.iBaudrate);
+
+	switch (uart_cfg.fc) {
+	/* HW FC Enable */
+	case UART_HW_FC:
+		new_termios.c_cflag |= CRTSCTS;
+		new_termios.c_iflag &= ~(NOFLSH);
+		break;
+	/* Linux Software FC */
+	case UART_LINUX_FC:
+		new_termios.c_iflag |= (IXON | IXOFF | IXANY);
+		new_termios.c_cflag &= ~(CRTSCTS);
+		new_termios.c_iflag &= ~(NOFLSH);
+		break;
+	/* MTK Software FC */
+	case UART_MTK_SW_FC:
+		new_termios.c_cflag &= ~(CRTSCTS);
+		new_termios.c_iflag |= NOFLSH;
+		break;
+	/* default disable flow control */
+	default:
+		new_termios.c_cflag &= ~(CRTSCTS);
+		new_termios.c_iflag &= ~(NOFLSH);
+	}
+
+	tty_set_termios(tty, &new_termios);
+
+	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
+	if (ret < 0) {
+		goto exit;
+	}
+
+	ret = btmtk_load_rom_patch(bdev);
+	cif_event = HIF_EVENT_PROBE;
+	cif_state = &bdev->cif_state[cif_event];
+	/* Set End/Error state */
+	if (ret == 0) {
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+		goto exit;
+	} else {
+		BTMTK_ERR("%s: btmtk_load_rom_patch failed (%d)", __func__, ret);
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+	}
+
+
+	BTMTK_INFO("%s done", __func__);
+
+exit:
+	return ret;
+}
+
+static int btmtk_chardev_post_on(struct btmtk_dev *bdev)
+{
+	BTMTK_INFO("%s done", __func__);
+
+	return 0;
+}
+#endif // (USE_DEVICE_NODE == 1)
+
+
 static void btmtk_uart_waker_notify(struct btmtk_dev *bdev)
 {
 	BTMTK_INFO("%s enter!", __func__);
@@ -493,11 +633,14 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 
 		if (sent_len > 0) {
 			memcpy(image, fwbuf + section_offset + cur_len, sent_len);
-		       BTMTK_DBG("%s: sent_len = %d, cur_len = %d", __func__,
-					     sent_len, cur_len);
-		       cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
-		       ret = cif_dev->tty->ops->write(cif_dev->tty, image, sent_len);
-		       BTMTK_DBG("%s, send length: ret= %d", __func__, ret);
+			// pinhao comment for test log too much
+		    // BTMTK_DBG("%s: sent_len = %d, cur_len = %d", __func__,
+					     //sent_len, cur_len);
+			cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+			ret = cif_dev->tty->ops->write(cif_dev->tty, image, sent_len);
+
+			// can use next cur_len - current cur_len = ret
+			//BTMTK_DBG("%s, send length: ret= %d", __func__, ret);
 
 			if (ret < 0) {
 				BTMTK_ERR("%s: send patch failed, terminate", __func__);
@@ -537,13 +680,13 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	while (len != cmd_len) {
 		ret = cif_dev->tty->ops->write(cif_dev->tty, cmd + len, cmd_len - len);
 		len += ret;
-		BTMTK_DBG("%s, len = %d", __func__, len);
+		BTMTK_DBG("%s, len = %d, tty[%s]", __func__, len, cif_dev->tty->name);
 	}
 
 	return ret;
 }
 
-static void btmtk_uart_tx_thread(void *data)
+static int btmtk_uart_tx_thread(void *data)
 {
 	struct btmtk_dev *bdev = data;
 	struct btmtk_uart_dev *cif_dev = NULL;
@@ -575,8 +718,8 @@ static void btmtk_uart_tx_thread(void *data)
 			}
 		}
 	}
-
 	BTMTK_INFO("%s end", __func__);
+	return 0;
 }
 
 static int btmtk_tx_thread_exit(struct btmtk_uart_dev *cif_dev)
@@ -603,6 +746,7 @@ int btmtk_cif_send_calibration(struct btmtk_dev *bdev)
 	return 0;
 }
 
+#if (USE_DEVICE_NODE == 0)
 static int btmtk_uart_set_pinmux(struct btmtk_dev *bdev)
 {
 	int err = 0;
@@ -631,6 +775,7 @@ static int btmtk_uart_set_pinmux(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s done", __func__);
 	return 0;
 }
+#endif
 
 static int btmtk_uart_init(struct btmtk_dev *bdev)
 {
@@ -642,6 +787,7 @@ static int btmtk_uart_init(struct btmtk_dev *bdev)
 		goto end;
 	}
 
+#if (USE_DEVICE_NODE == 0)
 	err = btmtk_register_hci_device(bdev);
 	if (err < 0) {
 		BTMTK_ERR("btmtk_register_hci_device failed!");
@@ -653,14 +799,17 @@ static int btmtk_uart_init(struct btmtk_dev *bdev)
 		BTMTK_ERR("btmtk_uart_set_pinmux failed!");
 		goto free_hci;
 	}
+#endif
 
 	INIT_WORK(&bdev->reset_waker, btmtk_reset_waker);
 	goto end;
 
+#if (USE_DEVICE_NODE == 0)
 free_hci:
 	btmtk_deregister_hci_device(bdev);
 deinit:
 	btmtk_main_cif_uninitialize(bdev, HCI_UART);
+#endif
 end:
 	BTMTK_INFO("%s done", __func__);
 	return err;
@@ -702,7 +851,7 @@ static int btmtk_uart_tty_probe(struct tty_struct *tty)
 
 	spin_lock_init(&cif_dev->tx_lock);
 	skb_queue_head_init(&cif_dev->tx_queue);
-	cif_dev->tx_task = kthread_run((void *)btmtk_uart_tx_thread,
+	cif_dev->tx_task = kthread_run(btmtk_uart_tx_thread,
 					bdev, "btmtk_uart_tx_thread");
 	if (IS_ERR(cif_dev->tx_task)) {
 		BTMTK_ERR("%s create tx thread FAILED", __func__);
@@ -744,8 +893,14 @@ static void btmtk_uart_tty_disconnect(struct tty_struct *tty)
 /*
  * We don't provide read/write/poll interface for user space.
  */
+#if (USE_DEVICE_NODE == 0)
 static ssize_t btmtk_uart_tty_read(struct tty_struct *tty, struct file *file,
 				 unsigned char *buf, size_t count)
+#else
+static ssize_t btmtk_uart_tty_read(struct tty_struct *tty, struct file *file,
+									unsigned char *buf, size_t nr,
+									void **cookie, unsigned long offset)
+#endif
 {
 	BTMTK_INFO("%s: tty %p", __func__, tty);
 	return 0;
@@ -788,8 +943,10 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 			      unsigned int cmd, unsigned long arg)
 {
 	int err = 0;
+#if (USE_DEVICE_NODE == 0)
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
+#endif
 	struct UART_CONFIG uart_cfg;
 	struct btmtk_dev *bdev = tty->disc_data;
 	struct btmtk_uart_dev *cif_dev = NULL;
@@ -810,21 +967,24 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 		cif_dev->uart_cfg = uart_cfg;
 		BTMTK_INFO("%s: <!!> Set BAUDRATE, fc = %d iBaudrate = %d <!!>",
 				__func__, (int)uart_cfg.fc, uart_cfg.iBaudrate);
-		err = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
+		//err = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
 		break;
 	case HCIUARTSETWAKEUP:
 		BTMTK_INFO("%s: <!!> Send Wakeup <!!>", __func__);
-		err = btmtk_uart_send_wakeup_cmd(bdev->hdev);
+		//err = btmtk_uart_send_wakeup_cmd(bdev->hdev);
 		break;
 	case HCIUARTGETBAUD:
 		BTMTK_INFO("%s: <!!> Get BAUDRATE <!!>", __func__);
-		err = btmtk_uart_send_query_uart_cmd(bdev->hdev);
+		//err = btmtk_uart_send_query_uart_cmd(bdev->hdev);
 		break;
 	case HCIUARTSETSTP:
 		BTMTK_INFO("%s: <!!> Set STP mandatory command <!!>", __func__);
 		break;
 	case HCIUARTLOADPATCH:
+
+#if (USE_DEVICE_NODE == 0)
 		BTMTK_INFO("%s: <!!> Set HCIUARTLOADPATCH command <!!>", __func__);
+
 		err = btmtk_load_rom_patch(bdev);
 		cif_event = HIF_EVENT_PROBE;
 		cif_state = &bdev->cif_state[cif_event];
@@ -841,7 +1001,7 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 			BTMTK_ERR("btmtk_woble_initialize failed!");
 		else
 			BTMTK_ERR("btmtk_woble_initialize");
-
+#endif
 		break;
 	case HCIUARTINIT:
 		BTMTK_INFO("%s: <!!> Set HCIUARTINIT <!!>", __func__);
@@ -856,8 +1016,13 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 	return err;
 }
 
+#if (USE_DEVICE_NODE == 0)
 static long btmtk_uart_tty_compat_ioctl(struct tty_struct *tty, struct file *file,
 			      unsigned int cmd, unsigned long arg)
+#else
+static int btmtk_uart_tty_compat_ioctl(struct tty_struct *tty, struct file *file,
+			      unsigned int cmd, unsigned long arg)
+#endif
 {
 	int err = 0;
 	int cif_event = 0;
@@ -933,11 +1098,10 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, char 
 	int ret = -1;
 	struct btmtk_dev *bdev = tty->disc_data;
 
-	BTMTK_DBG_RAW(data, count, "Receive");
+	BTMTK_DBG_RAW(data, count, "%s: count[%d]", __func__, count);
 
 	/* add hci device part */
 	bdev->recv_evt_len = count;
-	BTMTK_DBG("%s: count= %d", __func__, count);
 	ret = btmtk_recv(bdev->hdev, data, count);
 	if (ret < 0)
 		BTMTK_ERR("%s, ret = %d", __func__, ret);
@@ -1024,7 +1188,9 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 
 	/* Do HIF events */
 	ret = btmtk_uart_tty_probe(tty);
-
+#if (USE_DEVICE_NODE == 1)
+	btmtk_connv3_sub_drv_init(bdev);
+#endif
 	return ret;
 }
 
@@ -1265,6 +1431,11 @@ int btmtk_cif_register(void)
 	BTMTK_INFO("%s", __func__);
 
 	memset(&hook, 0, sizeof(hook));
+#if (USE_DEVICE_NODE == 1)
+	hook.chrdev_init = btmtk_chardev_init;
+	hook.chrdev_pre_on = btmtk_chrdev_pre_on;
+	hook.chrdev_post_on = btmtk_chardev_post_on;
+#endif
 	hook.open = btmtk_uart_open;
 	hook.close = btmtk_uart_close;
 	hook.reg_read = btmtk_uart_read_register;
