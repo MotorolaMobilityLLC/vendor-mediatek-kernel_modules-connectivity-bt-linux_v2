@@ -21,6 +21,7 @@
 #define RHW_DBG_TAG	"[btmtk_dbg_sop_rhw]"
 #define HIF_DBG_TAG	"[btmtk_dbg_sop_hif]"
 
+#define CHECK_ERR_MSG(val) (((val) >> 16) == 0xdead)
 
 #define FW_CR_WR_CMD_PKT_LEN	24
 #define FW_CR_RD_CMD_PKT_LEN	16
@@ -1001,11 +1002,17 @@ static inline void btmtk_hif_dump_bg_sysram1(void) {
 	BT_DUMP_CR_INIT(cr_count);
 	HIF_READ(0x1881042C, &value);
 
+	/* boundary check */
+	if(value < 0x00400000 || value > 0x00430000) {
+		BTMTK_INFO("%s %s: invalid boundary [0x%08x]", HIF_DBG_TAG, __func__, value);
+		return;
+	}
+
 	/* dynamci mapping to 0x1890_0000 */
 	value = (value & ~(0x3)) - 32;
 	HIF_WRITE(0x18815014, value);
 
-	BTMTK_INFO("%s bg_sysram for 0x1881042C[0x%08x], read from 0x1890_0000, count[%d]"
+	BTMTK_INFO("%s bg_sysram1 for 0x1881042C[0x%08x], read from 0x1890_0000, count[%d]"
 				, HIF_DBG_TAG, value, cr_count);
 
 	pos = 0x18900000;
@@ -1027,14 +1034,29 @@ static inline void btmtk_hif_dump_bg_sysram2(void) {
 	BT_DUMP_CR_INIT(cr_count);
 	HIF_READ(0x18810730, &pos);
 
+	/* boundary check */
+	if(pos < 0x00400000 || pos > 0x00430000) {
+		BTMTK_INFO("%s %s: invalid boundary [0x%08x]", HIF_DBG_TAG, __func__, pos);
+		return;
+	}
+
 	pos += 0x18440000;
 
 	HIF_READ(0x1881072C, &base);
+	if (CHECK_ERR_MSG(base)) {
+		BTMTK_INFO("%s %s: get error code 0x1881072C[0x%08x]", HIF_DBG_TAG, __func__, base);
+		return;
+	}
+
 	base += 0x18440000;
 
 	HIF_READ(0x18810744, &vff_size);
+	if (CHECK_ERR_MSG(vff_size)) {
+		BTMTK_INFO("%s %s: get error code 0x18810744[0x%08x]", HIF_DBG_TAG, __func__, vff_size);
+		return;
+	}
 
-	BTMTK_INFO("%s bg_sysram for 0x18810730[0x%08x], base[0x%08x], vff_size[0x%08x], count[%d]"
+	BTMTK_INFO("%s bg_sysram2 for 0x18810730[0x%08x], base[0x%08x], vff_size[0x%08x], count[%d]"
 				, HIF_DBG_TAG, pos, base, vff_size, cr_count);
 
 	/* 4 bytes alignment */
@@ -1062,14 +1084,30 @@ static inline void btmtk_hif_dump_bg_sysram3(void) {
 	BT_DUMP_CR_INIT(cr_count);
 	HIF_READ(0x18810734, &pos);
 
+	/* boundary check */
+	if(pos < 0x00400000 || pos > 0x00430000) {
+		BTMTK_INFO("%s %s: invalid boundary [0x%08x]", HIF_DBG_TAG, __func__, pos);
+		return;
+	}
+
 	pos += 0x18440000;
 
 	HIF_READ(0x1881072C, &base);
+	if (CHECK_ERR_MSG(base)) {
+		BTMTK_INFO("%s %s: get error code 0x1881072C[0x%08x]", HIF_DBG_TAG, __func__, base);
+		return;
+	}
+
 	base += 0x18440000;
 
-	HIF_READ(0x18810744, &vff_size);
 
-	BTMTK_INFO("%s bg_sysram for 0x18810734[0x%08x], base[0x%08x], vff_size[0x%08x], count[%d]"
+	HIF_READ(0x18810744, &vff_size);
+	if (CHECK_ERR_MSG(vff_size)) {
+		BTMTK_INFO("%s %s: get error code 0x18810744[0x%08x]", HIF_DBG_TAG, __func__, vff_size);
+		return;
+	}
+
+	BTMTK_INFO("%s bg_sysram3 for 0x18810734[0x%08x], base[0x%08x], vff_size[0x%08x], count[%d]"
 				, HIF_DBG_TAG, pos, base, vff_size, cr_count);
 
 	/* 4 bytes alignment */
