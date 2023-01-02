@@ -59,18 +59,35 @@
 #define UL_MSG_LVL_ERR       1
 #define UL_MSG_LVL_NONE      0
 
-/** Debug log level */
+
+#ifdef __ANDROID__
+/* print log to main log */
+/* LOG_TAG must be defined before log.h */
+#ifdef  LOG_TAG
+#undef  LOG_TAG
+#endif
+#define LOG_TAG               "btmtk_uart_launcher"
+#include <log/log.h>
+#include <android/log.h>
+
+
+/* Debug log level */
 #define UL_MSG_LVL_DEFAULT           UL_MSG_LVL_INFO
 
+#else /* __ANDROID__ */
+#define ALOGI	printf
+#endif
+
 #define BPRINT_D(fmt, ...) \
-		do { if (UL_MSG_LVL_DEFAULT >= UL_MSG_LVL_DBG) \
-			printf("[%s:D] "fmt"\n", LOG_TAG, ##__VA_ARGS__);   } while (0);
+    do { if (UL_MSG_LVL_DEFAULT >= UL_MSG_LVL_DBG) \
+        ALOGI("[%s:D] "fmt"\n", LOG_TAG, ##__VA_ARGS__);   } while (0);
 #define BPRINT_I(fmt, ...) \
     do { if (UL_MSG_LVL_DEFAULT >= UL_MSG_LVL_INFO) \
-        printf("[%s] "fmt"\n", LOG_TAG, ##__VA_ARGS__);     } while (0);
+        ALOGI("[%s:I] "fmt"\n", LOG_TAG, ##__VA_ARGS__);     } while (0);
 #define BPRINT_E(fmt, ...) \
-		do { if (UL_MSG_LVL_DEFAULT >= UL_MSG_LVL_ERR) \
-			printf("[%s:E] "fmt" !!!\n", LOG_TAG, ##__VA_ARGS__);} while (0);
+    do { if (UL_MSG_LVL_DEFAULT >= UL_MSG_LVL_ERR) \
+        ALOGI("[%s:E] "fmt" !!!\n", LOG_TAG, ##__VA_ARGS__);} while (0);
+
 
 #define CUST_BAUDRATE_DFT 115200
 #define CUST_MULTI_PATCH 1
