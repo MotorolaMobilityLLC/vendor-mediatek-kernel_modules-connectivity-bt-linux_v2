@@ -414,7 +414,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 #endif
 	btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD_HIF, skb->data, skb->len);
-	BTMTK_INFO_RAW(skb->data, skb->len, "%s: len[%d]", __func__, skb->len);
+	BTMTK_DBG_RAW(skb->data, skb->len, "%s: len[%d]", __func__, skb->len);
 
 	/* if just protect event, another cmd would reinit event_compare_status */
 	down(&cif_dev->evt_comp_sem);
@@ -1405,7 +1405,7 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	}
 	/* use HCI_SNOOP_TYPE_TX_ISO_HIF to record data sended to tty */
 	btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ISO_HIF, cmd, cmd_len);
-	BTMTK_INFO_RAW(cmd, cmd_len, "%s, len[%d] write_retry[%d] room[%d] flush_retry[%d] CMD :", __func__, cmd_len,
+	BTMTK_DBG_RAW(cmd, cmd_len, "%s, len[%d] write_retry[%d] room[%d] flush_retry[%d] CMD :", __func__, cmd_len,
 						count, tty_write_room(cif_dev->tty), flush_retry);
 
 	return ret;
