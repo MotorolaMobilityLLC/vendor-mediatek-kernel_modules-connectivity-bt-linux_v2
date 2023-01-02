@@ -1819,8 +1819,13 @@ static unsigned int btmtk_uart_tty_poll(struct tty_struct *tty, struct file *fil
  *
  * Return Value:    Command dependent
  */
+#if (KERNEL_VERSION(5, 16, 0) <= LINUX_VERSION_CODE)
+static int btmtk_uart_tty_ioctl(struct tty_struct *tty,
+			      unsigned int cmd, unsigned long arg)
+#else
 static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 			      unsigned int cmd, unsigned long arg)
+#endif
 {
 	int err = 0;
 #if (USE_DEVICE_NODE == 0)
@@ -1909,7 +1914,11 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 		break;
 	default:
 		/* pr_info("<!!> n_tty_ioctl_helper <!!>\n"); */
+#if (KERNEL_VERSION(5, 16, 0) <= LINUX_VERSION_CODE)
+		err = n_tty_ioctl_helper(tty, cmd, arg);
+#else
 		err = n_tty_ioctl_helper(tty, file, cmd, arg);
+#endif
 		break;
 	};
 
@@ -1919,8 +1928,11 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 #if (defined(ANDROID_OS) && (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)) || defined(LINUX_OS)
 static long btmtk_uart_tty_compat_ioctl(struct tty_struct *tty, struct file *file,
 			      unsigned int cmd, unsigned long arg)
-#else
+#elif (KERNEL_VERSION(5, 16, 0) > LINUX_VERSION_CODE)
 static int btmtk_uart_tty_compat_ioctl(struct tty_struct *tty, struct file *file,
+			      unsigned int cmd, unsigned long arg)
+#else
+static int btmtk_uart_tty_compat_ioctl(struct tty_struct *tty,
 			      unsigned int cmd, unsigned long arg)
 #endif
 {
@@ -1997,7 +2009,11 @@ static int btmtk_uart_tty_compat_ioctl(struct tty_struct *tty, struct file *file
 		break;
 	default:
 		/* pr_info("<!!> n_tty_ioctl_helper <!!>\n"); */
+#if (KERNEL_VERSION(5, 16, 0) <= LINUX_VERSION_CODE)
+		err = n_tty_ioctl_helper(tty, cmd, arg);
+#else
 		err = n_tty_ioctl_helper(tty, file, cmd, arg);
+#endif
 		break;
 	};
 
