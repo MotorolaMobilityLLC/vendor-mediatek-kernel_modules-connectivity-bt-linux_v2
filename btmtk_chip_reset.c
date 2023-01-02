@@ -193,7 +193,8 @@ L0RESET:
 			atomic_inc(&bmain_info->whole_reset_count);
 			DUMP_TIME_STAMP("whole_chip_reset_end");
 		} else {
-			BTMTK_INFO("%s: Not support whole chip reset", __func__);
+			BTMTK_INFO("%s: Not support whole chip reset, reset reset_conti_count to 0", __func__);
+			atomic_set(&bmain_info->subsys_reset_conti_count, 0);
 		}
 	}
 
