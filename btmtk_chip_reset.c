@@ -212,6 +212,9 @@ L0RESET:
 		} else {
 			BTMTK_INFO("%s: Not support whole chip reset, reset reset_conti_count to 0", __func__);
 			atomic_set(&bmain_info->subsys_reset_conti_count, 0);
+#if (USE_DEVICE_NODE == 1)
+			btmtk_send_hw_err_to_host(bdev);
+#endif
 		}
 	}
 

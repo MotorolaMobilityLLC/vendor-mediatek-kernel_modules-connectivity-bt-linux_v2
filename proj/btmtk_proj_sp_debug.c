@@ -15,6 +15,7 @@
 #include "connv3.h"
 
 #define BT_CR_DUMP_BUF_SIZE		(1024)
+#define BT_RHW_MAX_ERR_COUNT		(3)
 #define DBG_TAG	"[btmtk_dbg_sop]"
 
 struct bt_dump_cr_buffer {
@@ -27,6 +28,7 @@ struct bt_dump_cr_buffer {
 
 struct bt_dump_cr_buffer g_btmtk_cr_dump;
 struct btmtk_dev *g_dump_bdev;
+uint32_t	g_rhw_fail;
 
 static inline void BT_DUMP_CR_BUFFER_RESET(void)
 {
@@ -70,7 +72,7 @@ static inline int BT_DUMP_CR_PRINT(uint32_t value)
 
 int RHW_WRITE(uint32_t addr, uint32_t val)
 {
-	int ret = 0;
+	int ret = -1;
 	/* ex: write dummy CR 0x022121cc = 0x44332222 */
 	u8 cmd[RHW_PKT_LEN] = {0x40, 0x00, 0x00, 0x08, 0x00,
 				0xCC, 0x21, 0x21, 0x02,
@@ -78,6 +80,11 @@ int RHW_WRITE(uint32_t addr, uint32_t val)
 	u8 evt[RHW_PKT_LEN] = {0x40, 0x00, 0x00, 0x08, 0x00,
 				0xCC, 0x21, 0x21, 0x02,
 				0x22, 0x22, 0x33, 0x44};
+
+	if (g_rhw_fail >= BT_RHW_MAX_ERR_COUNT) {
+		BTMTK_WARN("%s skip, g_rhw_fail[%d]", __func__, g_rhw_fail);
+		return ret;
+	}
 
 	BTMTK_DBG("%s: write addr[%x], value[0x%08x]", __func__, addr, val);
 	memcpy(&cmd[RHW_ADDR_OFFSET_CMD], &addr, RHW_ADDR_LEN);
@@ -87,13 +94,16 @@ int RHW_WRITE(uint32_t addr, uint32_t val)
 
 	ret = btmtk_main_send_cmd(g_dump_bdev, cmd, RHW_PKT_LEN, evt, RHW_PKT_COMP_LEN, DELAY_TIMES,
 			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+	if (ret < 0)
+		BTMTK_ERR("%s failed, g_rhw_fail[%d]", __func__, ++g_rhw_fail);
+
 	return ret ;
 
 }
 
 int RHW_READ(uint32_t addr, uint32_t *val)
 {
-	int ret = 0;
+	int ret = -1;
 	/* ex: read dummy CR 0x022121cc */
 	u8 cmd[RHW_PKT_LEN] = {0x41, 0x00, 0x00, 0x08, 0x00,
 				0xCC, 0x21, 0x21, 0x02,
@@ -103,6 +113,11 @@ int RHW_READ(uint32_t addr, uint32_t *val)
 				0xCC, 0x21, 0x21, 0x02,
 				0x00, 0x00, 0x00, 0x00};
 
+	if (g_rhw_fail >= BT_RHW_MAX_ERR_COUNT) {
+		*val = 0xdeaddead;
+		BTMTK_WARN("%s skip, g_rhw_fail[%d]", __func__, g_rhw_fail);
+		return ret;
+	}
 	memcpy(&cmd[RHW_ADDR_OFFSET_CMD], &addr, sizeof(addr));
 	memcpy(&evt[RHW_ADDR_OFFSET_CMD], &addr, sizeof(addr));
 
@@ -112,9 +127,10 @@ int RHW_READ(uint32_t addr, uint32_t *val)
 	if (ret >= 0) {
 		memcpy(val, g_dump_bdev->io_buf + RHW_PKT_COMP_LEN, sizeof(u32));
 		*val = le32_to_cpu(*val);
-	} else
+	} else {
 		*val = 0xdeaddead;
-
+		BTMTK_ERR("%s failed, g_rhw_fail[%d]", __func__, ++g_rhw_fail);
+	}
 	BTMTK_DBG("%s: addr[%x], val[0x%08x]", __func__, addr, *val);
 
 	return ret;
@@ -411,6 +427,7 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 	}
 	BTMTK_INFO("%s: start", __func__);
 	g_dump_bdev = bdev;
+	g_rhw_fail = 0;
 	btmtk_dump_bg_mcu_core();
 	btmtk_dump_dsp_debug_flags();
 	btmtk_dump_mcusys_clk_gals_debug_flags();
@@ -422,6 +439,6 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 	btmtk_dump_cryto_debug_flags();
 	BTMTK_INFO("%s: connv3_conninfra_bus_dump start", __func__);
 	connv3_conninfra_bus_dump(CONNV3_DRV_TYPE_BT, &btmtk_connv3_cr_cb, NULL);
-	BTMTK_INFO("%s: end", __func__);
+	BTMTK_INFO("%s: end, g_rhw_fail[%d] ", __func__, g_rhw_fail);
 }
 
