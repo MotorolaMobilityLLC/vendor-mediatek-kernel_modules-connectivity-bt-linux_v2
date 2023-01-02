@@ -445,6 +445,11 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 	if (g_bt_state < BTMTK_STATE_WORKING || g_bt_state == BTMTK_STATE_CLOSED) {
 		BTMTK_WARN("%s: BT is not on state, no need to trigger whole chip reset", __func__);
 		return 0;
+	} else if (drv == CONNV3_DRV_TYPE_CONNV3 && strncmp(reason, "PMIC Fault", strlen("PMIC Fault")) == 0) {
+		BTMTK_WARN("%s: PMIC Fault, no need to wait coredump", __func__);
+		bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
+		btmtk_set_gpio_default();
+		return 0;
 	} else {
 		if (g_sbdev->assert_reason[0] == '\0') {
 			strncpy(g_sbdev->assert_reason, reason, strlen(reason));
@@ -454,9 +459,12 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 		bmain_info->hif_hook.trigger_assert(g_sbdev);
 	}
 	BTMTK_INFO("%s: wait dump_comp ...", __func__);
-	if (!wait_for_completion_timeout(&g_sbdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT)))
+	if (!wait_for_completion_timeout(&g_sbdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
 		BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
-
+		/* for let hw err evt can send event */
+		bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
+	}
+	btmtk_set_gpio_default();
 	return 0;
 }
 
