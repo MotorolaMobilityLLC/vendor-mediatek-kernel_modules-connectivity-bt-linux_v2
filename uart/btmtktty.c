@@ -502,7 +502,6 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
 	}
 #endif
-	event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
 
 	if (ret < 0) {
 		BTMTK_ERR("%s wait event timeout [0x%02x%02x], ret[%d], wait_retry[%d]",
@@ -513,6 +512,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 
 exit:
+	event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
 	up(&cif_dev->evt_comp_sem);
 	/* control not trigger assert */
 	if (ret < 0 && pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT) {
@@ -1067,7 +1067,7 @@ static int btmtk_uart_pre_open(struct btmtk_dev *bdev)
 
 static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 {
-#if (SLEEP_ENABLE == 1)
+
 	struct btmtk_uart_dev *cif_dev = NULL;
 
 	BTMTK_INFO("%s", __func__);
@@ -1077,10 +1077,6 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
-
-	/* start fw own timer */
-	btmtk_uart_create_fw_own_timer(cif_dev);
-#endif
 
 #if (USE_DEVICE_NODE == 1)
 	if (!cif_dev->is_pre_cal)
@@ -1096,6 +1092,11 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 	}
 #endif
 	btmtk_read_pmic_state(bdev);
+#endif
+
+#if (SLEEP_ENABLE == 1)
+	/* start fw own timer */
+	btmtk_uart_create_fw_own_timer(cif_dev);
 #endif
 
 }
@@ -1336,6 +1337,10 @@ static u32 btmtk_thread_wait_for_msg(struct btmtk_dev *bdev)
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
 	if (!skb_queue_empty(&cif_dev->tx_queue)) {
+		ret |= BTMTK_THREAD_TX;
+	}
+	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE) {
+		//BTMTK_DBG("%s: during send_and_recv, keep drv own", __func__);
 		ret |= BTMTK_THREAD_TX;
 	}
 
@@ -2126,8 +2131,11 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	/* if fw already coredump, no need to send drv own cmd */
 	if (cif_dev->sleep_en && btmtk_get_chip_state(bdev) != BTMTK_STATE_FW_DUMP) {
 		do {
-			/* if fw already wake, no need to send 0xFF and wait 5ms before clr fw own */
-			if (!atomic_read(&cif_dev->fw_wake)){
+			/* if fw already wake, no need to send 0xFF and wait 6ms before clr fw own */
+			if (atomic_read(&cif_dev->fw_wake)) {
+				/* wait a while for avoid rx pkt error */
+				usleep_range(4000, 4100);
+			} else {
 				/* no need to wait event */
 				ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
 						DELAY_TIMES, 1, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
