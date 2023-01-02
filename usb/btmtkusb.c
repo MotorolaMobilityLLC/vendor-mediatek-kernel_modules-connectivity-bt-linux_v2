@@ -3412,7 +3412,7 @@ get_response_again:
 		BTMTK_DBG_RAW(bdev->io_buf, ret + 1, "%s OK: EVT:", __func__);
 		return ret + 1; /* return read length */
 	} else if (retry > 0) {
-		BTMTK_WARN("%s: Trying to get response... (%d)", __func__, ret);
+		BTMTK_WARN("%s: Trying to get response... (%d)", __func__, retry);
 		retry--;
 		goto get_response_again;
 	} else
