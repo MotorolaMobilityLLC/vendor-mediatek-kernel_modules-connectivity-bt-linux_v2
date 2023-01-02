@@ -891,7 +891,7 @@ void btmtk_free_setting_file(struct btmtk_dev *bdev);
 
 unsigned char btmtk_fops_get_state(struct btmtk_dev *bdev);
 
-void btmtk_hci_snoop_save(unsigned int type, u8 *buf, u32 len);
+void btmtk_hci_snoop_save(unsigned int type, const u8 *buf, u32 len);
 void btmtk_hci_snoop_print(const u8 *buf, u32 len);
 void btmtk_hci_snoop_print_to_log(void);
 void *btmtk_kallsyms_lookup_name(const char *name);

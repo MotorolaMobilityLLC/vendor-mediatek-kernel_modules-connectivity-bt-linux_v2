@@ -797,6 +797,9 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 		return;
 	}
 
+	/* driver dump */
+	btmtk_hci_snoop_print_to_log();
+
 #if (SLEEP_ENABLE == 1)
 	/* incase do fw own in debug sop flow */
 	btmtk_uart_delete_fw_own_timer(cif_dev);
@@ -1172,7 +1175,7 @@ static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev)
 		} while (count != 0 && flush_retry++ < BTMTK_MAX_WAIT_RETRY);
 		time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
 		if (time_diff > TIMT_BOUND_OF_CHARS_WAIT)
-			BTMTK_ERR("%s: chars in buffer takes %lu ms to clear, remain count[%d]",
+			BTMTK_WARN("%s: chars in buffer takes %lu ms to clear, remain count[%d]",
 				__func__, time_diff, count);
 
 		if (flush_retry < BTMTK_MAX_WAIT_RETRY) {
@@ -1937,6 +1940,10 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+
+	/* record data from tty */
+	btmtk_hci_snoop_save(HCI_SNOOP_TYPE_EVT_HIF, data, count);
+
 #if (SLEEP_ENABLE == 1)
 	//BTMTK_INFO_RAW(data, count, "%s: count[%d]", __func__, count);
 

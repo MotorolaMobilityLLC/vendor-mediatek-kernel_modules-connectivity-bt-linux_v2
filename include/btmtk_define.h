@@ -137,7 +137,7 @@
 #define BTMTK_LOG_LVL_DEF	BTMTK_LOG_LVL_INFO	/* default setting */
 
 #define HCI_SNOOP_ENTRY_NUM	30
-#define HCI_SNOOP_BUF_SIZE	32
+#define HCI_SNOOP_BUF_SIZE	31	/* not use 32 because of separator_char */
 #define HCI_SNOOP_MAX_BUF_SIZE	64
 #define HCI_SNOOP_TS_STR_LEN	24
 #define WMT_OVER_HCI_HEADER_SIZE	3

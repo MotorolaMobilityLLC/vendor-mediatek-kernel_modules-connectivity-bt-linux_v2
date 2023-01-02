@@ -752,7 +752,11 @@ void btmtk_hci_snoop_print_to_log(void)
 		"Command from stack",
 		"Command to FW",
 		"Event to stack",
+#if (USE_DEVICE_NODE == 0)
 		"Event From FW",
+#else
+		"Data From TTY",
+#endif
 		"ADV Event to stack",
 		"ADV Event From FW",
 		"NOCP Event to stack",
@@ -767,7 +771,7 @@ void btmtk_hci_snoop_print_to_log(void)
 		"RX ISO From FW"};
 
 	for (snoop_index = 0; snoop_index < HCI_SNOOP_TYPE_MAX; snoop_index++) {
-		BTMTK_INFO("HCI %s Dump: Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data",
+		BTMTK_INFO("HCI %s Dump: Using A5 A5 to separator the head 31 bytes and the tail 31 bytes data",
 			snoop_str[snoop_index]);
 		if (main_info.snoop[snoop_index].index >= (HCI_SNOOP_ENTRY_NUM - 1))
 			index = 0;
@@ -787,12 +791,12 @@ void btmtk_hci_snoop_print_to_log(void)
 	}
 }
 
-void btmtk_hci_snoop_save(unsigned int type, u8 *buf, u32 len)
+void btmtk_hci_snoop_save(unsigned int type, const u8 *buf, u32 len)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
 	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
 	u8 separator_char[SEPARATOR_LEN] = {0xA5, 0xA5};
-	u8 *copy_tail_buf;
+	const u8 *copy_tail_buf;
 
 	if (!buf || len == 0 || type >= HCI_SNOOP_TYPE_MAX) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
@@ -811,8 +815,8 @@ void btmtk_hci_snoop_save(unsigned int type, u8 *buf, u32 len)
 		btmtk_get_UTC_time_str(main_info.snoop[type].timestamp[main_info.snoop[type].index]);
 		memset(main_info.snoop[type].buf[main_info.snoop[type].index], 0, HCI_SNOOP_MAX_BUF_SIZE);
 		memcpy(main_info.snoop[type].buf[main_info.snoop[type].index], buf, copy_len & 0xff);
-		/* save less then 32 bytes data in the buffer tail, using A5 A5 to
-		 * separator the head 32 bytes data and the tail 32 bytes data
+		/* save less then 31 bytes data in the buffer tail, using A5 A5 to
+		 * separator the head 31 bytes data and the tail 31 bytes data
 		 */
 		if (copy_tail_len > 0) {
 			copy_tail_buf = buf + len - copy_tail_len;
