@@ -106,6 +106,8 @@ struct mtk_stp_hdr {
 #define OWNTYPE_EVT_LEN 10
 #endif
 
+#define BTMTK_MAX_SEND_RETRY 10000
+
 #define BT_UART_DEFAULT_BAUD 115200
 
 /* Delay time between subsys reset GPIO pull low/high */
@@ -148,6 +150,7 @@ struct btmtk_uart_dev {
 	struct sk_buff_head	tx_queue;
 	spinlock_t		tx_lock;
 	struct task_struct	*tx_task;
+	atomic_t		thread_status;
 	unsigned long		tx_state;
 
 	/* For rx queue */
@@ -171,12 +174,23 @@ struct btmtk_uart_dev {
 	/* config form dts*/
 	u32			baudrate;
 	u32			hub_en;
+	u32			sleep_en;
 
 	/* For uarthub setting */
 	u8			fw_hub_en;
 	u8			crc_en;
 	u8			rhw_en;
 	u8			fw_dl_ready;
+
+	/* driver,fw own */
+	bool			no_fw_own;
+	u8			own_state;
+	struct timer_list	fw_own_timer;
+	atomic_t		fw_own_timer_flag;
+	atomic_t		need_drv_own;
+
+	/* sempaphore to compare event */
+	struct semaphore	evt_comp_sem;
 };
 
 #define btmtk_uart_is_standalone(bdev)	\

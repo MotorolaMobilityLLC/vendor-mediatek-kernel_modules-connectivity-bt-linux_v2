@@ -164,6 +164,7 @@
 
 #define WAIT_POWERKEY_TIMEOUT 5000
 #define WAIT_FW_DUMP_TIMEOUT 15000
+#define WAIT_DRV_OWN_TIMEOUT 3000
 
 #define SEPARATOR_LEN 2
 #define STP_CRC_LEN 2
@@ -249,8 +250,11 @@
 
 #define EVT_HDR_LEN 2
 
+#if (USE_DEVICE_NODE == 0)
 #define ASSERT_CMD_LEN 9
-
+#else
+#define ASSERT_CMD_LEN 4
+#endif
 #define TXPOWER_CMD_LEN 16
 #define TXPOWER_EVT_LEN 7
 
@@ -329,6 +333,7 @@ enum TX_TYPE {
 	BTMTK_TX_CMD_FROM_DRV = 0,	/* send hci cmd and wmt cmd by driver */
 	BTMTK_TX_ACL_FROM_DRV,	/* send acl pkt with load rompatch by driver */
 	BTMTK_TX_PKT_FROM_HOST,	/* send pkt from host, include acl and hci */
+	BTMTK_TX_PKT_SEND_DIRECT,/* send tx not through tx_thread */
 };
 
 enum bt_state {
@@ -383,6 +388,7 @@ enum {
 	BTMTK_STATE_STANDBY,
 	BTMTK_STATE_SUBSYS_RESET,
 	BTMTK_STATE_SEND_ASSERT,
+	BTMTK_STATE_CLOSED,
 	BTMTK_STATE_ERR,
 
 	BTMTK_STATE_MSG_NUM
@@ -607,19 +613,20 @@ struct btmtk_dev {
 	struct work_struct  dynamic_fwdl_work;
 	unsigned int		fw_bin_info;
 
-	/* fw dump completion */
+	/* completion */
 	struct completion	dump_comp;
+	struct completion	drv_own_comp;
 };
 
 #if (USE_DEVICE_NODE == 1)
-typedef int (*cif_chrdev_init_ptr)(void);
-typedef int (*cif_chrdev_pre_on_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_chrdev_fw_log_state_ptr)(uint8_t state);
-typedef int (*cif_chrdev_post_on_ptr)(struct btmtk_dev *bdev);
 #endif
+
 typedef int (*cif_bt_init_ptr)(void);
 typedef void (*cif_bt_exit_ptr)(void);
+typedef int (*cif_pre_open_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_open_ptr)(struct hci_dev *hdev);
+typedef void (*cif_open_done_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_close_ptr)(struct hci_dev *hdev);
 typedef int (*cif_reg_read_ptr)(struct btmtk_dev *bdev, u32 reg, u32 *val);
 typedef int (*cif_reg_write_ptr)(struct btmtk_dev *bdev, u32 reg, u32 val);
@@ -642,7 +649,6 @@ typedef ssize_t (*cif_log_read_to_user_ptr)(char __user *buf, size_t count);
 typedef unsigned int (*cif_log_get_buf_size_ptr)(void);
 typedef void (*cif_log_deinit_ptr)(void);
 typedef int (*cif_log_handler_ptr)(u8 *buf, u32 size);
-typedef void (*cif_open_done_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_dl_dma_ptr)(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset);
 typedef void (*cif_dump_debug_sop_ptr)(struct btmtk_dev *bdev);
@@ -651,14 +657,13 @@ typedef int (*cif_enter_standby_ptr)(void);
 
 struct hif_hook_ptr {
 #if (USE_DEVICE_NODE == 1)
-	cif_chrdev_init_ptr		chrdev_init;
-	cif_chrdev_pre_on_ptr	chrdev_pre_on;
 	cif_chrdev_fw_log_state_ptr fw_log_state;
-	cif_chrdev_post_on_ptr	chrdev_post_on;
 #endif
 	cif_bt_init_ptr			init;
 	cif_bt_exit_ptr			exit;
+	cif_pre_open_ptr		pre_open;
 	cif_open_ptr			open;
+	cif_open_done_ptr		open_done;
 	cif_close_ptr			close;
 	cif_reg_read_ptr		reg_read;
 	cif_reg_write_ptr		reg_write;
@@ -677,7 +682,6 @@ struct hif_hook_ptr {
 	cif_log_get_buf_size_ptr	log_get_buf_size;
 	cif_log_deinit_ptr			log_deinit;
 	cif_log_handler_ptr			log_handler;
-	cif_open_done_ptr		open_done;
 	cif_dl_dma_ptr			dl_dma;
 	cif_dump_debug_sop_ptr		dump_debug_sop;
 	cif_waker_notify_ptr		waker_notify;

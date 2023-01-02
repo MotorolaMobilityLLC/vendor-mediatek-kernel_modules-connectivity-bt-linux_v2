@@ -84,7 +84,7 @@ static const struct btmtk_cif_state g_cif_state[] = {
 #else //(USE_DEVICE_NODE == 1)
 static const struct btmtk_cif_state g_cif_state[] = {
 	/* HIF_EVENT_PROBE */
-	{BTMTK_STATE_PROBE, BTMTK_STATE_WORKING, BTMTK_STATE_DISCONNECT},
+	{BTMTK_STATE_PROBE, BTMTK_STATE_WORKING, BTMTK_STATE_ERR},
 	/* HIF_EVENT_DISCONNECT */
 	{BTMTK_STATE_DISCONNECT, BTMTK_STATE_DISCONNECT, BTMTK_STATE_DISCONNECT},
 	/* HIF_EVENT_SUSPEND */
@@ -96,9 +96,9 @@ static const struct btmtk_cif_state g_cif_state[] = {
 	/* HIF_EVENT_SUBSYS_RESET */
 	{BTMTK_STATE_SUBSYS_RESET, BTMTK_STATE_WORKING, BTMTK_STATE_ERR},
 	/* HIF_EVENT_WHOLE_CHIP_RESET */
-	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_DISCONNECT, BTMTK_STATE_ERR},
+	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_CLOSED, BTMTK_STATE_ERR},
 	/* HIF_EVENT_FW_DUMP */
-	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_DISCONNECT, BTMTK_STATE_ERR},
+	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_CLOSED, BTMTK_STATE_ERR},
 };
 #endif
 __weak int btmtk_cif_register(void)
@@ -364,7 +364,10 @@ u8 btmtk_get_chip_state(struct btmtk_dev *bdev)
 	u8 state = BTMTK_STATE_INIT;
 
 	CHIP_STATE_MUTEX_LOCK();
-	state = bdev->interface_state;
+	if (bdev)
+		state = bdev->interface_state;
+	else
+		BTMTK_ERR("%s: bdev is NULL", __func__);
 	CHIP_STATE_MUTEX_UNLOCK();
 
 	return state;
@@ -374,7 +377,7 @@ void btmtk_set_chip_state(struct btmtk_dev *bdev, u8 new_state)
 {
 	static const char * const state_msg[BTMTK_STATE_MSG_NUM] = {
 		"UNKNOWN", "INIT", "DISCONNECT", "PROBE", "WORKING", "SUSPEND", "RESUME",
-		"FW_DUMP", "STANDBY", "SUBSYS_RESET", "SEND_ASSERT", "ERROR"
+		"FW_DUMP", "STANDBY", "SUBSYS_RESET", "SEND_ASSERT", "CLOSED", "ERROR"
 	};
 
 	if (new_state >= BTMTK_STATE_MSG_NUM) {
@@ -1210,7 +1213,7 @@ int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count)
 
 		if (IS_ERR(bdev->rx_skb)) {
 			err = PTR_ERR(bdev->rx_skb);
-			BTMTK_ERR("Frame reassembly failed (%d)", err);
+			//BTMTK_ERR("Frame reassembly failed (%d)", err);
 			bdev->rx_skb = NULL;
 			return err;
 		}
@@ -3582,8 +3585,12 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	int state;
-	u8 cmd[ASSERT_CMD_LEN] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x02, 0x01, 0x00, 0x08 };
 	struct sk_buff *skb = NULL;
+#if (USE_DEVICE_NODE == 0)
+	u8 cmd[ASSERT_CMD_LEN] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x02, 0x01, 0x00, 0x08 };
+#else
+	u8 cmd[ASSERT_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
+#endif
 
 	if (!bdev) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
@@ -3592,7 +3599,8 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	}
 
 	state = btmtk_get_chip_state(bdev);
-	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SUSPEND || state == BTMTK_STATE_SEND_ASSERT) {
+	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SUSPEND ||
+		state == BTMTK_STATE_SEND_ASSERT || state == BTMTK_STATE_CLOSED) {
 		BTMTK_WARN("%s: FW dumping already or in suspend state don't send assert, state = %d!!!",
 			__func__, state);
 		return ret;
@@ -3609,7 +3617,11 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	memcpy(skb->data, cmd, ASSERT_CMD_LEN);
 	skb->len = ASSERT_CMD_LEN;
 
+#if (SLEEP_ENABLE == 0)
 	ret = main_info.hif_hook.send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES, (int)BTMTK_TX_CMD_FROM_DRV);
+#else
+	ret = main_info.hif_hook.send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES, (int)BTMTK_TX_PKT_SEND_DIRECT);
+#endif
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
 		kfree_skb(skb);
@@ -4092,8 +4104,8 @@ static int bt_close(struct hci_dev *hdev)
 	state = btmtk_get_chip_state(bdev);
 
 #if (USE_DEVICE_NODE == 1)
-	if (state == BTMTK_STATE_FW_DUMP) {
-		BTMTK_WARN("%s: fw dump ongoing, can't close yet", __func__);
+	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT) {
+		BTMTK_WARN("%s: fw dump or assert ongoing , can't close yet", __func__);
 		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT)))
 			BTMTK_ERR("%s: uanble to finish coredump in 15s", __func__);
 		goto exit;
@@ -4116,6 +4128,7 @@ static int bt_close(struct hci_dev *hdev)
 
 	state = btmtk_get_chip_state(bdev);
 	BTMTK_INFO("%s, enter, state[%d]", __func__, state);
+
 	if (state != BTMTK_STATE_WORKING && state != BTMTK_STATE_STANDBY) {
 		/* It's for the case that
 		 * bt_close and hif_disconnect occur at the same time
@@ -4131,7 +4144,8 @@ static int bt_close(struct hci_dev *hdev)
 	bdev->power_state = BTMTK_DONGLE_STATE_POWER_OFF;
 	BTMTK_INFO("%s, SKIP btmtk_send_deinit_cmds", __func__);
 #else
-	if (state != BTMTK_STATE_STANDBY && main_info.reset_stack_flag != HW_ERR_CODE_CORE_DUMP) {
+	if (state != BTMTK_STATE_STANDBY && main_info.reset_stack_flag != HW_ERR_CODE_CORE_DUMP
+		&& main_info.reset_stack_flag != HW_ERR_CODE_CHIP_RESET) {
 		ret = btmtk_send_deinit_cmds(bdev);
 		if (ret < 0) {
 			BTMTK_ERR("%s, btmtk_send_deinit_cmds failed", __func__);
@@ -4148,25 +4162,30 @@ static int bt_close(struct hci_dev *hdev)
 	/* Drop queues */
 	skb_queue_purge(&bdev->rx_q);
 
+#if (USE_DEVICE_NODE == 0)
 	main_info.hif_hook.close(hdev);
+#endif
 
 unlock:
 	if (main_info.hif_hook.cif_mutex_unlock)
 		main_info.hif_hook.cif_mutex_unlock(bdev);
 exit:
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
+#if (USE_DEVICE_NODE == 1)
+	/* avoid reset start at new bt on */
+	btmtk_reset_timer_del(bdev);
+	main_info.hif_hook.close(hdev);
+	state = btmtk_get_chip_state(bdev);
 	/* after fops set closed, would not get any rx data */
 	/* so if chip_state still fw_dump, need to release wakelock and coredump end*/
-	state = btmtk_get_chip_state(bdev);
-#if (USE_DEVICE_NODE == 1)
 	if (state == BTMTK_STATE_FW_DUMP) {
 		BTMTK_ERR("%s: end with chip_state still dumping", __func__);
-		//btmtk_fwdump_wake_unlock();
+		btmtk_fwdump_wake_unlock();
 		connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump fail");
 	}
-	btmtk_reset_pin_off();
-	if (connv3_pwr_off(CONNV3_DRV_TYPE_BT))
-		BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
+	if (state != BTMTK_STATE_DISCONNECT)
+		btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
+
 #endif
 
 err:
@@ -4204,39 +4223,32 @@ int bt_open(struct hci_dev *hdev)
 	fstate = btmtk_fops_get_state(bdev);
 	if (fstate == BTMTK_FOPS_STATE_OPENED) {
 		BTMTK_WARN("%s: fops opened!", __func__);
-		ret = -EIO;
-		goto failed;
+		return -EIO;
 	}
 
 	if ((fstate == BTMTK_FOPS_STATE_CLOSING) ||
 		(fstate == BTMTK_FOPS_STATE_OPENING)) {
 		BTMTK_WARN("%s: fops open/close is on-going !", __func__);
-		ret = -EAGAIN;
-		goto failed;
+		return -EAGAIN;
+	}
+
+	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_INIT || state == BTMTK_STATE_DISCONNECT) {
+		BTMTK_WARN("%s: chip_state[%d] is init or disconnect!", __func__, state);
+		return -EAGAIN;
 	}
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENING);
 
-#if (USE_DEVICE_NODE == 1)
-	if (connv3_pwr_on(CONNV3_DRV_TYPE_BT)) {
-		BTMTK_ERR("ConnInfra power on failed!");
-		btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
-		return -EFAULT;
+	if (main_info.hif_hook.pre_open) {
+		ret = main_info.hif_hook.pre_open(bdev);
+		if (ret < 0) {
+			BTMTK_ERR("%s: pre_open fail", __func__);
+			goto failed;
+		}
 	}
-
-	ret = main_info.hif_hook.chrdev_pre_on(bdev);
-	if (ret < 0) {
-		BTMTK_ERR("btmtk_chrdev_pre_on fail");
-		goto failed;
-	}
-#endif
 
 	state = btmtk_get_chip_state(bdev);
-	if (state == BTMTK_STATE_INIT || state == BTMTK_STATE_DISCONNECT) {
-		ret = -EAGAIN;
-		goto failed;
-	}
-
 	if (state != BTMTK_STATE_WORKING && state != BTMTK_STATE_STANDBY) {
 		BTMTK_WARN("%s: not in working state and standby state(%d).", __func__, state);
 		ret = -ENODEV;
@@ -4273,12 +4285,6 @@ int bt_open(struct hci_dev *hdev)
 
 	if (main_info.hif_hook.open_done)
 		main_info.hif_hook.open_done(bdev);
-#if (USE_DEVICE_NODE == 1)
-	if (connv3_pwr_on_done(CONNV3_DRV_TYPE_BT)) {
-		BTMTK_ERR("ConnInfra power done failed!");
-		//goto failed;
-	}
-#endif
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENED);
 	main_info.reset_stack_flag = HW_ERR_NONE;
@@ -4308,13 +4314,12 @@ int bt_open(struct hci_dev *hdev)
 
 failed:
 #if (USE_DEVICE_NODE == 1)
-	btmtk_reset_pin_off();
-	if (connv3_pwr_off(CONNV3_DRV_TYPE_BT)) {
-		BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
-		return ret;
-	}
-	BTMTK_INFO("%s: ConnInfra power off success", __func__);
-	btmtk_set_chip_state(bdev, BTMTK_STATE_DISCONNECT);
+	main_info.hif_hook.close(hdev);
+	state = btmtk_get_chip_state(bdev);
+	/* if state is disconnect means uart_launcher is disconnected, not set to close state */
+	if (state != BTMTK_STATE_DISCONNECT)
+		btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
+
 #endif
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
@@ -4358,8 +4363,7 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	bdev = hci_get_drvdata(hdev);
 	if (bdev == NULL) {
 		BTMTK_ERR("%s, bdev is invalid!", __func__);
-		ret = -ENODEV;
-		goto exit;
+		return -ENODEV;
 	}
 
 	if (main_info.hif_hook.cif_mutex_lock)
@@ -5081,7 +5085,7 @@ int __init main_driver_init(void)
 
 	ret = btmtk_cif_register();
 	if (ret < 0) {
-		BTMTK_ERR("*** USB registration failed(%d)! ***", ret);
+		BTMTK_ERR("*** cif registration failed(%d)! ***", ret);
 		main_exit();
 		return ret;
 	}
@@ -5092,10 +5096,6 @@ int __init main_driver_init(void)
 		main_exit();
 		return ret;
 	}
-#if (USE_DEVICE_NODE == 1)
-	if (main_info.hif_hook.chrdev_init)
-		ret = main_info.hif_hook.chrdev_init();
-#endif
 
 	if (main_info.hif_hook.init)
 		ret = main_info.hif_hook.init();

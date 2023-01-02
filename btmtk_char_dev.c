@@ -235,7 +235,7 @@ static ssize_t __bt_write(uint8_t *buf, size_t count, uint32_t flags)
 	retval = btmtk_send_data(g_sbdev->hdev, buf, count);
 
 	if (retval < 0)
-		BTMTK_ERR("bt_core_send_data failed, retval %d", retval);
+		BTMTK_ERR("%s: bt_core_send_data failed, retval %d", __func__, retval);
 	else if (retval == 0) {
 		/*
 		 * TX queue cannot be digested in time and no space is available for write.
@@ -244,13 +244,13 @@ static ssize_t __bt_write(uint8_t *buf, size_t count, uint32_t flags)
 		 * native program should not call write with no delay.
 		 */
 		if (flags & O_NONBLOCK) {
-			BTMTK_WARN_LIMITTED("Non-blocking write, no space is available!");
+			BTMTK_WARN_LIMITTED("%s: Non-blocking write, no space is available!", __func__);
 			retval = -EAGAIN;
 		} else {
 			/* TODO: blocking write case */
 		}
 	} else
-		BTMTK_DBG("Write bytes %d/%zd", retval, count);
+		BTMTK_DBG("%s: Write bytes %d/%zd", __func__, retval, count);
 
 	return retval;
 }
