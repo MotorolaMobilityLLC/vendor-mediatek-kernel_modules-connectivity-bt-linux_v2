@@ -761,18 +761,16 @@ exit:
  *******************************************************************************
  */
 int btmtk_dump_start(void *priv_data, unsigned int force_dump){
-#if 0
-	struct btmtk_uart_dev *cif_dev = NULL;
 
-	BTMTK_INFO("%s start", __func__);
+	struct btmtk_uart_dev *cif_dev = NULL;
 
 	if (g_sbdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return -1;
 	}
 
-	if (btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_WORKING 
-			&& btmtk_fops_get_state(g_sbdev) != BTMTK_FOPS_STATE_OPENED) {
+	if (btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_WORKING
+			|| btmtk_fops_get_state(g_sbdev) != BTMTK_FOPS_STATE_OPENED) {
 		BTMTK_WARN("%s: not in working state(%d) fops(%d)"
 			, __func__, btmtk_get_chip_state(g_sbdev), btmtk_fops_get_state(g_sbdev));
 		return -1;
@@ -785,17 +783,15 @@ int btmtk_dump_start(void *priv_data, unsigned int force_dump){
 	}
 
 	if (!force_dump && cif_dev->own_state != BTMTK_DRV_OWN) {
-		BTMTK_WARN("%s: force_dump[%d], own_state[%d]", __func__, force_dump, cif_dev->own_state);
+		BTMTK_WARN("%s: not in drv own, force_dump[%d], own_state[%d]", __func__, force_dump, cif_dev->own_state);
 		return -1;
 	}
 
+	BTMTK_INFO("%s start", __func__);
 	/* make sure keep drv own */
 	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
 	return 0;
-#endif
 
-	BTMTK_INFO("%s start (temp disable)", __func__);
-	return -1;
 }
 int btmtk_dump_end(void *priv_data){
 	struct btmtk_uart_dev *cif_dev = NULL;
