@@ -49,7 +49,7 @@ int btmtk_read_pmic_state(struct btmtk_dev *bdev);
 
 int btmtk_set_pcm_pin_mux(void);
 
-int btmtk_reset_pin_off(void);
+int btmtk_set_gpio_default(void);
 int btmtk_pre_power_on_handler(void);
 int btmtk_set_uart_auxFunc(void);
 
