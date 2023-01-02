@@ -71,8 +71,9 @@ void btmtk_uarthub_err_cb(unsigned int err_type)
 		return;
 	}
 
-	if ((1 << dev0_tx_timeout_err) & err_type) {
-		BTMTK_INFO("%s: dev0_tx_timeout_err", __func__);
+	if (((1 << dev0_tx_timeout_err) | (1 << dev0_tx_pkt_type_err) | (1 << dev0_rx_timeout_err)
+			| (1 << intfhub_dev0_tx_err)) & err_type) {
+		BTMTK_INFO("%s: dev0 err dump", __func__);
 		if (cif_dev->hub_en && btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_DISCONNECT)
 			mtk8250_uart_dump(cif_dev->tty);
 	}
