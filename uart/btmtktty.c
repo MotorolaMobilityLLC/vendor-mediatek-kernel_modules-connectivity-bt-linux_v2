@@ -802,11 +802,17 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 		mtk8250_uart_dump(cif_dev->tty);
 #endif
 
-	if (state == BTMTK_STATE_INIT || state == BTMTK_STATE_CLOSED
-		|| state == BTMTK_STATE_PROBE || fstate == BTMTK_FOPS_STATE_CLOSING
-		|| cif_dev->assert_state) {
-		BTMTK_WARN("%s: state[%d] bt assert_state[%d], not trigger coredump",
-				__func__, state, cif_dev->assert_state);
+	if (state == BTMTK_STATE_INIT || fstate == BTMTK_FOPS_STATE_CLOSED
+		|| fstate == BTMTK_FOPS_STATE_CLOSING || cif_dev->assert_state) {
+		BTMTK_WARN("%s: state[%d] fstate[%d] bt assert_state[%d], not trigger coredump",
+				__func__, state, fstate, cif_dev->assert_state);
+		return;
+	}
+
+	if (cif_dev->rhw_en == 0) {
+		/* not enable rhw yet, do hif dump */
+		if (bmain_info->hif_hook.dump_hif_debug_sop)
+			bmain_info->hif_hook.dump_hif_debug_sop(bdev);
 		return;
 	}
 
@@ -820,7 +826,9 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 
 	if (cif_dev->is_rhw_fail) {
 		BTMTK_WARN("%s: rhw can't trigger assert", __func__);
-		/* Todo: through wifi trigger assert */
+		/* hif dump */
+		if (bmain_info->hif_hook.dump_hif_debug_sop)
+			bmain_info->hif_hook.dump_hif_debug_sop(bdev);
 
 		/* direct send hw_err event notify host to close bt */
 		bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
@@ -2519,6 +2527,7 @@ int btmtk_cif_register(void)
 	hook.log_handler = btmtk_connsys_log_handler;
 	hook.init = btmtk_chardev_init;
 	hook.dump_debug_sop = btmtk_uart_sp_dump_debug_sop;
+	hook.dump_hif_debug_sop = btmtk_hif_sp_dump_debug_sop;
 	hook.whole_reset = btmtk_sp_whole_chip_reset;
 	hook.trigger_assert = btmtk_uart_trigger_assert;
 #endif

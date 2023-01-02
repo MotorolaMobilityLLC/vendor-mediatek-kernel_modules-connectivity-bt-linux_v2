@@ -1574,9 +1574,14 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	int state = BTMTK_STATE_INIT;
 	u8 drv_own_retry = 10;
 
-	if (bdev == NULL || bdev->hdev == NULL ||
-		cmd == NULL || cmd_len <= 0) {
-		BTMTK_ERR("%s, invalid parameters!", __func__);
+	if (bdev == NULL) {
+		BTMTK_ERR("%s, bdev is NULL", __func__);
+		ret = -EINVAL;
+		goto exit;
+	}
+
+	if (bdev->hdev == NULL || cmd == NULL || cmd_len <= 0) {
+		BTMTK_ERR("%s, invalid parameters! cmd_len[%d]", __func__, cmd_len);
 		ret = -EINVAL;
 		goto exit;
 	}

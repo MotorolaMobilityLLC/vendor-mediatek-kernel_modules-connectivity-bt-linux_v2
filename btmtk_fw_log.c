@@ -509,6 +509,18 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
+	if (strncmp(i_fwlog_buf, "hif_debug_sop", strlen("hif_debug_sop")) == 0) {
+		state = btmtk_get_chip_state(pp_bdev[hci_idx]);
+		//&& state == BTMTK_STATE_WORKING
+		if (bmain_info->hif_hook.dump_hif_debug_sop) {
+			bmain_info->hif_hook.dump_hif_debug_sop(pp_bdev[hci_idx]);
+		} else {
+			BTMTK_INFO("%s: not support hif_debug_sop or chip_state[%d]", __func__, state);
+		}
+		ret = count;
+		goto exit;
+	}
+
 #ifdef BTMTK_DEBUG_SOP
 	if (strncmp(i_fwlog_buf, "dump test", strlen("dump test")) == 0) {
 		btmtk_load_debug_sop_register(pp_bdev[hci_idx]->debug_sop_file_name,
