@@ -270,6 +270,8 @@ extern uint8_t btmtk_log_lvl;
 
 #define SECTION_SPEC_NUM	13
 
+#define ASSERT_REASON_SIZE 255
+
 #define BD_ADDRESS_SIZE 6
 #define PHASE1_WMT_CMD_COUNT 255
 #define VENDOR_CMD_COUNT 255
