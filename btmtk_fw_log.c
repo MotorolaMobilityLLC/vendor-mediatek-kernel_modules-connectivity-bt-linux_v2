@@ -346,12 +346,10 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 	ulong flags = 0;
 	struct sk_buff *skb = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-	static unsigned int fwlog_count;
 
 	//if (is_mt66xx(g_sbdev->chip_id)) {
 	if (bmain_info->hif_hook.log_read_to_user) {
 		copyLen = bmain_info->hif_hook.log_read_to_user(buf, count);
-		BTMTK_DBG_LIMITTED("%s: fw log counter[%d]", __func__, fwlog_count++);
 		return copyLen;
 	}
 
@@ -1101,6 +1099,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	struct connv3_issue_info issue_info;
 	int ret = 0, line = 0;
+	static unsigned int fwlog_count;
 
 	if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 			skb->data[0] == 0x6f &&
@@ -1292,6 +1291,8 @@ coredump_fail_unlock:
 		/* picus or syslog */
 		/* remove acl header (FF 05 LL LL)*/
 		skb_pull(skb, 4);
+		fwlog_count++;
+		BTMTK_INFO_LIMITTED("%s: fw log counter[%d]", __func__, fwlog_count);
 		bmain_info->hif_hook.log_handler(skb->data, skb->len);
 		return 1;
 	}
