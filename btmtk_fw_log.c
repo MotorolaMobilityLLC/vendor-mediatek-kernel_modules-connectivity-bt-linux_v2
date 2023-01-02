@@ -1292,7 +1292,7 @@ coredump_fail_unlock:
 		/* remove acl header (FF 05 LL LL)*/
 		skb_pull(skb, 4);
 		fwlog_count++;
-		BTMTK_INFO_LIMITTED("%s: fw log counter[%d]", __func__, fwlog_count);
+		BTMTK_INFO_LIMITTED("fw log counter[%d]", fwlog_count);
 		bmain_info->hif_hook.log_handler(skb->data, skb->len);
 		return 1;
 	}
