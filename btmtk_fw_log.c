@@ -27,9 +27,7 @@
 static wait_queue_head_t BT_log_wq;
 static struct semaphore ioctl_mtx;
 static uint8_t g_bt_on = BT_FWLOG_OFF;
-#if 0
 static uint8_t g_log_on = BT_FWLOG_OFF;
-#endif
 static uint8_t g_log_level = BT_FWLOG_DEFAULT_LEVEL;
 static uint8_t g_log_current = BT_FWLOG_OFF;
 /* For fwlog dev node setting */
@@ -698,9 +696,7 @@ int btmtk_fops_closefwlog(struct inode *inode, struct file *file)
 long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	long retval = 0;
-#if 0
 	uint8_t log_tmp = BT_FWLOG_OFF;
-#endif
 
 	/* only 66xx will use ioctlfwlog, 76xx not used */
 	/* if (!is_mt66xx(g_sbdev->chip_id)) {
@@ -712,7 +708,6 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 	down(&ioctl_mtx);
 	switch (cmd) {
 	case BT_FWLOG_IOC_ON_OFF:
-#if 0
 		/* Connsyslogger daemon dynamically enable/disable Picus log */
 		BTMTK_INFO("[ON_OFF]arg(%lu) bt_on(0x%x) log_on(0x%x) level(0x%x) log_cur(0x%x)",
 			       arg, g_bt_on, g_log_on, g_log_level, g_log_current);
@@ -726,10 +721,8 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 				btmtk_intcmd_wmt_utc_sync();
 			}
 		}
-#endif
 		break;
 	case BT_FWLOG_IOC_SET_LEVEL:
-#if 0
 		/* Connsyslogger daemon dynamically set Picus log level */
 		BTMTK_INFO("[SET_LEVEL]arg(%lu) bt_on(0x%x) log_on(0x%x) level(0x%x) log_cur(0x%x)",
 			       arg, g_bt_on, g_log_on, g_log_level, g_log_current);
@@ -744,7 +737,6 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 				btmtk_intcmd_wmt_utc_sync();
 			}
 		}
-#endif
 		break;
 	case BT_FWLOG_IOC_GET_LEVEL:
 		retval = g_log_level;
