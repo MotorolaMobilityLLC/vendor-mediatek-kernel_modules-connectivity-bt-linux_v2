@@ -123,10 +123,12 @@ ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
   $(info [BT_Drv] KBUILD_EXTRA_SYMBOLS = $(KBUILD_EXTRA_SYMBOLS))
   #KBUILD_EXTRA_SYMBOLS := /mfs/mtkslt1121/mtk24223/CAS_REAL/alps-dev-s0_bsp-connac3-1210--2022_03_08_12_00/merged/out_krn/target/product/mgk_64_k510/obj/ETC/conninfra.ko_intermediates/LINKED/Module.symvers
   CONN_INFRA_SRC := $(TOP)/vendor/mediatek/kernel_modules/connectivity/conninfra
+  CONN_FEM_SRC := $(TOP)/vendor/mediatek/kernel_modules/connectivity/connfem
   ccflags-y += -I$(CONN_INFRA_SRC)/include
   ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility
   ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/include
   ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/connsyslog
+  ccflags-y += -I$(CONN_FEM_SRC)/include
 endif
 
 ccflags-y += -Werror
