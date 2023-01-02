@@ -411,6 +411,11 @@ int btmtk_pre_power_on_handler(void)
 		return -1;
 	}
 
+	if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_DISCONNECT) {
+		BTMTK_WARN("%s: uart disconnected", __func__);
+		return -1;
+	}
+
 	if (cif_dev->is_pre_on_done) {
 		BTMTK_INFO("%s: already do pre_on_cb", __func__);
 		return 0;
