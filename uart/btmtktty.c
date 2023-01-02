@@ -854,14 +854,14 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	tty = cif_dev->tty;
 	new_termios = tty->termios;
 
-	cif_dev->tty->ops->open(cif_dev->tty, NULL);
-
 	btmtk_pwrctrl_pre_on(bdev);
 	if (!cif_dev->is_pre_cal)
 		if (connv3_pwr_on(CONNV3_DRV_TYPE_BT)) {
 			BTMTK_ERR("ConnInfra power on failed!");
 			return -EFAULT;
 		}
+
+	cif_dev->is_pre_on_done = FALSE;
 
 	/* start tx_thread */
 	if (btmtk_tx_thread_start(bdev))
