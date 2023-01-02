@@ -223,6 +223,13 @@ struct btmtk_uart_dev {
 #define HCIUARTSETWAKEUP _IOW('U', 205, int)
 #define HCIUARTINIT _IOW('U', 206, int)
 
+/**
+ * parameter settings
+ */
+#define BTMTK_HUB_EN		(1 << 0)
+#define BTMTK_SLEEP_EN		(1 << 1)
+
+
 //int btmtk_cif_send_calibration(struct hci_dev *hdev);
 #endif
 

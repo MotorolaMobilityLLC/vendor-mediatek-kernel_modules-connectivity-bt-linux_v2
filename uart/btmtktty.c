@@ -978,6 +978,26 @@ static void btmtk_uart_waker_notify(struct btmtk_dev *bdev)
 	schedule_work(&bdev->reset_waker);
 }
 
+static int btmtk_uart_set_para(struct btmtk_dev *bdev, int val)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s start val[%d]", __func__, val);
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	cif_dev->hub_en = !!(val & BTMTK_HUB_EN);
+	cif_dev->sleep_en = !!(val & BTMTK_SLEEP_EN);
+
+	BTMTK_INFO("%s hub_en[%d] sleep_en[%d]", __func__, cif_dev->hub_en, cif_dev->sleep_en);
+	return 0;
+}
+
+
 static void btmtk_uart_cif_mutex_lock(struct btmtk_dev *bdev)
 {
 	UART_OPS_MUTEX_LOCK();
@@ -2243,6 +2263,7 @@ int btmtk_cif_register(void)
 	hook.cif_mutex_unlock = btmtk_uart_cif_mutex_unlock;
 	hook.dl_dma = btmtk_uart_load_fw_patch_using_dma;
 	hook.waker_notify = btmtk_uart_waker_notify;
+	hook.set_para= btmtk_uart_set_para;
 	btmtk_reg_hif_hook(&hook);
 
 	ret = uart_register();
