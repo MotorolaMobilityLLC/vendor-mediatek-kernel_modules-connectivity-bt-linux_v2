@@ -342,11 +342,9 @@ void btmtk_sp_coredump_end(void)
 	if (ret)
 		BTMTK_ERR("%s: coredump_end fail ret[%d]", __func__, ret);
 
-	connv3_conninfra_bus_dump(CONNV3_DRV_TYPE_BT);
+	atomic_set(&g_sbdev->assert_state, BTMTK_ASSERT_END);
 
 	btmtk_fwdump_wake_unlock();
-
-	atomic_set(&g_sbdev->assert_state, BTMTK_ASSERT_END);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	/* uarthub reset */
