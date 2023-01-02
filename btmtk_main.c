@@ -4175,8 +4175,6 @@ int bt_open(struct hci_dev *hdev)
 		goto failed;
 	}
 
-
-
 #if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
 	/* Don't send init cmd for DVT
 	 * Such as Lowpower DVT
@@ -4190,7 +4188,7 @@ int bt_open(struct hci_dev *hdev)
 		goto failed;
 	}
 
-	ret = btmtk_send_apcf_reserved(bdev);
+	//ret = btmtk_send_apcf_reserved(bdev);
 	if (ret < 0) {
 		BTMTK_ERR("%s, btmtk_send_apcf_reserved failed", __func__);
 		goto failed;
