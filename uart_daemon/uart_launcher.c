@@ -422,7 +422,7 @@ restart:
     }
 
     while (cont) {
-        err = poll(&fds, fd_num, 2000);
+        err = poll(&fds, fd_num, 20000);
         if (err < 0) {
             if (errno == EINTR) {
                 continue;
