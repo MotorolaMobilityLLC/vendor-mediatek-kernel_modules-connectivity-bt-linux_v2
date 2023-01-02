@@ -92,7 +92,7 @@ static const struct btmtk_cif_state g_cif_state[] = {
 	/* HIF_EVENT_STANDBY */
 	{BTMTK_STATE_STANDBY, BTMTK_STATE_STANDBY, BTMTK_STATE_ERR},
 	/* HIF_EVENT_SUBSYS_RESET */
-	{BTMTK_STATE_SUBSYS_RESET, BTMTK_STATE_WORKING, BTMTK_STATE_ERR},
+	{BTMTK_STATE_SUBSYS_RESET, BTMTK_STATE_SUBSYS_RESET, BTMTK_STATE_ERR},
 	/* HIF_EVENT_WHOLE_CHIP_RESET */
 	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_CLOSED, BTMTK_STATE_ERR},
 	/* HIF_EVENT_FW_DUMP */
@@ -3641,6 +3641,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	int ret = 0;
 	int state;
 	struct sk_buff *skb = NULL;
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 #if (USE_DEVICE_NODE == 0)
 	u8 cmd[ASSERT_CMD_LEN] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x02, 0x01, 0x00, 0x08 };
 #else
@@ -3654,11 +3655,13 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 		goto exit;
 	}
 
+	fstate = btmtk_fops_get_state(bdev);
 	state = btmtk_get_chip_state(bdev);
+	/* use fop to judge bt off, not use chip state because chip state keep closed until wmt power on cmd success */
 	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SUSPEND ||
-		state == BTMTK_STATE_SEND_ASSERT || state == BTMTK_STATE_CLOSED) {
-		BTMTK_WARN("%s: FW dumping already or in suspend state don't send assert, state = %d!!!",
-			__func__, state);
+		state == BTMTK_STATE_SEND_ASSERT || fstate == BTMTK_FOPS_STATE_CLOSED) {
+		BTMTK_WARN("%s: chip_state(%d) fop_state(%d) don't send assert",
+			__func__, state, fstate);
 		return ret;
 	}
 
