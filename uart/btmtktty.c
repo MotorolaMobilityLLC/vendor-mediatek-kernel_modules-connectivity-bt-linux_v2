@@ -26,6 +26,7 @@
 #include <linux/platform_device.h>
 #include <linux/of_device.h>
 #include "btmtk_fw_log.h"
+#include "btmtk_queue.h"
 #endif
 
 #define LOG TRUE
@@ -2517,6 +2518,7 @@ int btmtk_cif_register(void)
 
 	memset(&hook, 0, sizeof(hook));
 #if (USE_DEVICE_NODE == 1)
+	rx_queue_initialize();
 	hook.fw_log_state = fw_log_bt_state_cb;
 	hook.log_init = btmtk_connsys_log_init;
 	hook.log_read_to_user = btmtk_connsys_log_read_to_user;
@@ -2568,6 +2570,9 @@ int btmtk_cif_deregister(void)
 		BTMTK_ERR("*** UART deregistration fail(%d)! ***", ret);
 		return ret;
 	}
+#if (USE_DEVICE_NODE == 1)
+	rx_queue_destroy();
+#endif
 	BTMTK_INFO("%s: Done", __func__);
 	return 0;
 }
