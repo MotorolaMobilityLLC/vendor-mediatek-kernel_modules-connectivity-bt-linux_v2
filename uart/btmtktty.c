@@ -831,8 +831,10 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	/* set chip baud and flowcontrol to config setting */
 	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
 	if (ret < 0) {
-		BTMTK_WARN("%s set uart cmd fail", __func__);
-		goto exit;
+		BTMTK_WARN("%s retry send cmd", __func__);
+		ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
+		if (ret < 0)
+			goto exit;
 	}
 
 	/* set tty host baud and flowcontrol to config setting */
