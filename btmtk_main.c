@@ -4507,8 +4507,8 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			btmtk_reset_timer_update(bdev);
 			btmtk_hci_snoop_print_to_log();
 			if (bdev->assert_reason[0] == '\0') {
-				memcpy(bdev->assert_reason, "[BT_DRV assert] host trigger", 28);
-				BTMTK_WARN("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+				strncpy(bdev->assert_reason, "[BT_DRV assert] host trigger", strlen("[BT_DRV assert] host trigger"));
+				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 			}
 
 			if(main_info.hif_hook.trigger_assert) {
