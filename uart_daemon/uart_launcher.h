@@ -47,6 +47,7 @@
 #define HCIUARTLOADPATCH _IOW('U', 204, int)
 #define HCIUARTSETWAKEUP _IOW('U', 205, int)
 #define HCIUARTINIT _IOW('U', 206, int)
+#define HCIUARTDEINIT _IOW('U', 207, int)
 
 #define CUST_COMBO_WMT_DEV "/dev/stpwmt"
 #define CUST_COMBO_STP_DEV "/dev/ttyUSB0"
