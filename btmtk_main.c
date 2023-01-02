@@ -615,8 +615,10 @@ int btmtk_load_register(char *block_name, struct debug_reg_struct *save_reg,
 		ret = kstrtoul(regnum, 0, &parsing_result);
 		if (ret != 0) {
 			BTMTK_ERR("%s: %s kstrtoul fail: %d", __func__, regnum, ret);
+			kfree(regnum);
 			return -ENOMEM;
 		}
+		kfree(regnum);
 
 		save_reg->reg = (struct debug_reg *)kzalloc(parsing_result * sizeof(struct debug_reg), GFP_KERNEL);
 		if (save_reg->reg == NULL) {
@@ -4571,6 +4573,7 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			btmtk_reset_timer_update(bdev);
 			btmtk_hci_snoop_print_to_log();
 			if (bdev->assert_reason[0] == '\0') {
+				memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
 				strncpy(bdev->assert_reason, "[BT_DRV assert] host trigger", strlen("[BT_DRV assert] host trigger"));
 				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 			}
