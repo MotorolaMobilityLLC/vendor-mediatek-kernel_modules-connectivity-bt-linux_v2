@@ -518,11 +518,6 @@ static int BT_open(struct inode *inode, struct file *file)
 		return -1;
 	}
 
-	if (g_sbdev->hdev->open == NULL) {
-		BTMTK_ERR("g_sbdev->hdev->open == NULL");
-		return -1;
-	}
-
 	__pm_stay_awake(bt_wakelock);
 	BTMTK_INFO("major %d minor %d (pid %d)", imajor(inode), iminor(inode), current->pid);
 
@@ -536,7 +531,7 @@ static int BT_open(struct inode *inode, struct file *file)
 		}
 		/* wait pre-cal done */
 		if (g_sbdev->is_pre_cal_done)
-			ret = g_sbdev->hdev->open(g_sbdev->hdev);
+			ret = bt_open(g_sbdev->hdev);
 		if (ret) {
 			BTMTK_WARN_LIMITTED("%s: retry[%d] ret[%d] is_pre_cal_done[%d]"
 							, __func__, ret, retry, g_sbdev->is_pre_cal_done);
@@ -583,15 +578,10 @@ static int BT_close(struct inode *inode, struct file *file)
 		return -1;
 	}
 
-	if (g_sbdev->hdev->close == NULL) {
-		BTMTK_ERR("%s: g_sbdev->hdev->close == NULL", __func__);
-		g_sbdev->fops_state = BTMTK_FOPS_STATE_CLOSED;
-		return -1;
-	}
 	__pm_stay_awake(bt_wakelock);
 	BTMTK_INFO("%s: major %d minor %d (pid %d)", __func__, imajor(inode), iminor(inode), current->pid);
 
-	ret = g_sbdev->hdev->close(g_sbdev->hdev);
+	ret = bt_close(g_sbdev->hdev);
 	__pm_relax(bt_wakelock);
 
 #if 0 // Simfex
