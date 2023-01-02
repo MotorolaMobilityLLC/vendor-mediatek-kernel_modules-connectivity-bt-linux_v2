@@ -1280,10 +1280,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		return 1;
 
 coredump_fail_unlock:
-		//btmtk_fwdump_wake_unlock();
-		BTMTK_ERR("%s: coredump fail ret[%d] line[%d], complete dump_comp", __func__, ret, line);
-		btmtk_sp_coredump_end();
-		complete_all(&bdev->dump_comp);
+		BTMTK_ERR("%s: coredump API fail ret[%d] line[%d]", __func__, ret, line);
 		return 1;
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
