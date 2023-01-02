@@ -602,7 +602,7 @@ int btmtk_read_pmic_state(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s enter", __func__);
 	ret = btmtk_main_send_cmd(bdev, read_pmic_state_cmd, sizeof(read_pmic_state_cmd),
-			read_pmic_state_event, sizeof(read_pmic_state_event), 0, 0, BTMTK_TX_CMD_FROM_DRV);
+			read_pmic_state_event, sizeof(read_pmic_state_event), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 	else
@@ -708,7 +708,7 @@ int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 	BTMTK_INFO_RAW(cmd, offset, "%s: Send: ", __func__);
 
 	ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
-			event, sizeof(event), 0, 0, BTMTK_TX_CMD_FROM_DRV);
+			event, sizeof(event), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
@@ -813,7 +813,7 @@ static void btmtk_send_set_tx_power_cmd(struct btmtk_dev *bdev)
 
 	cmd_set[5] = dy_pwr->set_val;
 	btmtk_main_send_cmd(bdev, cmd_set, sizeof(cmd_set),
-				evt_set, sizeof(evt_set), 0, 0, BTMTK_TX_CMD_FROM_DRV);
+				evt_set, sizeof(evt_set), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 
 	if (bdev->io_buf[6] != HCI_EVT_CC_STATUS_SUCCESS)
 		BTMTK_ERR("%s: status error[0x%02x]!", __func__, bdev->io_buf[6]);
@@ -922,7 +922,7 @@ int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb)
 	 * ZZ: Low power region boundary dBm
 	 */
 	btmtk_main_send_cmd(bdev, cmd_query, sizeof(cmd_query),
-				evt_query, sizeof(evt_query), 0, 0, BTMTK_TX_CMD_FROM_DRV);
+				evt_query, sizeof(evt_query), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 
 	if (bdev->io_buf[6] != HCI_EVT_CC_STATUS_SUCCESS)
 		BTMTK_ERR("%s: status error[0x%02x]!", __func__, bdev->io_buf[6]);
@@ -1083,7 +1083,7 @@ int32_t btmtk_intcmd_wmt_utc_sync(void)
 	memcpy(cmd + 6 + sizeof(uint32_t), &utc.usec, sizeof(uint32_t));
 
 	btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd),
-		NULL, 0, 0, 0, BTMTK_TX_CMD_FROM_DRV);
+		NULL, 0, 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 
 	return 0;
 }

@@ -83,7 +83,11 @@
 #define PATCH_DOWNLOAD_PHASE1_2_DELAY_TIME 1
 #define PATCH_DOWNLOAD_PHASE1_2_RETRY 5
 #define PATCH_DOWNLOAD_PHASE3_DELAY_TIME 20
+#if (USE_DEVICE_NODE == 0)
 #define PATCH_DOWNLOAD_PHASE3_RETRY 20
+#else
+#define PATCH_DOWNLOAD_PHASE3_RETRY 4
+#endif
 #define PATCH_DOWNLOAD_PHASE3_SECURE_BOOT_DELAY_TIME 200
 #define TIME_MULTIPL 1000
 #define TIME_US_OFFSET_RANGE 2000
@@ -91,7 +95,11 @@
 /* * delay and retrey for main_send_cmd */
 #define WMT_DELAY_TIMES 100
 #define DELAY_TIMES 20
+#if (USE_DEVICE_NODE == 0)
 #define RETRY_TIMES 20
+#else
+#define RETRY_TIMES 4
+#endif
 
 #define BT_OPEN_MAX_RETRY	100
 
@@ -338,7 +346,6 @@ enum TX_TYPE {
 	BTMTK_TX_ACL_FROM_DRV,			/* send acl pkt with load rompatch by driver */
 	BTMTK_TX_PKT_FROM_HOST,			/* send pkt from host, include acl and hci */
 	BTMTK_TX_PKT_SEND_DIRECT,		/* send tx not through tx_thread */
-	BTMTK_TX_PKT_SEND_DIRECT_NO_WAIT_OWN,		/* send tx not through tx_thread and no wait drv own*/
 	BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT,	/* send tx not through tx_thread and not trigger assert */
 };
 

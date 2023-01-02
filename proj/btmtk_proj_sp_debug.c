@@ -84,7 +84,7 @@ int RHW_WRITE(uint32_t addr, uint32_t val)
 				0x22, 0x22, 0x33, 0x44};
 
 	if (g_rhw_fail >= BT_RHW_MAX_ERR_COUNT) {
-		BTMTK_WARN("%s skip, g_rhw_fail[%d]", __func__, g_rhw_fail);
+		BTMTK_WARN_LIMITTED("%s skip, g_rhw_fail[%d]", __func__, g_rhw_fail);
 		return ret;
 	}
 
@@ -117,7 +117,7 @@ int RHW_READ(uint32_t addr, uint32_t *val)
 
 	if (g_rhw_fail >= BT_RHW_MAX_ERR_COUNT) {
 		*val = 0xdeaddead;
-		BTMTK_WARN("%s skip, g_rhw_fail[%d]", __func__, g_rhw_fail);
+		BTMTK_WARN_LIMITTED("%s skip, g_rhw_fail[%d]", __func__, g_rhw_fail);
 		return ret;
 	}
 	memcpy(&cmd[RHW_ADDR_OFFSET_CMD], &addr, sizeof(addr));
