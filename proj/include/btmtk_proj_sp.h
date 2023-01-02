@@ -61,6 +61,11 @@ extern int mtk8250_uart_hub_reset(void);
 extern int mtk8250_uart_hub_register_cb(UARTHUB_IRQ_CB irq_callback);
 extern int mtk8250_uart_hub_assert_bit_ctrl(int ctrl);
 extern int mtk8250_uart_dump(struct tty_struct *tty);
+extern int mtk8250_uart_hub_dev0_set_tx_request(void);
+extern int mtk8250_uart_hub_dev0_set_rx_request(void);
+extern int mtk8250_uart_hub_dev0_clear_tx_request(void);
+extern int mtk8250_uart_hub_dev0_clear_rx_request(void);
+extern int mtk8250_uart_hub_get_host_wakeup_status(void);
 int btmtk_wakeup_uarthub(void);
 void btmtk_release_uarthub(bool force);
 
