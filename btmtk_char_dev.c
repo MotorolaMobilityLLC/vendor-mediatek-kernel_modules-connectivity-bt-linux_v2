@@ -562,11 +562,15 @@ static int BT_close(struct inode *inode, struct file *file)
 
 	if (g_sbdev->hdev == NULL) {
 		BTMTK_ERR("%s: g_sbdev->hdev == NULL", __func__);
+		/* if bt closed after bt disconnected, would not able to set fops to closed */
+		/* Todo: how to excute bt_close flow to free unused data */
+		g_sbdev->fops_state = BTMTK_FOPS_STATE_CLOSED;
 		return -1;
 	}
 
 	if (g_sbdev->hdev->close == NULL) {
 		BTMTK_ERR("%s: g_sbdev->hdev->close == NULL", __func__);
+		g_sbdev->fops_state = BTMTK_FOPS_STATE_CLOSED;
 		return -1;
 	}
 	__pm_stay_awake(bt_wakelock);
