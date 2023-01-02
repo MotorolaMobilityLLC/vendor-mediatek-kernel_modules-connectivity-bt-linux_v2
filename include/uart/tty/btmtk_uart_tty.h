@@ -110,7 +110,7 @@ struct mtk_stp_hdr {
 #endif
 
 #define BTMTK_MAX_SEND_RETRY 10000
-#define BTMTK_MAX_WAIT_RETRY 30
+#define BTMTK_MAX_WAIT_RETRY 60
 #define BTMTK_MAX_WAKEUP_RETRY 4
 #define BTMTK_MAX_RECV_ERR_CNT 3
 
