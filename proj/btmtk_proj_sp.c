@@ -481,6 +481,7 @@ int btmtk_read_pmic_state(struct btmtk_dev *bdev)
 int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 {
 	struct connfem_epaelna_fem_info fem_info;
+	struct connfem_epaelna_fem_info bt_fem_info;
 	struct connfem_epaelna_flags_common common_flag;
 	struct connfem_epaelna_pin_info pin_info;
 	struct connfem_epaelna_flags_bt bt_flag;
@@ -497,6 +498,7 @@ int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 	/* Get data from connfem_api */
 	connfem_epaelna_get_fem_info(&fem_info);
 	connfem_epaelna_get_pin_info(&pin_info);
+	connfem_epaelna_get_bt_fem_info(&bt_fem_info);
 	connfem_epaelna_get_flags(CONNFEM_SUBSYS_NONE, &common_flag);
 	connfem_epaelna_get_flags(CONNFEM_SUBSYS_BT, &bt_flag);
 
@@ -520,10 +522,11 @@ int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 	 * BBBB : 2.4G part = VID + PID
 	 * CC : 1 byte Rx Mode info
 	 * DDDDDDDD: 4 bytes SPDT info
+	 * ZZZZZZZZ: 4 bytes BT dedicate efem ID
 	 *
 	 * RX: 04 E4 06 02 55 02 00 01 SS (SS : status)
 	 */
-	cmd_len = sizeof(cmd_header) + pin_info.count * pin_struct_size + 8;
+	cmd_len = sizeof(cmd_header) + pin_info.count * pin_struct_size + 12;
 	cmd = vmalloc(cmd_len);
 	if (!cmd) {
 		BTMTK_ERR("unable to allocate confem command");
@@ -564,6 +567,9 @@ int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 	cmd[offset++] = common_flag.fe_main_bt_share_lp2g;
 	cmd[offset++] = common_flag.fe_conn_spdt;
 	cmd[offset++] = common_flag.fe_reserved;
+
+	memcpy(&cmd[offset], &bt_fem_info.id, sizeof(bt_fem_info.id));
+	offset += sizeof(bt_fem_info.id);
 
 	BTMTK_INFO_RAW(cmd, offset, "%s: Send: ", __func__);
 
