@@ -1277,8 +1277,14 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 
 		if (sent_len > 0) {
 			memcpy(image, fwbuf + section_offset + cur_len, sent_len);
-			if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
+			if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT) {
+				/* avoid uart_launcher get signal 9 close uart, and not notify driver */
+				if(cif_dev->tty == NULL || cif_dev->tty->port == NULL || cif_dev->tty->port->count == 0) {
+					BTMTK_WARN("%s: tty port count is 0", __func__);
+					goto exit;
+				}
 				ret = cif_dev->tty->ops->write(cif_dev->tty, image, sent_len);
+			}
 
 			if (ret == UPLOAD_PATCH_UNIT) {
 				max_pkt_cnt++;
@@ -1349,6 +1355,12 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	}
 	while (len != cmd_len && count < BTMTK_MAX_SEND_RETRY
 			&& btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT) {
+		/* avoid uart_launcher get signal 9 close uart, and not notify driver */
+		if(cif_dev->tty == NULL || cif_dev->tty->port == NULL || cif_dev->tty->port->count == 0) {
+			BTMTK_WARN("%s: tty port count is 0", __func__);
+			ret = -1;
+			break;
+		}
 		ret = cif_dev->tty->ops->write(cif_dev->tty, cmd + len, cmd_len - len);
 		len += ret;
 		count++;
@@ -2307,8 +2319,15 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 
 	cif_state = &bdev->cif_state[cif_event];
 
-	/* Set Entering state */
-	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+	/* set working state for uart_launcher restart when driver already open */
+	if (btmtk_fops_get_state(bdev) == BTMTK_FOPS_STATE_OPENED) {
+		BTMTK_ERR("%s uart_launcher restart when BT already opened, send HW error event", __func__);
+		btmtk_set_chip_state((void *)bdev, BTMTK_STATE_WORKING);
+		/* notify stack to restart BT */
+		bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
+		btmtk_send_hw_err_to_host(bdev);
+	}else
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
 	/* Init completion */
 	init_completion(&bdev->dump_comp);

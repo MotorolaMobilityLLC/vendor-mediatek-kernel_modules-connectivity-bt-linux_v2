@@ -2675,6 +2675,10 @@ struct btmtk_dev *btmtk_get_dev(void)
 		 * Identified chip_id from cap_init.
 		 */
 		if (g_bdev[i]->hdev == NULL) {
+#if (USE_DEVICE_NODE == 1)
+			/* only use g_bdev[0] in SP project */
+			i = 0;
+#endif
 			if (i == 0)
 				g_bdev[i]->dongle_index = i;
 			else
@@ -4763,12 +4767,13 @@ void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 		/* Drop queues */
 		skb_queue_purge(&bdev->rx_q);
 	}
+#if (USE_DEVICE_NODE == 0)
 	if (bdev->workqueue) {
 		destroy_workqueue(bdev->workqueue);
 		bdev->workqueue = NULL;
 	}
 
-#if (USE_DEVICE_NODE == 0)
+
 	if (bdev->hdev) {
 		hci_free_dev(bdev->hdev);
 		bdev->hdev = NULL;
@@ -4842,8 +4847,11 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 	INIT_WORK(&bdev->pwr_on_uds_work, btmtk_pwr_on_uds_work);
 #endif
 	skb_queue_head_init(&bdev->rx_q);
-	bdev->workqueue = alloc_workqueue("BTMTK_RX_WQ", WQ_HIGHPRI | WQ_UNBOUND |
-					  WQ_MEM_RECLAIM, 1);
+	if(bdev->workqueue == NULL) {
+		bdev->workqueue = alloc_workqueue("BTMTK_RX_WQ", WQ_HIGHPRI | WQ_UNBOUND |
+							WQ_MEM_RECLAIM, 1);
+	} else
+		BTMTK_INFO("%s: bdev->workqueue exist", __func__);
 	if (!bdev->workqueue) {
 		BTMTK_ERR("%s, bdev->workqueue is NULL!", __func__);
 		err = -ENOMEM;
