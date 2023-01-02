@@ -4726,6 +4726,10 @@ int btmtk_register_hci_device(struct btmtk_dev *bdev)
 
 	hdev = bdev->hdev;
 
+#if (KERNEL_VERSION(5, 10, 20) < LINUX_VERSION_CODE)
+	set_bit(HCI_QUIRK_NO_SUSPEND_NOTIFIER, &hdev->quirks);
+#endif
+
 	err = hci_register_dev(hdev);
 	/* After hci_register_dev completed
 	 * It will set dev_flags to HCI_SETUP
