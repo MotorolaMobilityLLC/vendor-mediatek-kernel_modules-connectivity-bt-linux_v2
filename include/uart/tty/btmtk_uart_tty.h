@@ -170,6 +170,12 @@ struct btmtk_uart_dev {
 
 	/* config form dts*/
 	u32			baudrate;
+
+	/* For uarthub setting */
+	u8			fw_hub_en;
+	u8			crc_en;
+	u8			rhw_en;
+	u8			fw_dl_ready;
 };
 
 #define btmtk_uart_is_standalone(bdev)	\
