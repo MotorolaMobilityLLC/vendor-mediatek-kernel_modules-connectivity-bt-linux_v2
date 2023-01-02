@@ -112,7 +112,6 @@ void fw_log_bt_state_cb(uint8_t state)
 
 void fw_log_bt_event_cb(void)
 {
-	BTMTK_DBG("fw_log_bt_event_cb");
 	wake_up_interruptible(&BT_log_wq);
 }
 
@@ -362,7 +361,9 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	int hci_idx = 0;
 	int vlen = 0, index = 3;
 	struct sk_buff *skb = NULL;
+#if (USE_DEVICE_NODE == 0)
 	struct sk_buff *skb_opcode = NULL;
+#endif
 	int state = BTMTK_STATE_INIT;
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	u8 *i_fwlog_buf = NULL;
@@ -587,7 +588,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 				index = index + FWLOG_ATTR_TL_SIZE + vlen;
 				break;
 			default:
-				BTMTK_WARN("Invalid opcode");
+				BTMTK_WARN("%s: Invalid opcode", __func__);
 				ret = -1;
 				goto free_skb;
 			}
@@ -595,7 +596,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	} else {
 		memcpy(skb->data, o_fwlog_buf, len);
 		skb->len = len;
-#if defined(DRV_RETURN_SPECIFIC_HCE_ONLY) && (DRV_RETURN_SPECIFIC_HCE_ONLY == 1)
+#if defined(DRV_RETURN_SPECIFIC_HCE_ONLY) && (DRV_RETURN_SPECIFIC_HCE_ONLY == 1) && (USE_DEVICE_NODE == 0)
 		// 0xFC26 is get link & profile information command.
 		if (*(uint16_t *)(o_fwlog_buf + 1) != 0xFC26) {
 			skb_opcode = alloc_skb(len + FWLOG_PRSV_LEN, GFP_ATOMIC);
@@ -613,7 +614,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 	/* won't send command if g_bdev not define */
 	if (pp_bdev[hci_idx]->hdev == NULL) {
-		BTMTK_DBG("pp_bdev[%d] not define", hci_idx);
+		BTMTK_DBG("%s: pp_bdev[%d] not define", __func__, hci_idx);
 		ret = count;
 		goto free_skb;
 	}
@@ -639,6 +640,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto free_skb;
 	}
 
+#if (USE_DEVICE_NODE == 0)
 	/* clean fwlog queue before enable picus log */
 	if (skb_queue_len(&g_fwlog->fwlog_queue) && skb->data[0] == 0x01
 			&& skb->data[1] == 0x5d && skb->data[2] == 0xfc && skb->data[4] == 0x00) {
@@ -647,7 +649,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	}
 
 	btmtk_dispatch_fwlog_bluetooth_kpi(pp_bdev[hci_idx], skb->data, skb->len, KPI_WITHOUT_TYPE);
-
+#endif
 	ret = bmain_info->hif_hook.send_cmd(pp_bdev[hci_idx], skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST);
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
@@ -662,8 +664,10 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 free_skb:
 	kfree_skb(skb);
 	skb = NULL;
+#if (USE_DEVICE_NODE == 0)
 	/* clean opcode queue if bt is disable */
 	skb_queue_purge(&g_fwlog->usr_opcode_queue);
+#endif
 exit:
 	kfree(i_fwlog_buf);
 	kfree(o_fwlog_buf);

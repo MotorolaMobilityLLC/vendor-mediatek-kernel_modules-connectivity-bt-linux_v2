@@ -205,7 +205,7 @@ L0RESET:
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
 
 #if (USE_DEVICE_NODE == 1)
-	complete(&bdev->dump_comp);
+	complete(&bdev->dump_comp);
 #endif
 }
 
