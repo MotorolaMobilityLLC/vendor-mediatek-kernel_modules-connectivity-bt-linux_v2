@@ -40,6 +40,8 @@ void btmtk_register_rx_event_cb(BT_RX_EVENT_CB cb);
 
 int32_t btmtk_receive_data(struct hci_dev *hdev, u8 *buf, u32 count);
 int32_t btmtk_send_data(struct hci_dev *hdev, u8 *buf, u32 count);
+void rx_queue_initialize(void);
+void rx_queue_destroy(void);
 
 #endif
 
