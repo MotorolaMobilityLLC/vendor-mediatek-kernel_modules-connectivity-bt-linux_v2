@@ -268,6 +268,7 @@ void btmtk_free_setting_file(struct btmtk_dev *bdev)
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_enable, 1);
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.phase1_wmt_cmd, PHASE1_WMT_CMD_COUNT);
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.vendor_cmd, VENDOR_CMD_COUNT);
+	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.audio_cmd, 1);
 
 	memset(&bdev->bt_cfg, 0, sizeof(bdev->bt_cfg));
 	/* reset pin initial value need to be -1, used to judge after
@@ -513,9 +514,13 @@ int btmtk_load_register(char *block_name, struct debug_reg_struct *save_reg,
 	/* search REG NUM */
 	(void)snprintf(search, SEARCH_LEN, "%sNUM:", block_name);
 	search_result = strstr((char *)searchcontent, search);
-
 	if (search_result) {
 		search_result = strstr(search_result, ":");
+		if (search_result == NULL) {
+			BTMTK_ERR("%s:regnum Incorrect format", __func__);
+			return -1;
+		}
+
 		search_end = strstr(search_result, ",");
 		if (search_end == NULL) {
 			BTMTK_ERR("%s: regnum is NULL", __func__);
@@ -536,6 +541,11 @@ int btmtk_load_register(char *block_name, struct debug_reg_struct *save_reg,
 		memcpy(regnum, search_result + 1, search_end - search_result - 1);
 		regnum[search_end - search_result - 1] = '\0';
 		ret = kstrtoul(regnum, 0, &parsing_result);
+		if (ret != 0) {
+			BTMTK_ERR("%s: %s kstrtoul fail: %d", __func__, regnum, ret);
+			return -ENOMEM;
+		}
+
 		save_reg->reg = (struct debug_reg *)kzalloc(parsing_result * sizeof(struct debug_reg), GFP_KERNEL);
 		if (save_reg->reg == NULL) {
 			BTMTK_ERR("%s: Allocate memory fail", __func__);
@@ -571,6 +581,8 @@ int btmtk_load_register(char *block_name, struct debug_reg_struct *save_reg,
 
 			/* find next line as end of this command line, if NULL means last line */
 			next_block = strstr(search_result, ":");
+			if (next_block == NULL)
+				BTMTK_WARN("%s: if NULL means last line", __func__);
 
 			do {
 				search_end = strstr(search_result, ",");
@@ -2473,6 +2485,8 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 
 			/* find next line as end of this command line, if NULL means last line */
 			next_block = strstr(search_result, ":");
+			if (next_block == NULL)
+				BTMTK_WARN("%s: if NULL means last line", __func__);
 
 			/* Add HCI packet type to front of each command/event */
 			if (!memcmp(block_name, "APCF", sizeof("APCF")) ||
@@ -3245,14 +3259,25 @@ static int btmtk_send_txpower_cmd(struct btmtk_dev *bdev)
 
 static int btmtk_set_power_value(char *str, int resolution, int is_edr)
 {
-	int power = ERR_PWR, integer = 0, decimal = 0, ret = 0;
+	int power = ERR_PWR, integer = 0, decimal = 0;
+	char *ptr = NULL;
 
 	if (resolution == RES_DOT_25) {
 		/* XX.YY => XX.YY/0.25 = XX*4 + YY/25 */
 		if (strstr(str, ".")) {
-			ret = sscanf(str, "%d.%d", &integer, &decimal);
-			if (ret < 0)
-				return ret;
+			ptr = strsep(&str, ".");
+			if (ptr == NULL)
+				return -1;
+			if (kstrtoint(ptr, 0, &integer) != 0) {
+				BTMTK_ERR("Read integer Fail");
+				return -1;
+			}
+
+			if (kstrtoint(str, 0, &decimal) != 0) {
+				BTMTK_ERR("Read decimal Fail");
+				return -1;
+			}
+
 			if (decimal != 25 && decimal != 75 && decimal != 5 && decimal != 50)
 				return ERR_PWR;
 			if (decimal == 5)
@@ -3262,9 +3287,10 @@ static int btmtk_set_power_value(char *str, int resolution, int is_edr)
 			else
 				power = integer * 4 - decimal / 25;
 		} else {
-			ret = sscanf(str, "%d", &integer);
-			if (ret < 0)
-				return ret;
+			if (kstrtoint(str, 0, &integer) != 0) {
+				BTMTK_ERR("Read integer Fail");
+				return -1;
+			}
 			power = integer * 4;
 		}
 
@@ -3280,9 +3306,19 @@ static int btmtk_set_power_value(char *str, int resolution, int is_edr)
 	} else if (resolution == RES_DOT_5) {
 		/* XX.YY => XX.YY/0.5 = XX*2 + YY/5 */
 		if (strstr(str, ".")) {
-			ret = sscanf(str, "%d.%d", &integer, &decimal);
-			if (ret < 0)
-				return ret;
+			ptr = strsep(&str, ".");
+			if (ptr == NULL)
+				return -1;
+			if (kstrtoint(ptr, 0, &integer) != 0) {
+				BTMTK_ERR("Read integer Fail");
+				return -1;
+			}
+
+			if (kstrtoint(str, 0, &decimal) != 0) {
+				BTMTK_ERR("Read decimal Fail");
+				return -1;
+			}
+
 			if (decimal != 5)
 				return ERR_PWR;
 			if (integer >= 0)
@@ -3290,9 +3326,10 @@ static int btmtk_set_power_value(char *str, int resolution, int is_edr)
 			if (integer < 0)
 				power = integer * 2 - decimal / 5;
 		} else {
-			ret = sscanf(str, "%d", &integer);
-			if (ret < 0)
-				return ret;
+			if (kstrtoint(str, 0, &integer) != 0) {
+				BTMTK_ERR("Read integer Fail");
+				return -1;
+			}
 			power = integer * 2;
 		}
 
@@ -3306,9 +3343,10 @@ static int btmtk_set_power_value(char *str, int resolution, int is_edr)
 		} else if (!is_edr && (power > BLE_MAX_R1 || power < BLE_MIN_R1))
 			return ERR_PWR;
 	} else if (resolution == RES_1) {
-		ret = sscanf(str, "%d", &power);
-		if (ret < 0)
-			return ret;
+		if (kstrtoint(str, 0, &power) != 0) {
+			BTMTK_ERR("Read power Fail");
+			return -1;
+		}
 
 		BTMTK_DBG("%s: power = %d", __func__, power);
 
