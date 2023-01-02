@@ -508,7 +508,7 @@ int btmtk_set_gpio_default_for_close(void)
 	BTMTK_DBG("%s: is_pre_on_done false", __func__);
 
 	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
-	msleep(10);
+	msleep(50);
 	cif_dev->tty->ops->close(cif_dev->tty, NULL);
 	return btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
 }

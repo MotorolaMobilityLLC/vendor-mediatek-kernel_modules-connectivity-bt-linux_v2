@@ -510,7 +510,8 @@ exit:
 	event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
 	up(&cif_dev->evt_comp_sem);
 	/* control not trigger assert */
-	if (ret < 0 && pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT) {
+	if (ret < 0 && pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT
+			&& pkt_type != BTMTK_TX_PKT_SEND_NO_ASSERT) {
 		if(bmain_info->hif_hook.trigger_assert) {
 			if (bdev->assert_reason[0] == '\0') {
 				if (snprintf(bdev->assert_reason, ASSERT_REASON_SIZE , "[BT_DRV assert] cmd timeout 0x%02x%02x"
@@ -625,7 +626,7 @@ static int btmtk_uart_send_query_uart_cmd(struct hci_dev *hdev)
 #if (USE_DEVICE_NODE == 0)
 			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 #else
-			RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+			RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
 #endif
 	if (ret < 0) {
 		BTMTK_ERR("%s btmtk_uart_send_query_uart_cmd failed!!", __func__);
@@ -661,7 +662,7 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 	if (is_mt6639(bdev->chip_id) || is_mt66xx(bdev->chip_id)) {
 		if (cif_dev->fw_dl_ready)
 			ret = btmtk_main_send_cmd(bdev, cmd+4, 1, event2, WAKEUP_EVT_LEN + 1,
-					0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+					0, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
 		else
 			ret = btmtk_main_send_cmd(bdev, cmd+4, 1, event, WAKEUP_EVT_LEN,
 					0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
@@ -867,6 +868,19 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 
 }
 
+static int btmtk_uart_driver_own_cmd(struct btmtk_dev *bdev)
+{
+	u8 fw_own_clr_cmd[] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x03, 0x02, 0x00, 0x03, 0x01 };
+	u8 evt[] = { 0x04, 0xE4, 0x07, 0x02, 0x03, 0x03, 0x00, 0x00, 0x03, 0x01 };
+	int ret = 0;
+
+	ret = btmtk_main_send_cmd(bdev, fw_own_clr_cmd, 10, evt, OWNTYPE_EVT_LEN,
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+	if (ret < 0)
+		BTMTK_ERR("%s: failed, ret[%d]", __func__, ret);
+	return ret;
+}
+
 static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 {
 	struct ktermios new_termios;
@@ -1033,8 +1047,12 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 #endif
 
 	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
-	if (ret < 0)
-		goto exit;
+	if (ret < 0) {
+		/* err handle for fw get dirty data trigger EINT */
+		ret = btmtk_uart_driver_own_cmd(bdev);
+		if (ret < 0)
+			goto exit;
+	}
 
 	/* bt on success, reset subsys count */
 	atomic_set(&bmain_info->subsys_reset_conti_count, 0);
