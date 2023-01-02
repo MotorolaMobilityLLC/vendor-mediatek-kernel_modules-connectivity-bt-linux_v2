@@ -4733,10 +4733,12 @@ void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 		bdev->workqueue = NULL;
 	}
 
+#if (USE_DEVICE_NODE == 0)
 	if (bdev->hdev) {
 		hci_free_dev(bdev->hdev);
 		bdev->hdev = NULL;
 	}
+#endif
 
 	fstate = btmtk_fops_get_state(bdev);
 	if (fstate == BTMTK_FOPS_STATE_OPENED || fstate == BTMTK_FOPS_STATE_CLOSING) {
@@ -4759,6 +4761,17 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 		err = -EINVAL;
 		goto end;
 	}
+
+#if (USE_DEVICE_NODE == 1)
+	/*
+	 * delay free to here instead of unitialize for phone in case
+	 * of uart_launcher crash or force terminate, and driver function
+	 * is still running in
+	 * hdev pointer
+	 */
+	if (bdev->hdev)
+		hci_free_dev(bdev->hdev);
+#endif
 
 	BTMTK_INFO("%s", __func__);
 	/* Add hci device */

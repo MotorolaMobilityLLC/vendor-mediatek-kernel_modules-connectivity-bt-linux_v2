@@ -670,11 +670,6 @@ int btmtk_pre_cal_pwr_on_cb(void)
 		return -1;
 	}
 
-	if (g_sbdev->hdev->open == NULL) {
-		BTMTK_ERR("g_sbdev->hdev->open == NULL");
-		return -1;
-	}
-
 	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
 	if (!cif_dev) {
 		BTMTK_ERR("[ERR] cif_dev is NULL");
@@ -682,7 +677,7 @@ int btmtk_pre_cal_pwr_on_cb(void)
 	}
 	cif_dev->is_pre_cal = TRUE;
 
-	ret = g_sbdev->hdev->open(g_sbdev->hdev);
+	ret = bt_open(g_sbdev->hdev);
 	cif_dev->is_pre_cal = FALSE;
 	if (ret) {
 		BTMTK_ERR("%s: BT turn on fail!", __func__);
@@ -713,11 +708,6 @@ int btmtk_pre_cal_do_cal_cb(void)
 		goto exit;
 	}
 
-	if (g_sbdev->hdev->close == NULL) {
-		BTMTK_ERR("%s: g_sbdev->hdev->close == NULL", __func__);
-		goto exit;
-	}
-
 	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
 	if (!cif_dev) {
 		BTMTK_ERR("[ERR] cif_dev is NULL");
@@ -725,7 +715,7 @@ int btmtk_pre_cal_do_cal_cb(void)
 	}
 
 	cif_dev->is_pre_cal = TRUE;
-	ret = g_sbdev->hdev->close(g_sbdev->hdev);
+	ret = bt_close(g_sbdev->hdev);
 	cif_dev->is_pre_cal = FALSE;
 	if (ret) {
 		BTMTK_ERR("%s: BT turn off fail!", __func__);
@@ -1120,12 +1110,6 @@ void btmtk_pwr_on_uds_work(struct work_struct *work)
 		return;
 	}
 
-	if (g_sbdev->hdev->close == NULL) {
-		BTMTK_ERR("%s: g_sbdev->hdev->close == NULL", __func__);
-		return;
-	}
-
-
 	if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_DISCONNECT) {
 		BTMTK_WARN("%s: uart disconnected", __func__);
 		return;
@@ -1136,7 +1120,7 @@ void btmtk_pwr_on_uds_work(struct work_struct *work)
 		return;
 	}
 
-	ret = g_sbdev->hdev->open(g_sbdev->hdev);
+	ret = bt_open(g_sbdev->hdev);
 
 	if (ret) {
 		BTMTK_ERR("%s: BT turn on fail!", __func__);
@@ -1144,12 +1128,7 @@ void btmtk_pwr_on_uds_work(struct work_struct *work)
 	}
 	BTMTK_INFO("%s: BT turn on ok!", __func__);
 
-	if (g_sbdev->hdev == NULL) {
-		BTMTK_ERR("%s: g_sbdev->hdev == NULL", __func__);
-		return;
-	}
-
-	ret = g_sbdev->hdev->close(g_sbdev->hdev);
+	ret = bt_close(g_sbdev->hdev);
 	if (ret) {
 		BTMTK_ERR("%s: BT turn off fail!", __func__);
 		return;
