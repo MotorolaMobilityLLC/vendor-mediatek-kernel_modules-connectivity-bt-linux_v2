@@ -158,6 +158,7 @@ static void btmtk_sdio_dump_debug_register(struct btmtk_dev *bdev,
 	struct btmtk_sdio_dev *cif_dev = NULL;
 	u32 value = 0, i = 0, count = 0;
 	static u32 reg_page[] = {0, 0};
+
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
 	count = debug_reg.num;
@@ -641,9 +642,9 @@ int btmtk_sdio_read_bt_mcu_pc(u32 *val)
 
 	SDIO_DEBUG_MUTEX_LOCK();
 
-	if (is_mt7902(g_sdio_dev.bdev->chip_id)) {
+	if (is_mt7902(g_sdio_dev.bdev->chip_id))
 		btmtk_sdio_writel(0x34, 0x01, g_sdio_dev.func);
-	}
+
 	btmtk_sdio_writel(0x30, 0xFD, g_sdio_dev.func);
 	btmtk_sdio_readl(0x2c, val, g_sdio_dev.func);
 
@@ -663,11 +664,11 @@ int btmtk_sdio_read_conn_infra_pc(u32 *val)
 
 	SDIO_DEBUG_MUTEX_LOCK();
 
-	if (is_mt7902(g_sdio_dev.bdev->chip_id)) {
+	if (is_mt7902(g_sdio_dev.bdev->chip_id))
 		btmtk_sdio_writel(0x34, 0x04, g_sdio_dev.func);
-	} else {
+	else
 		btmtk_sdio_writel(0x44, 0, g_sdio_dev.func);
-	}
+
 	btmtk_sdio_writel(0x3C, 0x9F1E0000, g_sdio_dev.func);
 	btmtk_sdio_readl(0x38, val, g_sdio_dev.func);
 

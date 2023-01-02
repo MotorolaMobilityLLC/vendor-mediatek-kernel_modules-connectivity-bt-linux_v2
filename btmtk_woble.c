@@ -79,7 +79,8 @@ int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 	}
 
 	if (is_support_unify_woble(bdev)) {
-		if (is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
+		if (is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id)
+				|| is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 			ret = btmtk_main_send_cmd(bdev, reserve_apcf_cmd, RES_APCF_CMD_LEN,
 				reserve_apcf_event, RES_APCF_EVT_LEN, 0, 0,
 				BTMTK_TX_PKT_FROM_HOST);

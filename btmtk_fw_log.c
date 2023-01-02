@@ -459,7 +459,8 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 #ifdef BTMTK_DEBUG_SOP
 	if (strncmp(i_fwlog_buf, "dump test", strlen("dump test")) == 0) {
-		btmtk_load_debug_sop_register(pp_bdev[hci_idx]->debug_sop_file_name, pp_bdev[hci_idx]->intf_dev, pp_bdev[hci_idx]);
+		btmtk_load_debug_sop_register(pp_bdev[hci_idx]->debug_sop_file_name,
+				pp_bdev[hci_idx]->intf_dev, pp_bdev[hci_idx]);
 		ret = count;
 		goto exit;
 	}
@@ -753,14 +754,12 @@ unsigned int btmtk_fops_pollfwlog(struct file *file, poll_table *wait)
 	//if (is_mt66xx(g_sbdev->chip_id)) {
 	if (bmain_info->hif_hook.log_get_buf_size) {
 		poll_wait(file, &BT_log_wq, wait);
-		if (bmain_info->hif_hook.log_get_buf_size() > 0) {
+		if (bmain_info->hif_hook.log_get_buf_size() > 0)
 			mask = (POLLIN | POLLRDNORM);
-		}
 	} else {
 		poll_wait(file, &g_fwlog->fw_log_inq, wait);
-		if (skb_queue_len(&g_fwlog->fwlog_queue) > 0) {
+		if (skb_queue_len(&g_fwlog->fwlog_queue) > 0)
 			mask |= POLLIN | POLLRDNORM;			/* readable */
-		}
 	}
 	return mask;
 }
@@ -978,11 +977,10 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			kfree_skb(skb_opcode);
 #endif
 			return 1;
-		} else {
-			BTMTK_INFO("%s: check opcode fail!", __func__);
-			skb_queue_head(&g_fwlog->usr_opcode_queue, skb_opcode);
-			return 0;
 		}
+
+		BTMTK_INFO("%s: check opcode fail!", __func__);
+		skb_queue_head(&g_fwlog->usr_opcode_queue, skb_opcode);
 	}
 
 	return 0;

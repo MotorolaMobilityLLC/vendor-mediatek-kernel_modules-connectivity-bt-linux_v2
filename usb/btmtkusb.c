@@ -113,6 +113,7 @@ static void btmtk_usb_dump_debug_register(struct btmtk_dev *bdev,
 	struct btmtk_sdio_dev *cif_dev = NULL;
 	u32 value = 0, i = 0, count = 0;
 	static u32 reg_page[] = {0, 0};
+
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
 	count = debug_reg.num;
@@ -1185,7 +1186,8 @@ static int btmtk_usb_open(struct hci_dev *hdev)
 
 	ifnum_base = cif_dev->intf->cur_altsetting->desc.bInterfaceNumber;
 
-	if (is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
+	if (is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id)
+			|| is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
 		BTMTK_INFO("%s 7961 submit urb\n", __func__);
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
 			if (cif_dev->reset_intr_ep) {
@@ -1694,7 +1696,8 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		}
 
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
-			if ((is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) &&
+			if ((is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id)
+					|| is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) &&
 					cif_dev->bulk_cmd_tx_ep)
 				urb = alloc_bulk_cmd_urb(hdev, skb);
 			else
@@ -1715,9 +1718,8 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			return -ENODEV;
 		}
 
-		if (IS_ERR(urb)) {
+		if (IS_ERR(urb))
 			return PTR_ERR(urb);
-		}
 
 		hdev->stat.cmd_tx++;
 		return submit_or_queue_tx_urb(hdev, urb, HCI_COMMAND_PKT);
@@ -1737,9 +1739,8 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					urb = alloc_intr_iso_urb(hdev, skb);
 					BTMTK_DBG_RAW(skb->data, skb->len, "%s, it's ble iso packet",
 						__func__);
-					if (IS_ERR(urb)) {
+					if (IS_ERR(urb))
 						return PTR_ERR(urb);
-					}
 				} else {
 					/* hci driver alllocate the size of skb that is to small, need re-allocate */
 					iso_skb = alloc_skb(HCI_MAX_ISO_SIZE + BT_SKB_RESERVE, GFP_ATOMIC);
@@ -1789,9 +1790,8 @@ exit:
 			}
 		} else {
 			urb = alloc_bulk_urb(hdev, skb);
-			if (IS_ERR(urb)) {
+			if (IS_ERR(urb))
 				return PTR_ERR(urb);
-			}
 		}
 		hdev->stat.acl_tx++;
 		return submit_or_queue_tx_urb(hdev, urb, HCI_ACLDATA_PKT);
@@ -1807,9 +1807,8 @@ exit:
 		}
 
 		urb = alloc_isoc_urb(hdev, skb);
-		if (IS_ERR(urb)) {
+		if (IS_ERR(urb))
 			return PTR_ERR(urb);
-		}
 
 		hdev->stat.sco_tx++;
 		return submit_tx_urb(hdev, urb, HCI_SCODATA_PKT);
@@ -2167,6 +2166,7 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	int val, retry = 10;
 	u32 mcu_init_done = MCU_BT0_INIT_DONE;
 	u32 bt_subsys_cr;
+
 	cancel_work_sync(&bdev->work);
 	cancel_work_sync(&bdev->waker);
 

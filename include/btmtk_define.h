@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2022020901"
+#define VERSION "7.0.2022021101"
 #define SUBVER ":turnkey"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -331,7 +331,7 @@ struct debug_reg {
 	u32	length;
 };
 
-struct debug_reg_struct{
+struct debug_reg_struct {
 	struct debug_reg	*reg;
 	u32	num;
 };
