@@ -1286,7 +1286,7 @@ int btmtk_load_code_from_bin(u8 **image, char *bin_name, struct device *dev,
 
 	do {
 		err = request_firmware(&fw_entry, bin_name, dev);
-		if (err == 0) {
+		if (err >= 0) {
 			break;
 		} else if (retry <= 0) {
 			*image = NULL;
