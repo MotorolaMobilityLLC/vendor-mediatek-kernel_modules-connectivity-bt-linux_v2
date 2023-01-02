@@ -4155,7 +4155,9 @@ static int bt_close(struct hci_dev *hdev)
 			connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump not complete");
 			btmtk_sp_coredump_end();
 		}
-		goto exit;
+		if (main_info.hif_hook.cif_mutex_lock)
+			main_info.hif_hook.cif_mutex_lock(bdev);
+		goto unlock;
 	}
 #endif
 
@@ -4217,6 +4219,7 @@ static int bt_close(struct hci_dev *hdev)
 #endif
 
 unlock:
+	main_info.hif_hook.close(hdev);
 	if (main_info.hif_hook.cif_mutex_unlock)
 		main_info.hif_hook.cif_mutex_unlock(bdev);
 exit:
@@ -4224,7 +4227,6 @@ exit:
 #if (USE_DEVICE_NODE == 1)
 	/* avoid reset start at new bt on */
 	btmtk_reset_timer_del(bdev);
-	main_info.hif_hook.close(hdev);
 	state = btmtk_get_chip_state(bdev);
 
 	if (state != BTMTK_STATE_DISCONNECT)
