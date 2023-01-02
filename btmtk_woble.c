@@ -263,9 +263,10 @@ static int btmtk_set_Woble_APCF(struct btmtk_woble *bt_woble)
 				BTMTK_INFO("%s: apcf[%d], add local BDADDR to location %d", __func__, i,
 						(*bt_woble->woble_setting_apcf_fill_mac_location[i].content));
 			}
-
+#if CFG_SHOW_FULL_MACADDR
 			BTMTK_INFO_RAW(bt_woble->woble_setting_apcf[i].content, bt_woble->woble_setting_apcf[i].length,
 				"Send woble_setting_apcf[%d] ", i);
+#endif
 			ret = btmtk_main_send_cmd(bdev, bt_woble->woble_setting_apcf[i].content,
 				bt_woble->woble_setting_apcf[i].length, event, APCF_EVT_HDR_LEN, 0, 0,
 				BTMTK_TX_PKT_FROM_HOST);
