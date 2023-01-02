@@ -234,16 +234,6 @@ static int btmtk_fops_initfwlog(void)
 		goto create_node_error;
 	}
 
-	g_fwlog->pBTDevfwlog = device_create(g_fwlog->pBTClass, NULL, devIDfwlog, NULL,
-		"%s", BT_FWLOG_DEV_NODE);
-	if (IS_ERR(g_fwlog->pBTDevfwlog)) {
-		BTMTK_ERR("%s: device(stpbtfwlog) create fail, error code(%ld)", __func__,
-			PTR_ERR(g_fwlog->pBTDevfwlog));
-		goto create_node_error;
-	}
-	BTMTK_INFO("%s: BT_majorfwlog %d, devIDfwlog %d", __func__, BT_majorfwlog, devIDfwlog);
-
-	g_fwlog->g_devIDfwlog = devIDfwlog;
 	sema_init(&ioctl_mtx, 1);
 
 	//if (is_mt66xx(g_sbdev->chip_id)) {
@@ -257,6 +247,18 @@ static int btmtk_fops_initfwlog(void)
 		skb_queue_head_init(&g_fwlog->usr_opcode_queue);//opcode
 		init_waitqueue_head(&(g_fwlog->fw_log_inq));
 	}
+
+	/* move node create after waitqueue init, incase of fw log open first */
+	g_fwlog->pBTDevfwlog = device_create(g_fwlog->pBTClass, NULL, devIDfwlog, NULL,
+		"%s", BT_FWLOG_DEV_NODE);
+	if (IS_ERR(g_fwlog->pBTDevfwlog)) {
+		BTMTK_ERR("%s: device(stpbtfwlog) create fail, error code(%ld)", __func__,
+			PTR_ERR(g_fwlog->pBTDevfwlog));
+		goto create_node_error;
+	}
+	BTMTK_INFO("%s: BT_majorfwlog %d, devIDfwlog %d", __func__, BT_majorfwlog, devIDfwlog);
+
+	g_fwlog->g_devIDfwlog = devIDfwlog;
 
 	atomic_set(&bmain_info->fwlog_ref_cnt, 0);
 	BTMTK_INFO("%s: End", __func__);
