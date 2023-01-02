@@ -1971,6 +1971,11 @@ static int btmtk_parsing_fw_rom_patch(struct btmtk_dev *bdev,
 		goto exit;
 	}
 
+	if (bdev->sectionMap_table) {
+		kfree(bdev->sectionMap_table );
+		bdev->sectionMap_table = NULL;
+	}
+
 	bdev->sectionMap_table = kmalloc_array(section_num,
 			sizeof(struct _Section_Map), GFP_ATOMIC);
 
