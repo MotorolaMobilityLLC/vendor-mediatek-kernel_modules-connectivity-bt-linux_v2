@@ -89,8 +89,9 @@ int btmtk_reset_pin_off(void)
 int btmtk_set_gpio_default(void)
 {
 	BTMTK_DBG("%s: start", __func__);
-	return btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
-	//return btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
+	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
+	msleep(10);
+	return btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
 }
 
 int btmtk_set_uart_auxFunc(void)
