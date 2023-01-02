@@ -1175,9 +1175,16 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
 			btmtk_fwdump_wake_lock();
 			line = __LINE__;
+			bdev->collect_fwdump = TRUE;
 			ret = connv3_coredump_start(
 					bmain_info->hif_hook.coredump_handler, CONNV3_DRV_TYPE_BT,
 					bdev->assert_reason, skb->data, bmain_info->fw_version_str);
+
+			if(ret == CONNV3_COREDUMP_ERR_CHIP_RESET_ONLY) {
+				BTMTK_ERR("%s: not collect fw dump, only do reset", __func__);
+				bdev->collect_fwdump = FALSE;
+				return 1;
+			}
 			if (ret == CONNV3_COREDUMP_ERR_WRONG_STATUS) {
 				BTMTK_ERR("%s: BT previous not end", __func__);
 				connv3_coredump_end(bmain_info->hif_hook.coredump_handler, "BT previous not end");
@@ -1214,8 +1221,10 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		if (dump_data_counter < 20)
 			BTMTK_INFO("%s: FW dump data (%d): %s",
 					__func__, dump_data_counter, skb->data);
+
 		line = __LINE__;
-		ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "[M]", skb->data, skb->len);
+		if(bdev->collect_fwdump)
+			ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "[M]", skb->data, skb->len);
 		if (ret) {
 			BTMTK_INFO_RAW(skb->data, skb->len, "%s: send fail, len[%d]", __func__, skb->len);
 			goto coredump_fail_unlock;

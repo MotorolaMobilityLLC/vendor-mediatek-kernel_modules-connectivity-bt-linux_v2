@@ -337,8 +337,8 @@ void btmtk_sp_coredump_end(void)
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
 		return;
 	}
-
-	ret = connv3_coredump_end(bmain_info->hif_hook.coredump_handler, g_sbdev->assert_reason);
+	if(g_sbdev->collect_fwdump)
+		ret = connv3_coredump_end(bmain_info->hif_hook.coredump_handler, g_sbdev->assert_reason);
 
 	if (ret)
 		BTMTK_ERR("%s: coredump_end fail ret[%d]", __func__, ret);

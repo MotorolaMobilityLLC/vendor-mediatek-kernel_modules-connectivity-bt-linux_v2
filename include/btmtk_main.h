@@ -660,6 +660,8 @@ struct btmtk_dev {
 
 	int get_hci_reset;
 
+	bool	collect_fwdump;
+
 	/* debug sop */
 	struct debug_reg_struct debug_sop_reg_dump;
 	unsigned char		debug_sop_file_name[MAX_BIN_FILE_NAME_LEN];
