@@ -114,11 +114,12 @@
 #define BTMTK_LOG_LVL_INFO	3
 #define BTMTK_LOG_LVL_DBG	4
 #define BTMTK_LOG_LVL_MAX	BTMTK_LOG_LVL_DBG
-#define BTMTK_LOG_LVL_DEF	BTMTK_LOG_LVL_INFO	/* default setting */
+#define BTMTK_LOG_LVL_DEF	BTMTK_LOG_LVL_MAX	/* default setting */
 
 #define HCI_SNOOP_ENTRY_NUM	30
 #define HCI_SNOOP_BUF_SIZE	32
-#define HCI_SNOOP_MAX_BUF_SIZE	66
+//#define HCI_SNOOP_MAX_BUF_SIZE	66
+#define HCI_SNOOP_MAX_BUF_SIZE	128
 #define HCI_SNOOP_TS_STR_LEN	24
 #define WMT_OVER_HCI_HEADER_SIZE	3
 #define READ_ISO_PACKET_CMD_SIZE	4
@@ -145,10 +146,10 @@ extern uint8_t btmtk_log_lvl;
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) {	\
 			int cnt_ = 0;	\
 			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
-			uint8_t raw_buf[HCI_SNOOP_MAX_BUF_SIZE * 5 + 10];	\
+			uint8_t raw_buf[HCI_SNOOP_MAX_BUF_SIZE * 3 + 10];	\
 			const unsigned char *ptr = p;	\
 			for (cnt_ = 0; cnt_ < len_; ++cnt_)	\
-				(void)snprintf(raw_buf+5*cnt_, 6, "0x%02X ", ptr[cnt_]);	\
+				(void)snprintf(raw_buf+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
 			raw_buf[5*cnt_] = '\0';	\
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
 				pr_cont("[btmtk_info] "fmt"%s\n", ##__VA_ARGS__, raw_buf);	\
@@ -162,19 +163,20 @@ extern uint8_t btmtk_log_lvl;
 	do {	\
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {	\
 			int cnt_ = 0;	\
+			int pos = 0;	\
 			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
-			uint8_t raw_buf[HCI_SNOOP_MAX_BUF_SIZE * 5 + 10];	\
+			uint8_t raw_buf[HCI_SNOOP_MAX_BUF_SIZE * 3 + 10];	\
 			const unsigned char *ptr = p;	\
-			for (cnt_ = 0; cnt_ < len_; ++cnt_)	\
-				(void)snprintf(raw_buf+5*cnt_, 6, "0x%02X ", ptr[cnt_]);	\
-			raw_buf[5*cnt_] = '\0';	\
-			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-				pr_cont("[btmtk_debug] "fmt"%s\n", ##__VA_ARGS__, raw_buf);	\
-			} else {	\
-				pr_cont("[btmtk_debug] "fmt"%s (prtail)\n", ##__VA_ARGS__, raw_buf); \
+			for (pos = 0; pos < l; ) {	\
+				for (cnt_ = 0; cnt_ < len_ && pos < l; ++cnt_, ++pos) {	\
+					(void)snprintf(raw_buf+3*cnt_, 4, "%02X ", ptr[pos]);	\
+				}	\
+				raw_buf[3*cnt_] = '\0';	\
+				pr_cont("[btmtk_debug] "fmt" %s\n", ##__VA_ARGS__, raw_buf);	\
 			}	\
 		}	\
 	} while (0)
+
 
 #define BTMTK_CIF_IS_NULL(bdev, cif_event) \
 	(!bdev || !(&bdev->cif_state[cif_event]))
