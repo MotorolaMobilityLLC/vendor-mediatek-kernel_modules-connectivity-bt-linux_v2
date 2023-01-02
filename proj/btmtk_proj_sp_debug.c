@@ -33,6 +33,9 @@
 #define FW_CR_CMD_DATA_OFFSET	(FW_CR_CMD_ADDR_OFFSET + FW_CR_DATA_LEN)
 #define FW_CR_EVT_ADDR_OFFSET	(FW_CR_RD_EVT_PKT_LEN - FW_CR_ADDR_LEN - FW_CR_DATA_LEN)
 #define FW_CR_EVT_DATA_OFFSET	(FW_CR_EVT_ADDR_OFFSET + FW_CR_ADDR_LEN)
+#define REMAP_DLM(addr)	(((addr) - 0x02200000) + 0x188C0000)
+
+#define ALIGN4(addr)	((addr) & ~(0x3))
 
 struct bt_dump_cr_buffer {
 	uint8_t buffer[BT_CR_DUMP_BUF_SIZE];
@@ -44,6 +47,15 @@ struct bt_dump_cr_buffer {
 
 struct bt_dump_cr_buffer g_btmtk_cr_dump;
 extern struct btmtk_dev *g_sbdev;
+
+static inline uint32_t btmtk_conninfra_view_remap(uint32_t pos)
+{
+	if ((pos & 0xffff0000) == 0x18020000)
+		return (pos & 0x00ffffff) | 0x7c000000;
+	else if (pos >= 0x1880000 && pos <= 0x18bfffff)
+		return (pos & 0x000fffff) | 0x18800000;
+	return pos;
+}
 
 static inline void BT_DUMP_CR_BUFFER_RESET(void)
 {
@@ -724,16 +736,23 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 #define SET_BIT_RANGE(l, r) (((1 << (l + 1)) - 1) ^ ((1 << r) - 1))
 
 int HIF_WRITE(uint32_t addr, uint32_t val) {
-	return connv3_hif_dbg_write(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI, addr, val);
+	BTMTK_DBG("%s: addr[0x%08x], val[0x%08x], map_addr[0x%08x]", __func__, addr, val,
+			btmtk_conninfra_view_remap(ALIGN4(addr)));
+	return connv3_hif_dbg_write(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI,
+			btmtk_conninfra_view_remap(ALIGN4(addr)), val);
 }
 
 int HIF_WRITE_MASK(uint32_t addr, uint32_t end, uint32_t start,uint32_t val) {
-	return connv3_hif_dbg_write_mask(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI
-			, addr, SET_BIT_RANGE(end, start), (val << start));
+	return connv3_hif_dbg_write_mask(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI,
+			btmtk_conninfra_view_remap(ALIGN4(addr)),
+			SET_BIT_RANGE(end, start), (val << start));
 }
 
 int HIF_READ(uint32_t addr, uint32_t *val) {
-	return connv3_hif_dbg_read(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI, addr, val);
+	BTMTK_DBG("%s: addr[0x%08x], map_addr[0x%08x]", __func__, addr,
+			btmtk_conninfra_view_remap(ALIGN4(addr)));
+	return connv3_hif_dbg_read(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI,
+			btmtk_conninfra_view_remap(ALIGN4(addr)), val);
 }
 static inline int btmtk_connv3_readable_check(void){
 	unsigned int value;
@@ -1266,7 +1285,7 @@ static inline void btmtk_hif_dump_cirq_eint(void) {
 
 static inline void btmtk_hif_dump_bg_cfg(void)
 {
-	uint32_t i = 0, value, cr_count = 6;
+	uint32_t i = 0, value, cr_count = 6 + 6 + 3 + 3 + 13 + 6;
 
 	if (btmtk_connv3_readable_check()) {
 		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
@@ -1276,12 +1295,60 @@ static inline void btmtk_hif_dump_bg_cfg(void)
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG CFG] count[%d]", HIF_DBG_TAG, cr_count);
 
-	/* mcu_flag19 */
-	for (i = 0; i < cr_count; i++) {
+	/* bg_cfg */
+	for (i = 0; i < 6; i++) {
 		HIF_READ(0x18812168 + (i << 2), &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
+
+	/* conn_mcu_cirq_on */
+	for (i = 0; i < 4; i++) {
+		HIF_READ(0x18828400 + (i << 2), &value);
+		if (BT_DUMP_CR_PRINT(value))
+			return;
+	}
+	HIF_READ(0x18828070, &value);
+	BT_DUMP_CR_PRINT(value);
+	HIF_READ(0x18828074, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* conn_mcu_eint_vlp */
+	HIF_READ(0x18860600, &value);
+	BT_DUMP_CR_PRINT(value);
+	HIF_READ(0x18860604, &value);
+	BT_DUMP_CR_PRINT(value);
+	HIF_READ(0x188606C0, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* conn_mcu_dbg_cirq_on */
+	HIF_READ(0x18828900, &value);
+	BT_DUMP_CR_PRINT(value);
+	HIF_READ(0x18828904, &value);
+	BT_DUMP_CR_PRINT(value);
+	HIF_READ(0x188004E4, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* conn_mcu_confg */
+	HIF_READ(0x18800410, &value);
+	BT_DUMP_CR_PRINT(value);
+	for (i = 0; i < 10; i++) {
+		HIF_READ(0x18800418 + (i << 2), &value);
+		if (BT_DUMP_CR_PRINT(value))
+			return;
+	}
+	HIF_READ(0x18802214, &value);
+	BT_DUMP_CR_PRINT(value);
+	HIF_READ(0x18802218, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* con_mcu_bus_cr */
+	for (i = 0; i < 6; i++) {
+		HIF_READ(0x18815010 + (i << 2), &value);
+		if (BT_DUMP_CR_PRINT(value))
+			return;
+	}
+
 }
 
 static inline void btmtk_hif_dump_bt_mcusys_vlp(void)
@@ -1353,6 +1420,182 @@ static inline void btmtk_hif_dump_bt_hif_select(void)
 	BT_DUMP_CR_PRINT(value);
 }
 
+static inline void btmtk_hif_dump_cbtop(void)
+{
+	uint32_t i = 0, value, cr_count = 14;
+
+	BT_DUMP_CR_INIT(cr_count);
+	BTMTK_INFO("%s [CBTOP] count[%d]", HIF_DBG_TAG, cr_count);
+
+	for (i = 0; i < cr_count; i++) {
+		HIF_READ(0x70005300 + (i << 4), &value);
+		if (BT_DUMP_CR_PRINT(value))
+			return;
+	}
+}
+
+static inline void btmtk_hif_dump_conninfra(void)
+{
+	uint32_t value, cr_count = 3;
+
+	BT_DUMP_CR_INIT(cr_count);
+	BTMTK_INFO("%s [CONNINFRA] count[%d]", HIF_DBG_TAG, cr_count);
+
+	/* CONN_HOST_CSR_TOP_CONNSYS_PWR_STATES */
+	HIF_READ(0x7C060A10, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* CONN_HOST_CSR_TOP_CONN_INFRA_SYSSTRAP_OUT */;
+	HIF_READ(0x7C060A00, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* UNDEF in CODA */
+	HIF_READ(0x70025304, &value);
+	BT_DUMP_CR_PRINT(value);
+
+}
+
+static inline void btmtk_hif_dump_mcu_var1(void)
+{
+	uint32_t i = 0, value, cr_count = 69;
+
+	if (btmtk_connv3_readable_check()) {
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		return;
+	}
+
+	BT_DUMP_CR_INIT(cr_count);
+	BTMTK_INFO("%s [MCU VAR1] ctrl_info_ram[0], g1_exp_counter, g_exp_type, g4_exp_1st_PC_log count[%d]"
+			, HIF_DBG_TAG, cr_count);
+
+	/* ctrl_info_ram[0] */
+	HIF_READ(0x18B16F60, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* g1_exp_counter */
+	HIF_READ(0x188C8F4F, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* g_exp_type */
+	HIF_READ(0x18B172D0, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* g4_exp_1st_PC_log */
+	for (i = 0; i < 66; i++) {
+		HIF_READ(0x18B17004 + (i << 2), &value);
+		if (BT_DUMP_CR_PRINT(value))
+			return;
+	}
+
+}
+
+static inline void btmtk_hif_dump_mcu_var2(void)
+{
+	uint32_t i = 0, value, cr_count = 42;
+
+	if (btmtk_connv3_readable_check()) {
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		return;
+	}
+
+	BT_DUMP_CR_INIT(cr_count);
+	BTMTK_INFO("%s [MCU VAR2] csr_reg_value, register_value count[%d]", HIF_DBG_TAG, cr_count);
+
+	/* csr_reg_value */
+	for (i = 0; i < 5; i++) {
+		HIF_READ(0x188C8D54 + (i << 2), &value);
+		if (BT_DUMP_CR_PRINT(value))
+			return;
+	}
+	/* register_value */
+	for (i = 0; i < 37; i++) {
+		HIF_READ(0x188C96D8 + (i << 2), &value);
+		if (BT_DUMP_CR_PRINT(value))
+			return;
+	}
+
+}
+
+static inline void btmtk_hif_dump_mcu_var3(void)
+{
+	uint32_t value, cr_count = 6;
+
+	if (btmtk_connv3_readable_check()) {
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		return;
+	}
+
+	BT_DUMP_CR_INIT(cr_count);
+	BTMTK_INFO("%s [MCU VAR3] g_exp_eva ~ processing_eintx count[%d]", HIF_DBG_TAG, cr_count);
+
+	/* g_exp_eva */
+	HIF_READ(0x18B171F4, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* g_exp_ipc */
+	HIF_READ(0x18B171FC, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* g_exp_itype */
+	HIF_READ(0x18B17204, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* Current_Task_Id */
+	HIF_READ(0x188C8324, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* Current_Task_Indx */
+	HIF_READ(0x188C8328, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* COS_Interrupt_Count */
+	HIF_READ(0x188C0038, &value);
+	BT_DUMP_CR_PRINT(value);
+
+}
+
+static inline void btmtk_hif_dump_mcu_var_stack(void)
+{
+	uint32_t i = 0, pos,value, cr_count = 64;
+
+	if (btmtk_connv3_readable_check()) {
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		return;
+	}
+
+	BT_DUMP_CR_INIT(cr_count);
+	BTMTK_INFO("%s [MCU VAR STACK] count[%d]", HIF_DBG_TAG, cr_count);
+
+	HIF_READ(REMAP_DLM(0x02209764), &pos);
+	pos = REMAP_DLM(pos);
+	/* <Stack> */
+	for (i = 0; i < cr_count; i++) {
+		HIF_READ(pos + (i << 2), &value);
+		if (BT_DUMP_CR_PRINT(value))
+			return;
+	}
+}
+
+static inline void btmtk_hif_dump_mcu_var_assert_log_buf(void)
+{
+	uint32_t i = 0, value, cr_count = 180 / 4;
+
+	if (btmtk_connv3_readable_check()) {
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		return;
+	}
+
+	BT_DUMP_CR_INIT(cr_count);
+	BTMTK_INFO("%s [MCU VAR ASSERT LOG BUF] count[%d]", HIF_DBG_TAG, cr_count);
+
+	/* g_exp_assert_log_buf */
+	for (i = 0; i < cr_count; i++) {
+		HIF_READ(0x18B17138 + (i << 2), &value);
+		if (BT_DUMP_CR_PRINT(value))
+			return;
+	}
+}
+
 void btmtk_hif_dump_work(struct work_struct *work)
 {
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, hif_dump_work);
@@ -1416,7 +1659,13 @@ void btmtk_hif_dump_work(struct work_struct *work)
 	btmtk_hif_dump_bg_cfg();
 	btmtk_hif_dump_bt_mcusys_vlp();
 	btmtk_hif_dump_bt_hif_select();
-
+	btmtk_hif_dump_cbtop();
+	btmtk_hif_dump_conninfra();
+	btmtk_hif_dump_mcu_var1();
+	btmtk_hif_dump_mcu_var2();
+	btmtk_hif_dump_mcu_var3();
+	btmtk_hif_dump_mcu_var_stack();
+	btmtk_hif_dump_mcu_var_assert_log_buf();
 	ret = connv3_hif_dbg_end(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI);
 exit:
 	if (atomic_read(&bdev->assert_state) == BTMTK_ASSERT_START) {
