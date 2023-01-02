@@ -233,10 +233,10 @@ int btmtk_uart_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 		goto exit;
 	}
 
-	/* send pkt through tx_thread or not */
-	/* if want to send_and_recv cmd in tx_thread would not be able to send the pkt */
+	/* send pkt direct or not */
+	/* if want to use send_and_recv cmd in tx_thread would not be able to send the pkt */
 	if (pkt_type == BTMTK_TX_PKT_SEND_DIRECT || pkt_type == BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT) {
-		BTMTK_WARN("%s send pkt not through tx_thread", __func__);
+		BTMTK_DBG("%s send pkt direct, not queue in tx queue ", __func__);
 		ret = btmtk_cif_send_cmd(bdev, skb->data, skb->len, delay, retry);
 
 		/* in normal case, cif_send success would kfree_skb in tx_thread */
@@ -420,7 +420,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 #endif
 
-	BTMTK_DBG_RAW(skb->data, skb->len, "%s: len[%d] ", __func__, skb->len);
+	BTMTK_INFO_RAW(skb->data, skb->len, "%s: len[%d] ", __func__, skb->len);
 
 	/* if just protect event, another cmd would reinit event_compare_status */
 	down(&cif_dev->evt_comp_sem);
@@ -467,6 +467,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		opcode[0] = skb->data[1];
 		opcode[1] = skb->data[2];
 	}
+	btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD_HIF, skb->data, skb->len);
 	ret = btmtk_uart_send_cmd(bdev, skb, delay, retry, pkt_type);
 
 	if (ret < 0) {
@@ -1050,7 +1051,7 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 #if (SLEEP_ENABLE == 1)
 	struct btmtk_uart_dev *cif_dev = NULL;
 
-	BTMTK_INFO("%s start", __func__);
+	BTMTK_INFO("%s", __func__);
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -1135,7 +1136,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		goto exit;
 	}
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
-	BTMTK_INFO("%s: loading rom patch... start", __func__);
+	BTMTK_DBG("%s: loading rom patch... start", __func__);
 	while (1) {
 		sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT) ?
 				(UPLOAD_PATCH_UNIT) : (section_dl_size - cur_len);
@@ -1198,7 +1199,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			break;
 	}
 
-	BTMTK_INFO("%s: patch done max_pkt_cnt[%d], send wmt dl cmd ", __func__, max_pkt_cnt);
+	BTMTK_INFO("%s: patch done max_pkt_cnt[%d], send wmt dl phase3 cmd ", __func__, max_pkt_cnt);
 
 	/* seperate phase 3 cmd with dma mode content */
 	usleep_range(1000, 1100);
@@ -1212,7 +1213,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		BTMTK_ERR("%s: send wmd dl cmd failed, terminate!", __func__);
 		return ret;
 	}
-	BTMTK_INFO("%s: loading rom patch... Done", __func__);
+	BTMTK_DBG("%s: loading rom patch... Done", __func__);
 
 exit:
 	return ret;
@@ -1726,7 +1727,7 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
-	BTMTK_INFO("%s: tty %p cmd = %u", __func__, tty, cmd);
+	BTMTK_DBG("%s: tty %p cmd = %u", __func__, tty, cmd);
 
 	switch (cmd) {
 	case HCIUARTSETPROTO:
@@ -1747,14 +1748,14 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 #endif
 		break;
 	case HCIUARTSETWAKEUP:
-		BTMTK_INFO("%s: <!!> Send Wakeup <!!>", __func__);
 #if (USE_DEVICE_NODE == 0)
+		BTMTK_INFO("%s: <!!> Send Wakeup <!!>", __func__);
 		err = btmtk_uart_send_wakeup_cmd(bdev->hdev);
 #endif
 		break;
 	case HCIUARTGETBAUD:
-		BTMTK_INFO("%s: <!!> Get BAUDRATE <!!>", __func__);
 #if (USE_DEVICE_NODE == 0)
+		BTMTK_INFO("%s: <!!> Get BAUDRATE <!!>", __func__);
 		err = btmtk_uart_send_query_uart_cmd(bdev->hdev);
 #endif
 		break;
@@ -2481,7 +2482,7 @@ static int uart_register(void)
 		return err;
 	}
 
-	BTMTK_INFO("%s done", __func__);
+	BTMTK_DBG("%s done", __func__);
 	return err;
 }
 static int uart_deregister(void)

@@ -719,7 +719,7 @@ int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 	memcpy(&cmd[offset], &bt_fem_info.id, sizeof(bt_fem_info.id));
 	offset += sizeof(bt_fem_info.id);
 
-	BTMTK_INFO_RAW(cmd, offset, "%s: Send: ", __func__);
+	BTMTK_DBG_RAW(cmd, offset, "%s: Send: ", __func__);
 
 	ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
 			event, sizeof(event), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
@@ -746,7 +746,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	btmtk_drv_cbs.pwr_on_cb = btmtk_pwr_on_cb;
 	btmtk_drv_cbs.rst_cb = btmtk_whole_chip_rst_cb;
 	btmtk_drv_cbs.pre_cal_cb = btmtk_pre_cal_cb;
-	BTMTK_INFO("%s start", __func__);
+	BTMTK_DBG("%s start", __func__);
 	if (!bdev) {
 		BTMTK_ERR("[ERR] bdev is NULL");
 		return -1;
@@ -850,7 +850,7 @@ void btmtk_async_trx_work(struct work_struct *work)
 void btmtk_pwr_on_uds_work(struct work_struct *work)
 {
 	//struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, pwr_on_uds_work);
-	int ret = 0, retry = 0;
+	int ret = 0;
 
 	BTMTK_INFO("%s start", __func__);
 
@@ -870,23 +870,18 @@ void btmtk_pwr_on_uds_work(struct work_struct *work)
 		return;
 	}
 
-	/* uds bt on in reboot conflict with pre-cal flow */
-	/* But if bt already on, no need to retry open */
-	do {
-		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_DISCONNECT) {
-			BTMTK_WARN("%s: uart disconnected", __func__);
-			return;
-		}
-		/* wait pre-cal done */
-		if (g_sbdev->is_pre_cal_done) {
-			ret = g_sbdev->hdev->open(g_sbdev->hdev);
-			break;
-		} else {
-			BTMTK_WARN_LIMITTED("%s: retry[%d] is_pre_cal_done[%d]"
-							, __func__, ret, retry, g_sbdev->is_pre_cal_done);
-			msleep(20);
-		}
-	} while (retry++ < BT_OPEN_MAX_RETRY);
+
+	if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_DISCONNECT) {
+		BTMTK_WARN("%s: uart disconnected", __func__);
+		return;
+	}
+
+	if (!g_sbdev->is_pre_cal_done) {
+		BTMTK_WARN("%s: pre-cal not done", __func__);
+		return;
+	}
+
+	ret = g_sbdev->hdev->open(g_sbdev->hdev);
 
 	if (ret) {
 		BTMTK_ERR("%s: BT turn on fail!", __func__);
