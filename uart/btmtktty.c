@@ -788,8 +788,14 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		return -EFAULT;
 
 	btmtk_set_uart_auxFunc();
-	/* temp solution */
+
+	/* temp solution wait pmic enable */
 	msleep(100);
+
+	if (connv3_ext_32k_on()) {
+		BTMTK_ERR("connv3_ext_32k_on failed!");
+		return -EFAULT;
+	}
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en) {
