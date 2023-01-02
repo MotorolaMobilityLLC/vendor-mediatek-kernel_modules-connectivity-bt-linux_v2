@@ -131,8 +131,6 @@ static int btmtk_uart_open(struct hci_dev *hdev)
 
 static int btmtk_uart_close(struct hci_dev *hdev)
 {
-
-
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	int ret;
@@ -154,14 +152,7 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 	cancel_work_sync(&bdev->reset_waker);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-
-	if (cif_dev->hub_en) {
-		/* Clr TX,RX request, let uarthub can sleep */
-		ret =  mtk8250_uart_hub_clear_request();
-		if (ret)
-			BTMTK_ERR("%s  mtk8250_uart_hub_clear_request fail ret[%d]", __func__, ret);
-	}
-
+	btmtk_release_uarthub(true);
 #endif
 
 	btmtk_tx_thread_exit(bdev->cif_dev);
@@ -1877,12 +1868,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		atomic_set(&cif_dev->fw_wake, 0);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-		/* Clr TX,RX request, let uarthub can sleep */
-		if (cif_dev->hub_en && cif_dev->sleep_en) {
-			ret =  mtk8250_uart_hub_clear_request();
-			if (ret)
-				BTMTK_ERR("%s  mtk8250_uart_hub_clear_request fail ret[%d]", __func__, ret);
-		}
+		btmtk_release_uarthub(false);
 #endif
 		BTMTK_INFO("%s success", __func__);
 	}
@@ -2068,9 +2054,12 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 	if (fstate == BTMTK_FOPS_STATE_CLOSING || fstate == BTMTK_FOPS_STATE_OPENING) {
 		/* temp solution for disconnect at random time would KE */
 		BTMTK_WARN("%s bt opening/closing, skip free in disconnect", __func__);
-	} else {	
+	} else {
 		/* Do HIF events */
 		btmtk_uart_tty_disconnect(tty);
+#if (USE_DEVICE_NODE == 1)
+		btmtk_connv3_sub_drv_deinit();
+#endif
 		devm_kfree(tty->dev, cif_dev);
 	}
 
