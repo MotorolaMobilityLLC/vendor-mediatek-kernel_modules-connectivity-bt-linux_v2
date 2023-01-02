@@ -89,7 +89,7 @@ static s32 rx_pkt_enqueue(u8 *buffer, u32 length)
 	s32 tail_len = 0;
 	struct bt_ring_buffer_mgmt *p_ring = &g_rx_buffer;
 
-	if (length > HCI_MAX_FRAME_SIZE) {
+	if (length > BT_HCI_MAX_FRAME_SIZE) {
 		BTMTK_ERR("Abnormal packet length %u, not enqueue!", length);
 		return -EINVAL;
 	}
@@ -240,7 +240,7 @@ int32_t btmtk_receive_data(struct hci_dev *hdev, u8 *buf, u32 count)
 	u32 read_bytes = 0;
 
 	rx_dequeue(hdev, buf, count, &read_bytes);
-	BTMTK_DBG_RAW(buf, read_bytes, "%s, len[%d]", __func__, read_bytes);
+	//BTMTK_DBG_RAW(buf, read_bytes, "%s, len[%d]", __func__, read_bytes);
 	/* TODO: disable quick PS mode by traffic density */
 	return read_bytes;
 }
