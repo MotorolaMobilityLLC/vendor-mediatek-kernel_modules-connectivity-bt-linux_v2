@@ -428,13 +428,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 #if (USE_DEVICE_NODE == 0)
 		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_COMP_EVENT_TIMO);
 #else
-		if (retry == SEND_RETRY_ONE_TIMES_30MS) {
-			/* for query cmd in bt on */
-			BTMTK_INFO("%s: query cmd, just wait 30ms", __func__);
-			comp_event_timo = jiffies + msecs_to_jiffies(30);
-			retry = 1;
-		} else
-			comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
+		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
 #endif
 		BTMTK_DBG("event_need_compare_len %d, event_compare_status %d",
 			event_need_compare_len, event_compare_status);
@@ -618,7 +612,7 @@ static int btmtk_uart_send_query_uart_cmd(struct hci_dev *hdev)
 #if (USE_DEVICE_NODE == 0)
 			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 #else
-			SEND_RETRY_ONE_TIMES_30MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+			RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
 #endif
 	if (ret < 0) {
 		BTMTK_ERR("%s btmtk_uart_send_query_uart_cmd failed!!", __func__);
@@ -864,7 +858,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-	int query_retry = 10;
+	int query_retry = 3;
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
