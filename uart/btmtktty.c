@@ -1346,7 +1346,7 @@ static int btmtk_cif_suspend(void)
 	int cif_event = 0, state, ret = 0;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct tty_struct *tty = g_tty;
-	struct btmtk_dev *bdev = dev_get_drvdata(tty->dev);
+	struct btmtk_dev *bdev = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 #if (USE_DEVICE_NODE == 0)
@@ -1354,6 +1354,18 @@ static int btmtk_cif_suspend(void)
 	struct btmtk_woble *bt_woble = &cif_dev->bt_woble;
 #endif
 	BTMTK_INFO("%s", __func__);
+
+	if (tty == NULL) {
+		BTMTK_ERR("%s: tty is NULL, maybe not run btmtk_cif_probe yet", __func__);
+		return -EAGAIN;
+	}
+
+	bdev = dev_get_drvdata(tty->dev);
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -EAGAIN;
+	}
 
 	if (bdev->get_hci_reset) {
 		BTMTK_WARN("open flow not ready(%d), retry", bdev->get_hci_reset);
@@ -1413,7 +1425,7 @@ static int btmtk_cif_suspend(void)
 static int btmtk_cif_resume(void)
 {
 	struct tty_struct *tty = g_tty;
-	struct btmtk_dev *bdev = dev_get_drvdata(tty->dev);
+	struct btmtk_dev *bdev = NULL;
 	struct btmtk_cif_state *cif_state = NULL;
 	int ret = 0;
 
@@ -1423,6 +1435,14 @@ static int btmtk_cif_resume(void)
 #endif
 
 	BTMTK_INFO("%s", __func__);
+
+	if (tty == NULL) {
+		BTMTK_ERR("%s: tty is NULL, maybe not run btmtk_cif_probe yet", __func__);
+		return -EAGAIN;
+	}
+
+	bdev = dev_get_drvdata(tty->dev);
+
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return -1;
