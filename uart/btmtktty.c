@@ -762,7 +762,9 @@ exit:
 #else // (USE_DEVICE_NODE == 1)
 static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 {
-	BTMTK_DBG("%s sp no need to reset flow, bt on/off directly", __func__);
+	BTMTK_INFO("%s trigger connv3_conninfra_bus_dump", __func__);
+	/* cant not put at rx thread, would deadlock to get event */
+	connv3_conninfra_bus_dump(CONNV3_DRV_TYPE_BT);
 	return 0;
 }
 
