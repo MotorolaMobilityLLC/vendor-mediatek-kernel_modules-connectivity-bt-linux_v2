@@ -332,10 +332,11 @@ struct btmtk_cif_state {
 };
 
 enum TX_TYPE {
-	BTMTK_TX_CMD_FROM_DRV = 0,	/* send hci cmd and wmt cmd by driver */
-	BTMTK_TX_ACL_FROM_DRV,	/* send acl pkt with load rompatch by driver */
-	BTMTK_TX_PKT_FROM_HOST,	/* send pkt from host, include acl and hci */
-	BTMTK_TX_PKT_SEND_DIRECT,/* send tx not through tx_thread */
+	BTMTK_TX_CMD_FROM_DRV = 0,		/* send hci cmd and wmt cmd by driver */
+	BTMTK_TX_ACL_FROM_DRV,			/* send acl pkt with load rompatch by driver */
+	BTMTK_TX_PKT_FROM_HOST,			/* send pkt from host, include acl and hci */
+	BTMTK_TX_PKT_SEND_DIRECT,		/* send tx not through tx_thread */
+	BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT,	/* send tx not through tx_thread and not trigger assert */
 };
 
 enum bt_state {
