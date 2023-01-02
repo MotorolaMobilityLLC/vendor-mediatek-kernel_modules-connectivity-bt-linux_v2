@@ -168,6 +168,8 @@ struct btmtk_uart_dev {
 	struct UART_CONFIG	uart_cfg;
 	struct btmtk_woble	bt_woble;
 
+	/* config form dts*/
+	u32			baudrate;
 };
 
 #define btmtk_uart_is_standalone(bdev)	\
