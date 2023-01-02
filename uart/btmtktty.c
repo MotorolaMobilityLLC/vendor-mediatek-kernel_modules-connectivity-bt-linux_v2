@@ -776,6 +776,28 @@ static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 	return 0;
 }
 
+void btmtk_uart_trigger_assert_by_tx_thread(struct btmtk_dev *bdev)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s: start", __func__);
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+
+	atomic_set(&cif_dev->need_assert, 1);
+	wake_up_interruptible(&tx_wait_q);
+}
+
 static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;

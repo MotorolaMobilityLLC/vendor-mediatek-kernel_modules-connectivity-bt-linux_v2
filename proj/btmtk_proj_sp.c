@@ -45,6 +45,8 @@ int g_bt_state;
 /* dump gpio */
 static void __iomem *vir_0x1000_5000 = NULL; /* GPIO */
 #define CONSYS_REG_READ(addr) (*((volatile unsigned int *)(addr)))
+
+extern void btmtk_uart_trigger_assert_by_tx_thread(struct btmtk_dev *bdev);
 static void btmtk_dump_gpio_state(void);
 
 static inline int btmtk_pinctrl_exec(const char *name);
@@ -216,10 +218,20 @@ void btmtk_uarthub_err_cb(unsigned int err_type)
 	}
 
 	if (((1 << dev0_tx_timeout_err) | (1 << dev0_tx_pkt_type_err) | (1 << dev0_rx_timeout_err)
-			| (1 << intfhub_dev0_tx_err)) & err_type) {
+			| (1 << intfhub_dev0_tx_err) | (1 << rx_pkt_type_err)) & err_type) {
 		BTMTK_INFO("%s: dev0 err dump", __func__);
 		if (cif_dev->hub_en && btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_DISCONNECT)
 			mtk8250_uart_dump(cif_dev->tty);
+	}
+
+	if (((1 << rx_pkt_type_err) | (1 << dev0_rx_timeout_err)) & err_type) {
+		if (g_sbdev->assert_reason[0] == '\0') {
+			strncpy(g_sbdev->assert_reason, "[BT_DRV assert] uarthub rx error",
+					strlen("[BT_DRV assert] uarthub rx error"));
+			BTMTK_ERR("%s: [assert_reason] %s", __func__, g_sbdev->assert_reason);
+		}
+
+		btmtk_uart_trigger_assert_by_tx_thread(g_sbdev);
 	}
 	return;
 }
