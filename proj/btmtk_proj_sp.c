@@ -28,6 +28,7 @@
 #define READ_PMIC_STATE_CMD_LEN		16
 #define READ_PMIC_STATE_EVENT_LEN	16
 
+#define DEFAULT_STATE_PINCTRL_NAME	("bt_combo_gpio_init")
 #define PRE_ON_PINCTRL_NAME		("bt_combo_gpio_pre_on")
 #define POWER_ON_PINCTRL_NAME		("bt_combo_gpio_on")
 #define RST_ON_PINCTRL_NAME		("bt_rst_on")
@@ -83,6 +84,13 @@ int btmtk_reset_pin_off(void)
 {
 	BTMTK_DBG("%s: start", __func__);
 	return btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
+}
+
+int btmtk_set_gpio_default(void)
+{
+	BTMTK_DBG("%s: start", __func__);
+	return btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
+	//return btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
 }
 
 int btmtk_set_uart_auxFunc(void)
