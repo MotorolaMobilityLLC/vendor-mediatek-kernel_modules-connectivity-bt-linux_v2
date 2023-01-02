@@ -932,6 +932,9 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s done", __func__);
 
 exit:
+	if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT)
+		return ret;
+
 	cif_event = HIF_EVENT_PROBE;
 	cif_state = &bdev->cif_state[cif_event];
 	/* Set End/Error state */
@@ -1045,7 +1048,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset)
 {
 	int cur_len = 0;
-	int count = 0;
+	int count = 0, flush_retry = 0, max_pkt_cnt = 0;
 	int ret = -1;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	s32 sent_len;
@@ -1062,22 +1065,32 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	while (1) {
 		sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT) ?
 				(UPLOAD_PATCH_UNIT) : (section_dl_size - cur_len);
+		flush_retry = 0;
 		/* wait tty buffer clean */
 		if (cif_dev->flush_en) {
 			do {
+				if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT) {
+					BTMTK_ERR("%s: BTMTK_STATE_DISCONNECT", __func__);
+					return -1;
+				}
 				count = tty_chars_in_buffer(cif_dev->tty);
-				//BTMTK_DBG("%s: char in buffer before flush count[%d]", __func__, count);
-			} while (count != 0);
-			tty_driver_flush_buffer(cif_dev->tty);
+				/* only wait 3ms for tty buffer clean */
+				usleep_range(10, 20);
+			} while (count != 0 && flush_retry++ < BTMTK_MAX_WAIT_RETRY);
+			if (flush_retry < BTMTK_MAX_WAIT_RETRY)
+				tty_driver_flush_buffer(cif_dev->tty);
 		}
 
 		if (sent_len > 0) {
 			memcpy(image, fwbuf + section_offset + cur_len, sent_len);
+			if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
+				ret = cif_dev->tty->ops->write(cif_dev->tty, image, sent_len);
 
-			ret = cif_dev->tty->ops->write(cif_dev->tty, image, sent_len);
-
-			// can use next cur_len - current cur_len = ret
-			//BTMTK_DBG("%s, send length: ret= %d", __func__, ret);
+			if (ret == UPLOAD_PATCH_UNIT)
+				max_pkt_cnt++;
+			else
+				BTMTK_DBG("%s, sent_len[%d] tty_write[%d], flush_retry[%d] buffer_chars[%d] max_pkt_cnt[%d]",
+							__func__, sent_len, ret, flush_retry, count, max_pkt_cnt);
 
 			if (ret < 0) {
 				BTMTK_ERR("%s: send patch failed, terminate", __func__);
@@ -1088,7 +1101,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			break;
 	}
 
-	BTMTK_INFO("%s: send dl cmd", __func__);
+	BTMTK_INFO("%s: patch done max_pkt_cnt[%d], send wmt dl cmd ", __func__, max_pkt_cnt);
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, LD_PATCH_CMD_LEN,
 			event, LD_PATCH_EVT_LEN,
