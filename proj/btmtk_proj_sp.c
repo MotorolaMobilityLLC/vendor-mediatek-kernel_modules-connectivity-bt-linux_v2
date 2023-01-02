@@ -129,7 +129,7 @@ void btmtk_platform_driver_init(void) {
 }
 
 void btmtk_platform_driver_deinit(void) {
-	BTMTK_DBG("%s", __func__);
+	BTMTK_INFO("%s", __func__);
 	platform_driver_unregister(&btmtk_uart_driver);
 }
 
@@ -156,10 +156,17 @@ void btmtk_dev_link_uart(void)
 		BTMTK_ERR("%s: tty is NULL", __func__);
 		return;
 	}
-	if (!btmtk_uart_device) {
+	BTMTK_INFO("%s: tty addr[%p]", __func__, cif_dev->tty);
+	if (!cif_dev->tty->dev) {
+		BTMTK_ERR("%s: tty->dev is NULL", __func__);
+		return;
+	}
+
+	if (btmtk_uart_device == NULL) {
 		BTMTK_ERR("%s: btmtk_uart_device is NULL", __func__);
 		return;
 	}
+
 	/* set up dl_flags */
 	dl_flags = DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS;
 
