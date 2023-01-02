@@ -15,6 +15,7 @@ CONFIG_SUPPORT_BLUEZ=n
 CONFIG_SUPPORT_DVT=n
 CONFIG_SUPPORT_HW_DVT=n
 CONFIG_SUPPORT_MULTI_DEV_NODE=n
+BT_CONFIG_TRACING=n
 
 KO_CODE_PATH := $(if $(filter /%,$(src)),,$(srctree)/)$(src)
 
@@ -113,6 +114,10 @@ ccflags-y += -DSLEEP_ENABLE=1
 else
 ccflags-y += -DUSE_DEVICE_NODE=0
 ccflags-y += -DSLEEP_ENABLE=0
+endif
+
+ifeq ($(BT_CONFIG_TRACING),y)
+    ccflags-y += -DBT_CONFIG_TRACING
 endif
 
 $(info linux_v2/Kbuild [BT_Drv] MTK_PROJ_TYPE = $(MTK_PROJ_TYPE) src = $(src) KO_CODE_PATH = $(KO_CODE_PATH))
