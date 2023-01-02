@@ -500,6 +500,144 @@ static inline void btmtk_dump_cryto_debug_flags(void)
 	BT_DUMP_CR_PRINT(value);
 }
 
+static inline void btmtk_dump_dma_uart_cfg2(void)
+{
+	uint32_t value, pos, forward_dump_count = 8, cr_count = 8 + 8 + 1;
+	BT_DUMP_CR_INIT(cr_count);
+
+	/* dma_cfg1 */
+	RHW_READ(0x80010000, &value);
+	BT_DUMP_CR_PRINT(value);
+	RHW_READ(0x80010414, &value);
+	BT_DUMP_CR_PRINT(value);
+	RHW_READ(0x80010418, &value);
+	BT_DUMP_CR_PRINT(value);
+	RHW_READ(0x8001041C, &value);
+	BT_DUMP_CR_PRINT(value);
+	RHW_READ(0x80010424, &value);
+	BT_DUMP_CR_PRINT(value);
+	RHW_READ(0x8001072C, &value);
+	BT_DUMP_CR_PRINT(value);
+	RHW_READ(0x80010738, &value);
+	BT_DUMP_CR_PRINT(value);
+	RHW_READ(0x80010744, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* dma_cfg2 */
+	RHW_READ(0x8001042C, &pos);
+	BT_DUMP_CR_PRINT(pos);
+	BTMTK_INFO("%s [DMA UART CFG] - dma_cfg1, dma_cfg2, uart_cfg1[0x8001042C=0x%08x] count[%d]"
+			, RHW_DBG_TAG, pos, cr_count);
+
+	/* 4 bytes alignment */
+	pos &= ~(0x3);
+
+	/* forward dump 32 bytes */
+	for (; forward_dump_count > 0; pos-=4, forward_dump_count--) {
+		BTMTK_DBG("%s pos[0x%08x]", __func__, pos);
+		RHW_READ(pos, &value);
+		BT_DUMP_CR_PRINT(value);
+	}
+
+	/* uart_cfg1 */
+	RHW_READ(0x8009006C, &value);
+	BT_DUMP_CR_PRINT(value);
+
+}
+
+
+static inline void btmtk_dump_dma_uart_cfg3(void)
+{
+	uint32_t value, pos, cr_count = 8;
+	uint32_t base, vff_size;
+	BT_DUMP_CR_INIT(cr_count);
+
+	/* dma_cfg3 */
+	RHW_READ(0x80010734, &pos);
+
+	RHW_READ(0x8001072C, &base);
+
+	RHW_READ(0x80010744, &vff_size);
+
+	BTMTK_INFO("%s [dma_cfg3] - 0x80010734[0x%08x], 0x8001072C[0x%08x], 0x80010744[0x%08x] count[%d]"
+			, RHW_DBG_TAG, pos, base, vff_size, cr_count);
+
+	/* 4 bytes alignment */
+	pos &= ~(0x3);
+
+	for (; cr_count > 0; pos-=4, cr_count--) {
+		/* wrap around */
+	    if (pos < base)
+			pos = base + vff_size - 4;
+		BTMTK_DBG("%s pos[0x%08x]", __func__, pos);
+		RHW_READ(pos, &value);
+		BT_DUMP_CR_PRINT(value);
+	}
+
+}
+
+static inline void btmtk_dump_dma_uart_cfg4(void)
+{
+	uint32_t value, pos, cr_count = 8;
+	uint32_t base, vff_size;
+	BT_DUMP_CR_INIT(cr_count);
+
+	/* dma_cfg4 */
+	RHW_READ(0x80010730, &pos);
+
+	RHW_READ(0x8001072C, &base);
+
+	RHW_READ(0x80010744, &vff_size);
+
+	BTMTK_INFO("%s [dma_cfg4] - 0x80010730[0x%08x], 0x8001072C[0x%08x], 0x80010744[0x%08x] count[%d]"
+			, RHW_DBG_TAG, pos, base, vff_size, cr_count);
+
+	/* 4 bytes alignment */
+	pos &= ~(0x3);
+
+	for (; cr_count > 0; pos-=4, cr_count--) {
+	    if (pos < base)
+			pos = base + vff_size - 4;
+		BTMTK_DBG("%s pos[0x%08x]", __func__, pos);
+		RHW_READ(pos, &value);
+		BT_DUMP_CR_PRINT(value);
+	}
+}
+
+static inline void btmtk_dump_bt_mcysys_vlp(void)
+{
+	uint32_t value, cr_count = 10, i = 0;
+	BT_DUMP_CR_INIT(cr_count);
+
+	BTMTK_INFO("%s [BT MCUSYS VLP] - mcu_vlp_flg0 count[%d]" , RHW_DBG_TAG, cr_count);
+
+	RHW_WRITE(0x81030408, 0x10);
+	for (i = 0; i < 3; i++) {
+		RHW_WRITE(0x81030408, 0x11 + i);
+		RHW_READ(0x81030414, &value);
+		BT_DUMP_CR_PRINT(value);
+	}
+
+	for (i = 0; i <= 3; i++) {
+		RHW_WRITE(0x81030408, 0x20 + (i << 4));
+		RHW_READ(0x81030414, &value);
+		BT_DUMP_CR_PRINT(value);
+	}
+
+	RHW_READ(0x81030434, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	RHW_READ(0x81030438, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	RHW_READ(0x8103040C, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	RHW_WRITE(0x81030408, 0x60);
+	RHW_READ(0x81030414, &value);
+	BT_DUMP_CR_PRINT(value);
+}
+
 /*	connv3_conninfra_bus_dump(enum connv3_drv_type drv_type, struct connv3_cr_cb *cb, void * priv_data)
  *
  *	drv_type: driver type
@@ -572,6 +710,10 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 	btmtk_dump_bus_debug_flags();
 	btmtk_dump_dma_uart_debug_flags();
 	btmtk_dump_cryto_debug_flags();
+	btmtk_dump_dma_uart_cfg2();
+	btmtk_dump_dma_uart_cfg3();
+	btmtk_dump_dma_uart_cfg4();
+	btmtk_dump_bt_mcysys_vlp();
 	/* cannot call connv3_conninfra_bus_dump at here, connv3_cored may trigger assert */
 	BTMTK_INFO("%s: end", __func__);
 }
@@ -943,7 +1085,7 @@ static inline void btmtk_hif_dump_bg_sysram3(void) {
 	for (; cr_count > 0; pos-=4, cr_count--) {
 		/* wrap around */
 	    if (pos < base)
-			pos = base + vff_size -4;
+			pos = base + vff_size - 4;
 		BTMTK_DBG("%s pos[0x%08x]", __func__, pos);
 		HIF_READ(pos, &value);
 		BT_DUMP_CR_PRINT(value);
@@ -1063,7 +1205,7 @@ static inline void btmtk_hif_dump_cirq_eint(void) {
 	}
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s CIRQ, EINT count[%d]", HIF_DBG_TAG, cr_count);
+	BTMTK_INFO("%s [CIRQ, EINT] count[%d]", HIF_DBG_TAG, cr_count);
 
 	/* CIRQ */
 	HIF_READ(0x18828070, &value);
@@ -1088,6 +1230,70 @@ static inline void btmtk_hif_dump_cirq_eint(void) {
 	BT_DUMP_CR_PRINT(value);
 	HIF_READ(0x18830604, &value);
 	BT_DUMP_CR_PRINT(value);
+}
+
+static inline void btmtk_hif_dump_bg_cfg(void)
+{
+	uint32_t i = 0, value, cr_count = 6;
+
+	if (btmtk_connv3_readable_check()) {
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		return;
+	}
+
+	BT_DUMP_CR_INIT(cr_count);
+	BTMTK_INFO("%s [BG CFG] count[%d]", HIF_DBG_TAG, cr_count);
+
+	/* mcu_flag19 */
+	for (i = 0; i < cr_count; i++) {
+		HIF_READ(0x18812168 + (i << 2), &value);
+		if (BT_DUMP_CR_PRINT(value))
+			return;
+	}
+}
+
+static inline void btmtk_hif_dump_bt_mcusys_vlp(void)
+{
+	uint32_t i = 0, value, cr_count = 14;
+
+	BT_DUMP_CR_INIT(cr_count);
+	BTMTK_INFO("%s [BT MCUSYS VLP] count[%d]", HIF_DBG_TAG, cr_count);
+
+	/* mcu_vlp_flg1 */
+	for (i = 0; i < 3; i++) {
+		HIF_WRITE(0x7C060C04, 0x30520 + i);
+		HIF_READ(0x7C060C00, &value);
+		if (BT_DUMP_CR_PRINT(value))
+			return;
+	}
+	/* mcu_vlp_flg2 */
+	HIF_WRITE(0x7C060C04, 0x30540);
+	HIF_READ(0x7C060C00, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* mcu_vlp_flg3 */
+	HIF_WRITE(0x7C060C04, 0x30560);
+	HIF_READ(0x7C060C00, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* mcu_vlp_flg4 */
+	HIF_WRITE(0x7C060C04, 0x30580);
+	HIF_READ(0x7C060C00, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* mcu_vlp_flg5 */
+	for (i = 0; i < 7; i++) {
+		HIF_WRITE(0x7C060C04, 0x305A0 + i);
+		HIF_READ(0x7C060C00, &value);
+		if (BT_DUMP_CR_PRINT(value))
+			return;
+	}
+
+	/* mcu_vlp_flg6 */
+	HIF_WRITE(0x7C060C04, 0x305C0);
+	HIF_READ(0x7C060C00, &value);
+	BT_DUMP_CR_PRINT(value);
+
 }
 
 void btmtk_hif_dump_work(struct work_struct *work)
@@ -1150,6 +1356,8 @@ void btmtk_hif_dump_work(struct work_struct *work)
 	btmtk_hif_dump_hif_uart1();
 	btmtk_hif_dump_hif_uart2();
 	btmtk_hif_dump_cirq_eint();
+	btmtk_hif_dump_bg_cfg();
+	btmtk_hif_dump_bt_mcusys_vlp();
 
 	ret = connv3_hif_dbg_end(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI);
 }
