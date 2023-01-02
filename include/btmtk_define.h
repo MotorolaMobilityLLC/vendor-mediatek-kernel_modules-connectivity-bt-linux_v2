@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "8.0.2022052501"
+#define VERSION "8.0.2022053001"
 #define SUBVER ":connac3_dev"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -63,6 +63,25 @@
 #define BTMTKUART_RX_STATE_ACTIVE	1
 #define BTMTKUART_RX_STATE_WAKEUP	2
 #define BTMTKUART_RX_STATE_RESET	3
+
+#define BTMTK_DRV_OWN			0	/* init state is driver own for fw dl */
+#define BTMTK_DRV_OWNING		1
+#define BTMTK_FW_OWN			2
+#define BTMTK_FW_OWNING			3
+#define BTMTK_OWN_FAIL			4
+
+#define FW_OWN_TIMEOUT			30
+
+#define FW_OWN_TIMER_UKNOWN		0
+#define FW_OWN_TIMER_INIT		1
+#define FW_OWN_TIMER_RUNNING		2
+#define FW_OWN_TIMER_DONE		3
+
+#define BTMTK_THREAD_STOP		(1 << 0)
+#define BTMTK_THREAD_TX			(1 << 1)
+#define BTMTK_THREAD_RX			(1 << 2)
+#define BTMTK_THREAD_FW_OWN		(1 << 3)
+
 
 /**
  * Maximum rom patch file name length

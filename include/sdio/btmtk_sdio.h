@@ -133,15 +133,6 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define LD_PATCH_CMD_LEN 10
 #define LD_PATCH_EVT_LEN 8
 
-#define BTMTK_SDIO_THREAD_STOP	(1 << 0)
-#define BTMTK_SDIO_THREAD_TX		(1 << 1)
-#define BTMTK_SDIO_THREAD_RX		(1 << 2)
-#define BTMTK_SDIO_THREAD_FW_OWN	(1 << 3)
-
-#define FW_OWN_TIMEOUT		30
-#define FW_OWN_TIMER_INIT	0
-#define FW_OWN_TIMER_RUNNING	1
-
 #define CHECK_THREAD_RETRY_TIMES 50
 
 struct btmtk_sdio_hdr {

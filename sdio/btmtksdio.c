@@ -1622,22 +1622,22 @@ static u32 btmtk_thread_wait_for_msg(struct btmtk_sdio_dev *cif_dev)
 
 	if (!skb_queue_empty(&cif_dev->tx_queue) && (atomic_read(&cif_dev->tx_rdy))) {
 		BTMTK_DBG("tx queue is not empty");
-		ret |= BTMTK_SDIO_THREAD_TX;
+		ret |= BTMTK_THREAD_TX;
 	}
 
 	if (atomic_read(&cif_dev->int_count)) {
 		BTMTK_DBG("cif_dev->int_count is %d", atomic_read(&cif_dev->int_count));
-		ret |= BTMTK_SDIO_THREAD_RX;
+		ret |= BTMTK_THREAD_RX;
 	}
 
 	if (kthread_should_stop()) {
 		BTMTK_DBG("kthread_should_stop");
-		ret |= BTMTK_SDIO_THREAD_STOP;
+		ret |= BTMTK_THREAD_STOP;
 	}
 
 	if (atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_RUNNING) {
 		BTMTK_DBG("fw own");
-		ret |= BTMTK_SDIO_THREAD_FW_OWN;
+		ret |= BTMTK_THREAD_FW_OWN;
 	}
 
 	return ret;
@@ -1757,13 +1757,13 @@ static int btmtk_sdio_main_thread(void *data)
 	for (;;) {
 		wait_event_interruptible(cif_dev->sdio_thread.wait_q,
 			(thread_flag = btmtk_thread_wait_for_msg(cif_dev)));
-		if (thread_flag & BTMTK_SDIO_THREAD_STOP) {
+		if (thread_flag & BTMTK_THREAD_STOP) {
 			BTMTK_WARN("sdio_thread: break from main thread");
 			break;
 		}
 		BTMTK_DBG("btmtk_sdio_main_thread doing...");
 
-		if (thread_flag & BTMTK_SDIO_THREAD_FW_OWN) {
+		if (thread_flag & BTMTK_THREAD_FW_OWN) {
 			ret = btmtk_sdio_set_fw_own(cif_dev, RETRY_TIMES);
 			if (ret) {
 				BTMTK_ERR("set fw own return fail");
@@ -1772,7 +1772,7 @@ static int btmtk_sdio_main_thread(void *data)
 			}
 		}
 
-		if (thread_flag & (BTMTK_SDIO_THREAD_TX | BTMTK_SDIO_THREAD_RX)) {
+		if (thread_flag & (BTMTK_THREAD_TX | BTMTK_THREAD_RX)) {
 			ret = btmtk_sdio_set_driver_own(cif_dev, RETRY_TIMES);
 			if (ret) {
 				BTMTK_ERR("set driver own return fail");
@@ -1782,7 +1782,7 @@ static int btmtk_sdio_main_thread(void *data)
 		}
 
 		/* Do interrupt */
-		if (thread_flag & BTMTK_SDIO_THREAD_RX) {
+		if (thread_flag & BTMTK_THREAD_RX) {
 			BTMTK_DBG("go int");
 			atomic_set(&cif_dev->int_count, 0);
 			if (btmtk_sdio_interrupt_process(bdev)) {
@@ -1793,7 +1793,7 @@ static int btmtk_sdio_main_thread(void *data)
 			BTMTK_DBG("go tx");
 		}
 
-		if (thread_flag & BTMTK_SDIO_THREAD_TX) {
+		if (thread_flag & BTMTK_THREAD_TX) {
 			spin_lock_irqsave(&bdev->txlock, flags);
 			skb = skb_dequeue(&cif_dev->tx_queue);
 			spin_unlock_irqrestore(&bdev->txlock, flags);
