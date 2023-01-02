@@ -161,7 +161,8 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc)
 	utc->sec = tv.tv_sec;
 #else
 	struct timespec64 ts;
-	struct timespec64 kerneltime;
+	unsigned long long kerneltime;
+
 
 	ktime_get_real_ts64(&ts);
 	rtc_time64_to_tm(ts.tv_sec, &utc->tm);
@@ -169,9 +170,10 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc)
 	utc->sec = ts.tv_sec;
 
 	/* kernel time */
-	ktime_get_ts64(&kerneltime);
-	utc->ksec = kerneltime.tv_sec;
-	utc->knsec = kerneltime.tv_nsec;
+	/* ktime_get_ts64 is not accurate */
+	kerneltime = sched_clock();
+	utc->ksec = kerneltime/1000000000;
+	utc->knsec = do_div(kerneltime, 1000000000)/1000;
 #endif
 	utc->tm.tm_year += 1900;
 	utc->tm.tm_mon += 1;
@@ -202,7 +204,7 @@ void btmtk_get_UTC_time_str(char *ts_str)
 
 	memset(ts_str, 0, HCI_SNOOP_TS_STR_LEN);
 	(void)snprintf(ts_str, HCI_SNOOP_TS_STR_LEN,
-			"%04d%02d%02d-%02d%02d%02d.%06u/Kernel:%6d.%09u",
+			"%04d%02d%02d-%02d%02d%02d.%06u/Kernel:%6lu.%06lu",
 			utc.tm.tm_year, utc.tm.tm_mon, utc.tm.tm_mday,
 			utc.tm.tm_hour+8, utc.tm.tm_min, utc.tm.tm_sec, utc.usec,
 			utc.ksec, utc.knsec);

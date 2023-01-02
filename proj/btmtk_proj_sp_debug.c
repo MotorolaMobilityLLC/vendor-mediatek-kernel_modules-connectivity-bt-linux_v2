@@ -18,6 +18,8 @@
 
 #define BT_CR_DUMP_BUF_SIZE		(1024)
 #define DBG_TAG	"[btmtk_dbg_sop]"
+#define RHW_DBG_TAG	"[btmtk_dbg_sop_rhw]"
+#define HIF_DBG_TAG	"[btmtk_dbg_sop_hif]"
 
 struct bt_dump_cr_buffer {
 	uint8_t buffer[BT_CR_DUMP_BUF_SIZE];
@@ -165,7 +167,7 @@ static inline void btmtk_dump_bg_mcu_core(void)
 	uint32_t i = 0, org_value, value, cr_count = 0x26 + 4;
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s [BG MCU core registers] - mcu_flg1, mcu_flg2 count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s [BG MCU core registers] - mcu_flg1, mcu_flg2 count[%d]", RHW_DBG_TAG, cr_count);
 	RHW_WRITE(0x81025020, 0x00000201);
 	RHW_READ(0x80000A00, &org_value);
 
@@ -194,7 +196,7 @@ static inline void btmtk_dump_dsp_debug_flags(void)
 	uint32_t i = 0, value, cr_count = 0x17 + 1;
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s [BG DSP debug flags] - mcu_flg3, mcu_flg4 count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s [BG DSP debug flags] - mcu_flg3, mcu_flg4 count[%d]", RHW_DBG_TAG, cr_count);
 
 	/* mcu_flag3 */
 	RHW_WRITE(0x81025020, 0x00000605);
@@ -217,7 +219,7 @@ static inline void btmtk_dump_mcusys_clk_gals_debug_flags(void)
 	uint32_t i = 0, value, cr_count = 4 + 8;
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s [BG MCUSYS CLK and GALS debug flags] - mcu_flg5, mcu_flg6 count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s [BG MCUSYS CLK and GALS debug flags] - mcu_flg5, mcu_flg6 count[%d]", RHW_DBG_TAG, cr_count);
 
 	/* mcu_flag5 */
 	for (i = 0; i < 4; i++) {
@@ -247,7 +249,7 @@ static inline void btmtk_dump_mcu_pc_lr(void)
 
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG MCU PC/LR log] - mcu_flg7[84:168] cpu_dbg_pc_log0 ~ conn_debug_port84 count[%d]"
-				, DBG_TAG, cr_count);
+				, RHW_DBG_TAG, cr_count);
 
 	/* mcu_flag7 */
 	RHW_WRITE(0x81025020, 0x00000E0D);
@@ -265,7 +267,7 @@ static inline void btmtk_dump_dsp_pc_lr(void)
 
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG DSP PC/LR log] - mcu_flg7[169:236] cpu1_dbg_pc_log0 ~ cpu1_lr count[%d]"
-				, DBG_TAG, cr_count);
+				, RHW_DBG_TAG, cr_count);
 
 	/* mcu_flag7 */
 	RHW_WRITE(0x81025020, 0x00000E0D);
@@ -282,7 +284,7 @@ static inline void btmtk_dump_peri_debug_flags(void)
 	uint32_t i = 0, value, cr_count = 4 + 6;
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s [BG PERI debug flags] - mcu_flg11, mcu_flg12 count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s [BG PERI debug flags] - mcu_flg11, mcu_flg12 count[%d]", RHW_DBG_TAG, cr_count);
 
 	/* mcu_flag11 */
 	for (i = 0; i < 4; i++) {
@@ -308,7 +310,7 @@ static inline void btmtk_dump_bus_debug_flags(void)
 	uint32_t i = 0, value, cr_count = 10 + 15 + 17;
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s [BG BUS debug flags] - mcu_flg13, mcu_flg14, mcu_flg16 count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s [BG BUS debug flags] - mcu_flg13, mcu_flg14, mcu_flg16 count[%d]", RHW_DBG_TAG, cr_count);
 
 	/* mcu_flag13 */
 	RHW_WRITE(0x81025020, 0x00001A19);
@@ -346,7 +348,7 @@ static inline void btmtk_dump_dma_uart_debug_flags(void)
 
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG DMA and UART debug flags] - mcu_flg19, mcu_flg20, mcu_flg23, mcu_flg24 count[%d]"
-				, DBG_TAG, cr_count);
+				, RHW_DBG_TAG, cr_count);
 
 	/* mcu_flag19 */
 	RHW_WRITE(0x81025020, 0x00002625);
@@ -394,7 +396,7 @@ static inline void btmtk_dump_cryto_debug_flags(void)
 	uint32_t value, cr_count = 1 + 1;
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s [BG CRYPTO debug flags] - mcu_flg21, mcu_flg22 (optional) count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s [BG CRYPTO debug flags] - mcu_flg21, mcu_flg22 (optional) count[%d]", RHW_DBG_TAG, cr_count);
 
 	/* mcu_flag21 */
 	RHW_WRITE(0x81025020, 0x00002827);
@@ -533,10 +535,10 @@ static inline void btmtk_hif_dump_bg_mcu_core(void)
 
 	if (btmtk_connv3_readable_check()) {
 		cr_count = 4;
-		BTMTK_INFO("%s [BG MCU core registers] - mcu_flg2 count[%d]", DBG_TAG, cr_count);
+		BTMTK_INFO("%s [BG MCU core registers] - mcu_flg2 count[%d]", HIF_DBG_TAG, cr_count);
 		BT_DUMP_CR_INIT(cr_count);
 	} else {
-		BTMTK_INFO("%s [BG MCU core registers] - mcu_flg1, mcu_flg2 count[%d]", DBG_TAG, cr_count);
+		BTMTK_INFO("%s [BG MCU core registers] - mcu_flg1, mcu_flg2 count[%d]", HIF_DBG_TAG, cr_count);
 		BT_DUMP_CR_INIT(cr_count);
 		/* mcu_flag1 */
 		for (i = 0; i < 0x26; i++) {
@@ -562,7 +564,7 @@ static inline void btmtk_hif_dump_dsp_debug_flags(void)
 	uint32_t i = 0, value, cr_count = 0x17 + 1;
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s [BG DSP debug flags] - mcu_flg3, mcu_flg4 count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s [BG DSP debug flags] - mcu_flg3, mcu_flg4 count[%d]", HIF_DBG_TAG, cr_count);
 
 	/* mcu_flag3 */
 	HIF_WRITE(0x7C023A0C, 0xC0040500);
@@ -583,7 +585,7 @@ static inline void btmtk_hif_dump_mcusys_clk_gals_debug_flags(void)
 	uint32_t i = 0, value, cr_count = 4 + 8;
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s [BG MCUSYS CLK and GALS debug flags] - mcu_flg5, mcu_flg6 count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s [BG MCUSYS CLK and GALS debug flags] - mcu_flg5, mcu_flg6 count[%d]", HIF_DBG_TAG, cr_count);
 
 	/* mcu_flag5 */
 	for (i = 0; i < 4; i++) {
@@ -608,7 +610,7 @@ static inline void btmtk_hif_dump_mcu_pc_lr(void)
 
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG MCU PC/LR log] - mcu_flg7[84:168] cpu_dbg_pc_log0 ~ conn_debug_port84 count[%d]"
-				, DBG_TAG, cr_count);
+				, HIF_DBG_TAG, cr_count);
 
 	/* mcu_flag7 */
 	for (i = 0; i <= 0x54; i++) {
@@ -624,7 +626,7 @@ static inline void btmtk_hif_dump_peri_debug_flags(void)
 	uint32_t i = 0, value, cr_count = 4 + 6;
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s [BG PERI debug flags] - mcu_flg11, mcu_flg12 count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s [BG PERI debug flags] - mcu_flg11, mcu_flg12 count[%d]", HIF_DBG_TAG, cr_count);
 
 	/* mcu_flag11 */
 	for (i = 0; i < 4; i++) {
@@ -648,7 +650,7 @@ static inline void btmtk_hif_dump_bus_debug_flags(void)
 	uint32_t i = 0, value, cr_count = 10 + 15 + 17;
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s [BG BUS debug flags] - mcu_flg13, mcu_flg14, mcu_flg16 count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s [BG BUS debug flags] - mcu_flg13, mcu_flg14, mcu_flg16 count[%d]", HIF_DBG_TAG, cr_count);
 
 	/* mcu_flag13 */
 	for (i = 0; i <= 9; i++) {
@@ -681,7 +683,7 @@ static inline void btmtk_hif_dump_dma_uart_debug_flags(void)
 
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG DMA and UART debug flags] - mcu_flg19, mcu_flg20, mcu_flg23, mcu_flg24 count[%d]"
-				, DBG_TAG, cr_count);
+				, HIF_DBG_TAG, cr_count);
 
 	/* mcu_flag19 */
 	for (i = 0; i <= 7; i++) {
@@ -723,7 +725,7 @@ static inline void btmtk_hif_dump_cryto_debug_flags(void)
 	uint32_t value, cr_count = 1 + 1;
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s [BG CRYPTO debug flags] - mcu_flg21, mcu_flg22 (optional) count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s [BG CRYPTO debug flags] - mcu_flg21, mcu_flg22 (optional) count[%d]", HIF_DBG_TAG, cr_count);
 
 	/* mcu_flag21 */
 	HIF_WRITE(0x7C023A0C, 0xC0042900);
@@ -740,12 +742,12 @@ static inline void btmtk_hif_dump_dma1(void) {
 	uint32_t value, cr_count = 6;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s readable check failed, skip", DBG_TAG, cr_count);
+		BTMTK_INFO("%s readable check failed, skip", HIF_DBG_TAG, cr_count);
 		return;
 	}
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s DMA1 count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s DMA1 count[%d]", HIF_DBG_TAG, cr_count);
 
 	HIF_READ(0x18810000, &value);
 	BT_DUMP_CR_PRINT(value);
@@ -766,7 +768,7 @@ static inline void btmtk_hif_dump_bg_sysram1(void) {
 	uint32_t value, pos, cr_count = 8;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
 		return;
 	}
 
@@ -778,7 +780,7 @@ static inline void btmtk_hif_dump_bg_sysram1(void) {
 	HIF_WRITE(0x18815014, value);
 
 	BTMTK_INFO("%s bg_sysram for 0x1881042C[0x%08x], read from 0x1890_0000, count[%d]"
-				, DBG_TAG, value, cr_count);
+				, HIF_DBG_TAG, value, cr_count);
 
 	pos = 0x18900000;
 
@@ -792,7 +794,7 @@ static inline void btmtk_hif_dump_bg_sysram2(void) {
 	uint32_t value, pos, cr_count = 8, base, vff_size;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
 		return;
 	}
 
@@ -807,7 +809,7 @@ static inline void btmtk_hif_dump_bg_sysram2(void) {
 	HIF_READ(0x18810744, &vff_size);
 
 	BTMTK_INFO("%s bg_sysram for 0x18810730[0x%08x], base[0x%08x], vff_size[0x%08x], count[%d]"
-				, DBG_TAG, pos, base, vff_size, cr_count);
+				, HIF_DBG_TAG, pos, base, vff_size, cr_count);
 
 	/* 4 bytes alignment */
 	pos &= ~(0x3);
@@ -827,7 +829,7 @@ static inline void btmtk_hif_dump_bg_sysram3(void) {
 	uint32_t value, pos, cr_count = 8, base, vff_size;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
 		return;
 	}
 
@@ -842,7 +844,7 @@ static inline void btmtk_hif_dump_bg_sysram3(void) {
 	HIF_READ(0x18810744, &vff_size);
 
 	BTMTK_INFO("%s bg_sysram for 0x18810734[0x%08x], base[0x%08x], vff_size[0x%08x], count[%d]"
-				, DBG_TAG, pos, base, vff_size, cr_count);
+				, HIF_DBG_TAG, pos, base, vff_size, cr_count);
 
 	/* 4 bytes alignment */
 	pos &= ~(0x3);
@@ -861,12 +863,12 @@ static inline void btmtk_hif_dump_hif_uart1(void) {
 	uint32_t value, cr_count = 23;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
 		return;
 	}
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s HIF_UART count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s HIF_UART count[%d]", HIF_DBG_TAG, cr_count);
 
 	HIF_READ(0x1881900C, &value);
 	BT_DUMP_CR_PRINT(value);
@@ -919,12 +921,12 @@ static inline void btmtk_hif_dump_hif_uart2(void) {
 	uint32_t value, cr_count = 14;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
 		return;
 	}
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s HIF_UART(0x1881900C) count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s HIF_UART(0x1881900C) count[%d]", HIF_DBG_TAG, cr_count);
 
 	HIF_WRITE(0x1881900C, 0x00000010);
 	HIF_READ(0x18819000, &value);
@@ -966,12 +968,12 @@ static inline void btmtk_hif_dump_cirq_eint(void) {
 	uint32_t value, cr_count = 10;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
 		return;
 	}
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s CIRQ, EINT count[%d]", DBG_TAG, cr_count);
+	BTMTK_INFO("%s CIRQ, EINT count[%d]", HIF_DBG_TAG, cr_count);
 
 	/* CIRQ */
 	HIF_READ(0x18828070, &value);
