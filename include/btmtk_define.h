@@ -147,13 +147,13 @@
 extern uint8_t btmtk_log_lvl;
 
 #define BTMTK_ERR(fmt, ...)	 \
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR) pr_warn("[btmtk_err] ***"fmt"***\n", ##__VA_ARGS__); } while (0)
+	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR) pr_info("[btmtk_err] ***"fmt"***\n", ##__VA_ARGS__); } while (0)
 #define BTMTK_WARN(fmt, ...)	\
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN) pr_warn("[btmtk_warn] "fmt"\n", ##__VA_ARGS__); } while (0)
+	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN) pr_info("[btmtk_warn] "fmt"\n", ##__VA_ARGS__); } while (0)
 #define BTMTK_INFO(fmt, ...)	\
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) pr_warn("[btmtk_info] "fmt"\n", ##__VA_ARGS__); } while (0)
+	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) pr_info("[btmtk_info] "fmt"\n", ##__VA_ARGS__); } while (0)
 #define BTMTK_DBG(fmt, ...)	 \
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) pr_warn("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__); } while (0)
+	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) pr_info("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__); } while (0)
 
 #define BTMTK_ERR_LIMITTED(fmt, ...)	\
 	do { \
@@ -190,9 +190,9 @@ extern uint8_t btmtk_log_lvl;
 				(void)snprintf(raw_buf+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
 			raw_buf[3*cnt_] = '\0';	\
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-				pr_warn("[btmtk_info] "fmt" %s\n", ##__VA_ARGS__, raw_buf);	\
+				pr_info("[btmtk_info] "fmt" %s\n", ##__VA_ARGS__, raw_buf);	\
 			} else {	\
-				pr_warn("[btmtk_info] "fmt" %s (partial)\n", ##__VA_ARGS__, raw_buf);	\
+				pr_info("[btmtk_info] "fmt" %s (partial)\n", ##__VA_ARGS__, raw_buf);	\
 			}	\
 		}	\
 	} while (0)
@@ -209,9 +209,9 @@ extern uint8_t btmtk_log_lvl;
 				(void)snprintf(raw_buf+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
 			raw_buf[3*cnt_] = '\0'; \
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-				pr_warn("[btmtk_debug] "fmt" %s\n", ##__VA_ARGS__, raw_buf); \
+				pr_info("[btmtk_debug] "fmt" %s\n", ##__VA_ARGS__, raw_buf); \
 			} else {	\
-				pr_warn("[btmtk_debug] "fmt" %s (partial)\n", ##__VA_ARGS__, raw_buf);	\
+				pr_info("[btmtk_debug] "fmt" %s (partial)\n", ##__VA_ARGS__, raw_buf);	\
 			}	\
 		}	\
 	} while (0)
