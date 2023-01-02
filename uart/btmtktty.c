@@ -1103,7 +1103,7 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	/* BTMTK_INFO("%s: tty %p\n", __func__, bdev->tty); */
 
 	/* wait tty buffer clean */
-	if (cif_dev->flush_en) {
+	if (cif_dev->flush_en && btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT) {
 		do {
 			count = tty_chars_in_buffer(cif_dev->tty);
 			//BTMTK_DBG("%s: char in buffer before flush count[%d]", __func__, count);
@@ -1114,7 +1114,8 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 
 	count = 0;
 
-	while (len != cmd_len && count < BTMTK_MAX_SEND_RETRY) {
+	while (len != cmd_len && count < BTMTK_MAX_SEND_RETRY 
+			&& btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT) {
 		ret = cif_dev->tty->ops->write(cif_dev->tty, cmd + len, cmd_len - len);
 		len += ret;
 		count++;
@@ -2001,6 +2002,7 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_uart_dev *cif_dev;
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 
 	bdev = dev_get_drvdata(tty->dev);
 	if (bdev == NULL) {
@@ -2027,14 +2029,19 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 	/* temp solution for disconnect at random time would KE */
 	BTMTK_INFO("%s wait", __func__);
 	msleep(3000);
-
-	/* Do HIF events */
-	btmtk_uart_tty_disconnect(tty);
+	fstate = btmtk_fops_get_state(bdev);
+	if (fstate == BTMTK_FOPS_STATE_CLOSING || fstate == BTMTK_FOPS_STATE_OPENING) {
+		/* temp solution for disconnect at random time would KE */
+		BTMTK_WARN("%s bt opening/closing, skip free in disconnect", __func__);
+	} else {	
+		/* Do HIF events */
+		btmtk_uart_tty_disconnect(tty);
+		devm_kfree(tty->dev, cif_dev);
+	}
 
 	/* Set End/Error state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
 	btmtk_uart_cif_mutex_unlock(bdev);
-	devm_kfree(tty->dev, cif_dev);
 
 	BTMTK_INFO("%s end", __func__);
 }
