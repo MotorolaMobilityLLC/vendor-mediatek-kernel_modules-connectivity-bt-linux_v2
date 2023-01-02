@@ -87,9 +87,8 @@ void btmtk_reset_waker(struct work_struct *work)
 		return;
 	}
 
-	if (bdev->debug_type != DEBUG_SOP_NONE && bmain_info->hif_hook.dump_debug_sop)
-		bmain_info->hif_hook.dump_debug_sop(bdev, bdev->debug_type);
-	bdev->debug_type = DEBUG_SOP_NONE;
+	if (bmain_info->hif_hook.dump_debug_sop)
+		bmain_info->hif_hook.dump_debug_sop(bdev);
 
 	DUMP_TIME_STAMP("chip_reset_start");
 	cif_event = HIF_EVENT_SUBSYS_RESET;

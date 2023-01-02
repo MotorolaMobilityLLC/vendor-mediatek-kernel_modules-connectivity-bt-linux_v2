@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2022012501"
+#define VERSION "7.0.2022012601"
 #define SUBVER ":turnkey"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -316,6 +316,25 @@ struct bt_utc_struct {
 #define BT_DOWNLOAD	1
 #define WIFI_DOWNLOAD	2
 #define ZB_DOWNLOAD	3
+
+enum debug_reg_index_len {
+	DEBUG_REG_INX_LEN_NONE = 0,
+	DEBUG_REG_INX_LEN_2 = 2,
+	DEBUG_REG_INX_LEN_3 = 3,
+};
+
+#define DEBUG_REG_SIZE	10
+#define DEBUG_REG_NUM	10
+
+struct debug_reg {
+	u32	*content;
+	u32	length;
+};
+
+struct debug_reg_struct{
+	struct debug_reg	*reg;
+	u32	num;
+};
 
 #define SWAP32(x) \
 	((u32) (\

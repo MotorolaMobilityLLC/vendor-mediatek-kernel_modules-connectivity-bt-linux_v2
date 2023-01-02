@@ -97,6 +97,9 @@ $(MOD_NAME)-objs := $(CFILES:.c=.o)
 
 obj-m += $(MOD_NAME).o
 
+ifneq ($(TARGET_BUILD_VARIANT), user)
+ccflags-y += -DBTMTK_DEBUG_SOP
+endif
 
 #VPATH = /opt/toolchains/gcc-linaro-aarch64-linux-gnu-4.9-2014.09_linux
 #UART_MOD_NAME = btmtk_uart

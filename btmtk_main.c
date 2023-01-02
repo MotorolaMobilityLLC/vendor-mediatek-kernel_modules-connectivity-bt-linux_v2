@@ -442,6 +442,235 @@ struct btmtk_dev **btmtk_get_pp_bdev(void)
 	return g_bdev;
 }
 
+void btmtk_free_debug_reg_struct(struct debug_reg_struct *debug_reg)
+{
+	int i = 0;
+	int count = debug_reg->num;
+	for (i = 0; i < count; i++) {
+		if (debug_reg->reg[i].content) {
+			BTMTK_DBG("%s:kfree %d", __func__, i);
+			kfree(debug_reg->reg[i].content);
+			debug_reg->reg[i].content = NULL;
+			debug_reg->reg[i].length = 0;
+		} else {
+			debug_reg->reg[i].length = 0;
+		}
+	}
+	if (debug_reg->reg) {
+		kfree(debug_reg->reg);
+		debug_reg->reg = NULL;
+		debug_reg->num = 0;
+		}
+
+}
+
+static void btmtk_initialize_debug_reg_items(struct btmtk_dev *bdev)
+{
+	BTMTK_INFO("%s begin", __func__);
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return;
+	}
+	btmtk_clean_debug_reg_file(bdev);
+	bdev->debug_sop_reg_dump.num = 0;
+	BTMTK_INFO("%s end", __func__);
+}
+
+void btmtk_clean_debug_reg_file(struct btmtk_dev *bdev)
+{
+	BTMTK_INFO("%s begin", __func__);
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev == NULL", __func__);
+		return;
+	}
+
+	btmtk_free_debug_reg_struct(&bdev->debug_sop_reg_dump);
+	BTMTK_INFO("%s end", __func__);
+}
+
+int btmtk_load_register(char *block_name, struct debug_reg_struct *save_reg,
+		u8 *searchcontent, enum debug_reg_index_len index_length)
+{
+	int ret = 0, i = 0;
+	u16 temp_len = 0;
+	u32 temp[DEBUG_REG_NUM]; /* save for total hex number */
+	unsigned long parsing_result = 0;
+	char *search_result = NULL;
+	char *search_end = NULL;
+	char search[SEARCH_LEN];
+	char *next_block = NULL;
+	char number[DEBUG_REG_SIZE + 1];	/* 1 is for '\0' */
+	char *regnum = NULL;
+
+	memset(search, 0, SEARCH_LEN);
+	memset(temp, 0, DEBUG_REG_NUM * sizeof(u32));
+	memset(number, 0, DEBUG_REG_SIZE + 1);
+
+	if (searchcontent == NULL) {
+		BTMTK_ERR("%s: Searchcontent is NULL", __func__);
+		return -1;
+	}
+
+	/* search REG NUM */
+	(void)snprintf(search, SEARCH_LEN, "%sNUM:", block_name);
+	search_result = strstr((char *)searchcontent, search);
+
+	if (search_result) {
+		search_result = strstr(search_result, ":");
+		search_end = strstr(search_result, ",");
+		if (search_end == NULL) {
+			BTMTK_ERR("%s: regnum is NULL", __func__);
+			return -1;
+		}
+
+		if (search_end - search_result < 0) {
+			BTMTK_ERR("%s: Incorrect Format in %s", __func__, search);
+			return -1;
+		}
+		regnum = kzalloc((search_end - search_result) * sizeof(char), GFP_KERNEL);
+		if (regnum == NULL) {
+			BTMTK_ERR("%s: Allocate memory fail", __func__);
+			return -ENOMEM;
+		}
+
+		memset(regnum, 0, search_end - search_result);
+		memcpy(regnum, search_result + 1, search_end - search_result - 1);
+		regnum[search_end - search_result - 1] = '\0';
+		ret = kstrtoul(regnum, 0, &parsing_result);
+		save_reg->reg = (struct debug_reg *)kzalloc(parsing_result * sizeof(struct debug_reg), GFP_KERNEL);
+		if (save_reg->reg == NULL) {
+			BTMTK_ERR("%s: Allocate memory fail", __func__);
+			return -ENOMEM;
+		}
+		save_reg->num = (u32)parsing_result;
+		BTMTK_INFO("%s: reg num is %d", __func__, save_reg->num);
+	} else{
+		BTMTK_ERR("%s: %s is not found", __func__, search);
+		return ret;
+	}
+
+	/* search block name */
+	for (i = 0; i < save_reg->num; i++) {
+		temp_len = 0;
+		if (index_length == DEBUG_REG_INX_LEN_2) /* EX: POWER_STATUS_01 */
+			(void)snprintf(search, SEARCH_LEN, "%s%02d:", block_name, i);
+		else if (index_length == DEBUG_REG_INX_LEN_3) /* EX: POWER_STATUS_001 */
+			(void)snprintf(search, SEARCH_LEN, "%s%03d:", block_name, i);
+		else
+			(void)snprintf(search, SEARCH_LEN, "%s:", block_name);
+
+		ret = 0;
+
+		search_result = strstr((char *)searchcontent, search);
+		if (search_result) {
+			memset(temp, 0, DEBUG_REG_NUM * sizeof(u32));
+			search_result = strstr(search_result, "0x");
+			if (search_result == NULL) {
+				BTMTK_ERR("%s: search_result is NULL", __func__);
+				return -1;
+			}
+
+			/* find next line as end of this command line, if NULL means last line */
+			next_block = strstr(search_result, ":");
+
+			do {
+				search_end = strstr(search_result, ",");
+				if (search_end == NULL) {
+					BTMTK_ERR("%s: Search_end is NULL", __func__);
+					break;
+				}
+
+				if (search_end - search_result != DEBUG_REG_SIZE) {
+					BTMTK_ERR("%s: Incorrect Format in %s", __func__, search);
+					break;
+				}
+
+				memset(number, 0, DEBUG_REG_SIZE + 1);
+				memcpy(number, search_result, DEBUG_REG_SIZE);
+				ret = kstrtoul(number, 0, &parsing_result);
+				if (ret == 0) {
+					if (temp_len >= DEBUG_REG_NUM) {
+						BTMTK_ERR("%s: %s data over %d", __func__, search, DEBUG_REG_NUM);
+						break;
+					}
+					temp[temp_len] = parsing_result;
+					temp_len++;
+				} else {
+					BTMTK_WARN("%s: %s kstrtoul fail: %d", __func__, search, ret);
+					break;
+				}
+				search_result = strstr(search_end, "0x");
+				if (search_result == NULL) {
+					BTMTK_ERR("%s: search_result is NULL", __func__);
+					break;
+				}
+			} while (search_result < next_block || (search_result && next_block == NULL));
+		} else
+			BTMTK_DBG("%s: %s is not found in %d", __func__, search, i);
+
+		if (temp_len && temp_len < DEBUG_REG_NUM) {
+			BTMTK_DBG("%s: %s found & stored in %d", __func__, search, i);
+			save_reg->reg[i].content = (u32 *)kzalloc(temp_len * sizeof(u32), GFP_KERNEL);
+			if (save_reg->reg[i].content == NULL) {
+				BTMTK_ERR("%s: Allocate memory fail(%d)", __func__, i);
+				return -ENOMEM;
+			}
+			memcpy(save_reg->reg[i].content, temp, temp_len * sizeof(u32));
+			save_reg->reg[i].length = temp_len;
+			BTMTK_DBG("%s: %s has found %d stored , value0 is %08x", __func__, block_name, temp_len, temp[0]);
+		}
+	}
+
+	return ret;
+}
+
+void btmtk_load_debug_sop_register(char *debug_sop_name, struct device *dev, struct btmtk_dev *bdev)
+{
+	int err;
+	u32 code_len = 0;
+
+	btmtk_initialize_debug_reg_items(bdev);
+
+	err = btmtk_load_code_from_setting_files(debug_sop_name, dev, &code_len, bdev);
+	if (err) {
+		BTMTK_WARN("btmtk_load_code_from_setting_files failed!!");
+
+#ifdef DEBUG_SOP_NAME
+	/* load from sdio_debug.h */
+		if (is_mt7902(bdev->chip_id)) {
+			err = btmtk_load_register("DEBUG_REG_",
+				&bdev->debug_sop_reg_dump, DEBUG_SOP_NAME(7902), DEBUG_REG_INX_LEN_3);
+			if (err)
+				goto LOAD_END;
+		}
+		if (is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
+			err = btmtk_load_register("DEBUG_REG_",
+				&bdev->debug_sop_reg_dump, DEBUG_SOP_NAME(7921), DEBUG_REG_INX_LEN_3);
+			if (err)
+				goto LOAD_END;
+		}
+		BTMTK_INFO("btmtk_load_debug_sop_register from .h!!");
+#endif
+	} else {
+	/* load from file */
+		err = btmtk_load_register("DEBUG_REG_",
+			&bdev->debug_sop_reg_dump, bdev->setting_file, DEBUG_REG_INX_LEN_3);
+		if (err)
+			goto LOAD_END;
+		BTMTK_INFO("btmtk_load_debug_sop_register from .bin!!");
+	}
+
+LOAD_END:
+	/* release setting file memory */
+	if (bdev->setting_file) {
+		kfree(bdev->setting_file);
+		bdev->setting_file = NULL;
+	}
+
+	if (err)
+		BTMTK_ERR("%s: error return %d", __func__, err);
+}
+
 void btmtk_hci_snoop_print_to_log(void)
 {
 	u8 counter, index, snoop_index;
@@ -2956,7 +3185,6 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 		skb = NULL;
 		btmtk_reset_trigger(bdev);
 	} else {
-		bdev->debug_type = DEBUG_SOP_NO_RESPONSE;
 		btmtk_reset_timer_update(bdev);
 		BTMTK_INFO("%s: OK", __func__);
 		btmtk_set_chip_state(bdev, BTMTK_STATE_SEND_ASSERT);
@@ -3464,7 +3692,6 @@ exit:
 
 err:
 	main_info.reset_stack_flag = HW_ERR_NONE;
-	bdev->debug_type = DEBUG_SOP_NONE;
 	bdev->get_hci_reset = 0;
 
 	BTMTK_INFO("%s: end, reset_stack_flag = %d", __func__, main_info.reset_stack_flag);
@@ -3695,7 +3922,6 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			if (skb->len == FW_COREDUMP_CMD_LEN &&
 				!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
 				BTMTK_INFO("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
-				bdev->debug_type = DEBUG_SOP_NO_RESPONSE;
 				fw_coredump_flag = 1;
 				btmtk_reset_timer_update(bdev);
 				btmtk_hci_snoop_print_to_log();
@@ -4075,6 +4301,16 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 	(void)snprintf(bdev->country_file_name, MAX_BIN_FILE_NAME_LEN,
 			DEFAULT_COUNTRY_TABLE_NAME);
 
+#ifdef BTMTK_DEBUG_SOP
+	/* debug sop */
+	(void)snprintf(bdev->debug_sop_file_name, MAX_BIN_FILE_NAME_LEN,
+		"%s_%x.bin", DEFAULT_DEBUG_SOP_NAME, bdev->chip_id & 0xffff);
+	BTMTK_INFO("%s: debug sop file name is %s", __func__,
+		bdev->debug_sop_file_name);
+
+	btmtk_load_debug_sop_register(bdev->debug_sop_file_name, bdev->intf_dev, bdev);
+#endif
+
 	return 0;
 
 free_hci_dev:
@@ -4091,6 +4327,9 @@ void btmtk_main_cif_uninitialize(struct btmtk_dev *bdev, int hci_bus)
 	btmtk_free_hci_device(bdev, hci_bus);
 	btmtk_main_free_memory(bdev);
 	btmtk_reset_timer_del(bdev);
+#ifdef BTMTK_DEBUG_SOP
+	btmtk_clean_debug_reg_file(bdev);
+#endif
 }
 
 int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus)
