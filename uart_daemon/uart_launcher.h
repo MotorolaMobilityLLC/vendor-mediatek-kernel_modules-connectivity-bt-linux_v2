@@ -130,13 +130,4 @@ static struct speed_map speeds[] = {
     {4000000,    B4000000},
 };
 
-/* print log to main log */
-/* LOG_TAG must be defined before log.h */
-#ifdef  LOG_TAG
-#undef  LOG_TAG
-#endif
-#define LOG_TAG               "[btmtk_uart_launcher]"
-#include <log/log.h>
-#include <android/log.h>
-
 #endif /*__UART_LAUNCHER_H__*/
