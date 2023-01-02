@@ -29,7 +29,8 @@
 
 #define DEFAULT_STATE_PINCTRL_NAME	("bt_combo_gpio_init")
 #define PRE_ON_PINCTRL_NAME		("bt_combo_gpio_pre_on")
-#define POWER_ON_PINCTRL_NAME		("bt_combo_gpio_on")
+#define POWER_ON_TX_PINCTRL_NAME	("bt_combo_uart_tx_aux")
+#define POWER_ON_RX_PINCTRL_NAME	("bt_combo_uart_rx_aux")
 #define RST_ON_PINCTRL_NAME		("bt_rst_on")
 #define RST_OFF_PINCTRL_NAME		("bt_rst_off")
 #define INIT_STATE_PINCTRL_NAME		("bt_combo_gpio_init")
@@ -252,11 +253,15 @@ int btmtk_pre_power_on_handler(void)
 	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
 
 #endif
-	btmtk_pinctrl_exec(POWER_ON_PINCTRL_NAME);
+	btmtk_pinctrl_exec(POWER_ON_TX_PINCTRL_NAME);
 
-	msleep(100);
-	BTMTK_DBG("%s: wait 100ms", __func__);
 	return 0;
+}
+
+int btmtk_set_uart_rx_aux(void)
+{
+	BTMTK_DBG("%s: start", __func__);
+	return btmtk_pinctrl_exec(POWER_ON_RX_PINCTRL_NAME);
 }
 
 int btmtk_reset_pin_off(void)
