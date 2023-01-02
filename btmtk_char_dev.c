@@ -386,8 +386,9 @@ static ssize_t BT_read(struct file *filp, char __user *buf, size_t count, loff_t
 			if (filp->f_flags & O_NONBLOCK) {
 				BTMTK_ERR_LIMITTED("Non-blocking read, no data is available!");
 				retval = -EAGAIN;
-				if (hw_err_retry++ > TRIGGER_HW_ERR_EVT_COUNT){
-					BTMTK_ERR("%s: hw_err_retry[%d] > %d", __func__, hw_err_retry,TRIGGER_HW_ERR_EVT_COUNT);
+				if (hw_err_retry++ > TRIGGER_HW_ERR_EVT_COUNT) {
+					BTMTK_ERR("%s: hw_err_retry[%d] > %d", __func__, hw_err_retry
+								, TRIGGER_HW_ERR_EVT_COUNT);
 					retval = bt_report_hw_error(i_buf, count, &rd_offset);
 					if (rd_offset == sizeof(HCI_EVT_HW_ERROR))
 						rd_offset = 0;

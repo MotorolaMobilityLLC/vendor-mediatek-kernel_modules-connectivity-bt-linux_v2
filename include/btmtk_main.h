@@ -449,8 +449,8 @@ struct dump_debug_cr {
 
 struct h4_recv_pkt {
 	u8  type;	/* Packet type */
-	u8  hlen;	/* Header length */
-	u8  loff;	/* Data length offset in header */
+	u8  hlen;	/* Header length (not include pkt type)*/
+	u8  loff;	/* Data length offset in header (not include pkt type)*/
 	u8  lsize;	/* Data length field size */
 	u16 maxlen;	/* Max overall packet length */
 	int (*recv)(struct hci_dev *hdev, struct sk_buff *skb);
@@ -494,6 +494,32 @@ struct _Section_Map {
 
 #if (USE_DEVICE_NODE == 1)
 #define BT_HCI_MAX_FRAME_SIZE	4096
+
+
+#define RHW_WRITE_TYPE		0x40
+#define RHW_READ_TYPE		0x41
+
+#define RHW_VAL_LEN		4
+#define RHW_ADDR_LEN		4
+#define RHW_PKT_HDR_LEN		4
+#define RHW_PKT_LEN			13
+#define RHW_PKT_COMP_LEN	9
+#define RHW_ADDR_OFFSET_CMD	5
+#define RHW_VAL_OFFSET_CMD	9
+
+#define H4_RECV_RHW_WRITE \
+	.type = RHW_WRITE_TYPE, \
+	.hlen = RHW_PKT_HDR_LEN, \
+	.loff = 2, \
+	.lsize = 2, \
+	.maxlen = RHW_PKT_LEN
+
+#define H4_RECV_RHW_READ \
+	.type = RHW_READ_TYPE, \
+	.hlen = RHW_PKT_HDR_LEN, \
+	.loff = 2, \
+	.lsize = 2, \
+	.maxlen = RHW_PKT_LEN
 
 #define H4_RECV_ACL \
 	.type = HCI_ACLDATA_PKT, \
@@ -814,6 +840,9 @@ int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count);
 int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_recv_iso(struct hci_dev *hdev, struct sk_buff *skb);
+#if (USE_DEVICE_NODE == 1)
+int btmtk_recv_rhw(struct hci_dev *hdev, struct sk_buff *skb);
+#endif
 int btmtk_send_init_cmds(struct btmtk_dev *hdev);
 int btmtk_send_deinit_cmds(struct btmtk_dev *hdev);
 int btmtk_load_rom_patch(struct btmtk_dev *bdev);

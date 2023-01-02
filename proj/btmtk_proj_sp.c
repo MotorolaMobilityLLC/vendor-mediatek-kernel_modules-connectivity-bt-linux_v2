@@ -289,12 +289,12 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	if (!tty->dev->of_node)
 		BTMTK_ERR("[ERR] %s: mediatek,bt of_node not found", __func__);
 
-	ret = of_property_read_u32(tty->dev->of_node,"baudrate", &cif_dev->baudrate);
-	if(ret < 0)
+	ret = of_property_read_u32(tty->dev->of_node, "baudrate", &cif_dev->baudrate);
+	if (ret < 0)
 		BTMTK_ERR("[ERR] %s: mediatek,bt baudrate ret[%d]", __func__, ret);
 
-	ret = of_property_read_u32(tty->dev->of_node,"hub-en", &cif_dev->hub_en);
-	if(ret < 0)
+	ret = of_property_read_u32(tty->dev->of_node, "hub-en", &cif_dev->hub_en);
+	if (ret < 0)
 		BTMTK_ERR("[ERR] %s: mediatek,bt hub-en ret[%d]", __func__, ret);
 
 	ret = of_property_read_u32(tty->dev->of_node, "sleep-en", &cif_dev->sleep_en);
