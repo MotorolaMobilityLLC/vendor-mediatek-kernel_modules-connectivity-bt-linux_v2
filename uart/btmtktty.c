@@ -578,30 +578,32 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	ready_retry = 50;
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	/* use uarthub multi-host mode (default) */
-	ret = mtk8250_uart_hub_enable_bypass_mode(0);
-	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
+	if (cif_dev->hub_en) {
+		/* use uarthub multi-host mode (default) */
+		ret = mtk8250_uart_hub_enable_bypass_mode(0);
+		BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
 
-	/* Set TX,RX request */
-	ret = mtk8250_uart_hub_set_request();
-	if (ret) {
-		BTMTK_ERR("%s mtk8250_uart_hub_set_request fail", __func__);
+		/* Set TX,RX request */
+		ret = mtk8250_uart_hub_set_request();
+		if (ret) {
+			BTMTK_ERR("%s mtk8250_uart_hub_set_request fail", __func__);
+		}
+
+		/* Polling UARTHUB is ready state */
+		while (mtk8250_uart_hub_is_ready() <= 0 && --ready_retry) {
+			BTMTK_WARN("%s ready_retry[%d]", __func__, ready_retry);
+			usleep_range(1000, 1100);
+		}
+
+		if (ready_retry <= 0) {
+			ret = mtk8250_uart_hub_dump_with_tag("BT");
+			BTMTK_ERR("%s mtk8250_uart_hub_dump_with_tag ready_retry[%d] ret[%d]", __func__, ready_retry, ret);
+		}
+
+		/* use uarthub bypass mode */
+		ret = mtk8250_uart_hub_enable_bypass_mode(1);
+		BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
 	}
-
-	/* Polling UARTHUB is ready state */
-	while (mtk8250_uart_hub_is_ready() <= 0 && --ready_retry) {
-		BTMTK_WARN("%s ready_retry[%d]", __func__, ready_retry);
-		usleep_range(1000, 1100);
-	}
-
-	if (ready_retry <= 0) {
-		ret = mtk8250_uart_hub_dump_with_tag("BT");
-		BTMTK_ERR("%s mtk8250_uart_hub_dump_with_tag ready_retry[%d] ret[%d]", __func__, ready_retry, ret);
-	}
-
-	/* use uarthub bypass mode */
-	ret = mtk8250_uart_hub_enable_bypass_mode(1);
-	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
 #endif
 	/* set tty host baud and flowcontrol to default value */
 	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);
@@ -664,9 +666,11 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 		goto exit;
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	/* disable ADSP,MD when fw dl */
-	ret = mtk8250_uart_hub_fifo_ctrl(1);
-	BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(1) ret[%d]", __func__, ret);
+	if (cif_dev->hub_en) {
+		/* disable ADSP,MD when fw dl */
+		ret = mtk8250_uart_hub_fifo_ctrl(1);
+		BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(1) ret[%d]", __func__, ret);
+	}
 #endif
 
 
@@ -683,30 +687,32 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	}
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	/* enable ADSP,MD when fw dl done*/
-	ret = mtk8250_uart_hub_fifo_ctrl(0);
-	BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(0) ret[%d]", __func__, ret);
+	if (cif_dev->hub_en) {
+		/* enable ADSP,MD when fw dl done*/
+		ret = mtk8250_uart_hub_fifo_ctrl(0);
+		BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(0) ret[%d]", __func__, ret);
 
-	/* uarhub setting */
-	cif_dev->fw_hub_en = 1;
-	cif_dev->rhw_en = 0;
-	cif_dev->crc_en = 1;
-	cif_dev->fw_dl_ready = 1;
+		/* uarhub setting */
+		cif_dev->fw_hub_en = 1;
+		cif_dev->rhw_en = 0;
+		cif_dev->crc_en = 1;
+		cif_dev->fw_dl_ready = 1;
 
-	/* set chip baud and flowcontrol to config setting */
-	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
-	if (ret < 0) {
-		BTMTK_WARN("%s after fwdl, send uarhub setting cmd", __func__);
-		goto exit;
+		/* set chip baud and flowcontrol to config setting */
+		ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
+		if (ret < 0) {
+			BTMTK_WARN("%s after fwdl, send uarhub setting cmd", __func__);
+			goto exit;
+		}
+
+		/* after fw dl, use uarthub multi-host mode */
+		ret = mtk8250_uart_hub_enable_bypass_mode(0);
+		BTMTK_INFO("%s after fw dl, mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
+
+		ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
+		if (ret < 0)
+			goto exit;
 	}
-
-	/* after fw dl, use uarthub multi-host mode */
-	ret = mtk8250_uart_hub_enable_bypass_mode(0);
-	BTMTK_INFO("%s after fw dl, mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
-
-	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
-	if (ret < 0)
-		goto exit;
 #endif
 
 	BTMTK_INFO("%s done", __func__);
