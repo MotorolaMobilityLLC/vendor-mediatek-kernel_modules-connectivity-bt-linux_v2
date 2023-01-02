@@ -897,6 +897,13 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 		int i, len;
 
 		if (!skb) {
+			/* ignore first byte as 0xFF (FW wakeup) & 0x00 (noise from uart) */
+			while (count > 1 && (*buffer == 0xFF || *buffer == 0x00)) {
+				BTMTK_DBG("%s, receive 0x%02X in pkt head, pkt_len[%d]", __func__, buffer[0], count);
+				buffer++;
+				count--;
+			}
+
 			for (i = 0; i < pkts_count; i++) {
 				if (buffer[0] != (&pkts[i])->type)
 					continue;
@@ -915,8 +922,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 
 			/* Check for invalid packet type */
 			if (!skb) {
-				BTMTK_ERR("%s,skb is invalid, buffer[0] = 0x%02X, count[%d]", __func__,
-					buffer[0], count);
+				BTMTK_WARN("%s: buffer[0] = 0x%02X, drop data count[%d]", __func__, buffer[0], count);
 				if (is_mt66xx(bdev->chip_id)) {
 					BTMTK_INFO_RAW(buffer, count, "%s, len[%d]", __func__, count);
 					btmtk_set_sleep(hdev, FALSE);
