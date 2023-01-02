@@ -380,6 +380,9 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 }
 ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos)
 {
+#if (CFG_ENABLE_DEBUG_WRITE == 0)
+	return -ENODEV;
+#else
 	int i = 0, len = 0, ret = -1;
 	int hci_idx = 0;
 	int vlen = 0, index = 3;
@@ -394,9 +397,6 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	struct btmtk_dev **pp_bdev = btmtk_get_pp_bdev();
 
-#if (CFG_ENABLE_DEBUG_WRITE == 0)
-	return -ENODEV;
-#else
 	i_fwlog_buf = kmalloc(HCI_MAX_COMMAND_BUF_SIZE, GFP_KERNEL);
 	if (!i_fwlog_buf) {
 		BTMTK_ERR("%s: alloc i_fwlog_buf failed", __func__);
