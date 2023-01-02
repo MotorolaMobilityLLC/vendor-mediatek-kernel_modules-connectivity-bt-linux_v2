@@ -738,7 +738,7 @@ exit:
  *******************************************************************************
  */
 
-int btmtk_hif_dump_start(enum connv3_drv_type from_drv, void *priv_data){
+int btmtk_dump_start(void *priv_data){
 	struct btmtk_uart_dev *cif_dev = NULL;
 
 	BTMTK_INFO("%s start", __func__);
@@ -763,25 +763,33 @@ int btmtk_hif_dump_start(enum connv3_drv_type from_drv, void *priv_data){
 	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
 	return 0;
 }
-int btmtk_hif_dump_end(enum connv3_drv_type from_drv, void *priv_data){
+void btmtk_dump_end(void *priv_data){
 	struct btmtk_uart_dev *cif_dev = NULL;
 
 	BTMTK_INFO("%s start", __func__);
 
 	if (g_sbdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
-		return -1;
+		return;
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
 	if (!cif_dev) {
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
-		return -1;
+		return;
 	}
 
 	/*reset fw own timer */
 	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_INIT);
 	mod_timer(&cif_dev->fw_own_timer, jiffies + msecs_to_jiffies(FW_OWN_TIMEOUT));
+}
+
+int btmtk_hif_dump_start(enum connv3_drv_type from_drv, void *priv_data){
+	return btmtk_dump_start(priv_data);
+}
+
+int btmtk_hif_dump_end(enum connv3_drv_type from_drv, void *priv_data){
+	btmtk_dump_end(priv_data);
 	return 0;
 }
 
@@ -799,6 +807,15 @@ struct connv3_pre_calibration_cb btmtk_pre_cal_cb = {
 	.pre_on_cb = btmtk_pre_cal_pre_on_cb,
 	.pwr_on_cb = btmtk_pre_cal_pwr_on_cb,
 	.do_cal_cb = btmtk_pre_cal_do_cal_cb,
+};
+
+/*
+ * POWER dump
+ */
+
+struct connv3_power_dump_cb btmtk_pwr_dump_cb = {
+	.power_dump_start = btmtk_dump_start,
+	.power_dump_end = btmtk_dump_end,
 };
 
 /*
@@ -969,7 +986,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	btmtk_drv_cbs.rst_cb = btmtk_whole_chip_rst_cb;
 	btmtk_drv_cbs.pre_cal_cb = btmtk_pre_cal_cb;
 	btmtk_drv_cbs.cr_cb = btmtk_connv3_cr_cb;
-	//btmtk_drv_cbs.pwr_dump_cb = btmtk_pwr_dump_cb;
+	btmtk_drv_cbs.pwr_dump_cb = btmtk_pwr_dump_cb;
 	btmtk_drv_cbs.hif_dump_cb = btmtk_hif_dump_cb;
 
 	BTMTK_DBG("%s start", __func__);

@@ -202,7 +202,7 @@ struct btmtk_uart_dev {
 
 	/* trigger assert */
 	atomic_t		need_assert;
-	bool			is_rhw_fail;
+	u32			rhw_fail_cnt;
 
 	/* sempaphore to compare event */
 	struct semaphore	evt_comp_sem;

@@ -17,7 +17,6 @@
 
 
 #define BT_CR_DUMP_BUF_SIZE		(1024)
-#define BT_RHW_MAX_ERR_COUNT		(3)
 #define DBG_TAG	"[btmtk_dbg_sop]"
 
 struct bt_dump_cr_buffer {
@@ -30,7 +29,6 @@ struct bt_dump_cr_buffer {
 
 struct bt_dump_cr_buffer g_btmtk_cr_dump;
 extern struct btmtk_dev *g_sbdev;
-uint32_t	g_rhw_fail;
 
 static inline void BT_DUMP_CR_BUFFER_RESET(void)
 {
@@ -75,6 +73,8 @@ static inline int BT_DUMP_CR_PRINT(uint32_t value)
 int RHW_WRITE(uint32_t addr, uint32_t val)
 {
 	int ret = -1;
+	struct btmtk_uart_dev *cif_dev = NULL;
+
 	/* ex: write dummy CR 0x022121cc = 0x44332222 */
 	u8 cmd[RHW_PKT_LEN] = {0x40, 0x00, 0x00, 0x08, 0x00,
 				0xCC, 0x21, 0x21, 0x02,
@@ -83,8 +83,18 @@ int RHW_WRITE(uint32_t addr, uint32_t val)
 				0xCC, 0x21, 0x21, 0x02,
 				0x22, 0x22, 0x33, 0x44};
 
-	if (g_rhw_fail >= BT_RHW_MAX_ERR_COUNT) {
-		BTMTK_WARN_LIMITTED("%s skip, g_rhw_fail[%d]", __func__, g_rhw_fail);
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev is NULL", __func__);
+		return -1;
+	}
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	if (cif_dev->rhw_fail_cnt > BT_RHW_MAX_ERR_COUNT) {
+		BTMTK_WARN_LIMITTED("%s skip, rhw_fail_cnt[%d]", __func__, cif_dev->rhw_fail_cnt);
 		return ret;
 	}
 
@@ -97,7 +107,7 @@ int RHW_WRITE(uint32_t addr, uint32_t val)
 	ret = btmtk_main_send_cmd(g_sbdev, cmd, RHW_PKT_LEN, evt, RHW_PKT_COMP_LEN, DELAY_TIMES,
 			RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT);
 	if (ret < 0)
-		BTMTK_ERR("%s failed, g_rhw_fail[%d]", __func__, ++g_rhw_fail);
+		BTMTK_ERR("%s failed, rhw_fail_cnt[%d]", __func__, ++cif_dev->rhw_fail_cnt);
 
 	return ret ;
 
@@ -106,6 +116,7 @@ int RHW_WRITE(uint32_t addr, uint32_t val)
 int RHW_READ(uint32_t addr, uint32_t *val)
 {
 	int ret = -1;
+	struct btmtk_uart_dev *cif_dev = NULL;
 	/* ex: read dummy CR 0x022121cc */
 	u8 cmd[RHW_PKT_LEN] = {0x41, 0x00, 0x00, 0x08, 0x00,
 				0xCC, 0x21, 0x21, 0x02,
@@ -115,9 +126,19 @@ int RHW_READ(uint32_t addr, uint32_t *val)
 				0xCC, 0x21, 0x21, 0x02,
 				0x00, 0x00, 0x00, 0x00};
 
-	if (g_rhw_fail >= BT_RHW_MAX_ERR_COUNT) {
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev is NULL", __func__);
+		return -1;
+	}
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	if (cif_dev->rhw_fail_cnt > BT_RHW_MAX_ERR_COUNT) {
 		*val = 0xdeaddead;
-		BTMTK_WARN_LIMITTED("%s skip, g_rhw_fail[%d]", __func__, g_rhw_fail);
+		BTMTK_WARN_LIMITTED("%s skip, rhw_fail_cnt[%d]", __func__, cif_dev->rhw_fail_cnt);
 		return ret;
 	}
 	memcpy(&cmd[RHW_ADDR_OFFSET_CMD], &addr, sizeof(addr));
@@ -131,7 +152,7 @@ int RHW_READ(uint32_t addr, uint32_t *val)
 		*val = le32_to_cpu(*val);
 	} else {
 		*val = 0xdeaddead;
-		BTMTK_ERR("%s failed, g_rhw_fail[%d]", __func__, ++g_rhw_fail);
+		BTMTK_ERR("%s failed, rhw_fail_cnt[%d]", __func__, ++cif_dev->rhw_fail_cnt);
 	}
 	BTMTK_DBG("%s: addr[%x], val[0x%08x]", __func__, addr, *val);
 
@@ -449,7 +470,6 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 		return;
 	}
 
-	g_rhw_fail = 0;
 	btmtk_dump_bg_mcu_core();
 	btmtk_dump_dsp_debug_flags();
 	btmtk_dump_mcusys_clk_gals_debug_flags();
@@ -459,10 +479,7 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 	btmtk_dump_bus_debug_flags();
 	btmtk_dump_dma_uart_debug_flags();
 	btmtk_dump_cryto_debug_flags();
-	BTMTK_INFO("%s: connv3_conninfra_bus_dump start", __func__);
-	if (g_rhw_fail >= BT_RHW_MAX_ERR_COUNT)
-		cif_dev->is_rhw_fail = 1;
-	BTMTK_INFO("%s: end, g_rhw_fail[%d] ", __func__, g_rhw_fail);
+	BTMTK_INFO("%s: end", __func__);
 }
 
 
