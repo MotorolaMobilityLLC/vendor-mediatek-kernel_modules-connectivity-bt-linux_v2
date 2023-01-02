@@ -214,6 +214,8 @@ struct btmtk_uart_dev {
 
 	/* pre-cal flag */
 	bool 		is_pre_cal;
+
+	bool		is_pre_on_done;
 #endif
 };
 
