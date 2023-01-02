@@ -1079,7 +1079,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				skb->data[skb->len - 4] == 'c' &&
 				skb->data[skb->len - 3] == 'h' &&
 				skb->data[skb->len - 2] == 'e') {
-				BTMTK_INFO("%s: drop Cache", __func__, skb->data, skb->len);
+				BTMTK_INFO("%s: drop Cache", __func__);
 				return 1;
 			}
 
@@ -1094,15 +1094,30 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				skb->data[skb->len - 4] == 'o' &&
 				skb->data[skb->len - 3] == 'f' &&
 				skb->data[skb->len - 2] == 'f') {
-				BTMTK_INFO("%s: drop radio off", __func__, skb->data, skb->len);
+				BTMTK_INFO("%s: drop radio off", __func__);
+				return 1;
+			}
+
+			/* fw trigger whole chip reset */
+			if (skb->len > 6 &&
+				skb->data[skb->len - 6] == 'w' &&
+				skb->data[skb->len - 5] == 'h' &&
+				skb->data[skb->len - 4] == 'o' &&
+				skb->data[skb->len - 3] == 'l' &&
+				skb->data[skb->len - 2] == 'e') {
+				bmain_info->chip_reset_flag = 1;
+				if (bdev->assert_reason[0] == '\0')
+					strncpy(bdev->assert_reason, "[BT_FW assert] trigger whole chip reset"
+						, strlen("[BT_FW assert] trigger whole chip reset"));
+				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 				return 1;
 			}
 
 			DUMP_TIME_STAMP("FW_dump_start");
 			if (bdev->assert_reason[0] == '\0') {
 				if (snprintf(bdev->assert_reason, ASSERT_REASON_SIZE, "[BT_FW assert] %s", skb->data) < 0)
-					memcpy(bdev->assert_reason, "[BT_FW assert]", 14);
-				BTMTK_WARN("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+					strncpy(bdev->assert_reason, "[BT_FW assert]", strlen("[BT_FW assert]"));
+				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 			}
 
 			/* Print too much log, it may cause kernel panic. */

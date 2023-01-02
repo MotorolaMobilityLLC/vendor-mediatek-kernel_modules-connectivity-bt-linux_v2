@@ -521,8 +521,8 @@ exit:
 			if (bdev->assert_reason[0] == '\0') {
 				if (snprintf(bdev->assert_reason, ASSERT_REASON_SIZE , "[BT_DRV assert] cmd timeout 0x%02x%02x"
 						,opcode[1], opcode[0]) < 0)
-					memcpy(bdev->assert_reason, "[BT_DRV assert] cmd timeout", 27);
-				BTMTK_WARN("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+					strncpy(bdev->assert_reason, "[BT_DRV assert] cmd timeout", strlen("[BT_DRV assert] cmd timeout"));
+				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 			}
 			bmain_info->hif_hook.trigger_assert(bdev);
 		} else
@@ -2107,8 +2107,8 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	if (ret < 0) {
 		BTMTK_ERR("%s fail, trigger assert", __func__);
 		if (bdev->assert_reason[0] == '\0') {
-			memcpy(bdev->assert_reason, "[BT_FW assert] drv own failed", 29);
-			BTMTK_WARN("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+			strncpy(bdev->assert_reason, "[BT_FW assert] drv own failed", strlen("[BT_FW assert] drv own failed"));
+			BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 		}
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		btmtk_uart_trigger_assert(bdev);
