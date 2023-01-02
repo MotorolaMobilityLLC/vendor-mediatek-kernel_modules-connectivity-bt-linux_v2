@@ -42,6 +42,7 @@ static int btmtk_proc_open(struct inode *inode, struct  file *file);
 static int btmtk_proc_chip_reset_count_open(struct inode *inode, struct  file *file);
 static int btmtk_proc_chip_reset_count_show(struct seq_file *m, void *v);
 
+#if (KERNEL_VERSION(5, 6, 0) > LINUX_VERSION_CODE)
 static const struct file_operations BT_proc_fops = {
 	.open = btmtk_proc_open,
 	.read = seq_read,
@@ -53,7 +54,19 @@ static const struct file_operations BT_proc_chip_reset_count_fops = {
 	.read = seq_read,
 	.release = single_release,
 };
+#else
+static const struct proc_ops BT_proc_fops = {
+	.proc_open = btmtk_proc_open,
+	.proc_read = seq_read,
+	.proc_release = single_release,
+};
 
+static const struct proc_ops BT_proc_chip_reset_count_fops = {
+	.proc_open = btmtk_proc_chip_reset_count_open,
+	.proc_read = seq_read,
+	.proc_release = single_release,
+};
+#endif
 __weak int32_t btmtk_intcmd_wmt_utc_sync(void)
 {
 	BTMTK_ERR("weak function %s not implement", __func__);

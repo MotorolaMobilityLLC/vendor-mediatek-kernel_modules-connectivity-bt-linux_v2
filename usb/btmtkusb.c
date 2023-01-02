@@ -3017,7 +3017,7 @@ static void btusb_waker(struct work_struct *work)
 	usb_autopm_put_interface(cif_dev->intf);
 }
 
-static int btmtk_usb_toggle_rst_pin(struct btmtk_dev *bdev)
+int btmtk_usb_toggle_rst_pin(struct btmtk_dev *bdev)
 {
 	struct device_node *node;
 	int rst_pin_num = 0;
@@ -3535,7 +3535,10 @@ static int btusb_suspend(struct usb_interface *intf, pm_message_t message)
 {
 	struct btmtk_dev *bdev = usb_get_intfdata(intf);
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
+#else
 	struct btmtk_woble *bt_woble = &cif_dev->bt_woble;
+#endif
 	int ret = 0;
 
 	BTMTK_DBG("intf %p", intf);
@@ -3578,7 +3581,10 @@ static int btusb_resume(struct usb_interface *intf)
 	struct btmtk_dev *bdev = usb_get_intfdata(intf);
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 	struct hci_dev *hdev = bdev->hdev;
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
+#else
 	struct btmtk_woble *bt_woble = &cif_dev->bt_woble;
+#endif
 	int err = 0;
 	unsigned int ifnum_base = intf->cur_altsetting->desc.bInterfaceNumber;
 
