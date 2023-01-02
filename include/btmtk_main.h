@@ -593,6 +593,7 @@ struct btmtk_dev {
 #if (USE_DEVICE_NODE == 1)
 typedef int (*cif_chrdev_init_ptr)(void);
 typedef int (*cif_chrdev_pre_on_ptr)(struct btmtk_dev *bdev);
+typedef void (*cif_chrdev_fw_log_state_ptr)(uint8_t state);
 typedef int (*cif_chrdev_post_on_ptr)(struct btmtk_dev *bdev);
 #endif
 typedef int (*cif_bt_init_ptr)(void);
@@ -614,11 +615,12 @@ typedef void (*cif_chip_reset_notify_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_mutex_lock_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_mutex_unlock_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_flush_ptr)(struct btmtk_dev *bdev);
-typedef void (*cif_log_init_ptr)(void);
+typedef void (*cif_log_init_ptr)(void (*log_event_cb)(void));
 typedef void (*cif_log_register_cb_ptr)(void (*func)(void));
 typedef ssize_t (*cif_log_read_to_user_ptr)(char __user *buf, size_t count);
 typedef unsigned int (*cif_log_get_buf_size_ptr)(void);
 typedef void (*cif_log_deinit_ptr)(void);
+typedef int (*cif_log_handler_ptr)(u8 *buf, u32 size);
 typedef void (*cif_open_done_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_dl_dma_ptr)(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset);
@@ -630,6 +632,7 @@ struct hif_hook_ptr {
 #if (USE_DEVICE_NODE == 1)
 	cif_chrdev_init_ptr		chrdev_init;
 	cif_chrdev_pre_on_ptr	chrdev_pre_on;
+	cif_chrdev_fw_log_state_ptr fw_log_state;
 	cif_chrdev_post_on_ptr	chrdev_post_on;
 #endif
 	cif_bt_init_ptr			init;
@@ -652,6 +655,7 @@ struct hif_hook_ptr {
 	cif_log_read_to_user_ptr	log_read_to_user;
 	cif_log_get_buf_size_ptr	log_get_buf_size;
 	cif_log_deinit_ptr			log_deinit;
+	cif_log_handler_ptr			log_handler;
 	cif_open_done_ptr		open_done;
 	cif_dl_dma_ptr			dl_dma;
 	cif_dump_debug_sop_ptr		dump_debug_sop;
@@ -830,6 +834,12 @@ void btmtk_set_country_code_from_wifi(char *code);
 #if (USE_DEVICE_NODE == 1)
 int rx_skb_enqueue(struct sk_buff *skb);
 int btmtk_chardev_init(void);
+void btmtk_connsys_log_init(void (*log_event_cb)(void));
+void btmtk_connsys_log_deinit(void);
+int btmtk_connsys_log_handler(u8 *buf, u32 size);
+ssize_t btmtk_connsys_log_read_to_user(char __user *buf, size_t count);
+unsigned int btmtk_connsys_log_get_buf_size(void);
+int32_t btmtk_intcmd_set_fw_log(uint8_t flag);
 #endif
 
 #endif /* __BTMTK_MAIN_H__ */

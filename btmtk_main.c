@@ -150,6 +150,22 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc)
 	utc->tm.tm_mon += 1;
 }
 
+
+int32_t btmtk_intcmd_set_fw_log(uint8_t flag)
+{
+	u8 fw_log_cmd[8] = { 0x01, 0x5D, 0xFC, 0x04, 0x02, 0x00, 0x02, 0x03 };
+	int ret;
+	BTMTK_INFO("%s send flag[0x%02X]", __func__, flag);
+	fw_log_cmd[7] = flag;
+	ret = btmtk_main_send_cmd(g_sbdev,
+			fw_log_cmd, 8, NULL, 0,
+			0, 0, BTMTK_TX_CMD_FROM_DRV);
+	if (ret < 0)
+		BTMTK_ERR("%s faill to send flag[0x%02X]", __func__, flag);
+
+	return ret;
+}
+
 void btmtk_get_UTC_time_str(char *ts_str)
 {
 	struct bt_utc_struct utc;
@@ -382,6 +398,8 @@ static void btmtk_fops_set_state(struct btmtk_dev *bdev, u8 new_state)
 	FOPS_MUTEX_LOCK();
 	bdev->fops_state = new_state;
 	FOPS_MUTEX_UNLOCK();
+	if (main_info.hif_hook.fw_log_state)
+		main_info.hif_hook.fw_log_state(new_state);
 }
 
 void *btmtk_kallsyms_lookup_name(const char *name)
@@ -926,8 +944,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 			return ERR_PTR(-EILSEQ);
 		}
 
-		/* not use hci_skb_expect instead of hlen
-		because hci_skb_expect will update by +=dlen */
+		/* not use hci_skb_expect instead of hlen */
+		/* because hci_skb_expect will update by +=dlen */
 		if (skb->len == (&pkts[i])->hlen) {
 			u16 dlen;
 
@@ -941,7 +959,6 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 			case 1:
 				/* Single octet variable length */
 				dlen = skb->data[(&pkts[i])->loff];
-				/* BTMTK_DBG("%s, case1 hci_skb_expect[%d], skb->len[%d], dlen[%d], loff[%d]", __func__, hci_skb_expect(skb), skb->len, dlen, (&pkts[i])->loff); */
 				hci_skb_expect(skb) += dlen;
 
 				if (skb_tailroom(skb) < dlen) {
@@ -963,7 +980,6 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				/* Double octet variable length */
 				dlen = get_unaligned_le16(skb->data +
 							  (&pkts[i])->loff);
-				/* BTMTK_DBG("%s,case2 hci_skb_expect[%d], skb->len[%d], dlen[%d], loff[%d]", __func__, hci_skb_expect(skb), skb->len, dlen, (&pkts[i])->loff); */
 				/* parse ISO packet len*/
 				if ((&pkts[i])->type == HCI_ISODATA_PKT) {
 					unsigned char *cp = (unsigned char *)&dlen + 1;
@@ -2322,8 +2338,8 @@ int btmtk_dynamic_load_rom_patch(struct btmtk_dev *bdev, u32 binInfo)
 #if (USE_DEVICE_NODE == 0)
 							"BT_RAM_CODE_MT6639_2_1_hdr.bin");
 #else
-							//"BT_RAM_CODE_MT6639_1_1_hdr.bin");
-							"BT_RAM_CODE_MT6639_1_1_nonenc_hdr.bin");
+							"BT_RAM_CODE_MT6639_1_1_hdr.bin");
+							//"BT_RAM_CODE_MT6639_1_1_nonenc_hdr.bin");
 #endif
 
 	BTMTK_INFO("%s: rom patch file name is %s", __func__,
@@ -2397,8 +2413,8 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag)
 #if (USE_DEVICE_NODE == 0)
 					"BT_RAM_CODE_MT6639_2_1_hdr.bin");
 #else
-					//"BT_RAM_CODE_MT6639_1_1_hdr.bin");
-					"BT_RAM_CODE_MT6639_1_1_nonenc_hdr.bin");
+					"BT_RAM_CODE_MT6639_1_1_hdr.bin");
+					//"BT_RAM_CODE_MT6639_1_1_nonenc_hdr.bin");
 #endif
 
 	} else
@@ -4096,6 +4112,7 @@ err:
 	btmtk_reset_pin_off();
 	if (connv3_pwr_off(CONNV3_DRV_TYPE_BT)) {
 		BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
+		return -1;
 	}
 	BTMTK_INFO("%s: ConnInfra power off success", __func__);
 #endif
@@ -4131,7 +4148,7 @@ int bt_open(struct hci_dev *hdev)
 #if (USE_DEVICE_NODE == 1)
 	if (connv3_pwr_on(CONNV3_DRV_TYPE_BT)) {
 		BTMTK_ERR("ConnInfra power on failed!");
-		goto failed;
+		return -EFAULT;
 	}
 
 	ret = main_info.hif_hook.chrdev_pre_on(bdev);
@@ -4243,11 +4260,12 @@ int bt_open(struct hci_dev *hdev)
 failed:
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
 #if (USE_DEVICE_NODE == 1)
-		btmtk_reset_pin_off();
-		if (connv3_pwr_off(CONNV3_DRV_TYPE_BT)) {
-			BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
-		}
-		BTMTK_INFO("%s: ConnInfra power off success", __func__);
+	btmtk_reset_pin_off();
+	if (connv3_pwr_off(CONNV3_DRV_TYPE_BT)) {
+		BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
+		return ret;
+	}
+	BTMTK_INFO("%s: ConnInfra power off success", __func__);
 #endif
 
 	return ret;
@@ -4458,6 +4476,13 @@ static void btmtk_rx_work(struct work_struct *work)
 			/* save hci acl pkt for debug, not include picus log and coredump*/
 			if (!(skb->data[0] == 0xFF && skb->data[1] == 0xF0))
 				btmtk_hci_snoop_save(HCI_SNOOP_TYPE_RX_ACL_STACK, skb->data, skb->len);
+			/* fw log for sp */
+			if ((skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
+				skb->data[1] == 0x05 && main_info.hif_hook.log_handler) {
+				main_info.hif_hook.log_handler(skb->data, skb->len);
+				kfree_skb(skb);
+				continue;
+			}
 		} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
 			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_RX_ISO_STACK, skb->data, skb->len);
 		}

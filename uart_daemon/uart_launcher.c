@@ -291,7 +291,8 @@ int main(int argc, char *argv[])
     sigaction(SIGKILL, &sigact, NULL);
     init_flock(&fl);
     ld = N_MTK;
-    ALOGW("%s: start",__func__);
+    ALOGW("%s: flow_control[%d] baudrate[%d]",__func__, flow_control, baudrate);
+
     while ((opt = getopt(argc, argv, "c:f:p:k:l::")) != -1) {
         switch (opt) {
             /* change baudrate */
