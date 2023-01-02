@@ -734,6 +734,7 @@ exit:
  */
 
 int btmtk_dump_start(void *priv_data){
+#if 0
 	struct btmtk_uart_dev *cif_dev = NULL;
 
 	BTMTK_INFO("%s start", __func__);
@@ -757,6 +758,10 @@ int btmtk_dump_start(void *priv_data){
 	/* make sure keep drv own */
 	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
 	return 0;
+#endif
+
+	BTMTK_INFO("%s start (temp disable)", __func__);
+	return -1;
 }
 void btmtk_dump_end(void *priv_data){
 	struct btmtk_uart_dev *cif_dev = NULL;
