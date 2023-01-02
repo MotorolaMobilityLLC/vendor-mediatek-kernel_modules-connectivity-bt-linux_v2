@@ -398,7 +398,10 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	/* then driver_own cmd would not get evt_comp_sem */
 
 	/* can not wait BTMTK_FW_OWNING because would wait for itself */
-	if (cif_dev->own_state == BTMTK_FW_OWN) {
+	/* use pkt_type to recongize drv own cmd */
+	/* block cmd in fw own state and cmd in drv owning state except for drv own cmd */
+	if ((cif_dev->own_state == BTMTK_DRV_OWNING && pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT)
+			|| cif_dev->own_state == BTMTK_FW_OWN) {
 		BTMTK_INFO("%s: wait driver own", __func__);
 		reinit_completion(&bdev->drv_own_comp);
 		atomic_set(&cif_dev->need_drv_own, 1);
@@ -2031,7 +2034,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			if (!atomic_read(&cif_dev->fw_wake)){
 				/* no need to wait event */
 				ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
-						DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT);
+						DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
 				if (ret < 0)
 					BTMTK_ERR("%s wakeup_cmd fail retry[%d]", __func__, retry);
 				/* wait a while for fw wakeup */
@@ -2054,7 +2057,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	} else if (cif_dev->no_fw_own == 0) {
 		btmtk_uart_update_fw_own_timer(cif_dev);
 		cif_dev->own_state = BTMTK_DRV_OWN;
-		complete(&bdev->drv_own_comp);
+		complete_all(&bdev->drv_own_comp);
 		BTMTK_INFO("%s success", __func__);
 	}
 
