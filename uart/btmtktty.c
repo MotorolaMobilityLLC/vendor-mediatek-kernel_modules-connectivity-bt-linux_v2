@@ -55,6 +55,10 @@ static DEFINE_MUTEX(btmtk_uart_ops_mutex);
 static DEFINE_MUTEX(btmtk_uart_own_mutex);
 #define UART_OWN_MUTEX_LOCK()	mutex_lock(&btmtk_uart_own_mutex)
 #define UART_OWN_MUTEX_UNLOCK()	mutex_unlock(&btmtk_uart_own_mutex)
+static DEFINE_MUTEX(btmtk_tx_thread_mutex);
+#define TX_THREAD_MUTEX_LOCK()	mutex_lock(&btmtk_tx_thread_mutex)
+#define TX_THREAD_MUTEX_UNLOCK()	mutex_unlock(&btmtk_tx_thread_mutex)
+
 static struct wakeup_source *bt_trx_wakelock;
 
 static char event_need_compare[EVENT_COMPARE_SIZE] = {0};
@@ -1391,10 +1395,15 @@ static int btmtk_uart_tx_thread(void *data)
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return -1;
 	}
-	/* avoid unused var for USE_DEVICE_NODE == 0*/
+	/* avoid unused var for USE_DEVICE_NODE == 0 */
 	ret = 0;
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
 
 	atomic_set(&cif_dev->thread_status, 1);
 
@@ -1525,7 +1534,7 @@ static int btmtk_tx_thread_exit(struct btmtk_uart_dev *cif_dev)
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
 		return -1;
 	}
-
+	TX_THREAD_MUTEX_LOCK();
 	if (!IS_ERR(cif_dev->tx_task) && atomic_read(&cif_dev->thread_status)) {
 		kthread_stop(cif_dev->tx_task);
 
@@ -1539,6 +1548,7 @@ static int btmtk_tx_thread_exit(struct btmtk_uart_dev *cif_dev)
 			}
 		}
 	}
+	TX_THREAD_MUTEX_UNLOCK();
 	skb_queue_purge(&cif_dev->tx_queue);
 
 	BTMTK_INFO("%s done", __func__);
