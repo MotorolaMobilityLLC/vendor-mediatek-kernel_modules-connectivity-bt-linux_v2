@@ -1183,8 +1183,8 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			BTMTK_INFO("%s  complete dump_comp , coredump_end", __func__);
 			complete_all(&bdev->dump_comp);
 
-			bmain_info->hif_hook.waker_notify(bdev);
-
+			if (bmain_info->hif_hook.waker_notify)
+				bmain_info->hif_hook.waker_notify(bdev);
 
 		}
 		return 1;
