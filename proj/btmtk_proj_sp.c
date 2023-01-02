@@ -525,8 +525,8 @@ int btmtk_sp_whole_chip_reset(struct btmtk_dev *bdev)
 
 	/* happen when whole chip reset is triggered by fw node */
 	if (g_sbdev->assert_reason[0] == '\0')
-		strncpy(g_sbdev->assert_reason, "[BT_DRV assert] BT whole chip reset"
-			, strlen("[BT_DRV assert] BT whole chip reset"));
+		strncpy(g_sbdev->assert_reason, "[BT_DRV assert] BT whole chip reset\0"
+			, strlen("[BT_DRV assert] BT whole chip reset\0"));
 
 	return connv3_trigger_whole_chip_rst(CONNV3_DRV_TYPE_BT , g_sbdev->assert_reason);
 }
@@ -603,7 +603,11 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 		goto exit;
 	} else {
 		if (g_sbdev->assert_reason[0] == '\0') {
-			strncpy(g_sbdev->assert_reason, reason, strlen(reason));
+			unsigned int len = strlen(reason);
+
+			len = (len >= ASSERT_REASON_SIZE) ? ASSERT_REASON_SIZE - 1 : len;
+			reason[len] = '\0';
+			strncpy(g_sbdev->assert_reason, reason, len);
 			BTMTK_ERR("%s: [assert_reason] %s", __func__, g_sbdev->assert_reason);
 		}
 		atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DOING);
@@ -726,7 +730,8 @@ int btmtk_pre_cal_do_cal_cb(void)
 	BTMTK_INFO("%s: BT turn off ok!", __func__);
 
 exit:
-	g_sbdev->is_pre_cal_done = TRUE;
+	if (g_sbdev)
+		g_sbdev->is_pre_cal_done = TRUE;
 	return ret;
 }
 
@@ -870,7 +875,7 @@ int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 	struct connfem_epaelna_flags_common common_flag;
 	struct connfem_epaelna_pin_info pin_info;
 	struct connfem_epaelna_flags_bt bt_flag;
-	uint32_t ret = 0;
+	int32_t ret = 0;
 	uint8_t *cmd = NULL;
 	uint8_t cmd_header[] = {0x01, 0x6F, 0xFC, 0x42, 0x01, 0x55, 0x3E, 0x00,
 			0x01, 0x04, 0x03, 0x33, 0x00, 0x10};
@@ -1065,10 +1070,14 @@ static void btmtk_send_set_tx_power_cmd(struct btmtk_dev *bdev)
 	struct btmtk_dypwr_st *dy_pwr = &cif_dev->dy_pwr;
 	uint8_t cmd_set[6] = { 0x01, 0x2D, 0xFC, 0x02, 0x02, 0x00 };
 	uint8_t evt_set[] = { 0x04, 0x0E, 0x06, 0x01, 0x2D, 0xFC };
+	int ret = 0;
 
 	cmd_set[5] = dy_pwr->set_val;
-	btmtk_main_send_cmd(bdev, cmd_set, sizeof(cmd_set),
+	ret = btmtk_main_send_cmd(bdev, cmd_set, sizeof(cmd_set),
 				evt_set, sizeof(evt_set), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+
+	if (ret < 0)
+		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 
 	if (bdev->io_buf[6] != HCI_EVT_CC_STATUS_SUCCESS)
 		BTMTK_ERR("%s: status error[0x%02x]!", __func__, bdev->io_buf[6]);
@@ -1150,6 +1159,7 @@ int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb)
 	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	uint8_t cmd_query[] = { 0x01, 0x2D, 0xFC, 0x01, 0x01 };
 	uint8_t evt_query[] = { 0x04, 0x0E, 0x08, 0x01, 0x2D, 0xFC };
+	int ret = 0;
 
 	if (!btmtk_pwrctrl_support())
 		return 0;
@@ -1171,8 +1181,11 @@ int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb)
 	 * YY: Dynamic range Min dBm
 	 * ZZ: Low power region boundary dBm
 	 */
-	btmtk_main_send_cmd(bdev, cmd_query, sizeof(cmd_query),
+	ret = btmtk_main_send_cmd(bdev, cmd_query, sizeof(cmd_query),
 				evt_query, sizeof(evt_query), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+
+	if (ret < 0)
+		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 
 	if (bdev->io_buf[6] != HCI_EVT_CC_STATUS_SUCCESS)
 		BTMTK_ERR("%s: status error[0x%02x]!", __func__, bdev->io_buf[6]);
@@ -1323,6 +1336,7 @@ int32_t btmtk_intcmd_wmt_utc_sync(void)
 			  0x00, 0x00, 0x00, 0x00,	/* UTC time second unit */
 			  0x00, 0x00, 0x00, 0x00};	/* UTC time microsecond unit*/
 	/* uint8_t evt[] = {0x04, 0xE4, 0x06, 0x02, 0xF0, 0x02, 0x00, 0x02, 0x00}; */
+	int ret = 0;
 
 	BTMTK_INFO("[InternalCmd] %s", __func__);
 
@@ -1332,8 +1346,11 @@ int32_t btmtk_intcmd_wmt_utc_sync(void)
 	memcpy(cmd + 6, &utc.sec, sizeof(uint32_t));
 	memcpy(cmd + 6 + sizeof(uint32_t), &utc.usec, sizeof(uint32_t));
 
-	btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd),
+	ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd),
 		NULL, 0, 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+
+	if (ret < 0)
+		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 
 	return 0;
 }
