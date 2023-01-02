@@ -3575,6 +3575,7 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	/* parsing commands */
 	u8 fw_coredump_cmd[FW_COREDUMP_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
+	u8 fw_coredump_flag = 0;
 	u8 reset_cmd[HCI_RESET_CMD_LEN] = { 0x01, 0x03, 0x0C, 0x00 };
 	struct btmtk_dev *bdev = NULL;
 	unsigned char *skb_tmp = NULL;
@@ -3661,6 +3662,7 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
 				BTMTK_INFO("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
 				bdev->debug_type = DEBUG_SOP_NO_RESPONSE;
+				fw_coredump_flag = 1;
 				btmtk_reset_timer_update(bdev);
 				btmtk_hci_snoop_print_to_log();
 			} else if (skb->len == HCI_RESET_CMD_LEN &&
@@ -3689,8 +3691,7 @@ exit:
 	if (main_info.hif_hook.cif_mutex_unlock)
 		main_info.hif_hook.cif_mutex_unlock(bdev);
 
-	if (ret >= 0 && skb->len == FW_COREDUMP_CMD_LEN &&
-		!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN))
+	if (ret >= 0 && fw_coredump_flag == 1)
 		btmtk_set_chip_state(bdev, BTMTK_STATE_SEND_ASSERT);
 
 	return ret;
