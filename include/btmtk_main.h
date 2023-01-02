@@ -584,6 +584,8 @@ struct btmtk_dev {
 	/* debug sop */
 	struct debug_reg_struct debug_sop_reg_dump;
 	unsigned char		debug_sop_file_name[MAX_BIN_FILE_NAME_LEN];
+
+	struct _Section_Map	*sectionMap_table;
 };
 
 typedef int (*cif_bt_init_ptr)(void);
@@ -807,7 +809,7 @@ void btmtk_free_fw_cfg_struct(struct fw_cfg_struct *fw_cfg, int count);
 struct btmtk_dev **btmtk_get_pp_bdev(void);
 void btmtk_load_debug_sop_register(char *debug_sop_name, struct device *dev, struct btmtk_dev *bdev);
 void btmtk_clean_debug_reg_file(struct btmtk_dev *bdev);
-
+int btmtk_dynamic_load_rom_patch(struct btmtk_dev *bdev, u32 binInfo);
 
 int32_t btmtk_set_sleep(struct hci_dev *hdev, u_int8_t need_wait);
 int32_t bgfsys_bt_patch_dl(void);
