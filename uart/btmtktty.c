@@ -328,8 +328,12 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 		} else if ((skb->len == (READ_ADDRESS_EVT_HDR_LEN - HCI_TYPE_SIZE + BD_ADDRESS_SIZE)) &&
 					memcmp(skb->data, &read_address_event[1], READ_ADDRESS_EVT_HDR_LEN - 1) == 0) {
 			memcpy(bdev->bdaddr, &skb->data[READ_ADDRESS_EVT_PAYLOAD_OFFSET - 1], BD_ADDRESS_SIZE);
-			BTMTK_INFO("%s: GET BDADDR = "MACSTR, __func__, MAC2STR(bdev->bdaddr));
+			BTMTK_DBG("%s: GET BDADDR = "MACSTR, __func__, MAC2STR(bdev->bdaddr));
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+#if (USE_DEVICE_NODE == 1)
+			/* SP project need to send to stack */
+			return 0;
+#endif
 		} else if (memcmp(skb->data, event_need_compare,
 					event_need_compare_len) == 0) {
 			/* if it is wobx debug event, just print in kernel log, drop it
