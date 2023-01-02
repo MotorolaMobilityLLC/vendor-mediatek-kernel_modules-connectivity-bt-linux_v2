@@ -608,7 +608,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
-	skb = alloc_skb(count + BT_SKB_RESERVE, GFP_ATOMIC);
+	skb = alloc_skb(count + BT_SKB_RESERVE, GFP_KERNEL);
 	if (!skb) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		ret = -ENOMEM;
@@ -653,7 +653,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 #if defined(DRV_RETURN_SPECIFIC_HCE_ONLY) && (DRV_RETURN_SPECIFIC_HCE_ONLY == 1) && (USE_DEVICE_NODE == 0)
 		// 0xFC26 is get link & profile information command.
 		if (*(uint16_t *)(o_fwlog_buf + 1) != 0xFC26) {
-			skb_opcode = alloc_skb(len + FWLOG_PRSV_LEN, GFP_ATOMIC);
+			skb_opcode = alloc_skb(len + FWLOG_PRSV_LEN, GFP_KERNEL);
 			if (!skb_opcode) {
 				BTMTK_ERR("%s allocate skb failed!!", __func__);
 				ret = -ENOMEM;
@@ -860,7 +860,7 @@ static int btmtk_skb_enq_fwlog(struct btmtk_dev *bdev, void *src, u32 len, u8 ty
 	int retry = 10, index = FWLOG_TL_SIZE;
 
 	do {
-		skb_tmp = alloc_skb(len + FWLOG_PRSV_LEN, GFP_ATOMIC);
+		skb_tmp = alloc_skb(len + FWLOG_PRSV_LEN, GFP_KERNEL);
 		if (skb_tmp != NULL)
 			break;
 		else if (retry <= 0) {
