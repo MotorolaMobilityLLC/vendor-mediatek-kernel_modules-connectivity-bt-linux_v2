@@ -256,7 +256,7 @@ int32_t btmtk_send_data(struct hci_dev *hdev, u8 *buf, u32 count)
 	}
 
 	if (count <= 0 || buf == NULL) {
-		BTMTK_ERR("%s: error input length (%d) or buffer (%p)", count, buf);
+		BTMTK_ERR("%s: error input length (%d) or buffer (%p)", __func__, count, buf);
 		return -1;
 	}
 
