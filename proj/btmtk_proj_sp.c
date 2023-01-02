@@ -293,6 +293,10 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	if(ret < 0)
 		BTMTK_ERR("[ERR] %s: mediatek,bt baudrate ret[%d]", __func__, ret);
 
+	ret = of_property_read_u32(tty->dev->of_node,"hub-en", &cif_dev->hub_en);
+	if(ret < 0)
+		BTMTK_ERR("[ERR] %s: mediatek,bt hub-en ret[%d]", __func__, ret);
+
 	pinctrl_ptr = devm_pinctrl_get(tty->dev);
 	if (IS_ERR(pinctrl_ptr)) {
 		BTMTK_ERR("[ERR] %s: fail to get bt pinctrl", __func__);
@@ -300,7 +304,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	}
 	//btmtk_pinctrl_exec(INIT_STATE_PINCTRL_NAME);
 	connv3_sub_drv_ops_register(CONNV3_DRV_TYPE_BT, &btmtk_drv_cbs);
-	BTMTK_INFO("%s end, baudrate[%d]", __func__, cif_dev->baudrate);
+	BTMTK_INFO("%s end, baudrate[%d] hub_en[%d]", __func__, cif_dev->baudrate, cif_dev->hub_en);
 	return 0;
 }
 
