@@ -218,7 +218,7 @@ int btmtk_uart_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 
 	/* send pkt through tx_thread or not */
 	/* if want to send_and_recv cmd in tx_thread would not be able to send the pkt */
-	if (pkt_type == BTMTK_TX_PKT_SEND_DIRECT) {
+	if (pkt_type == BTMTK_TX_PKT_SEND_DIRECT || pkt_type == BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT) {
 		BTMTK_WARN("%s send pkt not through tx_thread", __func__);
 		ret = btmtk_cif_send_cmd(bdev, skb->data, skb->len, delay, retry);
 
@@ -463,8 +463,8 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 exit:
 	up(&cif_dev->evt_comp_sem);
-
-	if (ret < 0) {
+	/* control not trigger assert */
+	if (ret < 0 && pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT) {
 		if(bmain_info->hif_hook.trigger_assert) {
 			bmain_info->hif_hook.trigger_assert(bdev);
 		} else
@@ -1963,7 +1963,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			}
 			/* fw own clr cmd for notice is wakeup by bt driver */
 			ret = btmtk_main_send_cmd(bdev, fw_own_clr_cmd, 10, evt, OWNTYPE_EVT_LEN,
-					DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT);
+					DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
 			if (ret < 0)
 				BTMTK_ERR("%s fw_own_clr_cmd fail retry[%d]", __func__, retry);
 		} while (ret < 0 && --retry);
@@ -1971,8 +1971,9 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		ret = 0;
 
 	if (ret < 0) {
-		BTMTK_ERR("%s fail", __func__);
-		cif_dev->own_state = BTMTK_OWN_FAIL;
+		BTMTK_ERR("%s fail, trigger assert", __func__);
+		btmtk_uart_trigger_assert(bdev);
+		cif_dev->own_state = BTMTK_DRV_OWN;
 		goto unlock;
 	} else if (cif_dev->no_fw_own == 0) {
 		btmtk_uart_update_fw_own_timer(cif_dev);
