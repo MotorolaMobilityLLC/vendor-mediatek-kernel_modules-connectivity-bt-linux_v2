@@ -2236,7 +2236,14 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 		return -ENODEV;
 	}
 
+#if (USE_DEVICE_NODE == 1)
+	if (!bdev->cif_dev)
+		kfree(bdev->cif_dev);
+
+	cif_dev = kzalloc(sizeof(*cif_dev), GFP_KERNEL);
+#else
 	cif_dev = devm_kzalloc(tty->dev, sizeof(*cif_dev), GFP_KERNEL);
+#endif
 	if (!cif_dev)
 		return -ENOMEM;
 
@@ -2337,7 +2344,9 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 		btmtk_set_gpio_default();
 #endif
 		btmtk_uart_tty_disconnect(tty);
+#if (USE_DEVICE_NODE == 0)
 		devm_kfree(tty->dev, cif_dev);
+#endif
 	}
 	wakeup_source_unregister(bt_trx_wakelock);
 	/* Set End/Error state */
