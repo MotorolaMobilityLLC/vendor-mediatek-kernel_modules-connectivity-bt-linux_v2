@@ -797,6 +797,7 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 		return;
 	}
 
+	BTMTK_INFO("%s tty_port[%p]", __func__, cif_dev->tty->port);
 	/* driver dump */
 	btmtk_hci_snoop_print_to_log();
 
@@ -1146,7 +1147,7 @@ static void btmtk_uart_chip_reset_notify(struct btmtk_dev *bdev)
 }
 
 
-static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev)
+static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev, bool do_flush)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
 	int count = 0, flush_retry = 0;
@@ -1178,7 +1179,7 @@ static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev)
 			BTMTK_WARN("%s: chars in buffer takes %lu ms to clear, remain count[%d]",
 				__func__, time_diff, count);
 
-		if (flush_retry < BTMTK_MAX_WAIT_RETRY) {
+		if (flush_retry < BTMTK_MAX_WAIT_RETRY && do_flush) {
 			/* stop uart auto send next pkt to avoid flush conflict with send pkt */
 			cif_dev->tty->flow.stopped = true;
 			tty_driver_flush_buffer(cif_dev->tty);
@@ -1217,12 +1218,13 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	}
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	BTMTK_DBG("%s: loading rom patch... start", __func__);
+	down(&cif_dev->tty_flush_sem);
 	while (1) {
 		sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT) ?
 				(UPLOAD_PATCH_UNIT) : (section_dl_size - cur_len);
 
 		/* wait tty buffer clean */
-		flush_retry = btmtk_uart_wait_tty_buffer_clean(bdev);
+		flush_retry = btmtk_uart_wait_tty_buffer_clean(bdev, TRUE);
 		if (flush_retry < 0) {
 			ret = -1;
 			goto exit;
@@ -1251,7 +1253,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		} else
 			break;
 	}
-
+	up(&cif_dev->tty_flush_sem);
 	BTMTK_INFO("%s: patch done max_pkt_cnt[%d], send wmt dl phase3 cmd ", __func__, max_pkt_cnt);
 
 	/* seperate phase 3 cmd with dma mode content */
@@ -1268,7 +1270,9 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	}
 	BTMTK_DBG("%s: loading rom patch... Done", __func__);
 
+	return ret;
 exit:
+	up(&cif_dev->tty_flush_sem);
 	return ret;
 }
 
@@ -1288,17 +1292,20 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 
 	/* BTMTK_INFO("%s: tty %p\n", __func__, bdev->tty); */
 
+	down(&cif_dev->tty_flush_sem);
 	/* wait tty buffer clean */
-	flush_retry = btmtk_uart_wait_tty_buffer_clean(bdev);
-	if (flush_retry < 0)
+	flush_retry = btmtk_uart_wait_tty_buffer_clean(bdev, TRUE);
+	if (flush_retry < 0) {
+		up(&cif_dev->tty_flush_sem);
 		return -1;
-
+	}
 	while (len != cmd_len && count < BTMTK_MAX_SEND_RETRY
 			&& btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT) {
 		ret = cif_dev->tty->ops->write(cif_dev->tty, cmd + len, cmd_len - len);
 		len += ret;
 		count++;
 	}
+	up(&cif_dev->tty_flush_sem);
 
 	if (count == BTMTK_MAX_SEND_RETRY) {
 		BTMTK_ERR("%s: retry[%d] fail", __func__, count);
@@ -2128,7 +2135,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 					BTMTK_ERR("%s wakeup_cmd fail retry[%d]", __func__, retry);
 
 				/* wait 0xff sended */
-				if (btmtk_uart_wait_tty_buffer_clean(bdev) < 0) {
+				if (btmtk_uart_wait_tty_buffer_clean(bdev, FALSE) < 0) {
 					ret = -1;
 					break;
 				}
@@ -2214,6 +2221,7 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 
 	/* Init semaphore */
 	sema_init(&cif_dev->evt_comp_sem, 1);
+	sema_init(&cif_dev->tty_flush_sem, 1);
 
 	/* Do HIF events */
 	ret = btmtk_uart_tty_probe(tty);
