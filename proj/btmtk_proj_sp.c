@@ -1353,14 +1353,13 @@ void btmtk_pwrctrl_register_evt(void)
 int32_t btmtk_intcmd_wmt_utc_sync(void)
 {
 	struct bt_utc_struct utc;
-	uint8_t cmd[] =  {0x01, 0x5D, 0xFC, 0x0A, 0x02, 0x02,
+	uint8_t cmd[] =  {0x01, 0x5D, 0xFC, 0x0A, 0x00, 0x02,
 			  0x00, 0x00, 0x00, 0x00,	/* UTC time second unit */
 			  0x00, 0x00, 0x00, 0x00};	/* UTC time microsecond unit*/
-	/* uint8_t evt[] = {0x04, 0xE4, 0x06, 0x02, 0xF0, 0x02, 0x00, 0x02, 0x00}; */
+	uint8_t evt[] = {0x04, 0x0E, 0x0E, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x02};
 	int ret = 0;
 
 	BTMTK_INFO("[InternalCmd] %s", __func__);
-
 	btmtk_getUTCtime(&utc);
 
 	//connsys_log_get_utc_time(&sec, &usec);
@@ -1368,7 +1367,7 @@ int32_t btmtk_intcmd_wmt_utc_sync(void)
 	memcpy(cmd + 6 + sizeof(uint32_t), &utc.usec, sizeof(uint32_t));
 
 	ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd),
-		NULL, 0, 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+		evt, sizeof(evt), DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
