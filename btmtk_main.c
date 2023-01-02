@@ -4384,6 +4384,7 @@ failed:
 #endif
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
+	main_info.reset_stack_flag = HW_ERR_NONE;
 
 unlock:
 	if (main_info.hif_hook.cif_mutex_unlock)
