@@ -8,6 +8,12 @@ CONFIG_SUPPORT_DVT=n
 CONFIG_SUPPORT_HW_DVT=n
 CONFIG_SUPPORT_MULTI_DEV_NODE=n
 
+ifneq ($(TARGET_BUILD_VARIANT), user)
+    ccflags-y += -DBUILD_QA_DBG=1
+else
+    ccflags-y += -DBUILD_QA_DBG=0
+endif
+
 ifeq ($(CONFIG_SUPPORT_BT_DL_WIFI_PATCH), y)
     ccflags-y += -DCFG_SUPPORT_BT_DL_WIFI_PATCH=1
 else

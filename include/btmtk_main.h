@@ -269,6 +269,21 @@
 #define FW_VERSION_BUF_SIZE 256
 #define FW_VERSION_KEY_WORDS "t-neptune"
 
+#if BUILD_QA_DBG
+#define CFG_SHOW_FULL_MACADDR 1
+#else
+#define CFG_SHOW_FULL_MACADDR 0
+#endif
+
+#if CFG_SHOW_FULL_MACADDR
+#define MACSTR "%02X:%02X:%02X:%02X:%02X:%02X"
+#define MAC2STR(a) ((unsigned char *)a)[0], ((unsigned char *)a)[1], ((unsigned char *)a)[2],\
+				((unsigned char *)a)[3], ((unsigned char *)a)[4], ((unsigned char *)a)[5]
+#else
+#define MACSTR "%02X:%02X:**:**:**:%02X"
+#define MAC2STR(a) ((unsigned char *)a)[0], ((unsigned char *)a)[1], ((unsigned char *)a)[5]
+#endif
+
 enum {
 	RES_1 = 0,
 	RES_DOT_5,
