@@ -27,6 +27,7 @@
 #include <linux/of_device.h>
 #include "btmtk_fw_log.h"
 #include "btmtk_queue.h"
+extern void bthost_debug_print(void);
 #endif
 
 #define LOG TRUE
@@ -66,6 +67,7 @@ static char event_need_compare_len;
 static char event_compare_status;
 static struct tty_struct *g_tty;
 static struct tty_ldisc_ops btmtk_uart_ldisc;
+extern struct btmtk_dev *g_sbdev;
 
 #if (SLEEP_ENABLE == 1)
 
@@ -2640,6 +2642,10 @@ static int btmtk_pm_notification(struct notifier_block *this, unsigned long even
 		break;
 	case PM_POST_SUSPEND:
 		btmtk_cif_resume();
+#if (USE_DEVICE_NODE == 1)
+		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_WORKING)
+			bthost_debug_print();
+#endif
 		break;
 	default:
 		break;
