@@ -603,7 +603,58 @@ exit:
 	return ret;
 }
 
+/*
+ *******************************************************************************
+ *						 bt HIF dump feature
+ *******************************************************************************
+ */
 
+int btmtk_hif_dump_start(enum connv3_drv_type from_drv, void *priv_data){
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s start", __func__);
+
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+
+	if (btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_WORKING) {
+		BTMTK_WARN("%s: not in working state(%d)", __func__, btmtk_get_chip_state(g_sbdev));
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	/* make sure keep drv own */
+	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
+	return 0;
+}
+int btmtk_hif_dump_end(enum connv3_drv_type from_drv, void *priv_data){
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s start", __func__);
+
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	/*reset fw own timer */
+	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_INIT);
+	mod_timer(&cif_dev->fw_own_timer, jiffies + msecs_to_jiffies(FW_OWN_TIMEOUT));
+	return 0;
+}
 
 struct connv3_whole_chip_rst_cb btmtk_whole_chip_rst_cb = {
 	.pre_whole_chip_rst = btmtk_pre_chip_rst_handler,
@@ -621,6 +672,24 @@ struct connv3_pre_calibration_cb btmtk_pre_cal_cb = {
 	.do_cal_cb = btmtk_pre_cal_do_cal_cb,
 };
 
+/*
+ * connv3_drv_type
+ *
+ *    CONNV3_DRV_TYPE_BT = 0
+ *    CONNV3_DRV_TYPE_WIFI = 1
+ */
+
+extern struct connv3_cr_cb btmtk_connv3_cr_cb;
+
+/*
+ * HIF dump
+ *
+ *    addr is connsys view
+ */
+struct connv3_hif_dump_cb btmtk_hif_dump_cb = {
+	.hif_dump_start = btmtk_hif_dump_start,
+	.hif_dump_end = btmtk_hif_dump_end,
+};
 
 /* connv3_sub_drv_ops_cb
  *
@@ -770,7 +839,11 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	btmtk_drv_cbs.pwr_on_cb = btmtk_pwr_on_cb;
 	btmtk_drv_cbs.rst_cb = btmtk_whole_chip_rst_cb;
 	btmtk_drv_cbs.pre_cal_cb = btmtk_pre_cal_cb;
-	BTMTK_DBG("%s start", __func__);
+	btmtk_drv_cbs.cr_cb = btmtk_connv3_cr_cb;
+	//btmtk_drv_cbs.pwr_dump_cb = btmtk_pwr_dump_cb;
+	btmtk_drv_cbs.hif_dump_cb = btmtk_hif_dump_cb;
+
+	BTMTK_INFO("%s start", __func__);
 	if (!bdev) {
 		BTMTK_ERR("[ERR] bdev is NULL");
 		return -1;
