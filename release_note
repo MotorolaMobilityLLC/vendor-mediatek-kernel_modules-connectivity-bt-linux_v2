@@ -4,6 +4,9 @@ Checking list:
     3. If bin mode is enabled for the project, BT_ADDR/tx_power will be set by EEPROM.bin
     4. wifi.cfg will enable bin mode or not, and set coex mode(hybrid, legacy, TDD). Please confirm with wifi owner
 
+20220117    CL: 5516615     Fix Thread modeling issue
+                            don't show full MAC address
+
 20220110    CL: 5489513     Build pass with Linux K4.19 and Android K5.10
                             Add MACRO: LINUX_OS&ANDROID_OS. Please define it for platform
 

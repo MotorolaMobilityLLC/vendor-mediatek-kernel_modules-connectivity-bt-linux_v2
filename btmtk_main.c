@@ -2228,7 +2228,7 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 					ptr--;
 				if (*ptr == '#') {
 					BTMTK_WARN("%s: %s has been ignored", __func__, search);
-					return -1;;
+					return -1;
 				}
 			}
 
