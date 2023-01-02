@@ -485,8 +485,12 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	}
 	if (strncmp(i_fwlog_buf, "subsys chip reset", strlen("subsys chip reset")) == 0) {
 		BTMTK_INFO("subsys chip reset");
-		bmain_info->chip_reset_flag = 0;
-		btmtk_reset_trigger(pp_bdev[hci_idx]);
+		if(bmain_info->hif_hook.trigger_assert)
+			bmain_info->hif_hook.trigger_assert(pp_bdev[hci_idx]);
+		else {
+			bmain_info->chip_reset_flag = 0;
+			btmtk_reset_trigger(pp_bdev[hci_idx]);
+		}
 		ret = count;
 		goto exit;
 	}

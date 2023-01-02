@@ -449,6 +449,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		if (btmtk_get_chip_state(bdev) == BTMTK_STATE_FW_DUMP || !atomic_read(&cif_dev->thread_status)) {
 			BTMTK_WARN("%s thread stopped or fw dumping, don't wait evt anymore!!", __func__);
 			ret = -1;
+			break;
 		}
 
 		usleep_range(10, 100);
@@ -1120,7 +1121,8 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 			usleep_range(10, 20);
 		} while (count != 0 && flush_retry++ < BTMTK_MAX_WAIT_RETRY);
 
-		tty_driver_flush_buffer(cif_dev->tty);
+		if (flush_retry < BTMTK_MAX_WAIT_RETRY)
+			tty_driver_flush_buffer(cif_dev->tty);
 	}
 
 	count = 0;
@@ -1202,7 +1204,6 @@ static int btmtk_uart_tx_thread(void *data)
 	struct sk_buff *skb;
 	u32 thread_flag = 0;
 	int ret = 0;
-	ulong flags = 0;
 
 	BTMTK_INFO("%s start", __func__);
 
@@ -1243,7 +1244,8 @@ static int btmtk_uart_tx_thread(void *data)
 			ret = btmtk_uart_driver_own(bdev);
 			if (ret) {
 				BTMTK_ERR("%s: set driver own return fail", __func__);
-				ret |= BTMTK_THREAD_ASSERT;
+				/* trigger by cmd timeout */
+				//thread_flag |= BTMTK_THREAD_ASSERT;
 			}
 
 		/* if bt fw closed, no need to send fw own */
@@ -1251,7 +1253,8 @@ static int btmtk_uart_tx_thread(void *data)
 			ret = btmtk_uart_fw_own(bdev);
 			if (ret) {
 				BTMTK_ERR("%s: set fw own return fail", __func__);
-				ret |= BTMTK_THREAD_ASSERT;
+				/* trigger by cmd timeout */
+				//thread_flag |= BTMTK_THREAD_ASSERT;
 			}
 		}
 #endif
@@ -1263,13 +1266,12 @@ static int btmtk_uart_tx_thread(void *data)
 
 		if (thread_flag & BTMTK_THREAD_TX) {
 			if (cif_dev->own_state != BTMTK_DRV_OWN) {
-				BTMTK_WARN("%s not in dirver_own state[%d] can not send cmd", __func__, cif_dev->own_state);
-				continue;
+				BTMTK_WARN_LIMITTED("%s not in dirver_own state[%d] can not send cmd", __func__, cif_dev->own_state);
+				skb_queue_purge(&cif_dev->tx_queue);
 			}
 			while (skb_queue_len(&cif_dev->tx_queue)) {
-				spin_lock_irqsave(&cif_dev->tx_lock, flags);
+				/* skb_dequeue already have lock protection */
 				skb = skb_dequeue(&cif_dev->tx_queue);
-				spin_unlock_irqrestore(&cif_dev->tx_lock, flags);
 				if (skb) {
 					btmtk_cif_send_cmd(bdev,
 						skb->data, skb->len,
@@ -1870,7 +1872,7 @@ unlock:
 
 static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 {
-	int ret = 0, retry = 5;
+	int ret = 0, retry = BTMTK_MAX_WAKEUP_RETRY;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	u8 wakeup_cmd[] = { 0xFF };
 	u8 fw_own_clr_cmd[] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x03, 0x02, 0x00, 0x03, 0x01 };
@@ -1893,7 +1895,12 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en && cif_dev->sleep_en) {
-		ret = btmtk_wakeup_uarthub();
+		do {
+			ret = btmtk_wakeup_uarthub();
+			if (ret < 0)
+				mtk8250_uart_hub_reset();
+		} while (retry--);
+
 		if (ret < 0) {
 			BTMTK_ERR("%s wakeup uart_hub fail", __func__);
 			cif_dev->own_state = BTMTK_OWN_FAIL;
@@ -1902,6 +1909,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	}
 #endif
 
+	retry = BTMTK_MAX_WAKEUP_RETRY;
 	if (cif_dev->sleep_en) {
 		do {
 			/* if fw already wake, no need to send 0xFF and wait 5ms before clr fw own */
