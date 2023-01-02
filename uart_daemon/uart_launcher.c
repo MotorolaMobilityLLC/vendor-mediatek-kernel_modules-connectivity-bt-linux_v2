@@ -50,7 +50,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <signal.h>
-#include <syslog.h>
+//#include <syslog.h>
 #include <termios.h>
 #include <time.h>
 #include <sys/time.h>
@@ -267,11 +267,12 @@ int main(int argc, char *argv[])
     int fd_num = 0;
     int err = 0;
     int opt;
-    int baudrate = 0;
-    int chang_baud_rate = 0;
+    int baudrate = 3000000;
+    int chang_baud_rate = 1;
     int retry = 0;
     int flow_control = UART_DISABLE_FC;
-    char *tty_path = "/dev/ttyUSB0";
+    //char *tty_path = "/dev/ttyUSB0";
+    char *tty_path = "/dev/ttyS3";
     struct UART_CONFIG sUartConfig;
     struct sigaction sigact;
     struct flock fl;
@@ -290,7 +291,7 @@ int main(int argc, char *argv[])
     sigaction(SIGKILL, &sigact, NULL);
     init_flock(&fl);
     ld = N_MTK;
-
+    ALOGW("%s: start",__func__);
     while ((opt = getopt(argc, argv, "c:f:p:k:l::")) != -1) {
         switch (opt) {
             /* change baudrate */
@@ -354,6 +355,7 @@ int main(int argc, char *argv[])
     }
 
     /* flock the device node */
+    BPRINT_I("flock the device node");
     if (fcntl(gTtyFd, F_SETLK, &fl) < 0) {
         BPRINT_E("lock device node failed, uart_launcher already running.");
         goto exit;
@@ -463,7 +465,9 @@ restart:
 exit:
     /* unlock ttyFd */
     if (gTtyFd > 0) {
+        BPRINT_I("unlock_flock");
         unlock_flock(gTtyFd, &fl, F_UNLCK, SEEK_SET);
+        ALOGW("%s: close",__func__);
         close(gTtyFd);
     }
     BPRINT_I("uart_launcher stop");

@@ -344,8 +344,8 @@ void btmtk_set_chip_state(struct btmtk_dev *bdev, u8 new_state)
 		return;
 	}
 
-	BTMTK_INFO("%s: %s(%d) -> %s(%d)", __func__, state_msg[bdev->interface_state],
-			bdev->interface_state, state_msg[new_state], new_state);
+	BTMTK_INFO("%s: %s(%d) -> %s(%d) dongle_index[%d]", __func__, state_msg[bdev->interface_state],
+			bdev->interface_state, state_msg[new_state], new_state, bdev->dongle_index);
 
 	CHIP_STATE_MUTEX_LOCK();
 	bdev->interface_state = new_state;
@@ -357,7 +357,10 @@ u8 btmtk_fops_get_state(struct btmtk_dev *bdev)
 	u8 state = BTMTK_FOPS_STATE_INIT;
 
 	FOPS_MUTEX_LOCK();
-	state = bdev->fops_state;
+	if (bdev)
+		state = bdev->fops_state;
+	else
+		BTMTK_ERR("%s: bdev is NULL", __func__);
 	FOPS_MUTEX_UNLOCK();
 
 	return state;
@@ -485,7 +488,9 @@ static void btmtk_initialize_debug_reg_items(struct btmtk_dev *bdev)
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return;
 	}
+#if (USE_DEVICE_NODE == 0)
 	btmtk_clean_debug_reg_file(bdev);
+#endif
 	bdev->debug_sop_reg_dump.num = 0;
 	BTMTK_INFO("%s end", __func__);
 }
@@ -843,7 +848,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 	/* Check for error from previous call */
 	if (IS_ERR(skb))
 		skb = NULL;
-	/* BTMTK_DBG("%s begin, count = %d", __func__, count); */
+	/* BTMTK_DBG("%s, buffer[0]=0x%02X, count[%d], pkts_count[%d]", __func__, *buffer, count, pkts_count); */
 
 	while (count) {
 		int i, len;
@@ -867,7 +872,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 
 			/* Check for invalid packet type */
 			if (!skb) {
-				BTMTK_ERR("%s,skb is invalid, buffer[0] = %d!", __func__,
+				BTMTK_ERR("%s,skb is invalid, buffer[0] = 0x%02X!", __func__,
 					buffer[0]);
 				if (is_mt66xx(bdev->chip_id))
 					btmtk_set_sleep(hdev, FALSE);
@@ -884,6 +889,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 		}
 
 		len = min_t(uint, hci_skb_expect(skb) - skb->len, count);
+		/* BTMTK_DBG("%s, hci_skb_expect[%d](hdlen), skb->len[%d], count[%d]", __func__, hci_skb_expect(skb), skb->len, count); */
+
 		skb_tmp = skb_put(skb, len);
 		if (!skb_tmp) {
 			BTMTK_ERR("%s, skb_put failed. Len = %d!", __func__, len);
@@ -896,8 +903,6 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 
 		count -= len;
 		buffer += len;
-
-		/* BTMTK_DBG("%s skb->len = %d, %d", __func__, skb->len, hci_skb_expect(skb)); */
 
 		/* Check for partial packet */
 		if (skb->len < hci_skb_expect(skb))
@@ -921,6 +926,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 			return ERR_PTR(-EILSEQ);
 		}
 
+		/* not use hci_skb_expect instead of hlen
+		because hci_skb_expect will update by +=dlen */
 		if (skb->len == (&pkts[i])->hlen) {
 			u16 dlen;
 
@@ -934,6 +941,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 			case 1:
 				/* Single octet variable length */
 				dlen = skb->data[(&pkts[i])->loff];
+				/* BTMTK_DBG("%s, case1 hci_skb_expect[%d], skb->len[%d], dlen[%d], loff[%d]", __func__, hci_skb_expect(skb), skb->len, dlen, (&pkts[i])->loff); */
 				hci_skb_expect(skb) += dlen;
 
 				if (skb_tailroom(skb) < dlen) {
@@ -955,6 +963,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				/* Double octet variable length */
 				dlen = get_unaligned_le16(skb->data +
 							  (&pkts[i])->loff);
+				/* BTMTK_DBG("%s,case2 hci_skb_expect[%d], skb->len[%d], dlen[%d], loff[%d]", __func__, hci_skb_expect(skb), skb->len, dlen, (&pkts[i])->loff); */
 				/* parse ISO packet len*/
 				if ((&pkts[i])->type == HCI_ISODATA_PKT) {
 					unsigned char *cp = (unsigned char *)&dlen + 1;
@@ -2515,8 +2524,6 @@ struct btmtk_dev *btmtk_get_dev(void)
 	int i = 0;
 	struct btmtk_dev *tmp_bdev = NULL;
 
-	BTMTK_INFO("%s", __func__);
-
 	for (i = 0; i < btmtk_intf_num; i++) {
 		/* Find empty slot for newly probe interface.
 		 * Judged from load_rom_patch is done and
@@ -2539,6 +2546,7 @@ struct btmtk_dev *btmtk_get_dev(void)
 			break;
 		}
 	}
+	BTMTK_INFO("%s use g_bdev[%d]", __func__, i);
 
 	return tmp_bdev;
 }
@@ -4087,9 +4095,9 @@ err:
 #if (USE_DEVICE_NODE == 1)
 	btmtk_reset_pin_off();
 	if (connv3_pwr_off(CONNV3_DRV_TYPE_BT)) {
-		BTMTK_ERR("ConnInfra power off failed!");
+		BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
 	}
-	BTMTK_INFO("ConnInfra power off success");
+	BTMTK_INFO("%s: ConnInfra power off success", __func__);
 #endif
 
 	BTMTK_INFO("%s: end, reset_stack_flag = %d", __func__, main_info.reset_stack_flag);
@@ -4128,7 +4136,7 @@ int bt_open(struct hci_dev *hdev)
 
 	ret = main_info.hif_hook.chrdev_pre_on(bdev);
 	if (ret < 0) {
-		BTMTK_ERR("btmtk_uart_subsys_reset_bt_on fail");
+		BTMTK_ERR("btmtk_chrdev_pre_on fail");
 		goto failed;
 	}
 #endif
@@ -4236,6 +4244,13 @@ int bt_open(struct hci_dev *hdev)
 
 failed:
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
+#if (USE_DEVICE_NODE == 1)
+		btmtk_reset_pin_off();
+		if (connv3_pwr_off(CONNV3_DRV_TYPE_BT)) {
+			BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
+		}
+		BTMTK_INFO("%s: ConnInfra power off success", __func__);
+#endif
 
 	return ret;
 }
@@ -4773,6 +4788,7 @@ end:
 
 void btmtk_main_cif_uninitialize(struct btmtk_dev *bdev, int hci_bus)
 {
+	BTMTK_DBG("%s start", __func__);
 	btmtk_free_setting_file(bdev);
 	btmtk_free_hci_device(bdev, hci_bus);
 	btmtk_main_free_memory(bdev);
@@ -4788,6 +4804,7 @@ int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus)
 	 * when do whole chip reset, usb need to do clear action in usb_close when disconnect,
 	 * because usb_close will not execute when do chip reset
 	 */
+	BTMTK_DBG("%s: start", __func__);
 	cancel_work_sync(&bdev->rx_work);
 #if (USE_DEVICE_NODE == 0)
 	btmtk_deregister_hci_device(bdev);
