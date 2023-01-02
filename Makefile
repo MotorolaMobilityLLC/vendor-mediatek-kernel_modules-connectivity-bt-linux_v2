@@ -110,6 +110,7 @@ $(info [BT_Drv] MTK_PROJ_TYPE = $(MTK_PROJ_TYPE) src = $(src))
 ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
     CFILES += proj/btmtk_proj_sp.c proj/btmtk_proj_sp_debug.c
     ccflags-y += -DANDROID_OS
+    ccflags-y += -I$(srctree)/drivers/misc/mediatek/connectivity/power_throttling
 #else ifeq ($(MTK_PROJ_TYPE), ce)
 else
     CFILES += proj/btmtk_proj_ce.c

@@ -639,6 +639,10 @@ struct btmtk_dev {
 	struct work_struct  dynamic_fwdl_work;
 	unsigned int		fw_bin_info;
 
+#if (USE_DEVICE_NODE == 1)
+	/* asynchronize tx/rx */
+	struct work_struct  async_trx_work;
+#endif
 	/* completion */
 	struct completion	dump_comp;
 	struct completion	drv_own_comp;

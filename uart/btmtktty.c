@@ -210,6 +210,7 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 	btmtk_reset_pin_off();
 	if (connv3_pwr_off(CONNV3_DRV_TYPE_BT))
 		BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
+	btmtk_pwrctrl_post_off();
 #endif
 	BTMTK_INFO("%s end!", __func__);
 
@@ -776,6 +777,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	tty = cif_dev->tty;
 	new_termios = tty->termios;
 
+	btmtk_pwrctrl_pre_on(bdev);
 	if (connv3_pwr_on(CONNV3_DRV_TYPE_BT)) {
 		BTMTK_ERR("ConnInfra power on failed!");
 		return -EFAULT;
@@ -1912,6 +1914,8 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 	ret = btmtk_uart_tty_probe(tty);
 #if (USE_DEVICE_NODE == 1)
 	btmtk_connv3_sub_drv_init(bdev);
+	btmtk_pwrctrl_register_evt();
+
 	/* Init coredump */
 	bmain_info->hif_hook.coredump_handler = connv3_coredump_init(CONNV3_DEBUG_TYPE_BT, NULL);
 #endif
