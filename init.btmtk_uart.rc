@@ -1,0 +1,16 @@
+# load btmtksdio
+#on boot
+#  insmod /vendor/lib/modules/btmtk_uart_unify.ko
+#  start uart_launcher
+
+on property:vendor.connsys.driver.ready=yes
+  insmod /vendor/lib/modules/btmtk_uart_unify.ko
+  #chown bluetooth bluetooth /proc/driver/bt_dbg
+  start uart_launcher
+
+# service for uart_launcher
+service uart_launcher /vendor/bin/uart_launcher -c 115200 -p /dev/ttyS3
+  class core
+  user system
+  group system
+  oneshot

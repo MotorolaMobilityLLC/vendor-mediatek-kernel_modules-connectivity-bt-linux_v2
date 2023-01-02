@@ -20,6 +20,8 @@
 #define DEFAULT_DEBUG_SOP_NAME "usb_debug"
 #elif defined(CHIP_IF_SDIO)
 #define DEFAULT_DEBUG_SOP_NAME "sdio_debug"
+#elif defined(CHIP_IF_UART_TTY)
+#define DEFAULT_DEBUG_SOP_NAME "uart_debug"
 #endif
 
 //static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb);
@@ -588,6 +590,11 @@ struct btmtk_dev {
 	struct _Section_Map	*sectionMap_table;
 };
 
+#if (USE_DEVICE_NODE == 1)
+typedef int (*cif_chrdev_init_ptr)(void);
+typedef int (*cif_chrdev_pre_on_ptr)(struct btmtk_dev *bdev);
+typedef int (*cif_chrdev_post_on_ptr)(struct btmtk_dev *bdev);
+#endif
 typedef int (*cif_bt_init_ptr)(void);
 typedef void (*cif_bt_exit_ptr)(void);
 typedef int (*cif_open_ptr)(struct hci_dev *hdev);
@@ -620,6 +627,11 @@ typedef void (*cif_waker_notify_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_enter_standby_ptr)(void);
 
 struct hif_hook_ptr {
+#if (USE_DEVICE_NODE == 1)
+	cif_chrdev_init_ptr		chrdev_init;
+	cif_chrdev_pre_on_ptr	chrdev_pre_on;
+	cif_chrdev_post_on_ptr	chrdev_post_on;
+#endif
 	cif_bt_init_ptr			init;
 	cif_bt_exit_ptr			exit;
 	cif_open_ptr			open;
@@ -815,4 +827,9 @@ int32_t btmtk_set_sleep(struct hci_dev *hdev, u_int8_t need_wait);
 int32_t bgfsys_bt_patch_dl(void);
 int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value);
 void btmtk_set_country_code_from_wifi(char *code);
+#if (USE_DEVICE_NODE == 1)
+int rx_skb_enqueue(struct sk_buff *skb);
+int btmtk_chardev_init(void);
+#endif
+
 #endif /* __BTMTK_MAIN_H__ */
