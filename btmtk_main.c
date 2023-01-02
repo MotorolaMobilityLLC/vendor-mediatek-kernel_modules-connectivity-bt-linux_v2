@@ -1688,6 +1688,7 @@ int btmtk_load_code_from_bin(u8 **image, char *bin_name, struct device *dev,
 {
 	const struct firmware *fw_entry = NULL;
 	int err = 0;
+	unsigned long start_time = 0, time_diff = 0;
 
 	if (!bin_name) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
@@ -1695,6 +1696,7 @@ int btmtk_load_code_from_bin(u8 **image, char *bin_name, struct device *dev,
 	}
 	BTMTK_DBG("%s: load %s", __func__, bin_name);
 
+	start_time = jiffies;
 	do {
 		err = request_firmware(&fw_entry, bin_name, dev);
 		if (err >= 0) {
@@ -1709,6 +1711,10 @@ int btmtk_load_code_from_bin(u8 **image, char *bin_name, struct device *dev,
 			__func__, err, retry);
 		msleep(100);
 	} while (retry-- > 0);
+
+	time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
+	if (time_diff > TIME_BOUND_OF_REQ_FW)
+		BTMTK_WARN("%s: request_firmware takes %lu ms", __func__, time_diff);
 
 	*image = vmalloc(ALIGN_4(fw_entry->size));
 	if (*image == NULL) {
