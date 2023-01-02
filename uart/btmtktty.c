@@ -398,21 +398,12 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
 #if (SLEEP_ENABLE == 1)
-	/* error handle of deadlock */
-	/* if in fw_own, want to send_and_rev cmd */
-	/* cmd would get evt_comp_sem and then wait event */
-	/* however btmtk_uart_driver_own would be triggered before wmt cmd sended */
-	/* then driver_own cmd would not get evt_comp_sem */
-
-	/* use pkt_type to recongize drv/fw own cmd */
-	/* block cmd not in drv own state except for drv/fw own cmd */
-	if (pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT && cif_dev->own_state != BTMTK_DRV_OWN) {
-		BTMTK_INFO("%s: wait driver own", __func__);
-		reinit_completion(&bdev->drv_own_comp);
+	/* update fw own timer or wait fw own done then do drv own */
+	/* this case is not called by tx_thread(fw own/drv own) */
+	if (pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT) {
+		btmtk_uart_driver_own(bdev);
+		/* for cancel fw own if fw own timer just complete */
 		atomic_set(&cif_dev->need_drv_own, 1);
-		wake_up_interruptible(&tx_wait_q);
-		if (!wait_for_completion_timeout(&bdev->drv_own_comp, msecs_to_jiffies(WAIT_DRV_OWN_TIMEOUT)))
-			BTMTK_WARN("%s: wait driver own timeout", __func__);
 	}
 
 	if (cif_dev->own_state == BTMTK_FW_OWN || cif_dev->own_state == BTMTK_OWN_FAIL) {
@@ -1396,19 +1387,25 @@ static int btmtk_uart_tx_thread(void *data)
 
 		if (thread_flag & (BTMTK_THREAD_TX | BTMTK_THREAD_RX)) {
 			ret = btmtk_uart_driver_own(bdev);
-			if (ret) {
+			if (ret < 0) {
 				BTMTK_ERR("%s: set driver own return fail, ret[%d]", __func__, ret);
-				/* trigger by cmd timeout */
-				//thread_flag |= BTMTK_THREAD_ASSERT;
+				if (bdev->assert_reason[0] == '\0') {
+					strncpy(bdev->assert_reason, "[BT_FW assert] drv own failed", strlen("[BT_FW assert] drv own failed"));
+					BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+				}
+				btmtk_uart_trigger_assert(bdev);
 			}
 
 		/* if bt fw closed, no need to send fw own */
 		} else if (thread_flag & BTMTK_THREAD_FW_OWN) {
 			ret = btmtk_uart_fw_own(bdev);
-			if (ret) {
+			if (ret < 0) {
 				BTMTK_ERR("%s: set fw own return fail, ret[%d]", __func__, ret);
-				/* trigger by cmd timeout */
-				//thread_flag |= BTMTK_THREAD_ASSERT;
+				if (bdev->assert_reason[0] == '\0') {
+					strncpy(bdev->assert_reason, "[BT_FW assert] fw own failed", strlen("[BT_FW assert] fw own failed"));
+					BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+				}
+				btmtk_uart_trigger_assert(bdev);
 			}
 		}
 #endif
@@ -2021,15 +2018,8 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 	} else
 		ret = 0;
 
-
 	if (ret < 0) {
-		BTMTK_ERR("%s failed, keep drv own, ret[%d]", __func__, ret);
-		if (bdev->assert_reason[0] == '\0') {
-			strncpy(bdev->assert_reason, "[BT_FW assert] fw own failed", strlen("[BT_FW assert] fw own failed"));
-			BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
-		}
 		cif_dev->own_state = BTMTK_DRV_OWN;
-		btmtk_uart_trigger_assert(bdev);
 		goto unlock;
 	} else {
 		cif_dev->own_state = BTMTK_FW_OWN;
@@ -2080,6 +2070,8 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			ret = btmtk_wakeup_uarthub();
 			if (ret < 0)
 				mtk8250_uart_hub_reset();
+			else
+				break;
 		} while (retry--);
 
 		if (ret < 0) {
@@ -2115,18 +2107,11 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		ret = 0;
 
 	if (ret < 0) {
-		BTMTK_ERR("%s fail, trigger assert", __func__);
-		if (bdev->assert_reason[0] == '\0') {
-			strncpy(bdev->assert_reason, "[BT_FW assert] drv own failed", strlen("[BT_FW assert] drv own failed"));
-			BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
-		}
 		cif_dev->own_state = BTMTK_DRV_OWN;
-		btmtk_uart_trigger_assert(bdev);
 		goto unlock;
 	} else if (cif_dev->no_fw_own == 0) {
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		btmtk_uart_update_fw_own_timer(cif_dev);
-		complete_all(&bdev->drv_own_comp);
 		BTMTK_INFO("%s success", __func__);
 	}
 
@@ -2181,7 +2166,6 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 
 	/* Init completion */
 	init_completion(&bdev->dump_comp);
-	init_completion(&bdev->drv_own_comp);
 
 	/* Init semaphore */
 	sema_init(&cif_dev->evt_comp_sem, 1);
