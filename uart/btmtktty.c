@@ -788,6 +788,8 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		return -EFAULT;
 
 	btmtk_set_uart_auxFunc();
+	/* temp solution */
+	msleep(100);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en) {
@@ -818,6 +820,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	cif_dev->rhw_en = 0;
 	cif_dev->crc_en = 0;
 	cif_dev->fw_dl_ready = 0;
+	cif_dev->flush_en = 1;
 
 	/* set chip baud and flowcontrol to config setting */
 	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
@@ -1017,6 +1020,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset)
 {
 	int cur_len = 0;
+	int count = 0;
 	int ret = -1;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	s32 sent_len;
@@ -1028,16 +1032,23 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		ret = -1;
 		goto exit;
 	}
-
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	BTMTK_INFO("%s: loading rom patch... start", __func__);
 	while (1) {
 		sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT) ?
 				(UPLOAD_PATCH_UNIT) : (section_dl_size - cur_len);
+		/* wait tty buffer clean */
+		if (cif_dev->flush_en) {
+			do {
+				count = tty_chars_in_buffer(cif_dev->tty);
+				//BTMTK_DBG("%s: char in buffer before flush count[%d]", __func__, count);
+			} while (count != 0);
+			tty_driver_flush_buffer(cif_dev->tty);
+		}
 
 		if (sent_len > 0) {
 			memcpy(image, fwbuf + section_offset + cur_len, sent_len);
 
-			cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 			ret = cif_dev->tty->ops->write(cif_dev->tty, image, sent_len);
 
 			// can use next cur_len - current cur_len = ret
@@ -1074,6 +1085,7 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 {
 	int ret = -1, len = 0, count = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
+	u8 assert_cmd[ASSERT_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -1084,8 +1096,8 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 
 	/* BTMTK_INFO("%s: tty %p\n", __func__, bdev->tty); */
 
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	if (cif_dev->hub_en) {
+	/* wait tty buffer clean */
+	if (cif_dev->flush_en) {
 		do {
 			count = tty_chars_in_buffer(cif_dev->tty);
 			//BTMTK_DBG("%s: char in buffer before flush count[%d]", __func__, count);
@@ -1093,9 +1105,13 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 
 		tty_driver_flush_buffer(cif_dev->tty);
 	}
-#endif
 
 	count = 0;
+
+	if(cmd_len == ASSERT_CMD_LEN && memcmp(assert_cmd, cmd, ASSERT_CMD_LEN) == 0) {
+		BTMTK_INFO("%s: trigger assert", __func__);
+		btmtk_set_chip_state(bdev, BTMTK_STATE_SEND_ASSERT);
+	}
 
 	while (len != cmd_len && count < BTMTK_MAX_SEND_RETRY) {
 		ret = cif_dev->tty->ops->write(cif_dev->tty, cmd + len, cmd_len - len);
@@ -1200,9 +1216,10 @@ static int btmtk_uart_tx_thread(void *data)
 			thread_flag &= ~BTMTK_THREAD_FW_OWN;
 		}
 
-		if (state == BTMTK_STATE_FW_DUMP) {
+		if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
+			|| state == BTMTK_STATE_SUBSYS_RESET) {
 			//BTMTK_DBG("%s: no fw/driver own, no tx when dumping", __func__);
-			thread_flag &= ~(BTMTK_THREAD_FW_OWN | BTMTK_THREAD_RX | BTMTK_THREAD_TX);
+			thread_flag &= ~(BTMTK_THREAD_FW_OWN | BTMTK_THREAD_TX);
 		}
 
 		if (thread_flag & (BTMTK_THREAD_TX | BTMTK_THREAD_RX)) {
@@ -1723,7 +1740,6 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
-
 #if (SLEEP_ENABLE == 1)
 	//BTMTK_INFO_RAW(data, count, "%s: count[%d]", __func__, count);
 
