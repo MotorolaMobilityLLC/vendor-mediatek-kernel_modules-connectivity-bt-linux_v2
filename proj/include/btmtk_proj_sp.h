@@ -61,6 +61,8 @@ extern int mtk8250_uart_hub_reset(void);
 extern int mtk8250_uart_hub_register_cb(UARTHUB_IRQ_CB irq_callback);
 extern int mtk8250_uart_hub_assert_bit_ctrl(int ctrl);
 extern int mtk8250_uart_dump(struct tty_struct *tty);
+int btmtk_wakeup_uarthub(void);
+
 #endif
 
 #define HCI_EVT_COMPLETE_EVT		0x0E
@@ -98,7 +100,6 @@ int btmtk_set_pcm_pin_mux(void);
 
 int btmtk_set_gpio_default(void);
 int btmtk_pre_power_on_handler(void);
-int btmtk_set_uart_auxFunc(void);
 
 int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev);
 //int btmtk_connv3_sub_drv_init(struct platform_device *pdev);
