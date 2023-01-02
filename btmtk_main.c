@@ -5080,8 +5080,10 @@ static int main_init(void)
 	BTMTK_INFO("%s supported intf count <%d>", __func__, btmtk_intf_num);
 
 	BTMTK_INFO("%s: Register reboot_notifier callback success.", __func__);
+#if (USE_DEVICE_NODE == 0)
 	/* Is it necessary? bt_close will be called by reboot. */
 	register_reboot_notifier(&btmtk_reboot_notifier);
+#endif
 	g_bdev = kzalloc((sizeof(*g_bdev) * btmtk_intf_num), GFP_KERNEL);
 	if (!g_bdev) {
 		BTMTK_WARN("%s insufficient memory", __func__);
