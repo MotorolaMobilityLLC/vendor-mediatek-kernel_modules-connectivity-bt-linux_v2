@@ -160,6 +160,11 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 	const u8 read_address_event[READ_ADDRESS_EVT_HDR_LEN] = { 0x4, 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00 };
 	const u8 get_baudrate_event[GETBAUD_EVT_LEN] = { 0x04, 0xE4, 0x0A, 0x02, 0x04, 0x06, 0x00, 0x00, 0x02 };
 
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+
 	/* event may be fragment in uart */
 	bdev->recv_evt_len = skb->len;
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
@@ -297,6 +302,11 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	int ret = -1;
 
+	if (bdev == NULL) {
+		BTMTK_ERR("%s, bdev is NULL", __func__);
+		return -EINVAL;
+	}
+
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
 	switch (uart_cfg->iBaudrate) {
@@ -377,6 +387,11 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 	struct btmtk_uart_dev *cif_dev = NULL;
 	int ret = -1;
 
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
 	if (cif_dev->uart_baudrate_set == 0) {
@@ -407,6 +422,11 @@ static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 	struct UART_CONFIG uart_cfg;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	int ret = -1;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	uart_cfg = cif_dev->uart_cfg;
@@ -499,6 +519,11 @@ static int btmtk_chrdev_pre_on(struct btmtk_dev *bdev)
 	int ret = -1;
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	uart_cfg = cif_dev->uart_cfg;
@@ -607,6 +632,10 @@ static int btmtk_chardev_post_on(struct btmtk_dev *bdev)
 static void btmtk_uart_waker_notify(struct btmtk_dev *bdev)
 {
 	BTMTK_INFO("%s enter!", __func__);
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return;
+	}
 	schedule_work(&bdev->reset_waker);
 }
 
@@ -687,6 +716,11 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	int ret = -1, len = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
 
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	BTMTK_DBG_RAW(cmd, cmd_len, "%s, len = %d Send CMD : ", __func__, cmd_len);
 	/* BTMTK_INFO("%s: tty %p\n", __func__, bdev->tty); */
@@ -707,6 +741,11 @@ static int btmtk_uart_tx_thread(void *data)
 	ulong flags = 0;
 
 	BTMTK_INFO("%s start", __func__);
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
@@ -964,6 +1003,11 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 	struct btmtk_dev *bdev = tty->disc_data;
 	struct btmtk_uart_dev *cif_dev = NULL;
 
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
 	BTMTK_INFO("%s: tty %p cmd = %u", __func__, tty, cmd);
@@ -1050,6 +1094,11 @@ static int btmtk_uart_tty_compat_ioctl(struct tty_struct *tty, struct file *file
 	struct btmtk_dev *bdev = tty->disc_data;
 	struct btmtk_uart_dev *cif_dev = NULL;
 
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
 	BTMTK_INFO("%s: tty %p cmd = %u", __func__, tty, cmd);
@@ -1116,6 +1165,11 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, char 
 {
 	int ret = -1;
 	struct btmtk_dev *bdev = tty->disc_data;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return;
+	}
 
 	/* add hci device part */
 	bdev->recv_evt_len = count;
@@ -1226,6 +1280,10 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 	BTMTK_INFO("%s", __func__);
 
 	bdev = dev_get_drvdata(tty->dev);
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return;
+	}
 	/* wait bt_close */
 	do {
 		fstate = btmtk_fops_get_state(bdev);
@@ -1332,6 +1390,10 @@ static int btmtk_cif_resume(void)
 	int ret;
 
 	BTMTK_INFO("%s", __func__);
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
 	bdev->suspend_count--;
 
 	if (bdev->suspend_count) {
