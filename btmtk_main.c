@@ -4102,6 +4102,7 @@ static int bt_close(struct hci_dev *hdev)
 
 	/* Flush RX works */
 	flush_work(&bdev->rx_work);
+	flush_work(&bdev->dynamic_fwdl_work);
 
 	/* Drop queues */
 	skb_queue_purge(&bdev->rx_q);
@@ -4435,6 +4436,13 @@ void btmtk_reg_hif_hook(struct hif_hook_ptr *hook)
 	memcpy(&main_info.hif_hook, hook, sizeof(struct hif_hook_ptr));
 }
 
+static void btmtk_dynamic_fwdl_work(struct work_struct *work)
+{
+	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, dynamic_fwdl_work);
+	BTMTK_INFO("%s enter", __func__);
+	btmtk_dynamic_load_rom_patch(bdev, bdev->fw_bin_info);
+}
+
 static void btmtk_rx_work(struct work_struct *work)
 {
 	int err = 0, skip_pkt = 0;
@@ -4469,8 +4477,15 @@ static void btmtk_rx_work(struct work_struct *work)
 			if (skb->data[0] == 0x0E && skb->data[1] == 0x04 &&
 					skb->data[2] == 0x01 && skb->data[3] == 0x01 &&
 					skb->data[4] == 0xFE) {
+				bdev->fw_bin_info = skb->data[5];
+				/*
+				 * Create a thread to do dynamic fwdl
+				 * dynamic fwdl will block thread to wait for specific event,
+				 * blocking rx_work thread means waited event won't be handled in
+				 * rx_work thread, so here we create a new thread for dynamic fwdl.
+				 */
+				schedule_work(&bdev->dynamic_fwdl_work);
 				BTMTK_DBG_RAW(skb->data, skb->len, "%s: Get dynamic DL EVENT- ", __func__);
-				btmtk_dynamic_load_rom_patch(bdev, skb->data[5]);
 				/* Drop by driver, don't send to stack */
 				kfree_skb(skb);
 				continue;
@@ -4607,6 +4622,7 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 
 	/* rx_work init */
 	INIT_WORK(&bdev->rx_work, btmtk_rx_work);
+	INIT_WORK(&bdev->dynamic_fwdl_work, btmtk_dynamic_fwdl_work);
 	skb_queue_head_init(&bdev->rx_q);
 	bdev->workqueue = alloc_workqueue("BTMTK_RX_WQ", WQ_HIGHPRI | WQ_UNBOUND |
 					  WQ_MEM_RECLAIM, 1);
@@ -4841,6 +4857,7 @@ int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus)
 	 */
 	BTMTK_DBG("%s: start", __func__);
 	cancel_work_sync(&bdev->rx_work);
+	cancel_work_sync(&bdev->dynamic_fwdl_work);
 #if (USE_DEVICE_NODE == 0)
 	btmtk_deregister_hci_device(bdev);
 #endif
