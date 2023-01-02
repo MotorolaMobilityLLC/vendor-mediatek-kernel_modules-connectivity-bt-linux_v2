@@ -607,7 +607,7 @@ struct btmtk_dev {
 	unsigned int		fw_bin_info;
 
 	/* fw dump completion */
-	struct completion 	dump_comp;
+	struct completion	dump_comp;
 };
 
 #if (USE_DEVICE_NODE == 1)
