@@ -1111,6 +1111,18 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			}
 
 			/* fw trigger whole chip reset */
+			if (skb->len > 7 &&
+				skb->data[skb->len - 7] == 's' &&
+				skb->data[skb->len - 6] == 'u' &&
+				skb->data[skb->len - 5] == 'b' &&
+				skb->data[skb->len - 4] == 's' &&
+				skb->data[skb->len - 3] == 'y' &&
+				skb->data[skb->len - 2] == 's') {
+				BTMTK_INFO("%s: drop subsys type", __func__);
+				return 1;
+			}
+
+			/* fw trigger whole chip reset */
 			if (skb->len > 6 &&
 				skb->data[skb->len - 6] == 'w' &&
 				skb->data[skb->len - 5] == 'h' &&

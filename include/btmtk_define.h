@@ -172,6 +172,12 @@ extern uint8_t btmtk_log_lvl;
 			printk_ratelimited(KERN_WARNING "[btmtk_dbg_limit] "fmt"\n", ##__VA_ARGS__);	\
 	} while (0)
 
+#define BTMTK_INFO_LIMITTED(fmt, ...)	\
+	do { \
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO)	\
+			printk_ratelimited(KERN_WARNING "[btmtk_info_limit] "fmt"\n", ##__VA_ARGS__);	\
+	} while (0)
+
 #define BTMTK_INFO_RAW(p, l, fmt, ...)						\
 	do {	\
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) {	\
