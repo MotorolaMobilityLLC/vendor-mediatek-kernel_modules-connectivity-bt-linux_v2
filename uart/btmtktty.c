@@ -1854,6 +1854,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 {
 	int ret = 0;
+	u8 no_sleep = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x03, 0x02, 0x00, 0x01, 0x01 };
 	u8 evt[] = { 0x04, 0xE4, 0x07, 0x02, 0x03, 0x03, 0x00, 0x00, 0x01, 0x01 };
@@ -1874,14 +1875,18 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 	cif_dev->own_state = BTMTK_FW_OWNING;
 
 	if (cif_dev->sleep_en) {
-		ret = btmtk_main_send_cmd(bdev, cmd, FWOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN,
+		/* two different event for fw allow sleep or not */
+		ret = btmtk_main_send_cmd(bdev, cmd, FWOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN - 3,
 				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT);
+		/* evt[7] = 1 for no sleep */
+		no_sleep = bdev->io_buf[7];
 	} else
 		ret = 0;
 
-	if (ret < 0) {
-		BTMTK_ERR("%s failed!!", __func__);
-		cif_dev->own_state = BTMTK_OWN_FAIL;
+	if (ret < 0 || no_sleep) {
+		BTMTK_ERR("%s failed, keep drv own, ret[%d], no_sleep[%d]", __func__, ret, no_sleep);
+		cif_dev->own_state = BTMTK_DRV_OWN;
+		btmtk_uart_update_fw_own_timer(cif_dev);
 		goto unlock;
 	} else {
 		cif_dev->own_state = BTMTK_FW_OWN;
@@ -1890,7 +1895,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 		btmtk_release_uarthub(false);
 #endif
-		BTMTK_INFO("%s success", __func__);
+		BTMTK_INFO("%s success, no_sleep[%d]", __func__, no_sleep);
 	}
 unlock:
 	UART_OWN_MUTEX_UNLOCK();
