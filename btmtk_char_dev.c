@@ -552,6 +552,22 @@ static int BT_close(struct inode *inode, struct file *file)
 	bt_ftrace_flag = 0;
 	//bt_core_unregister_rx_event_cb();
 
+	/* err handle for uart disconnect */
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev == NULL", __func__);
+		return -1;
+	}
+
+	if (g_sbdev->hdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev->hdev == NULL", __func__);
+		return -1;
+	}
+
+	if (g_sbdev->hdev->close == NULL) {
+		BTMTK_ERR("%s: g_sbdev->hdev->close == NULL", __func__);
+		return -1;
+	}
+
 	ret = g_sbdev->hdev->close(g_sbdev->hdev);
 	__pm_relax(bt_wakelock);
 #if 0 // Simfex
