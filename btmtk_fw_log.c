@@ -1113,7 +1113,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		/* print dump data to console */
 		if (dump_data_counter < 20)
 			BTMTK_INFO("%s: FW dump data (%d): %s",
-					__func__, dump_data_counter, &skb->data);
+					__func__, dump_data_counter, skb->data);
 		line = __LINE__;
 		ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "[M]", skb->data, skb->len);
 		if (ret)

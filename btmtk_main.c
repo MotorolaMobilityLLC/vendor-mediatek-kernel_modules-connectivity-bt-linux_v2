@@ -917,8 +917,8 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 
 			/* Check for invalid packet type */
 			if (!skb) {
-				BTMTK_ERR("%s,skb is invalid, buffer[0] = 0x%02X!", __func__,
-					buffer[0]);
+				BTMTK_ERR("%s,skb is invalid, buffer[0] = 0x%02X, count[%d]", __func__,
+					buffer[0], count);
 				if (is_mt66xx(bdev->chip_id))
 					btmtk_set_sleep(hdev, FALSE);
 				else {
@@ -1068,6 +1068,10 @@ static const struct h4_recv_pkt mtk_recv_pkts[] = {
 	{ H4_RECV_SCO,      .recv = hci_recv_frame },
 	{ H4_RECV_EVENT,    .recv = btmtk_recv_event },
 	{ H4_RECV_ISO,      .recv = btmtk_recv_iso },
+#if (USE_DEVICE_NODE == 1)
+	{ H4_RECV_RHW_READ,	.recv = btmtk_recv_rhw},
+	{ H4_RECV_RHW_WRITE,	.recv = btmtk_recv_rhw},
+#endif
 };
 
 #if ENABLESTP
@@ -1523,6 +1527,30 @@ int btmtk_recv_iso(struct hci_dev *hdev, struct sk_buff *skb)
 	return 0;
 }
 
+#if (USE_DEVICE_NODE == 1)
+int btmtk_recv_rhw(struct hci_dev *hdev, struct sk_buff *skb)
+{
+	struct btmtk_dev *bdev = NULL;
+
+	if (hdev == NULL || skb == NULL) {
+		BTMTK_ERR("%s, invalid parameters!", __func__);
+		return -EINVAL;
+	}
+
+	bdev = hci_get_drvdata(hdev);
+	if (bdev == NULL || bdev->workqueue == NULL) {
+		BTMTK_ERR("%s, bdev or workqueue is invalid!", __func__);
+		kfree_skb(skb);
+		return -EINVAL;
+	}
+
+	skb_queue_tail(&bdev->rx_q, skb);
+	queue_work(bdev->workqueue, &bdev->rx_work);
+
+	return 0;
+}
+#endif
+
 int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		const int cmd_len, const uint8_t *event, const int event_len, int delay,
 		int retry, int pkt_type)
@@ -1975,7 +2003,7 @@ static int btmtk_parsing_fw_rom_patch(struct btmtk_dev *bdev,
 	}
 
 	if (bdev->sectionMap_table) {
-		kfree(bdev->sectionMap_table );
+		kfree(bdev->sectionMap_table);
 		bdev->sectionMap_table = NULL;
 	}
 
@@ -4104,8 +4132,9 @@ static int bt_close(struct hci_dev *hdev)
 	state = btmtk_get_chip_state(bdev);
 
 #if (USE_DEVICE_NODE == 1)
-	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT) {
-		BTMTK_WARN("%s: fw dump or assert ongoing , can't close yet", __func__);
+	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
+			|| state == BTMTK_STATE_SUBSYS_RESET) {
+		BTMTK_WARN("%s: fw dump or assert ongoing , can't close yet state[%d]", __func__, state);
 		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT)))
 			BTMTK_ERR("%s: uanble to finish coredump in 15s", __func__);
 		goto exit;
@@ -4502,7 +4531,8 @@ static void btmtk_rx_work(struct work_struct *work)
 			kfree_skb(skb);
 			continue;
 		}
-		BTMTK_INFO_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
+		BTMTK_INFO_RAW(skb->data, skb->len, "%s: len[%d] %02x", __func__,
+							skb->len, hci_skb_pkt_type(skb));
 		if (hci_skb_pkt_type(skb) == HCI_EVENT_PKT) {
 			/* save hci evt pkt for debug */
 			if (skb->data[0] == 0x3E)
@@ -4543,6 +4573,17 @@ static void btmtk_rx_work(struct work_struct *work)
 
 		} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
 			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_RX_ISO_STACK, skb->data, skb->len);
+
+#if (USE_DEVICE_NODE == 1)
+		} else if (hci_skb_pkt_type(skb) == RHW_WRITE_TYPE
+					|| hci_skb_pkt_type(skb) == RHW_READ_TYPE) {
+			if (main_info.hif_hook.event_filter(bdev, skb)) {
+				BTMTK_DBG("%s Drop by driver, don't send to stack", __func__);
+				/* Drop by driver, don't send to stack */
+				kfree_skb(skb);
+				continue;
+			}
+#endif
 		}
 
 		fstate = btmtk_fops_get_state(bdev);

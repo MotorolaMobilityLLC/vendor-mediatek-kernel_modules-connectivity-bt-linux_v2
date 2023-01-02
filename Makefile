@@ -108,7 +108,7 @@ endif
 $(info [BT_Drv] MTK_PROJ_TYPE = $(MTK_PROJ_TYPE) src = $(src))
 #ifeq ($(MTK_PROJ_TYPE), sp)
 ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
-    CFILES += proj/btmtk_proj_sp.c
+    CFILES += proj/btmtk_proj_sp.c proj/btmtk_proj_sp_debug.c
     ccflags-y += -DANDROID_OS
 #else ifeq ($(MTK_PROJ_TYPE), ce)
 else
