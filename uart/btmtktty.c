@@ -1094,12 +1094,7 @@ static u32 btmtk_thread_wait_for_msg(struct btmtk_dev *bdev)
 {
 	u32 ret = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
-	int state = BTMTK_STATE_INIT;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
-
-	state = btmtk_get_chip_state(bdev);
-	fstate = btmtk_fops_get_state(bdev);
 
 	if (!skb_queue_empty(&cif_dev->tx_queue)) {
 		ret |= BTMTK_THREAD_TX;
@@ -1118,16 +1113,6 @@ static u32 btmtk_thread_wait_for_msg(struct btmtk_dev *bdev)
 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_DONE);
 		ret |= BTMTK_THREAD_FW_OWN;
 	}
-
-	if (fstate == BTMTK_FOPS_STATE_CLOSING) {
-		//BTMTK_DBG("%s: no fw own when closing", __func__);
-		ret &= ~BTMTK_THREAD_FW_OWN;
-	}
-
-	if (state == BTMTK_STATE_FW_DUMP) {
-		//BTMTK_DBG("%s: no fw/driver own, no tx when dumping", __func__);
-		ret &= ~(BTMTK_THREAD_FW_OWN | BTMTK_THREAD_RX | BTMTK_THREAD_TX);
-	}
 #endif
 
 	if (kthread_should_stop()) {
@@ -1142,6 +1127,8 @@ static int btmtk_uart_tx_thread(void *data)
 {
 	struct btmtk_dev *bdev = data;
 	struct btmtk_uart_dev *cif_dev = NULL;
+	int state = BTMTK_STATE_INIT;
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	struct sk_buff *skb;
 	u32 thread_flag = 0;
 	int ret = 0;
@@ -1169,7 +1156,20 @@ static int btmtk_uart_tx_thread(void *data)
 			break;
 		}
 
+		state = btmtk_get_chip_state(bdev);
+		fstate = btmtk_fops_get_state(bdev);
+
 #if (SLEEP_ENABLE == 1)
+		if (fstate == BTMTK_FOPS_STATE_CLOSING) {
+			//BTMTK_DBG("%s: no fw own when closing", __func__);
+			thread_flag &= ~BTMTK_THREAD_FW_OWN;
+		}
+
+		if (state == BTMTK_STATE_FW_DUMP) {
+			//BTMTK_DBG("%s: no fw/driver own, no tx when dumping", __func__);
+			thread_flag &= ~(BTMTK_THREAD_FW_OWN | BTMTK_THREAD_RX | BTMTK_THREAD_TX);
+		}
+
 		if (thread_flag & (BTMTK_THREAD_TX | BTMTK_THREAD_RX)) {
 			ret = btmtk_uart_driver_own(bdev);
 			if (ret) {
