@@ -1232,10 +1232,12 @@ static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev, bool do_flus
 				return -1;
 			}
 			count = tty_chars_in_buffer(cif_dev->tty);
+			if (count == 0)
+				break;
 			/* only wait 30ms for tty buffer clean */
 			/* use udelay instead of usleep_range incase of sleep too long */
-			udelay(500);
-		} while (count != 0 && flush_retry++ < BTMTK_MAX_WAIT_RETRY);
+			usleep_range(500, 550);
+		} while (flush_retry++ < BTMTK_MAX_WAIT_RETRY);
 		time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
 		if (time_diff > TIMT_BOUND_OF_CHARS_WAIT)
 			BTMTK_WARN("%s: chars in buffer takes %lu ms to clear, remain count[%d]",

@@ -1201,7 +1201,7 @@ static inline void btmtk_hif_dump_hif_uart1(void) {
 	BT_DUMP_CR_PRINT(value);
 }
 static inline void btmtk_hif_dump_hif_uart2(void) {
-	uint32_t value, cr_count = 14;
+	uint32_t value, cr_count = 12;
 
 	if (btmtk_connv3_readable_check()) {
 		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
@@ -1218,8 +1218,6 @@ static inline void btmtk_hif_dump_hif_uart2(void) {
 	BT_DUMP_CR_PRINT(value);
 
 	HIF_WRITE(0x1881900C, 0x000000BF);
-	HIF_READ(0x1881900C, &value);
-	BT_DUMP_CR_PRINT(value);
 	HIF_READ(0x18819008, &value);
 	BT_DUMP_CR_PRINT(value);
 	HIF_READ(0x18819010, &value);
@@ -1232,8 +1230,6 @@ static inline void btmtk_hif_dump_hif_uart2(void) {
 	BT_DUMP_CR_PRINT(value);
 
 	HIF_WRITE(0x1881900C, 0x00000003);
-	HIF_READ(0x1881900C, &value);
-	BT_DUMP_CR_PRINT(value);
 	HIF_READ(0x18819008, &value);
 	BT_DUMP_CR_PRINT(value);
 	HIF_READ(0x18819010, &value);
