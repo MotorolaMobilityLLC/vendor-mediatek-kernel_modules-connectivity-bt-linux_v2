@@ -988,7 +988,7 @@ static inline void btmtk_hif_dump_dma1(void) {
 	uint32_t value, cr_count = 6;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s readable check failed, skip", HIF_DBG_TAG, cr_count);
+		BTMTK_INFO("%s readable check failed, skip", HIF_DBG_TAG);
 		return;
 	}
 
@@ -1014,7 +1014,7 @@ static inline void btmtk_hif_dump_bg_sysram1(void) {
 	uint32_t value, pos, cr_count = 8;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
 		return;
 	}
 
@@ -1046,7 +1046,7 @@ static inline void btmtk_hif_dump_bg_sysram2(void) {
 	uint32_t value, pos, cr_count = 8, base, vff_size;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
 		return;
 	}
 
@@ -1096,7 +1096,7 @@ static inline void btmtk_hif_dump_bg_sysram3(void) {
 	uint32_t value, pos, cr_count = 8, base, vff_size;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
 		return;
 	}
 
@@ -1146,7 +1146,7 @@ static inline void btmtk_hif_dump_hif_uart1(void) {
 	uint32_t value, cr_count = 23;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
 		return;
 	}
 
@@ -1204,7 +1204,7 @@ static inline void btmtk_hif_dump_hif_uart2(void) {
 	uint32_t value, cr_count = 14;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
 		return;
 	}
 
@@ -1251,7 +1251,7 @@ static inline void btmtk_hif_dump_cirq_eint(void) {
 	uint32_t value, cr_count = 10;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
 		return;
 	}
 
@@ -1288,7 +1288,7 @@ static inline void btmtk_hif_dump_bg_cfg(void)
 	uint32_t i = 0, value, cr_count = 6 + 6 + 3 + 3 + 13 + 6;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
 		return;
 	}
 
@@ -1400,7 +1400,7 @@ static inline void btmtk_hif_dump_bt_hif_select(void)
 	uint32_t value, cr_count = 3;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
 		return;
 	}
 
@@ -1425,7 +1425,7 @@ static inline void btmtk_hif_dump_bt_pos_check(void)
 	uint32_t value, cr_count = 8;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
 		return;
 	}
 
@@ -1507,7 +1507,7 @@ static inline void btmtk_hif_dump_mcu_var1(void)
 	uint32_t i = 0, value, cr_count = 69;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
 		return;
 	}
 
@@ -1541,7 +1541,7 @@ static inline void btmtk_hif_dump_mcu_var2(void)
 	uint32_t i = 0, value, cr_count = 42;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
 		return;
 	}
 
@@ -1568,7 +1568,7 @@ static inline void btmtk_hif_dump_mcu_var3(void)
 	uint32_t value, cr_count = 6;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
 		return;
 	}
 
@@ -1606,7 +1606,7 @@ static inline void btmtk_hif_dump_mcu_var_stack(void)
 	uint32_t i = 0, pos,value, cr_count = 64;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
 		return;
 	}
 
@@ -1628,7 +1628,7 @@ static inline void btmtk_hif_dump_mcu_var_assert_log_buf(void)
 	uint32_t i = 0, value, cr_count = 180 / 4;
 
 	if (btmtk_connv3_readable_check()) {
-		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__, cr_count);
+		BTMTK_INFO("%s %s: readable check failed, skip", HIF_DBG_TAG, __func__);
 		return;
 	}
 

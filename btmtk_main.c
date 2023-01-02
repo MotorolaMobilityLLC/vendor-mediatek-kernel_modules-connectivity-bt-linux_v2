@@ -5057,7 +5057,7 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 	err = snprintf(bdev->debug_sop_file_name, MAX_BIN_FILE_NAME_LEN,
 		"%s_%x.bin", DEFAULT_DEBUG_SOP_NAME, bdev->chip_id & 0xffff);
 	if (err < 0 || err > MAX_BIN_FILE_NAME_LEN)
-		BTMTK_ERR("%s: error snprintf value = %d", err);
+		BTMTK_ERR("%s: error snprintf value = %d", __func__, err);
 
 	BTMTK_INFO("%s: debug sop file name is %s", __func__,
 		bdev->debug_sop_file_name);
