@@ -2429,11 +2429,16 @@ static int btmtk_sdio_main_thread(void *data)
 	int ret = 0;
 	ulong flags;
 	u32 thread_flag = 0;
+#if (KERNEL_VERSION(5, 9, 0) > LINUX_VERSION_CODE)
 	struct sched_param param = { .sched_priority = 90 }; /* RR 90 is the same as audio*/
-
+#endif
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
+#if (KERNEL_VERSION(5, 9, 0) > LINUX_VERSION_CODE)
 	sched_setscheduler(current, SCHED_RR, &param);
+#else
+	sched_set_fifo(current);
+#endif
 
 	atomic_set(&cif_dev->sdio_thread.thread_status, 1);
 	BTMTK_INFO("thread_status = %d, btmtk_sdio_main_thread start running...",
@@ -3117,7 +3122,7 @@ exit:
 	return ret;
 }
 
-static int btmtk_sdio_whole_reset(struct btmtk_dev *bdev)
+int btmtk_sdio_whole_reset(struct btmtk_dev *bdev)
 {
 	int ret = -1;
 	int cur = 0;

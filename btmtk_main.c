@@ -103,6 +103,7 @@ __weak int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 	return -1;
 }
 
+#if 0
 void btmtk_do_gettimeofday(struct timeval *tv)
 {
 #if (KERNEL_VERSION(4, 19, 85) > LINUX_VERSION_CODE)
@@ -115,30 +116,37 @@ void btmtk_do_gettimeofday(struct timeval *tv)
 	tv->tv_usec = ts.tv_nsec/1000;
 #endif
 }
-
-void btmtk_getUTCtime(struct rtc_time *tm, u32 *usec)
+#endif
+void btmtk_getUTCtime(struct bt_utc_struct *utc)
 {
+#if (KERNEL_VERSION(4, 19, 85) > LINUX_VERSION_CODE)
 	struct timeval tv;
 
-	btmtk_do_gettimeofday(&tv);
-	rtc_time_to_tm(tv.tv_sec, tm);
-	tm->tm_year += 1900;
-	tm->tm_mon += 1;
-	*usec = tv.tv_usec;
+	do_gettimeofday(&tv);
+	rtc_time_to_tm(tv.tv_sec, &utc->tm);
+	utc->usec = tv.tv_usec;
+#else
+	struct timespec64 ts;
+
+	ktime_get_real_ts64(&ts);
+	rtc_time64_to_tm(ts.tv_sec, &utc->tm);
+	utc->usec = ts.tv_nsec/1000;
+#endif
+	utc->tm.tm_year += 1900;
+	utc->tm.tm_mon += 1;
 }
 
 void btmtk_get_UTC_time_str(char *ts_str)
 {
-	struct rtc_time tm;
-	u32 usec;
+	struct bt_utc_struct utc;
 
-	btmtk_getUTCtime(&tm, &usec);
+	btmtk_getUTCtime(&utc);
 
 	memset(ts_str, 0, HCI_SNOOP_TS_STR_LEN);
 	(void)snprintf(ts_str, HCI_SNOOP_TS_STR_LEN,
 			"%04d%02d%02d-%02d%02d%02d.%06u",
-			tm.tm_year, tm.tm_mon, tm.tm_mday,
-			tm.tm_hour, tm.tm_min, tm.tm_sec, usec);
+			utc.tm.tm_year, utc.tm.tm_mon, utc.tm.tm_mday,
+			utc.tm.tm_hour, utc.tm.tm_min, utc.tm.tm_sec, utc.usec);
 
 }
 
@@ -384,21 +392,28 @@ static void btmtk_main_info_initialize(void)
 	atomic_set(&main_info.chip_reset, BTMTK_RESET_DONE);
 	atomic_set(&main_info.subsys_reset, BTMTK_RESET_DONE);
 
-#ifdef CONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT
+#if defined(CONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT)
 	main_info.fwdump_ws = wakeup_source_register(NULL, "btmtk_fwdump_wakelock");
 	main_info.woble_ws = wakeup_source_register(NULL, "btmtk_woble_wakelock");
 	main_info.eint_ws = wakeup_source_register(NULL, "btevent_eint");
 #if WAKEUP_BT_IRQ
 	main_info.irq_ws = wakeup_source_register(NULL, "btevent_irq");
 #endif
-#else
+#elif (defined(LINUX_OS) && (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)) ||	\
+	(defined(ANDROID_OS) && (KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE))
 	main_info.fwdump_ws = wakeup_source_register("btmtk_fwdump_wakelock");
 	main_info.woble_ws = wakeup_source_register("btmtk_woble_wakelock");
 	main_info.eint_ws = wakeup_source_register("btevent_eint");
 #if WAKEUP_BT_IRQ
 	main_info.irq_ws = wakeup_source_register("btevent_irq");
 #endif
-
+#else
+	main_info.fwdump_ws = wakeup_source_register(NULL, "btmtk_fwdump_wakelock");
+	main_info.woble_ws = wakeup_source_register(NULL, "btmtk_woble_wakelock");
+	main_info.eint_ws = wakeup_source_register(NULL, "btevent_eint");
+#if WAKEUP_BT_IRQ
+	main_info.irq_ws = wakeup_source_register(NULL, "btevent_irq");
+#endif
 #endif
 
 	main_info.wmt_over_hci_header[0] = HCI_COMMAND_PKT;
@@ -1624,7 +1639,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 	memset(&tv_start, 0, sizeof(tv_start));
 	memset(&tv_bgf, 0, sizeof(tv_bgf));
 	memset(&tv_ilm, 0, sizeof(tv_ilm));
-	btmtk_do_gettimeofday(&tv_start);
+//	btmtk_do_gettimeofday(&tv_start);
 #endif
 	if (fwbuf == NULL) {
 		BTMTK_WARN("%s, fwbuf is NULL!", __func__);
@@ -1736,9 +1751,9 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 		 */
 #if DEBUG_LD_PATCH_TIME
 		if (loop_count == 0) {
-			btmtk_do_gettimeofday(&tv_bgf);
+//				btmtk_do_gettimeofday(&tv_bgf);
 		} else if (loop_count == 1) {
-			btmtk_do_gettimeofday(&tv_ilm);
+//				btmtk_do_gettimeofday(&tv_ilm);
 			if (tv_bgf.tv_sec != 0 || tv_bgf.tv_usec != 0) {
 				if (tv_ilm.tv_sec >= tv_bgf.tv_sec)
 					dlt_dma = (tv_ilm.tv_sec - tv_bgf.tv_sec) * 1000;

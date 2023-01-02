@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2022010701"
+#define VERSION "7.0.2022011001"
 #define SUBVER ":turnkey"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -308,6 +308,11 @@ struct bt_cfg_struct {
 	struct fw_cfg_struct audio_pinmux_mode;	/* support on set audio pinmux mode command customization */
 };
 
+struct bt_utc_struct {
+	struct rtc_time tm;
+	u32 usec;
+};
+
 #define BT_DOWNLOAD	1
 #define WIFI_DOWNLOAD	2
 #define ZB_DOWNLOAD	3
@@ -348,16 +353,16 @@ struct bt_cfg_struct {
 #define ERRNUM 0xFF
 
 #if DEBUG_DUMP_TIME
-void btmtk_getUTCtime(struct rtc_time *tm, u32 *usec);
+void btmtk_getUTCtime(struct bt_utc_struct *utc);
 #define DUMP_TIME_STAMP(__str) \
 	do { \
-		struct rtc_time tm; \
+		bt_utc_struct utc; \
 		u32 usec; \
-		btmtk_getUTCtime(&tm, &usec); \
+		btmtk_getUTCtime(&utc); \
 		BTMTK_INFO("%s:%d, %s - DUMP_TIME_STAMP UTC: %d-%02d-%02d %02d:%02d:%02d.%06u", \
 			__func__, __LINE__, __str, \
-			tm.tm_year, tm.tm_mon, tm.tm_mday, \
-			tm.tm_hour, tm.tm_min, tm.tm_sec, usec); \
+			utc.tm.tm_year, utc.tm.tm_mon, utc.tm.tm_mday, \
+			utc.tm.tm_hour, utc.tm.tm_min, utc.tm.tm_sec, utc.usec); \
 	} while (0)
 #else
 #define DUMP_TIME_STAMP(__str)
