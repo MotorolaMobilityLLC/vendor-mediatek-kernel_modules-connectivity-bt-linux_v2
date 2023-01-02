@@ -4854,6 +4854,8 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 {
 	int err = 0;
 
+	btmtk_init_node();
+
 	btmtk_reset_timer_add(bdev);
 
 	err = btmtk_main_allocate_memory(bdev);
@@ -5129,13 +5131,6 @@ int __init main_driver_init(void)
 
 	ret = btmtk_cif_register();
 	if (ret < 0) {
-		BTMTK_ERR("*** cif registration failed(%d)! ***", ret);
-		main_exit();
-		return ret;
-	}
-
-	ret = btmtk_fops_initfwlog();
-	if (ret < 0) {
 		BTMTK_ERR("*** STPBTFWLOG registration failed(%d)! ***", ret);
 		main_exit();
 		return ret;
@@ -5152,10 +5147,11 @@ void __exit main_driver_exit(void)
 {
 	BTMTK_INFO("%s", __func__);
 
+	btmtk_deinit_node();
+
 	if (main_info.hif_hook.exit)
 		main_info.hif_hook.exit();
 
-	btmtk_fops_exitfwlog();
 	btmtk_cif_deregister();
 
 	main_exit();

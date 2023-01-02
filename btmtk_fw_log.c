@@ -185,7 +185,7 @@ static void btmtk_proc_delete_entry(void)
 	bmain_info->proc_dir = NULL;
 }
 
-int btmtk_fops_initfwlog(void)
+static int btmtk_fops_initfwlog(void)
 {
 #ifdef STATIC_REGISTER_FWLOG_NODE
 	static int BT_majorfwlog = FIXED_STPBT_MAJOR_DEV_ID + 1;
@@ -260,8 +260,6 @@ int btmtk_fops_initfwlog(void)
 		init_waitqueue_head(&(g_fwlog->fw_log_inq));
 	}
 
-	btmtk_proc_create_new_entry();
-
 	atomic_set(&bmain_info->fwlog_ref_cnt, 0);
 	BTMTK_INFO("%s: End", __func__);
 	return 0;
@@ -286,7 +284,7 @@ alloc_error:
 	return -1;
 }
 
-int btmtk_fops_exitfwlog(void)
+static int btmtk_fops_exitfwlog(void)
 {
 	dev_t devIDfwlog = g_fwlog->g_devIDfwlog;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
@@ -314,8 +312,29 @@ int btmtk_fops_exitfwlog(void)
 
 	kfree(g_fwlog);
 
-	btmtk_proc_delete_entry();
 	return 0;
+}
+static int flag;
+void btmtk_init_node(void)
+{
+	if (flag == 1)
+		return;
+
+	flag = 1;
+	btmtk_proc_create_new_entry();
+	if (btmtk_fops_initfwlog() < 0)
+		BTMTK_ERR("%s: create stpbtfwlog failed.\n", __func__);
+}
+
+void btmtk_deinit_node(void)
+{
+	if (flag != 1)
+		return;
+
+	flag = 0;
+	btmtk_proc_delete_entry();
+	if (btmtk_fops_exitfwlog() < 0)
+		BTMTK_ERR("%s: release stpbtfwlog failed.\n", __func__);
 }
 
 ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)

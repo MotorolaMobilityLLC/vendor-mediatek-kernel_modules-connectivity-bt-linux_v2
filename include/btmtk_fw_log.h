@@ -61,8 +61,8 @@ struct btmtk_fops_fwlog {
 	struct sk_buff_head usr_opcode_queue;
 };
 
-int btmtk_fops_initfwlog(void);
-int btmtk_fops_exitfwlog(void);
+void btmtk_init_node(void);
+void btmtk_deinit_node(void);
 void fw_log_bt_event_cb(void);
 void fw_log_bt_state_cb(uint8_t state);
 /** file_operations: stpbtfwlog */
