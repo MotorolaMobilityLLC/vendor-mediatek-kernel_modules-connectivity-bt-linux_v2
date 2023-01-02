@@ -1,4 +1,10 @@
 $(info [bt_drv] linux_v2/Kbuild start)
+# Support GKI mixed build
+ifeq ($(DEVICE_MODULES_PATH),)
+DEVICE_MODULES_PATH = $(srctree)
+else
+LINUXINCLUDE := $(DEVCIE_MODULES_INCLUDE) $(LINUXINCLUDE)
+endif
 
 export KERNEL_SRC := /lib/modules/$(shell uname -r)/build
 #################### Configurations ####################
@@ -114,7 +120,7 @@ $(info linux_v2/Kbuild [BT_Drv] MTK_PROJ_TYPE = $(MTK_PROJ_TYPE) src = $(src) KO
 ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
     CFILES += proj/btmtk_proj_sp.c proj/btmtk_proj_sp_debug.c
     ccflags-y += -DANDROID_OS
-    ccflags-y += -I$(srctree)/drivers/misc/mediatek/connectivity/power_throttling
+    ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/connectivity/power_throttling
 #else ifeq ($(MTK_PROJ_TYPE), ce)
 else
     CFILES += proj/btmtk_proj_ce.c
