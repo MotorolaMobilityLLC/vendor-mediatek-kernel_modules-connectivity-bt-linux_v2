@@ -1853,7 +1853,9 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	s32 sent_len;
 	int retry = WMT_DELAY_TIMES;
 	int delay = 0;
+	u32 dma_done_cr_r, dma_done_cr_w;
 	u32 reg_value = 0;
+	u32 dma_done_value = 0;
 	u8 dl_done_cmd[LD_PATCH_CMD_LEN] = {0x01, 0x6F, 0xFC, 0x05, 0x01, 0x01, 0x01, 0x00, PATCH_PHASE3};
 	u8 event[LD_PATCH_EVT_LEN] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
 
@@ -1889,8 +1891,10 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			break;
 	}
 
-
-	if (is_mt6639(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7902(bdev->chip_id)) {
+	if (is_mt6639(bdev->chip_id)) {
+		delay = PATCH_DOWNLOAD_PHASE3_SECURE_BOOT_DELAY_TIME;
+		reg_value = BT_GDMA_DONE_6639_VALUE_W;
+	} else if (is_mt7922(bdev->chip_id) || is_mt7902(bdev->chip_id)) {
 		delay = PATCH_DOWNLOAD_PHASE3_SECURE_BOOT_DELAY_TIME;
 		reg_value = BT_GDMA_DONE_7922_VALUE_W;
 	} else {
@@ -1898,17 +1902,27 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		reg_value = BT_GDMA_DONE_7921_VALUE_W;
 	}
 
+	if (is_mt6639(bdev->chip_id)) {
+		dma_done_cr_w = BT_GDMA_DONE_6639_ADDR_W;
+		dma_done_cr_r = BT_GDMA_DONE_6639_ADDR_R;
+		dma_done_value = BT_GDMA_DONE_6639_VALUE_R;
+	} else {
+		dma_done_cr_w = BT_GDMA_DONE_ADDR_W;
+		dma_done_cr_r = BT_GDMA_DONE_ADDR_R;
+		dma_done_value = BT_GDMA_DONE_VALUE_R;
+	}
+
 	/* Poll the register until dma dl is completed */
 	if (is_mt6639(bdev->chip_id) || is_mt7961(bdev->chip_id) || is_mt7922(bdev->chip_id)) {
 		do {
-			btmtk_cif_write_uhw_register(bdev, BT_GDMA_DONE_ADDR_W, reg_value);
-			btmtk_cif_read_uhw_register(bdev, BT_GDMA_DONE_ADDR_R, &value);
-			if ((value & BT_GDMA_DONE_VALUE_R) == value)
+			btmtk_cif_write_uhw_register(bdev, dma_done_cr_w, reg_value);
+			btmtk_cif_read_uhw_register(bdev, dma_done_cr_r, &value);
+			if ((value & dma_done_value) == value)
 				break;
 			msleep(DELAY_TIMES);
 		} while (retry-- > 0);
 
-		if ((value & BT_GDMA_DONE_VALUE_R) != value) {
+		if ((value & dma_done_value) != value) {
 			BTMTK_INFO("%s: DL Failed cr=%08X", __func__, value);
 			ret = -1;
 			btmtk_send_assert_cmd(bdev);
