@@ -243,8 +243,8 @@ int32_t btmtk_receive_data(struct hci_dev *hdev, u8 *buf, u32 count)
 {
 	u32 read_bytes = 0;
 
-	BTMTK_DBG("%s: start", __func__);
 	rx_dequeue(hdev, buf, count, &read_bytes);
+	BTMTK_DBG_RAW(buf, read_bytes, "%s, len[%d]", __func__, read_bytes);
 	/* TODO: disable quick PS mode by traffic density */
 	return read_bytes;
 }
