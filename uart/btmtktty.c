@@ -846,6 +846,9 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 		if (bmain_info->hif_hook.dump_hif_debug_sop)
 			bmain_info->hif_hook.dump_hif_debug_sop(bdev);
 
+		BTMTK_INFO("%s: set bt assert_state end", __func__);
+		atomic_set(&bdev->assert_state, BTMTK_ASSERT_END);
+
 		/* if during btmtk_pre_chip_rst_handler (BTMTK_RESET_DOING)
 		 * leave hw_err to btmtk_post_chip_rst_handler
 		 */
@@ -1617,6 +1620,8 @@ static int btmtk_uart_init(struct btmtk_dev *bdev)
 		BTMTK_ERR("btmtk_uart_set_pinmux failed!");
 		goto free_hci;
 	}
+#else
+	INIT_WORK(&bdev->hif_dump_work, btmtk_hif_dump_work);
 #endif
 
 	INIT_WORK(&bdev->reset_waker, btmtk_reset_waker);
