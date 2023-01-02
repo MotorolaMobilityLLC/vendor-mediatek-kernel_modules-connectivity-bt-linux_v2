@@ -517,7 +517,7 @@ int btmtk_pre_cal_pwr_on_cb(void)
 }
 int btmtk_pre_cal_do_cal_cb(void)
 {
-	int ret = 0;
+	int ret = -1;
 	struct btmtk_uart_dev *cif_dev = NULL;
 
 	BTMTK_INFO("%s start", __func__);
@@ -528,23 +528,23 @@ int btmtk_pre_cal_do_cal_cb(void)
 	/* err handle for uart disconnect */
 	if (g_sbdev == NULL) {
 		BTMTK_ERR("%s: g_sbdev == NULL", __func__);
-		return -1;
+		goto exit;
 	}
 
 	if (g_sbdev->hdev == NULL) {
 		BTMTK_ERR("%s: g_sbdev->hdev == NULL", __func__);
-		return -1;
+		goto exit;
 	}
 
 	if (g_sbdev->hdev->close == NULL) {
 		BTMTK_ERR("%s: g_sbdev->hdev->close == NULL", __func__);
-		return -1;
+		goto exit;
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
 	if (!cif_dev) {
 		BTMTK_ERR("[ERR] cif_dev is NULL");
-		return -1;
+		goto exit;
 	}
 
 	cif_dev->is_pre_cal = TRUE;
@@ -554,9 +554,12 @@ int btmtk_pre_cal_do_cal_cb(void)
 		BTMTK_ERR("%s: BT turn off fail!", __func__);
 		return ret;
 	}
+	ret = 0;
 	BTMTK_INFO("%s: BT turn off ok!", __func__);
 
-	return 0;
+exit:
+	g_sbdev->is_pre_cal_done = TRUE;
+	return ret;
 }
 
 
@@ -830,8 +833,7 @@ void btmtk_async_trx_work(struct work_struct *work)
 void btmtk_pwr_on_uds_work(struct work_struct *work)
 {
 	//struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, pwr_on_uds_work);
-	int ret = 0;
-	struct btmtk_uart_dev *cif_dev = NULL;
+	int ret = 0, retry = 0;
 
 	BTMTK_INFO("%s start", __func__);
 
@@ -851,18 +853,34 @@ void btmtk_pwr_on_uds_work(struct work_struct *work)
 		return;
 	}
 
-	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
-	if (!cif_dev) {
-		BTMTK_ERR("[ERR] cif_dev is NULL");
-		return;
-	}
+	/* uds bt on in reboot conflict with pre-cal flow */
+	/* But if bt already on, no need to retry open */
+	do {
+		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_DISCONNECT) {
+			BTMTK_WARN("%s: uart disconnected", __func__);
+			return;
+		}
+		/* wait pre-cal done */
+		if (g_sbdev->is_pre_cal_done) {
+			ret = g_sbdev->hdev->open(g_sbdev->hdev);
+			break;
+		} else {
+			BTMTK_WARN_LIMITTED("%s: retry[%d] is_pre_cal_done[%d]"
+							, __func__, ret, retry, g_sbdev->is_pre_cal_done);
+			msleep(20);
+		}
+	} while (retry++ < BT_OPEN_MAX_RETRY);
 
-	ret = g_sbdev->hdev->open(g_sbdev->hdev);
 	if (ret) {
 		BTMTK_ERR("%s: BT turn on fail!", __func__);
 		return;
 	}
 	BTMTK_INFO("%s: BT turn on ok!", __func__);
+
+	if (g_sbdev->hdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev->hdev == NULL", __func__);
+		return;
+	}
 
 	ret = g_sbdev->hdev->close(g_sbdev->hdev);
 	if (ret) {

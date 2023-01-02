@@ -93,6 +93,8 @@
 #define DELAY_TIMES 20
 #define RETRY_TIMES 20
 
+#define BT_OPEN_MAX_RETRY	100
+
 /* Expected minimum supported interface */
 #define BT_MCU_MINIMUM_INTERFACE_NUM	4
 
@@ -594,6 +596,9 @@ struct btmtk_dev {
 
 	int	suspend_count;
 	bool	suspend_state;
+
+	/* pre-cal flag */
+	bool            is_pre_cal_done;
 
 	/* For tx queue */
 	unsigned long	tx_state;

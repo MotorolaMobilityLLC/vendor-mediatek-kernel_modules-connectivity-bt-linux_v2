@@ -135,6 +135,8 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	int ret;
+	int state = BTMTK_STATE_INIT;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	BTMTK_INFO("%s enter!", __func__);
 	if (bdev == NULL) {
@@ -150,6 +152,19 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 #endif
 
 #if (USE_DEVICE_NODE == 1)
+	/* wait coredump end */
+	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
+			|| state == BTMTK_STATE_SUBSYS_RESET) {
+		BTMTK_WARN("%s: wait dump_comp , can't close yet state[%d]", __func__, state);
+		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
+			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
+			btmtk_fwdump_wake_unlock();
+			connv3_coredump_end(bmain_info->hif_hook.coredump_handler, "BT coredump not complete");
+			btmtk_sp_coredump_end();
+		}
+	}
+
 	cancel_work_sync(&bdev->reset_waker);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
@@ -1106,9 +1121,12 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 				/* only wait 3ms for tty buffer clean */
 				usleep_range(10, 20);
 			} while (count != 0 && flush_retry++ < BTMTK_MAX_WAIT_RETRY);
-			if (flush_retry < BTMTK_MAX_WAIT_RETRY)
+			if (flush_retry < BTMTK_MAX_WAIT_RETRY) {
+				/* stop uart auto send next pkt to avoid flush conflict with send pkt */
+				cif_dev->tty->flow.stopped = true;
 				tty_driver_flush_buffer(cif_dev->tty);
-
+				cif_dev->tty->flow.stopped = false;
+			}
 			time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
 			if (time_diff >= TIME_BOUND_OF_TTY_FLUSH)
 				BTMTK_ERR("%s: flush time takes %lu ms", __func__, time_diff);
@@ -1181,12 +1199,16 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 			usleep_range(10, 20);
 		} while (count != 0 && flush_retry++ < BTMTK_MAX_WAIT_RETRY);
 
-		if (flush_retry < BTMTK_MAX_WAIT_RETRY)
+		if (flush_retry < BTMTK_MAX_WAIT_RETRY) {
+			/* stop uart auto send next pkt to avoid flush conflict with send pkt */
+			cif_dev->tty->flow.stopped = true;
 			tty_driver_flush_buffer(cif_dev->tty);
+			cif_dev->tty->flow.stopped = false;
+		}
 
 		time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
 		if (time_diff >= TIME_BOUND_OF_TTY_FLUSH)
-			BTMTK_ERR("%s: flush time takes %lu ms", __func__, time_diff);		
+			BTMTK_ERR("%s: flush time takes %lu ms", __func__, time_diff);
 	}
 
 	count = 0;
@@ -2099,6 +2121,9 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_uart_dev *cif_dev;
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+#if (USE_DEVICE_NODE == 1)
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+#endif
 
 	bdev = dev_get_drvdata(tty->dev);
 	if (bdev == NULL) {
@@ -2117,24 +2142,34 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 	}
 
 	cif_state = &bdev->cif_state[cif_event];
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+#if (SLEEP_ENABLE == 1)
+	btmtk_uart_delete_fw_own_timer(cif_dev);
+#endif
+
+#if (USE_DEVICE_NODE == 1)
+	/* update fw log bt state */
+	if (bmain_info->hif_hook.fw_log_state)
+		bmain_info->hif_hook.fw_log_state(BTMTK_FOPS_STATE_CLOSED);
+	cancel_work_sync(&bdev->pwr_on_uds_work);
+#endif
 
 	btmtk_uart_cif_mutex_lock(bdev);
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
-	/* temp solution for disconnect at random time would KE */
-	BTMTK_INFO("%s wait", __func__);
-	msleep(3000);
 	fstate = btmtk_fops_get_state(bdev);
 	if (fstate == BTMTK_FOPS_STATE_CLOSING || fstate == BTMTK_FOPS_STATE_OPENING) {
 		/* temp solution for disconnect at random time would KE */
 		BTMTK_WARN("%s bt opening/closing, skip free in disconnect", __func__);
 	} else {
 		/* Do HIF events */
-		btmtk_uart_tty_disconnect(tty);
 #if (USE_DEVICE_NODE == 1)
 		btmtk_connv3_sub_drv_deinit();
+		btmtk_set_gpio_default();
 #endif
+		btmtk_uart_tty_disconnect(tty);
 		devm_kfree(tty->dev, cif_dev);
 	}
 	wakeup_source_unregister(bt_trx_wakelock);
