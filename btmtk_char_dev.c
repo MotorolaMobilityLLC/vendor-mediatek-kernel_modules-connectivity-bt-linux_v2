@@ -506,9 +506,6 @@ static int BT_open(struct inode *inode, struct file *file)
 {
 	int32_t ret;
 
-	__pm_stay_awake(bt_wakelock);
-	BTMTK_INFO("major %d minor %d (pid %d)", imajor(inode), iminor(inode), current->pid);
-
 	/* Turn on BT */
 	if (g_sbdev == NULL) {
 		BTMTK_ERR("g_sbdev == NULL");
@@ -524,6 +521,12 @@ static int BT_open(struct inode *inode, struct file *file)
 		BTMTK_ERR("g_sbdev->hdev->open == NULL");
 		return -1;
 	}
+
+	/* incase of rc with pwr_on_uds_work */
+	flush_work(&g_sbdev->pwr_on_uds_work);
+
+	__pm_stay_awake(bt_wakelock);
+	BTMTK_INFO("major %d minor %d (pid %d)", imajor(inode), iminor(inode), current->pid);
 
 	ret = g_sbdev->hdev->open(g_sbdev->hdev);
 	if (ret) {
@@ -548,8 +551,6 @@ static int BT_close(struct inode *inode, struct file *file)
 {
 	int32_t ret;
 
-	__pm_stay_awake(bt_wakelock);
-	BTMTK_INFO("%s: major %d minor %d (pid %d)", __func__, imajor(inode), iminor(inode), current->pid);
 	bt_ftrace_flag = 0;
 	//bt_core_unregister_rx_event_cb();
 
@@ -568,9 +569,12 @@ static int BT_close(struct inode *inode, struct file *file)
 		BTMTK_ERR("%s: g_sbdev->hdev->close == NULL", __func__);
 		return -1;
 	}
+	__pm_stay_awake(bt_wakelock);
+	BTMTK_INFO("%s: major %d minor %d (pid %d)", __func__, imajor(inode), iminor(inode), current->pid);
 
 	ret = g_sbdev->hdev->close(g_sbdev->hdev);
 	__pm_relax(bt_wakelock);
+
 #if 0 // Simfex
 	bthost_debug_init();
 #endif
