@@ -207,6 +207,8 @@ struct btmtk_uart_dev {
 
 	/* sempaphore to compare event */
 	struct semaphore	evt_comp_sem;
+	/* sempaphore to tty flush & write operation */
+	struct semaphore	tty_flush_sem;
 
 #if (USE_DEVICE_NODE == 1)
 	/* dynamic tx power control */
