@@ -110,6 +110,8 @@ int btmtk_set_pcm_pin_mux(void);
 int btmtk_set_uart_rx_aux(void);
 
 int btmtk_set_gpio_default(void);
+int btmtk_set_gpio_default_for_close(void);
+
 int btmtk_pre_power_on_handler(void);
 
 int btmtk_sp_whole_chip_reset(struct btmtk_dev *bdev);
