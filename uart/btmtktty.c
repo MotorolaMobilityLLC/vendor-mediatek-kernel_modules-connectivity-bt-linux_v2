@@ -1153,6 +1153,9 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	}
 
 	BTMTK_INFO("%s: patch done max_pkt_cnt[%d], send wmt dl cmd ", __func__, max_pkt_cnt);
+
+	/* seperate phase 3 cmd with dma mode content */
+	usleep_range(1000, 1100);
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, LD_PATCH_CMD_LEN,
 			event, LD_PATCH_EVT_LEN,
