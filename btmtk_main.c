@@ -158,12 +158,14 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc)
 	do_gettimeofday(&tv);
 	rtc_time_to_tm(tv.tv_sec, &utc->tm);
 	utc->usec = tv.tv_usec;
+	utc->sec = tv.tv_sec;
 #else
 	struct timespec64 ts;
 
 	ktime_get_real_ts64(&ts);
 	rtc_time64_to_tm(ts.tv_sec, &utc->tm);
 	utc->usec = ts.tv_nsec/1000;
+	utc->sec = ts.tv_sec;
 #endif
 	utc->tm.tm_year += 1900;
 	utc->tm.tm_mon += 1;

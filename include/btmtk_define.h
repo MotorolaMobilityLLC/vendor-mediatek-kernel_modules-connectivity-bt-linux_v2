@@ -352,6 +352,7 @@ struct bt_cfg_struct {
 struct bt_utc_struct {
 	struct rtc_time tm;
 	u32 usec;
+	u32 sec;
 };
 
 #define BT_DOWNLOAD	1
@@ -412,8 +413,9 @@ struct debug_reg_struct {
 
 #define ERRNUM 0xFF
 
-#if DEBUG_DUMP_TIME
 void btmtk_getUTCtime(struct bt_utc_struct *utc);
+
+#if DEBUG_DUMP_TIME
 #define DUMP_TIME_STAMP(__str) \
 	do { \
 		struct bt_utc_struct utc; \

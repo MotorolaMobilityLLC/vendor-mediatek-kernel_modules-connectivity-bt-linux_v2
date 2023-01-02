@@ -1055,5 +1055,39 @@ void btmtk_pwrctrl_register_evt(void)
 	conn_pwr_register_event_cb(CONN_PWR_DRV_BT, (CONN_PWR_EVENT_CB)btmtk_pwrctrl_level_change_cb);
 }
 
+/* btmtk_intcmd_wmt_utc_sync
+ *
+ *    Send time sync command to FW to synchronize time
+ *
+ * Arguments:
+ *    [IN] hdev     - hci_device as control structure during BT life cycle
+ *
+ * Return Value:
+ *    N/A
+ *
+ */
+int32_t btmtk_intcmd_wmt_utc_sync(void)
+{
+	struct bt_utc_struct utc;
+	uint8_t cmd[] =  {0x01, 0x5D, 0xFC, 0x0A, 0x02, 0x02,
+			  0x00, 0x00, 0x00, 0x00,	/* UTC time second unit */
+			  0x00, 0x00, 0x00, 0x00};	/* UTC time microsecond unit*/
+	/* uint8_t evt[] = {0x04, 0xE4, 0x06, 0x02, 0xF0, 0x02, 0x00, 0x02, 0x00}; */
+
+	BTMTK_INFO("[InternalCmd] %s", __func__);
+
+	btmtk_getUTCtime(&utc);
+
+	//connsys_log_get_utc_time(&sec, &usec);
+	memcpy(cmd + 6, &utc.sec, sizeof(uint32_t));
+	memcpy(cmd + 6 + sizeof(uint32_t), &utc.usec, sizeof(uint32_t));
+
+	btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd),
+		NULL, 0, 0, 0, BTMTK_TX_CMD_FROM_DRV);
+
+	return 0;
+}
+
+
 #endif // (USE_DEVICE_NODE == 1)
 
