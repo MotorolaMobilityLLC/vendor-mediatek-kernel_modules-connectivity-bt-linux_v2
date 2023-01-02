@@ -17,7 +17,6 @@
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include "btmtk_main.h"
-#include "connv3.h"
 #include "conninfra.h"
 #include "connfem.h"
 #include "btmtk_proj_sp.h"
@@ -39,6 +38,104 @@
 #if (USE_DEVICE_NODE == 1)
 static struct pinctrl *pinctrl_ptr;
 extern struct btmtk_dev *g_sbdev;
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+void btmtk_uarthub_err_cb(unsigned int err_type)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+	int state;
+
+	BTMTK_INFO("%s: err_type[%d]", __func__, err_type);
+
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return;
+	}
+
+	state = btmtk_get_chip_state(g_sbdev);
+
+	if (state != BTMTK_STATE_WORKING) {
+		BTMTK_ERR("%s: state[%d] is not working", __func__, state);
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+
+	if (cif_dev->tty  == NULL) {
+		BTMTK_ERR("%s: tty is NULL", __func__);
+		return;
+	}
+
+	if ((1 << dev0_tx_timeout_err) & err_type) {
+		BTMTK_INFO("%s: dev0_tx_timeout_err", __func__);
+		if (cif_dev->hub_en)
+			mtk8250_uart_dump(cif_dev->tty);
+	}
+	return;
+}
+#endif
+
+void btmtk_sp_coredump_start(void)
+{
+
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s: start", __func__);
+
+	if (!g_sbdev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+	/* wait coredump end */
+	reinit_completion(&g_sbdev->dump_comp);
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	/* uarthub assert bit to avoid MD/ADSP send data */
+	if (cif_dev->hub_en) {
+		mtk8250_uart_hub_assert_bit_ctrl(1);
+		BTMTK_DBG("%s mtk8250_uart_hub_assert_bit_ctrl(1)", __func__);
+		mtk8250_uart_dump(cif_dev->tty);
+	}
+#endif
+
+}
+
+void btmtk_sp_coredump_end(void)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s: start", __func__);
+
+	if (!g_sbdev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	/* uarthub reset */
+	if (cif_dev->hub_en) {
+		mtk8250_uart_hub_assert_bit_ctrl(0);
+		BTMTK_DBG("%s mtk8250_uart_hub_assert_bit_ctrl(0)", __func__);
+		mtk8250_uart_hub_reset();
+		BTMTK_DBG("%s mtk8250_uart_hub_reset", __func__);
+	}
+#endif
+}
 
 static inline int btmtk_pinctrl_exec(const char *name)
 {
@@ -319,8 +416,18 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 		BTMTK_ERR("[ERR] %s: fail to get bt pinctrl", __func__);
 		return -1;
 	}
-	//btmtk_pinctrl_exec(INIT_STATE_PINCTRL_NAME);
+
+	/* set gpio to default */
+	btmtk_set_gpio_default();
+
 	connv3_sub_drv_ops_register(CONNV3_DRV_TYPE_BT, &btmtk_drv_cbs);
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	if (cif_dev->hub_en) {
+		ret = mtk8250_uart_hub_register_cb(btmtk_uarthub_err_cb);
+		BTMTK_DBG("%s mtk8250_uart_hub_register_cb ret[%d]", __func__, ret);
+	}
+#endif
 	BTMTK_INFO("%s end, baudrate[%d] hub_en[%d] sleep_en[%d]", __func__, cif_dev->baudrate, cif_dev->hub_en, cif_dev->sleep_en);
 	return 0;
 }

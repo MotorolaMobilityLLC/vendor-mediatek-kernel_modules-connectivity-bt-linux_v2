@@ -5,9 +5,7 @@
 #include "btmtk_fw_log.h"
 
 #if (USE_DEVICE_NODE == 1)
-#include "connv3_debug_utility.h"
-#include "connv3_mcu_log.h"
-#include "connv3.h"
+#include "btmtk_proj_sp.h"
 #endif
 
 /*
@@ -1101,8 +1099,10 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				BTMTK_ERR("%s: coredump_handler is NULL", __func__);
 				goto coredump_fail;
 			}
+
+			btmtk_sp_coredump_start();
+
 			btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
-			reinit_completion(&bdev->dump_comp);
 			btmtk_fwdump_wake_lock();
 			line = __LINE__;
 			ret = connv3_coredump_start(
@@ -1166,7 +1166,9 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			/* This is the latest coredump packet. */
 			BTMTK_INFO("%s: FW dump end, dump_data_counter[%d], dump_data_length[%d]",
 						__func__, dump_data_counter, dump_data_length);
-			//btmtk_log_lvl = ori_log_lvl;
+
+			btmtk_sp_coredump_end();
+
 			ret = connv3_coredump_end(bmain_info->hif_hook.coredump_handler, "BT assert");
 			if (bmain_info->hif_hook.waker_notify)
 				bmain_info->hif_hook.waker_notify(bdev);

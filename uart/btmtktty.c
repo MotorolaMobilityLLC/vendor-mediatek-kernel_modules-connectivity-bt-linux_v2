@@ -20,26 +20,12 @@
 #include "btmtk_define.h"
 #include "btmtk_uart_tty.h"
 #include "btmtk_main.h"
-//#include "connv3.h"
+
 #if (USE_DEVICE_NODE == 1)
 #include "btmtk_proj_sp.h"
 #include <linux/platform_device.h>
 #include <linux/of_device.h>
-#include "connv3_debug_utility.h"
-#include "connv3_mcu_log.h"
 #include "btmtk_fw_log.h"
-#include "connv3.h"
-
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
-/* uarthub API */
-extern int mtk8250_uart_hub_enable_bypass_mode(int bypass);
-extern int mtk8250_uart_hub_is_ready(void);
-extern int mtk8250_uart_hub_set_request(void);
-extern int mtk8250_uart_hub_clear_request(void);
-extern int mtk8250_uart_hub_fifo_ctrl(int ctrl);
-extern int mtk8250_uart_hub_dump_with_tag(const char *tag);
-#endif
-
 #endif
 
 #define LOG TRUE
@@ -198,11 +184,14 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 	cancel_work_sync(&bdev->reset_waker);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	/* Clr TX,RX request, let uarthub can sleep */
-	ret =  mtk8250_uart_hub_clear_request();
-	if (ret) {
-		BTMTK_ERR("%s  mtk8250_uart_hub_clear_request fail ret[%d]", __func__, ret);
+
+	if (cif_dev->hub_en) {
+		/* Clr TX,RX request, let uarthub can sleep */
+		ret =  mtk8250_uart_hub_clear_request();
+		if (ret)
+			BTMTK_ERR("%s  mtk8250_uart_hub_clear_request fail ret[%d]", __func__, ret);
 	}
+
 #endif
 
 	btmtk_tx_thread_exit(bdev->cif_dev);
@@ -495,7 +484,11 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
 
 	if (ret == -1) {
-		BTMTK_ERR("%s wait event timeout!!", __func__);
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+		if (cif_dev->hub_en)
+			ret = mtk8250_uart_dump(cif_dev->tty);
+#endif
+		BTMTK_ERR("%s wait event timeout, ret[%d]", __func__, ret);
 		bdev->recv_evt_len = 0;
 		ret = -ERRNUM;
 		goto fw_assert;
@@ -804,9 +797,17 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 
 		ret = btmtk_wakeup_uarthub();
 
+		/* reset uarthub assert bit */
+		ret = mtk8250_uart_hub_assert_bit_ctrl(0);
+		BTMTK_DBG("%s mtk8250_uart_hub_assert_bit_ctrl(0) ret[%d]", __func__, ret);
+
 		/* use uarthub bypass mode */
 		ret = mtk8250_uart_hub_enable_bypass_mode(1);
 		BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
+
+		/* disable ADSP,MD when fw dl, include reset uarthub */
+		ret = mtk8250_uart_hub_fifo_ctrl(1);
+		BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(1) ret[%d]", __func__, ret);
 	}
 #endif
 	/* set tty host baud and flowcontrol to default value */
@@ -869,15 +870,6 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
 	if (ret < 0)
 		goto exit;
-
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	if (cif_dev->hub_en) {
-		/* disable ADSP,MD when fw dl */
-		ret = mtk8250_uart_hub_fifo_ctrl(1);
-		BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(1) ret[%d]", __func__, ret);
-	}
-#endif
-
 
 	ret = btmtk_load_rom_patch(bdev);
 	cif_event = HIF_EVENT_PROBE;
@@ -1116,6 +1108,10 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	if(cmd_len == ASSERT_CMD_LEN && memcmp(assert_cmd, cmd, ASSERT_CMD_LEN) == 0) {
 		BTMTK_INFO("%s: trigger assert", __func__);
 		btmtk_set_chip_state(bdev, BTMTK_STATE_SEND_ASSERT);
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+		if (cif_dev->hub_en)
+			mtk8250_uart_dump(cif_dev->tty);
+#endif
 	}
 
 	while (len != cmd_len && count < BTMTK_MAX_SEND_RETRY) {
