@@ -601,11 +601,7 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, SETBAUD_CMD_LEN, event, SETBAUD_EVT_LEN, 0,
-#if (USE_DEVICE_NODE == 0)
 			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
-#else
-			SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_CMD_FROM_DRV);
-#endif
 
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
