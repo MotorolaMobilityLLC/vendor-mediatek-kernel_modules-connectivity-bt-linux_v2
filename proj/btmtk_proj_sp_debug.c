@@ -21,6 +21,18 @@
 #define RHW_DBG_TAG	"[btmtk_dbg_sop_rhw]"
 #define HIF_DBG_TAG	"[btmtk_dbg_sop_hif]"
 
+
+#define FW_CR_WR_CMD_PKT_LEN	24
+#define FW_CR_RD_CMD_PKT_LEN	16
+#define FW_CR_WR_EVT_PKT_LEN	11
+#define FW_CR_RD_EVT_PKT_LEN	19
+#define FW_CR_ADDR_LEN	4
+#define FW_CR_DATA_LEN	4
+#define FW_CR_CMD_ADDR_OFFSET	(FW_CR_RD_CMD_PKT_LEN - FW_CR_ADDR_LEN)
+#define FW_CR_CMD_DATA_OFFSET	(FW_CR_CMD_ADDR_OFFSET + FW_CR_DATA_LEN)
+#define FW_CR_EVT_ADDR_OFFSET	(FW_CR_RD_EVT_PKT_LEN - FW_CR_ADDR_LEN - FW_CR_DATA_LEN)
+#define FW_CR_EVT_DATA_OFFSET	(FW_CR_EVT_ADDR_OFFSET + FW_CR_ADDR_LEN)
+
 struct bt_dump_cr_buffer {
 	uint8_t buffer[BT_CR_DUMP_BUF_SIZE];
 	uint32_t cr_count;
@@ -119,6 +131,7 @@ int RHW_READ(uint32_t addr, uint32_t *val)
 {
 	int ret = -1;
 	struct btmtk_uart_dev *cif_dev = NULL;
+
 	/* ex: read dummy CR 0x022121cc */
 	u8 cmd[RHW_PKT_LEN] = {0x41, 0x00, 0x00, 0x08, 0x00,
 				0xCC, 0x21, 0x21, 0x02,
@@ -165,91 +178,72 @@ int RHW_READ(uint32_t addr, uint32_t *val)
 int CONNV3_RHW_WRITE(uint32_t addr, uint32_t val)
 {
 	int ret = -1;
-	struct btmtk_uart_dev *cif_dev = NULL;
 
-	/* ex: write dummy CR 0x022121cc = 0x44332222 */
-	u8 cmd[RHW_PKT_LEN] = {0x40, 0x00, 0x00, 0x08, 0x00,
-				0xCC, 0x21, 0x21, 0x02,
-				0x22, 0x22, 0x33, 0x44};
-	u8 evt[RHW_PKT_LEN] = {0x40, 0x00, 0x00, 0x08, 0x00,
-				0xCC, 0x21, 0x21, 0x02,
-				0x22, 0x22, 0x33, 0x44};
+	/* ex: write dummy CR 0x70025014 = 0x11223344 */
+	u8 cmd[FW_CR_WR_CMD_PKT_LEN] = {0x01, 0x6F, 0xFC, 0x14,		// hci cmd header
+									0x01, 0x08, 0x10, 0x00,		// fw cmd header
+									0x01, 0x01, 0x00, 0x01,		// 0x01 write, 0x02 read
+									0x14, 0x50, 0x02, 0x70,		// address
+									0x44, 0x33, 0x22, 0x11,		// data
+									0xFF, 0xFF, 0xFF, 0xFF};	// mask
+
+	u8 evt[FW_CR_WR_EVT_PKT_LEN] = {0x04, 0xE4, 0x08, 0x02, 0x08,
+									0x04, 0x00, 0x00, 0x00, 0x00, 0x01};
 
 	if (g_sbdev == NULL) {
 		BTMTK_ERR("%s: g_sbdev is NULL", __func__);
 		return -1;
 	}
-	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
-	if (cif_dev == NULL) {
-		BTMTK_ERR("%s: cif_dev is NULL", __func__);
-		return -1;
-	}
-
-	if (cif_dev->rhw_fail_cnt > BT_RHW_MAX_ERR_COUNT) {
-		BTMTK_WARN_LIMITTED("%s skip, rhw_fail_cnt[%d]", __func__, cif_dev->rhw_fail_cnt);
-		return ret;
-	}
 
 	BTMTK_DBG("%s: write addr[%x], value[0x%08x]", __func__, addr, val);
-	memcpy(&cmd[RHW_ADDR_OFFSET_CMD], &addr, RHW_ADDR_LEN);
-	memcpy(&cmd[RHW_VAL_OFFSET_CMD], &val, RHW_VAL_LEN);
+	memcpy(&cmd[FW_CR_CMD_ADDR_OFFSET], &addr, FW_CR_ADDR_LEN);
+	memcpy(&cmd[FW_CR_CMD_DATA_OFFSET], &val, FW_CR_DATA_LEN);
 
-	memcpy(&evt[RHW_ADDR_OFFSET_CMD], &addr, RHW_ADDR_LEN);
-
-	ret = btmtk_main_send_cmd(g_sbdev, cmd, RHW_PKT_LEN, evt, RHW_PKT_COMP_LEN, DELAY_TIMES,
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+	ret = btmtk_main_send_cmd(g_sbdev, cmd, FW_CR_WR_CMD_PKT_LEN, evt, FW_CR_WR_EVT_PKT_LEN,
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 	if (ret < 0)
-		BTMTK_ERR("%s failed, rhw_fail_cnt[%d]", __func__, ++cif_dev->rhw_fail_cnt);
+		BTMTK_ERR("%s failed", __func__);
 
 	return ret ;
-
 }
 
 int CONNV3_RHW_READ(uint32_t addr, uint32_t *val)
 {
 	int ret = -1;
-	struct btmtk_uart_dev *cif_dev = NULL;
-	/* ex: read dummy CR 0x022121cc */
-	u8 cmd[RHW_PKT_LEN] = {0x41, 0x00, 0x00, 0x08, 0x00,
-				0xCC, 0x21, 0x21, 0x02,
-				0x00, 0x00, 0x00, 0x00};
 
-	u8 evt[RHW_PKT_LEN] = {0x41, 0x00, 0x00, 0x08, 0x00,
-				0xCC, 0x21, 0x21, 0x02,
-				0x00, 0x00, 0x00, 0x00};
+	/* ex: read dummy CR 0x70025014 = 0x11223344 */
+	u8 cmd[FW_CR_RD_CMD_PKT_LEN] = {0x01, 0x6F, 0xFC, 0x0C,				// hci cmd header
+									0x01, 0x08, 0x08, 0x00,				// fw cmd header
+									0x02, 0x01, 0x00, 0x01,				// 0x01 write, 0x02 read
+									0x14, 0x50, 0x02, 0x70};			// address
+
+	u8 evt[FW_CR_RD_EVT_PKT_LEN] = {0x04, 0xE4, 0x10, 0x02, 0x08,
+									0x0C, 0x00, 0x00, 0x00, 0x00, 0x01,
+									0x14, 0x50, 0x02, 0x70, 			// address
+									0x44, 0x33, 0x22, 0x11}; 			// data
 
 	if (g_sbdev == NULL) {
 		BTMTK_ERR("%s: g_sbdev is NULL", __func__);
 		return -1;
 	}
-	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
-	if (cif_dev == NULL) {
-		BTMTK_ERR("%s: cif_dev is NULL", __func__);
-		return -1;
-	}
 
-	if (cif_dev->rhw_fail_cnt > BT_RHW_MAX_ERR_COUNT) {
-		*val = 0xdeaddead;
-		BTMTK_WARN_LIMITTED("%s skip, rhw_fail_cnt[%d]", __func__, cif_dev->rhw_fail_cnt);
-		return ret;
-	}
-	memcpy(&cmd[RHW_ADDR_OFFSET_CMD], &addr, sizeof(addr));
-	memcpy(&evt[RHW_ADDR_OFFSET_CMD], &addr, sizeof(addr));
+	memcpy(&cmd[FW_CR_CMD_ADDR_OFFSET], &addr, sizeof(addr));
+	memcpy(&evt[FW_CR_EVT_ADDR_OFFSET], &addr, sizeof(addr));
 
-	ret = btmtk_main_send_cmd(g_sbdev, cmd, RHW_PKT_LEN, evt, RHW_PKT_COMP_LEN, DELAY_TIMES,
+	ret = btmtk_main_send_cmd(g_sbdev, cmd, FW_CR_RD_CMD_PKT_LEN,
+			evt, FW_CR_EVT_DATA_OFFSET, DELAY_TIMES,
 			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 
 	if (ret >= 0) {
-		memcpy(val, g_sbdev->io_buf + RHW_PKT_COMP_LEN, sizeof(u32));
+		memcpy(val, g_sbdev->io_buf + FW_CR_EVT_DATA_OFFSET, sizeof(u32));
 		*val = le32_to_cpu(*val);
 	} else {
 		*val = 0xdeaddead;
-		BTMTK_ERR("%s failed, rhw_fail_cnt[%d]", __func__, ++cif_dev->rhw_fail_cnt);
+		BTMTK_ERR("%s failed", __func__);
 	}
 	BTMTK_DBG("%s: addr[%x], val[0x%08x]", __func__, addr, *val);
 
 	return ret;
-
 }
 
 
