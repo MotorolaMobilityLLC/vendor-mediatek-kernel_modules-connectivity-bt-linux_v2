@@ -61,12 +61,15 @@ void btmtk_reset_timer_del(struct btmtk_dev *bdev)
 void btmtk_reset_waker(struct work_struct *work)
 {
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, reset_waker);
-	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	int state = BTMTK_STATE_INIT;
-	int cif_event = 0, err = 0;
+	int err = 0;
 	int cur = 0;
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+#if (USE_DEVICE_NODE == 0)
+	int cif_event = 0
+	struct btmtk_cif_state *cif_state = NULL;
+#endif
 
 	/* Check chip state is ok to do reset or not */
 	state = btmtk_get_chip_state(bdev);
@@ -78,11 +81,6 @@ void btmtk_reset_waker(struct work_struct *work)
 	if (state == BTMTK_STATE_PROBE) {
 		bmain_info->chip_reset_flag = 1;
 		BTMTK_INFO("%s just do whole chip reset in probe stage!", __func__);
-	}
-
-	if (state == BTMTK_STATE_CLOSED) {
-		BTMTK_WARN("%s: chip is closed(%d), not trigger reset", __func__, state);
-		return;
 	}
 
 	fstate = btmtk_fops_get_state(bdev);
@@ -102,7 +100,6 @@ void btmtk_reset_waker(struct work_struct *work)
 #if (USE_DEVICE_NODE == 0)
 	if (bmain_info->hif_hook.dump_debug_sop)
 		bmain_info->hif_hook.dump_debug_sop(bdev);
-#endif
 
 	DUMP_TIME_STAMP("chip_reset_start");
 	cif_event = HIF_EVENT_SUBSYS_RESET;
@@ -112,17 +109,16 @@ void btmtk_reset_waker(struct work_struct *work)
 		return;
 	}
 
-#if (USE_DEVICE_NODE == 0)
+	cif_state = &bdev->cif_state[cif_event];
+
 	if (!bdev->bt_cfg.support_dongle_reset) {
 		BTMTK_ERR("%s chip_reset is not support", __func__);
 		return;
 	}
-#endif
-
-	cif_state = &bdev->cif_state[cif_event];
 
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+#endif
 
 	BTMTK_INFO("%s: Receive a byte (0xFF) subsys_reset_state[%d] chip_reset_flag[%d]", __func__, 
 					atomic_read(&bmain_info->subsys_reset), bmain_info->chip_reset_flag);
@@ -220,11 +216,14 @@ L0RESET:
 	}
 
 	DUMP_TIME_STAMP("chip_reset_end");
+
+#if (USE_DEVICE_NODE == 0)
 	/* Set End/Error state */
 	if (err < 0)
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 	else
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+#endif
 
 }
 
