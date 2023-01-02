@@ -2161,7 +2161,11 @@ static int btmtk_pm_notification(struct notifier_block *this, unsigned long even
 				break;
 			} else if (retry <= 0) {
 				BTMTK_ERR("not ready to suspend");
+#if (USE_DEVICE_NODE == 0)
 				return NOTIFY_STOP;
+#else
+				return NOTIFY_BAD;
+#endif
 			}
 			msleep(50);
 		} while (retry-- > 0);
