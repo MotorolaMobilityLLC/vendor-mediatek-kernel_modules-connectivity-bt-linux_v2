@@ -741,8 +741,7 @@ exit:
  *						 bt HIF dump feature
  *******************************************************************************
  */
-
-int btmtk_dump_start(void *priv_data){
+int btmtk_dump_start(void *priv_data, unsigned int force_dump){
 #if 0
 	struct btmtk_uart_dev *cif_dev = NULL;
 
@@ -753,14 +752,21 @@ int btmtk_dump_start(void *priv_data){
 		return -1;
 	}
 
-	if (btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_WORKING) {
-		BTMTK_WARN("%s: not in working state(%d)", __func__, btmtk_get_chip_state(g_sbdev));
+	if (btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_WORKING 
+			&& btmtk_fops_get_state(g_sbdev) != BTMTK_FOPS_STATE_OPENED) {
+		BTMTK_WARN("%s: not in working state(%d) fops(%d)"
+			, __func__, btmtk_get_chip_state(g_sbdev), btmtk_fops_get_state(g_sbdev));
 		return -1;
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
 	if (!cif_dev) {
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	if (!force_dump && cif_dev->own_state != BTMTK_DRV_OWN) {
+		BTMTK_WARN("%s: force_dump[%d], own_state[%d]", __func__, force_dump, cif_dev->own_state);
 		return -1;
 	}
 
@@ -772,34 +778,35 @@ int btmtk_dump_start(void *priv_data){
 	BTMTK_INFO("%s start (temp disable)", __func__);
 	return -1;
 }
-void btmtk_dump_end(void *priv_data){
+int btmtk_dump_end(void *priv_data){
 	struct btmtk_uart_dev *cif_dev = NULL;
 
 	BTMTK_INFO("%s start", __func__);
 
 	if (g_sbdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
-		return;
+		return -1;
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
 	if (!cif_dev) {
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
-		return;
+		return -1;
 	}
 
 	/*reset fw own timer */
 	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_INIT);
 	mod_timer(&cif_dev->fw_own_timer, jiffies + msecs_to_jiffies(FW_OWN_TIMEOUT));
+
+	return 0;
 }
 
 int btmtk_hif_dump_start(enum connv3_drv_type from_drv, void *priv_data){
-	return btmtk_dump_start(priv_data);
+	return btmtk_dump_start(priv_data, TRUE);
 }
 
 int btmtk_hif_dump_end(enum connv3_drv_type from_drv, void *priv_data){
-	btmtk_dump_end(priv_data);
-	return 0;
+	return btmtk_dump_end(priv_data);
 }
 
 struct connv3_whole_chip_rst_cb btmtk_whole_chip_rst_cb = {
