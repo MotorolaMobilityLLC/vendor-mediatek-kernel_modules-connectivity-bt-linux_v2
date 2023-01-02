@@ -13,6 +13,8 @@
 
 #include <btmtk_main.h>
 #include "connv3.h"
+#include "btmtk_uart_tty.h"
+
 
 #define BT_CR_DUMP_BUF_SIZE		(1024)
 #define BT_RHW_MAX_ERR_COUNT		(3)
@@ -421,11 +423,28 @@ struct connv3_cr_cb btmtk_connv3_cr_cb = {
 
 void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 {
+	struct btmtk_uart_dev *cif_dev = NULL;
+	int state = 0;
+
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return;
 	}
-	BTMTK_INFO("%s: start", __func__);
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+
+	state = btmtk_get_chip_state(bdev);
+	BTMTK_INFO("%s: start, bt assert_state[%d] rhw_en[%d] bt_state[%d]",
+				__func__, cif_dev->assert_state, cif_dev->rhw_en, state);
+
+	if (cif_dev->rhw_en && state < BTMTK_STATE_PROBE && state > BTMTK_STATE_SEND_ASSERT) {
+		BTMTK_ERR("%s: not trigger debug_sop", __func__);
+		return;
+	}
+
 	g_dump_bdev = bdev;
 	g_rhw_fail = 0;
 	btmtk_dump_bg_mcu_core();

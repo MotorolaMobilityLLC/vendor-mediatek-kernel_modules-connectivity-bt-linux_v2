@@ -179,6 +179,7 @@ struct btmtk_uart_dev {
 	u32			hub_en;
 	u32			sleep_en;
 	u32			flush_en;
+	u32			assert_state;
 
 	/* For uarthub setting */
 	u8			fw_hub_en;
@@ -193,6 +194,9 @@ struct btmtk_uart_dev {
 	atomic_t		fw_own_timer_flag;
 	atomic_t		need_drv_own;
 	atomic_t		fw_wake;
+
+	/* trigger assert */
+	atomic_t		need_assert;
 
 	/* sempaphore to compare event */
 	struct semaphore	evt_comp_sem;
