@@ -488,6 +488,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		ret = count;
 		goto exit;
 	}
+
 	if (strncmp(i_fwlog_buf, "subsys chip reset", strlen("subsys chip reset")) == 0) {
 		BTMTK_INFO("subsys chip reset");
 		if(bmain_info->hif_hook.trigger_assert)
@@ -499,6 +500,17 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		ret = count;
 		goto exit;
 	}
+
+	if (strncmp(i_fwlog_buf, "direct trigger whole chip reset", strlen("direct trigger whole chip reset")) == 0) {
+		BTMTK_INFO("direct trigger whole chip reset");
+		if (bmain_info->hif_hook.whole_reset)
+			bmain_info->hif_hook.whole_reset(pp_bdev[hci_idx]);
+		else
+			BTMTK_INFO("not support direct trigger whole chip reset");
+		ret = count;
+		goto exit;
+	}
+
 	if (strncmp(i_fwlog_buf, "dump chip reset", strlen("dump chip reset")) == 0) {
 		BTMTK_INFO("subsys chip reset = %d", atomic_read(&bmain_info->subsys_reset_count));
 		BTMTK_INFO("whole chip reset = %d", atomic_read(&bmain_info->whole_reset_count));
