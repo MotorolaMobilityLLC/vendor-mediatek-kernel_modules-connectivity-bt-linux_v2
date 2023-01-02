@@ -1800,6 +1800,13 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	ret = btmtk_recv(bdev->hdev, data, count);
 	if (ret < 0)
 		BTMTK_ERR("%s, ret = %d", __func__, ret);
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	/* debug for invalid buffer */
+	if (cif_dev->hub_en && ret == -EILSEQ && count > 1
+			&& btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
+		mtk8250_uart_dump(cif_dev->tty);
+#endif
 }
 
 /* btmtk_uart_tty_wakeup()
