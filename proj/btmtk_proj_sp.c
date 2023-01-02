@@ -1386,7 +1386,7 @@ static void btmtk_dump_gpio_state(void)
 		vir_0x1000_5000 = ioremap(0x10005000, 0x500);
 
 	if (vir_0x1000_5000 == NULL) {
-		BTMTK_ERR("%s: vir_0x1000_5000[%lx]", __func__, vir_0x1000_5000);
+		BTMTK_ERR("%s: vir_0x1000_5000[%p]", __func__, vir_0x1000_5000);
 		return;
 	}
 
