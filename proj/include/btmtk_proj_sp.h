@@ -122,5 +122,7 @@ void btmtk_platform_driver_deinit(void);
 
 /* Debug sop api */
 void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev);
+void btmtk_hif_sp_dump_debug_sop(struct btmtk_dev *bdev);
+
 #endif // (USE_DEVICE_NODE == 1)
 #endif
