@@ -485,8 +485,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		/* error handle*/
 		if (btmtk_get_chip_state(bdev) == BTMTK_STATE_FW_DUMP || !atomic_read(&cif_dev->thread_status)) {
 			BTMTK_WARN("%s thread stopped or fw dumping, don't wait evt anymore!!", __func__);
-			ret = 0;
-			break;
+			ret = -1;
 		}
 
 		usleep_range(10, 100);
