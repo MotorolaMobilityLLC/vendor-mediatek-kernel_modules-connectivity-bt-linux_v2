@@ -181,6 +181,7 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 			BTMTK_ERR("%s: ConnInfra power off failed!", __func__);
 	btmtk_pwrctrl_post_off();
 #endif
+	cif_dev->tty->ops->close(cif_dev->tty, NULL);
 	BTMTK_INFO("%s end!", __func__);
 
 	return 0;
@@ -861,6 +862,8 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	uart_cfg = cif_dev->uart_cfg;
 	tty = cif_dev->tty;
 	new_termios = tty->termios;
+
+	cif_dev->tty->ops->open(cif_dev->tty, NULL);
 
 	btmtk_pwrctrl_pre_on(bdev);
 	if (!cif_dev->is_pre_cal)
