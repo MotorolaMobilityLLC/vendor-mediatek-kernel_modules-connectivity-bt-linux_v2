@@ -331,7 +331,7 @@ void btmtk_free_setting_file(struct btmtk_dev *bdev)
 
 static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 {
-	BTMTK_INFO("%s begin", __func__);
+	BTMTK_DBG("%s begin", __func__);
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return;
@@ -1739,7 +1739,7 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwb
 			|| is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id) || is_mt66xx(bdev->chip_id))
 		globalDesrc = (struct _Global_Descr *)(fwbuf + FW_ROM_PATCH_HEADER_SIZE);
 
-	BTMTK_INFO("[btmtk] =============== Patch Info ==============");
+	BTMTK_DBG("[btmtk] =============== Patch Info ==============");
 
 	/* if not found version still need to do memset */
 	memset(main_info.fw_version_str, 0, FW_VERSION_BUF_SIZE);
@@ -1750,12 +1750,12 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwb
 	}
 
 	if (patchHdr) {
-		BTMTK_INFO("[btmtk] Built Time = %s", patchHdr->ucDateTime);
-		BTMTK_INFO("[btmtk] Hw Ver = 0x%04x", patchHdr->u2HwVer);
-		BTMTK_INFO("[btmtk] Sw Ver = 0x%04x", patchHdr->u2SwVer);
-		BTMTK_INFO("[btmtk] Magic Number = 0x%08x", patchHdr->u4MagicNum);
+		BTMTK_DBG("[btmtk] Built Time = %s", patchHdr->ucDateTime);
+		BTMTK_DBG("[btmtk] Hw Ver = 0x%04x", patchHdr->u2HwVer);
+		BTMTK_DBG("[btmtk] Sw Ver = 0x%04x", patchHdr->u2SwVer);
+		BTMTK_DBG("[btmtk] Magic Number = 0x%08x", patchHdr->u4MagicNum);
 
-		BTMTK_INFO("[btmtk] Platform = %c%c%c%c",
+		BTMTK_DBG("[btmtk] Platform = %c%c%c%c",
 				patchHdr->ucPlatform[0],
 				patchHdr->ucPlatform[1],
 				patchHdr->ucPlatform[2],
@@ -1764,11 +1764,11 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwb
 		BTMTK_WARN("%s, patchHdr is NULL!", __func__);
 
 	if (globalDesrc) {
-		BTMTK_INFO("[btmtk] Patch Ver = 0x%08x", globalDesrc->u4PatchVer);
-		BTMTK_INFO("[btmtk] Section num = 0x%08x", globalDesrc->u4SectionNum);
+		BTMTK_DBG("[btmtk] Patch Ver = 0x%08x", globalDesrc->u4PatchVer);
+		BTMTK_DBG("[btmtk] Section num = 0x%08x", globalDesrc->u4SectionNum);
 	} else
 		BTMTK_WARN("%s, globalDesrc is NULL!", __func__);
-	BTMTK_INFO("[btmtk] =========================================");
+	BTMTK_DBG("[btmtk] =========================================");
 }
 
 static void btmtk_print_wifi_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
@@ -2699,7 +2699,7 @@ struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev)
 	struct btmtk_dev *bdev;
 	size_t len = sizeof(*bdev);
 
-	BTMTK_INFO("%s", __func__);
+	BTMTK_DBG("%s", __func__);
 
 	if (dev != NULL)
 		bdev = devm_kzalloc(dev, len, GFP_KERNEL);
@@ -3559,7 +3559,7 @@ int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 		goto exit;
 	}
 
-	BTMTK_INFO("%s", __func__);
+	BTMTK_DBG("%s", __func__);
 
 #if ENABLESTP
 	btmtk_send_set_stp_cmd(bdev);
@@ -3616,7 +3616,7 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 		return ret;
 	}
 
-	BTMTK_INFO("%s", __func__);
+	BTMTK_DBG("%s", __func__);
 
 	if (bdev->bt_cfg.support_auto_picus == true &&
 		(bdev->bt_cfg.support_picus_to_host == true || atomic_read(&bmain_info->fwlog_ref_cnt) != 0)) {
@@ -4323,7 +4323,7 @@ int bt_open(struct hci_dev *hdev)
 		goto failed;
 	}
 
-	BTMTK_INFO("%s state[%d], fstate[%d]", __func__, state, fstate);
+	BTMTK_DBG("%s state[%d], fstate[%d]", __func__, state, fstate);
 
 	ret = main_info.hif_hook.open(hdev);
 	if (ret < 0) {
@@ -5098,7 +5098,7 @@ static int main_init(void)
 {
 	int i = 0;
 
-	BTMTK_INFO("%s", __func__);
+	BTMTK_DBG("%s", __func__);
 
 	/* Check if user changes default minimum supported intf count */
 	if (btmtk_intf_num < BT_MCU_MINIMUM_INTERFACE_NUM) {
@@ -5106,9 +5106,9 @@ static int main_init(void)
 		BTMTK_WARN("%s minimum interface is %d", __func__, btmtk_intf_num);
 	}
 
-	BTMTK_INFO("%s supported intf count <%d>", __func__, btmtk_intf_num);
+	BTMTK_DBG("%s supported intf count <%d>", __func__, btmtk_intf_num);
 
-	BTMTK_INFO("%s: Register reboot_notifier callback success.", __func__);
+	BTMTK_DBG("%s: Register reboot_notifier callback success.", __func__);
 #if (USE_DEVICE_NODE == 0)
 	/* Is it necessary? bt_close will be called by reboot. */
 	register_reboot_notifier(&btmtk_reboot_notifier);
@@ -5204,7 +5204,7 @@ int __init main_driver_init(void)
 	btmtk_init_node();
 #endif
 
-	BTMTK_INFO("%s: Done", __func__);
+	BTMTK_DBG("%s: Done", __func__);
 	return ret;
 }
 

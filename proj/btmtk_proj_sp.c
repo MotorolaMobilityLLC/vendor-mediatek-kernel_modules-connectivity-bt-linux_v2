@@ -254,7 +254,7 @@ void btmtk_release_uarthub(bool force)
 	int ret = -1;
 	struct btmtk_uart_dev *cif_dev = NULL;
 
-	BTMTK_INFO("%s: start", __func__);
+	BTMTK_DBG("%s: start", __func__);
 
 	if (!g_sbdev) {
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
@@ -385,7 +385,7 @@ int btmtk_pre_power_on_handler(void)
 	int ret = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
 
-	BTMTK_INFO("%s: start", __func__);
+	BTMTK_DBG("%s: start", __func__);
 
 	if (!g_sbdev) {
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
@@ -419,11 +419,11 @@ int btmtk_pre_power_on_handler(void)
 		return ret;
 
 	ret = mtk8250_uart_hub_reset_flow_ctrl();
-	BTMTK_INFO("%s mtk8250_uart_hub_reset_flow_ctrl ret[%d]", __func__, ret);
+	BTMTK_DBG("%s mtk8250_uart_hub_reset_flow_ctrl ret[%d]", __func__, ret);
 
 	/* disable ADSP,MD when fw dl */
 	ret = mtk8250_uart_hub_fifo_ctrl(1);
-	BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(1) ret[%d]", __func__, ret);
+	BTMTK_DBG("%s: Set mtk8250_uart_hub_fifo_ctrl(1) ret[%d]", __func__, ret);
 
 	/* use uarthub bypass mode*/
 	ret = mtk8250_uart_hub_enable_bypass_mode(1);
@@ -437,7 +437,7 @@ int btmtk_pre_power_on_handler(void)
 	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
 
 	cif_dev->is_pre_on_done = TRUE;
-	BTMTK_INFO("%s: is_pre_on_done true", __func__);
+	BTMTK_DBG("%s: is_pre_on_done true", __func__);
 
 	return 0;
 }
@@ -496,7 +496,7 @@ int btmtk_set_gpio_default_for_close(void)
 		return -1;
 	}
 	cif_dev->is_pre_on_done = FALSE;
-	BTMTK_INFO("%s: is_pre_on_done false", __func__);
+	BTMTK_DBG("%s: is_pre_on_done false", __func__);
 
 	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 	msleep(10);
@@ -596,7 +596,7 @@ static int btmtk_post_chip_rst_handler(void)
 
 int btmtk_pre_cal_pre_on_cb(void)
 {
-	BTMTK_INFO("%s start", __func__);
+	BTMTK_DBG("%s start", __func__);
 	return btmtk_pre_power_on_handler();
 }
 
@@ -927,7 +927,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	//btmtk_drv_cbs.pwr_dump_cb = btmtk_pwr_dump_cb;
 	btmtk_drv_cbs.hif_dump_cb = btmtk_hif_dump_cb;
 
-	BTMTK_INFO("%s start", __func__);
+	BTMTK_DBG("%s start", __func__);
 	if (!bdev) {
 		BTMTK_ERR("[ERR] bdev is NULL");
 		return -1;
@@ -1240,7 +1240,7 @@ void btmtk_pwrctrl_register_evt(void)
 	if (!btmtk_pwrctrl_support())
 		return;
 
-	BTMTK_INFO("%s", __func__);
+	BTMTK_DBG("%s", __func__);
 	/* Register callbacks for power throttling feature */
 	conn_pwr_register_event_cb(CONN_PWR_DRV_BT, (CONN_PWR_EVENT_CB)btmtk_pwrctrl_level_change_cb);
 }
