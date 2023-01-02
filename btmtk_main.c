@@ -954,14 +954,18 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 
 			/* Check for invalid packet type */
 			if (!skb) {
-				BTMTK_INFO_RAW(buffer, count, "%s: drop pkt len[%d]: ", __func__, count);
 				if (is_mt66xx(bdev->chip_id)) {
+					if (*buffer == 0xFF || *buffer == 0x00) {
+						BTMTK_INFO("%s: skip 0x%02X pkt", __func__, *buffer);
+						return ERR_PTR(-EINVAL);
+					}
 					btmtk_set_sleep(hdev, FALSE);
 				} else {
 					btmtk_hci_snoop_print(buffer_dbg, count_dbg);
 					btmtk_hci_snoop_print(buffer, count);
 					btmtk_hci_snoop_print_to_log();
 				}
+				BTMTK_INFO_RAW(buffer, count, "%s: drop pkt len[%d]: ", __func__, count);
 				return ERR_PTR(-EILSEQ);
 			}
 
