@@ -243,6 +243,9 @@ static int btmtk_power_on_notify_handler(void)
 {
 	/* Execute BT power on then power off (if BT is off before this callback */
 	BTMTK_INFO("%s", __func__);
+
+	/* Don't block caller thread for connv3 API */
+	schedule_work(&g_sbdev->pwr_on_uds_work);
 	return 0;
 }
 
@@ -516,6 +519,53 @@ void btmtk_async_trx_work(struct work_struct *work)
 
 	btmtk_send_set_tx_power_cmd(bdev);
 }
+
+void btmtk_pwr_on_uds_work(struct work_struct *work)
+{
+	//struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, pwr_on_uds_work);
+	int ret = 0;
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s start", __func__);
+
+	/* err handle for uart disconnect */
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev == NULL", __func__);
+		return;
+	}
+
+	if (g_sbdev->hdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev->hdev == NULL", __func__);
+		return;
+	}
+
+	if (g_sbdev->hdev->close == NULL) {
+		BTMTK_ERR("%s: g_sbdev->hdev->close == NULL", __func__);
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("[ERR] cif_dev is NULL");
+		return;
+	}
+
+	ret = g_sbdev->hdev->open(g_sbdev->hdev);
+	if (ret) {
+		BTMTK_ERR("%s: BT turn on fail!", __func__);
+		return;
+	}
+	BTMTK_INFO("%s: BT turn on ok!", __func__);
+
+	ret = g_sbdev->hdev->close(g_sbdev->hdev);
+	if (ret) {
+		BTMTK_ERR("%s: BT turn off fail!", __func__);
+		return;
+	}
+	BTMTK_INFO("%s: BT turn off ok!", __func__);
+
+}
+
 
 int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb)
 {
