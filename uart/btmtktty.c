@@ -374,6 +374,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	int ret = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	u8 opcode[2] = {0};
 #if (USE_DEVICE_NODE == 1)
 	int i = 0;
 #endif
@@ -452,6 +453,10 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
 		mtk8250_uart_start_record(cif_dev->tty);
 #endif
+	if (skb->len > 2) {
+		opcode[0] = skb->data[1];
+		opcode[1] = skb->data[2];
+	}
 	ret = btmtk_uart_send_cmd(bdev, skb, delay, retry, pkt_type);
 
 	if (ret < 0) {
@@ -491,7 +496,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
 
 	if (ret < 0) {
-		BTMTK_ERR("%s wait event timeout, ret[%d]", __func__, ret);
+		BTMTK_ERR("%s wait event timeout [0x%02x%02x], ret[%d]", __func__,opcode[1], opcode[0], ret);
 		bdev->recv_evt_len = 0;
 		ret = -ERRNUM;
 	}
@@ -502,6 +507,12 @@ exit:
 	/* control not trigger assert */
 	if (ret < 0 && pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT) {
 		if(bmain_info->hif_hook.trigger_assert) {
+			if (bdev->assert_reason[0] == '\0') {
+				if (snprintf(bdev->assert_reason, ASSERT_REASON_SIZE , "[BT_DRV assert] cmd timeout 0x%02x%02x"
+						,opcode[1], opcode[0]) < 0)
+					memcpy(bdev->assert_reason, "[BT_DRV assert] cmd timeout", 27);
+				BTMTK_WARN("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+			}
 			bmain_info->hif_hook.trigger_assert(bdev);
 		} else
 			btmtk_send_assert_cmd(bdev);
@@ -867,6 +878,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	cif_dev->assert_state = 0;
 	cif_dev->is_rhw_fail = 0;
 	reinit_completion(&bdev->dump_comp);
+	memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
 
 	/* set tty host baud and flowcontrol to default value */
 	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);
@@ -2051,6 +2063,10 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 	if (ret < 0) {
 		BTMTK_ERR("%s fail, trigger assert", __func__);
+		if (bdev->assert_reason[0] == '\0') {
+			memcpy(bdev->assert_reason, "[BT_FW assert] drv own failed", 29);
+			BTMTK_WARN("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+		}
 		btmtk_uart_trigger_assert(bdev);
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		goto unlock;

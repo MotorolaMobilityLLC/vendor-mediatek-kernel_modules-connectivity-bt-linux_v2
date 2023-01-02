@@ -440,6 +440,10 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 		BTMTK_WARN("%s: BT is not on state, no need to trigger whole chip reset", __func__);
 		return 0;
 	} else {
+		if (g_sbdev->assert_reason[0] == '\0') {
+			memcpy(g_sbdev->assert_reason, "[BT_DRV assert] wifi trigger whole chip reset", 45);
+			BTMTK_WARN("%s: [assert_reason] %s", __func__, g_sbdev->assert_reason);
+		}
 		atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DOING);
 		bmain_info->hif_hook.trigger_assert(g_sbdev);
 	}
