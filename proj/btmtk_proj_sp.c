@@ -554,11 +554,11 @@ int btmtk_set_gpio_default_for_close(void)
 	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 	btmtk_dump_gpio_state();
 	msleep(50);
-	cif_dev->tty->ops->close(cif_dev->tty, NULL);
 	if(!bmain_info->find_my_phone_mode)
 		btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
 	else
 		BTMTK_INFO("%s: into find my phone mode, skip set tx/rx gpio PD", __func__);
+	cif_dev->tty->ops->close(cif_dev->tty, NULL);
 
 	return 0;
 }
