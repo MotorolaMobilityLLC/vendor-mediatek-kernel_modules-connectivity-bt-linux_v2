@@ -2053,19 +2053,18 @@ static int btmtk_uart_tty_compat_ioctl(struct tty_struct *tty,
 void btmtk_wakeup_host(struct btmtk_dev *bdev)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
-	BTMTK_INFO("%s start", __func__);
-
-	fstate = btmtk_fops_get_state(bdev);
-	if (fstate != BTMTK_FOPS_STATE_OPENED) {
-		BTMTK_ERR("%s: fops is not opended (%d)", __func__, fstate);
-		return;
-	}
+	BTMTK_DBG("%s start", __func__);
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return;
 	}
+
+	if (bdev->fops_state != BTMTK_FOPS_STATE_OPENED) {
+		BTMTK_ERR("%s: fops is not opended (%d)", __func__, bdev->fops_state);
+		return;
+	}
+
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	if (cif_dev == NULL) {
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
