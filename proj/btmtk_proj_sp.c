@@ -36,6 +36,9 @@
 #define RST_OFF_PINCTRL_NAME		("bt_rst_off")
 #define INIT_STATE_PINCTRL_NAME		("bt_combo_gpio_init")
 #define BTMTK_UART_NAME			("btmtk_uart")
+#define BT_FIND_MY_PHONE_HIGH	("bt-find-my-phone-high")
+#define BT_FIND_MY_PHONE_LOW	("bt-find-my-phone-low")
+
 
 #if (USE_DEVICE_NODE == 1)
 static struct pinctrl *pinctrl_ptr;
@@ -494,6 +497,7 @@ int btmtk_set_uart_rx_aux(void)
 int btmtk_set_gpio_default(void)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	BTMTK_DBG("%s: start", __func__);
 
@@ -510,13 +514,19 @@ int btmtk_set_gpio_default(void)
 	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 	btmtk_dump_gpio_state();
 	msleep(10);
-	return btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
+	if(!bmain_info->find_my_phone_mode)
+		btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
+	else
+		BTMTK_INFO("%s: into find my phone mode, skip set tx/rx gpio PD", __func__);
+
+	return 0;
 }
 
 /* for bt close flow, add tty close */
 int btmtk_set_gpio_default_for_close(void)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	BTMTK_DBG("%s: start", __func__);
 
@@ -536,7 +546,12 @@ int btmtk_set_gpio_default_for_close(void)
 	btmtk_dump_gpio_state();
 	msleep(50);
 	cif_dev->tty->ops->close(cif_dev->tty, NULL);
-	return btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
+	if(!bmain_info->find_my_phone_mode)
+		btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
+	else
+		BTMTK_INFO("%s: into find my phone mode, skip set tx/rx gpio PD", __func__);
+
+	return 0;
 }
 
 
@@ -1060,6 +1075,9 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 		return -1;
 	}
 
+	btmtk_pinctrl_exec(BT_FIND_MY_PHONE_HIGH);
+	btmtk_pinctrl_exec(BT_FIND_MY_PHONE_LOW);
+
 	/* set gpio to default */
 	btmtk_set_gpio_default();
 
@@ -1506,5 +1524,25 @@ void bthost_debug_save(uint32_t id, uint32_t value, char* desc)
 	}
 	BTMTK_WARN("%s: no space for %d\n", __func__, id);
 }
+
+/*******************************************************************************
+*                           bt find my phone mode
+********************************************************************************
+*/
+
+int btmtk_find_my_phone_cmd(void)
+{
+	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x09, 0x01, 0x17, 0x05, 0x00, 0x01, 0x1F, 0x00, 0x00, 0x00 };
+	u8 evt[] = { 0x04, 0xE4, 0x0A, 0x02, 0x17, 0x06, 0x00, 0x00, 0x01, 0x1F, 0x00, 0x00, 0x00 };
+	int ret = 0;
+
+	BTMTK_INFO("%s", __func__);
+	ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd), evt, sizeof(evt),
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+	if (ret < 0)
+		BTMTK_ERR("%s: failed, ret[%d]", __func__, ret);
+	return ret;
+}
+
 #endif // (USE_DEVICE_NODE == 1)
 
