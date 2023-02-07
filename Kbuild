@@ -70,6 +70,12 @@ else
     ccflags-y += -DCFG_SUPPORT_MULTI_DEV_NODE=0
 endif
 
+ifeq ($(CONFIG_ARCH_MEDIATEK),y)
+    ccflags-y += -D BTMTK_PLAT_ALPS=1
+else
+    ccflags-y += -D BTMTK_PLAT_ALPS=0
+endif
+
 #################### Configurations ####################
 # For chip interface, driver supports "usb", "sdio", "uart_tty", "uart_serdev" and "btif"
 MTK_CHIP_IF := uart_tty
