@@ -14,7 +14,10 @@
 #define _BTMTK_PROJ_SP_H_
 
 #if (USE_DEVICE_NODE == 1)
+
+#if defined(BTMTK_PLAT_ALPS) && BTMTK_PLAT_ALPS
 #include "conn_power_throttling.h"
+#endif
 
 /* connv3 API */
 #include "connv3_debug_utility.h"
@@ -95,7 +98,11 @@ struct btmtk_dypwr_st {
 	int8_t lp_bdy_dbm;
 	int8_t fw_sel_dbm;
 	BT_RX_EVT_HANDLER_CB cb;
+#if defined(BTMTK_PLAT_ALPS) && BTMTK_PLAT_ALPS
 	enum conn_pwr_low_battery_level lp_cur_lv;
+#else
+	int8_t lp_cur_lv;
+#endif
 };
 
 void btmtk_async_trx_work(struct work_struct *work);
