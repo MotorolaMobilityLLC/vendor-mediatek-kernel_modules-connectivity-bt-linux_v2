@@ -1113,7 +1113,11 @@ int btmtk_connv3_sub_drv_deinit(void)
  */
 static inline bool btmtk_pwrctrl_support(void)
 {
+#if defined(BTMTK_PLAT_ALPS) && BTMTK_PLAT_ALPS
 	return TRUE;
+#else
+	return FALSE;
+#endif
 }
 
 static void btmtk_send_set_tx_power_cmd(struct btmtk_dev *bdev)
@@ -1274,6 +1278,7 @@ int btmtk_set_tx_power(struct btmtk_dev *bdev, int8_t req_val, BT_RX_EVT_HANDLER
 		/* check max limitation */
 		if (dy_pwr->set_val > dy_pwr->dy_max_dbm)
 			dy_pwr->set_val = dy_pwr->dy_max_dbm;
+#if defined(BTMTK_PLAT_ALPS) && BTMTK_PLAT_ALPS
 		/* power throttling limitation */
 		if (dy_pwr->lp_cur_lv >= CONN_PWR_THR_LV_4) { //TODO_PWRCTRL
 			dy_pwr->set_val = dy_pwr->lp_bdy_dbm;
@@ -1281,6 +1286,7 @@ int btmtk_set_tx_power(struct btmtk_dev *bdev, int8_t req_val, BT_RX_EVT_HANDLER
 			if (dy_pwr->set_val > dy_pwr->dy_max_dbm)
 				dy_pwr->set_val = dy_pwr->dy_max_dbm;
 		}
+#endif
 	} else {
 		BTMTK_INFO("%s: invalid dbm value, skip set cmd", __func__);
 		return 1;
@@ -1297,7 +1303,7 @@ int btmtk_set_tx_power(struct btmtk_dev *bdev, int8_t req_val, BT_RX_EVT_HANDLER
 	return 0;
 }
 
-
+#if defined(BTMTK_PLAT_ALPS) && BTMTK_PLAT_ALPS
 int btmtk_pwrctrl_level_change_cb(enum conn_pwr_event_type type, void *data)
 {
 	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
@@ -1320,7 +1326,7 @@ int btmtk_pwrctrl_level_change_cb(enum conn_pwr_event_type type, void *data)
 
 	return 0;
 }
-
+#endif
 int btmtk_pwrctrl_pre_on(struct btmtk_dev *bdev)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
@@ -1335,8 +1341,10 @@ int btmtk_pwrctrl_pre_on(struct btmtk_dev *bdev)
 
 	cif_dev = bdev->cif_dev;
 	memset(&cif_dev->dy_pwr, 0x00, sizeof(cif_dev->dy_pwr));
+#if defined(BTMTK_PLAT_ALPS) && BTMTK_PLAT_ALPS
 	cif_dev->dy_pwr.lp_cur_lv = CONN_PWR_THR_LV_0;
 	conn_pwr_drv_pre_on(CONN_PWR_DRV_BT, &cif_dev->dy_pwr.lp_cur_lv);
+#endif
 	BTMTK_INFO("%s: lp_cur_bat_lv = %d", __func__, cif_dev->dy_pwr.lp_cur_lv);
 	return 0;
 }
@@ -1345,8 +1353,9 @@ void btmtk_pwrctrl_post_off(void)
 {
 	if (!btmtk_pwrctrl_support())
 		return;
-
+#if defined(BTMTK_PLAT_ALPS) && BTMTK_PLAT_ALPS
 	conn_pwr_drv_post_off(CONN_PWR_DRV_BT);
+#endif
 }
 
 void btmtk_pwrctrl_register_evt(void)
@@ -1355,8 +1364,10 @@ void btmtk_pwrctrl_register_evt(void)
 		return;
 
 	BTMTK_DBG("%s", __func__);
+#if defined(BTMTK_PLAT_ALPS) && BTMTK_PLAT_ALPS
 	/* Register callbacks for power throttling feature */
 	conn_pwr_register_event_cb(CONN_PWR_DRV_BT, (CONN_PWR_EVENT_CB)btmtk_pwrctrl_level_change_cb);
+#endif
 }
 
 /* btmtk_intcmd_wmt_utc_sync
