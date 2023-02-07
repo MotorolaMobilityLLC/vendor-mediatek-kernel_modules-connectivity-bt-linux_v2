@@ -2049,7 +2049,33 @@ static int btmtk_uart_tty_compat_ioctl(struct tty_struct *tty,
 
 	return err;
 }
+#if (CFG_SUPPORT_HOSTWAKE == 1)
+void btmtk_wakeup_host(struct btmtk_dev *bdev)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	BTMTK_INFO("%s start", __func__);
 
+	fstate = btmtk_fops_get_state(bdev);
+	if (fstate != BTMTK_FOPS_STATE_OPENED) {
+		BTMTK_ERR("%s: fops is not opended (%d)", __func__, fstate);
+		return;
+	}
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return;
+	}
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+	atomic_set(&cif_dev->need_drv_own, 1);
+	atomic_set(&cif_dev->fw_wake, 1);
+	wake_up_interruptible(&tx_wait_q);
+}
+#endif
 #if (defined(ANDROID_OS) && (KERNEL_VERSION(5, 15, 0) > LINUX_VERSION_CODE)) || defined(LINUX_OS)
 static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, char *flags, int count)
 #else
@@ -2242,7 +2268,6 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 {
 	int ret = 0, retry = BTMTK_MAX_WAKEUP_RETRY;
 	struct btmtk_uart_dev *cif_dev = NULL;
-	u8 wakeup_cmd[] = { 0xFF };
 	u8 fw_own_clr_cmd[] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x03, 0x02, 0x00, 0x03, 0x01 };
 	u8 evt[] = { 0x04, 0xE4, 0x07, 0x02, 0x03, 0x03, 0x00, 0x00, 0x03, 0x01 };
 
@@ -2292,6 +2317,12 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			/* wait a while for avoid rx pkt error */
 			usleep_range(4000, 4100);
 		} else {
+			u8 wakeup_cmd[] = { 0xFF };
+#if (CFG_SUPPORT_HOSTWAKE == 1)
+			ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN,
+					DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+
+#else
 			int i = 0;
 			for (i = 0; i < 3; i++) {
 				/* no need to wait event */
@@ -2300,6 +2331,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 				/* wait a while for fw wakeup */
 				usleep_range(6000, 6100);
 			}
+#endif
 		}
 
 		do {
@@ -2766,6 +2798,9 @@ int btmtk_cif_register(void)
 	hook.dump_hif_debug_sop = btmtk_hif_sp_dump_debug_sop;
 	hook.whole_reset = btmtk_sp_whole_chip_reset;
 	hook.trigger_assert = btmtk_uart_trigger_assert;
+#if (CFG_SUPPORT_HOSTWAKE == 1)
+	hook.wakeup_host = btmtk_wakeup_host;
+#endif
 #endif
 	hook.open = btmtk_uart_open;
 	hook.close = btmtk_uart_close;

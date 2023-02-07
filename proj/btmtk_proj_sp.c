@@ -23,6 +23,9 @@
 #include "btmtk_uart_tty.h"
 #include "btmtk_fw_log.h"
 #include <linux/platform_device.h>
+#include <linux/of_gpio.h>
+#include <linux/gpio.h>
+#include <linux/interrupt.h>
 
 
 #define READ_PMIC_STATE_CMD_LEN		16
@@ -1027,6 +1030,25 @@ int btmtk_set_pcm_pin_mux(void)
 	return 0;
 }
 
+#if (CFG_SUPPORT_HOSTWAKE == 1)
+static irqreturn_t btmtk_host_wake_isr(int irq, void *dev)
+{
+	struct btmtk_dev *bdev = (struct btmtk_dev *)dev;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	int host_wake;
+
+	host_wake = gpio_get_value(bdev->wakeup_irq);
+	irq_set_irq_type(irq, host_wake ? IRQF_TRIGGER_FALLING: IRQF_TRIGGER_RISING);
+	BTMTK_INFO("%s: %d", __func__, host_wake);
+
+	/* 0 value for wake up*/
+	if (!host_wake)
+		bmain_info->hif_hook.wakeup_host(bdev);
+
+	return IRQ_HANDLED;
+}
+#endif
+
 int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
@@ -1083,6 +1105,41 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 
 	btmtk_pinctrl_exec(BT_FIND_MY_PHONE_HIGH);
 	btmtk_pinctrl_exec(BT_FIND_MY_PHONE_LOW);
+#if (CFG_SUPPORT_HOSTWAKE == 1)
+	if (cif_dev->sleep_en) {
+		int irq;
+		bdev->wakeup_irq = of_get_gpio(tty->dev->of_node, 0);
+		if (!gpio_is_valid(bdev->wakeup_irq)) {
+			BTMTK_ERR("[ERR] %s: uanble to get bt host wake gpio", __func__);
+			return -1;
+		}
+
+		ret = gpio_request(bdev->wakeup_irq, "hostwake_gpio");
+		if (unlikely(ret)) {
+			BTMTK_ERR("[ERR] %s: request host wake gpio fail", __func__);
+			gpio_free(bdev->wakeup_irq);
+			return -1;
+		}
+
+		gpio_direction_input(bdev->wakeup_irq);
+		irq = gpio_to_irq(bdev->wakeup_irq);
+		ret = request_irq(irq, btmtk_host_wake_isr, IRQF_TRIGGER_RISING,
+						"bt_hostwake", (void *)bdev);
+
+		if (ret) {
+			BTMTK_ERR("[ERR] %s: request irq for bt hostwake fail: %d", __func__, ret);
+			gpio_free(bdev->wakeup_irq);
+		}
+
+		ret = enable_irq_wake(irq);
+		if (ret) {
+			BTMTK_ERR("%s: enable irq_wake failed ret = %d", __func__, ret);
+			gpio_free(bdev->wakeup_irq);
+			return -1;
+		}
+		BTMTK_INFO("%s: request irq(%d) for bt hostwake done", __func__, irq);
+	}
+#endif
 
 	/* set gpio to default */
 	btmtk_set_gpio_default();
