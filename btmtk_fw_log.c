@@ -519,6 +519,15 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
+	if (strncmp(i_fwlog_buf, "FindMyPhone=", strlen("FindMyPhone=")) == 0) {
+		u8 val = *(i_fwlog_buf + strlen("FindMyPhone=")) - '0';
+
+		bmain_info->find_my_phone_mode = val;
+		BTMTK_INFO("%s: FindMyPhone[%d]", __func__, bmain_info->find_my_phone_mode);
+		ret = count;
+		goto exit;
+	}
+
 	if (strncmp(i_fwlog_buf, "hif_debug_sop", strlen("hif_debug_sop")) == 0) {
 		state = btmtk_get_chip_state(pp_bdev[hci_idx]);
 		//&& state == BTMTK_STATE_WORKING

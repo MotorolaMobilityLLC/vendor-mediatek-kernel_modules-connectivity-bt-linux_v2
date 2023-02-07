@@ -1661,6 +1661,28 @@ static int btmtk_uart_set_pinmux(struct btmtk_dev *bdev)
 }
 #endif
 
+static int btmtk_uart_deinit(struct btmtk_dev *bdev)
+{
+#if (USE_DEVICE_NODE == 1)
+	int cnt = 10;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	while (btmtk_fops_get_state(bdev) != BTMTK_FOPS_STATE_CLOSED && cnt--) {
+		BTMTK_INFO("wait bt close, fops(%d)", btmtk_fops_get_state(bdev));
+		msleep(100); /* wait BT close */
+	}
+
+	if (bmain_info->hif_hook.cif_mutex_lock)
+		bmain_info->hif_hook.cif_mutex_lock(bdev);
+
+	btmtk_set_chip_state(bdev, BTMTK_STATE_DISCONNECT);
+
+	if (bmain_info->hif_hook.cif_mutex_unlock)
+		bmain_info->hif_hook.cif_mutex_unlock(bdev);
+#endif
+	return 0;
+}
+
 static int btmtk_uart_init(struct btmtk_dev *bdev)
 {
 	int err = 0;
@@ -1913,10 +1935,7 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 		break;
 	case HCIUARTDEINIT:
 		BTMTK_INFO("%s: <!!> Set HCIUARTDEINIT <!!>", __func__);
-		btmtk_set_chip_state(bdev, BTMTK_STATE_DISCONNECT);
-#if (USE_DEVICE_NODE == 1)
-		msleep(500); /* wait BT thread to finish its job */
-#endif
+		err = btmtk_uart_deinit(bdev);
 		break;
 	default:
 		/* pr_info("<!!> n_tty_ioctl_helper <!!>\n"); */
