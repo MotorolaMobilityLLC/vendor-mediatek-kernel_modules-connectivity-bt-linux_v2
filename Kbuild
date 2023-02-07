@@ -16,6 +16,7 @@ CONFIG_SUPPORT_DVT=n
 CONFIG_SUPPORT_HW_DVT=n
 CONFIG_SUPPORT_MULTI_DEV_NODE=n
 BT_CONFIG_TRACING=n
+CONFIG_SUPPORT_UARTDBG=y
 
 KO_CODE_PATH := $(if $(filter /%,$(src)),,$(srctree)/)$(src)
 
@@ -118,6 +119,12 @@ endif
 
 ifeq ($(BT_CONFIG_TRACING),y)
     ccflags-y += -DBT_CONFIG_TRACING
+endif
+
+ifeq ($(CONFIG_SUPPORT_UARTDBG), y)
+ccflags-y += -DCONFIG_SUPPORT_UARTDBG=1
+else
+ccflags-y += -DCONFIG_SUPPORT_UARTDBG=0
 endif
 
 $(info linux_v2/Kbuild [BT_Drv] MTK_PROJ_TYPE = $(MTK_PROJ_TYPE) src = $(src) KO_CODE_PATH = $(KO_CODE_PATH))
