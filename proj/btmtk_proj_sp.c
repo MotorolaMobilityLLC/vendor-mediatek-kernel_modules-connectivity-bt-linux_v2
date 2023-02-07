@@ -1039,7 +1039,7 @@ static irqreturn_t btmtk_host_wake_isr(int irq, void *dev)
 
 	host_wake = gpio_get_value(bdev->wakeup_irq);
 	irq_set_irq_type(irq, host_wake ? IRQF_TRIGGER_FALLING: IRQF_TRIGGER_RISING);
-	BTMTK_INFO("%s: %d", __func__, host_wake);
+	BTMTK_DBG("%s: %d", __func__, host_wake);
 
 	/* 0 value for wake up*/
 	if (!host_wake)
