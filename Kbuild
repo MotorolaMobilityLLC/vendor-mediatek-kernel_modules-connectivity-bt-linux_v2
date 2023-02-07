@@ -17,6 +17,7 @@ CONFIG_SUPPORT_HW_DVT=n
 CONFIG_SUPPORT_MULTI_DEV_NODE=n
 BT_CONFIG_TRACING=n
 CONFIG_SUPPORT_UARTDBG=y
+CFG_SUPPORT_HOSTWAKE=n
 
 KO_CODE_PATH := $(if $(filter /%,$(src)),,$(srctree)/)$(src)
 
@@ -74,6 +75,12 @@ ifeq ($(CONFIG_ARCH_MEDIATEK),y)
     ccflags-y += -D BTMTK_PLAT_ALPS=1
 else
     ccflags-y += -D BTMTK_PLAT_ALPS=0
+endif
+
+ifeq ($(CFG_SUPPORT_HOSTWAKE), y)
+    ccflags-y += -DCFG_SUPPORT_HOSTWAKE=1
+else
+    ccflags-y += -DCFG_SUPPORT_HOSTWAKE=0
 endif
 
 #################### Configurations ####################
