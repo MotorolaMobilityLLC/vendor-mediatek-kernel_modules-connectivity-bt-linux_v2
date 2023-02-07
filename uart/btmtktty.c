@@ -452,7 +452,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 	}
 
-#if (USE_DEVICE_NODE == 1) && IS_ENABLED(CONFIG_MTK_UARTHUB)
+#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
 	if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
 		mtk8250_uart_start_record(cif_dev->tty);
 #endif
@@ -491,7 +491,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 #if (USE_DEVICE_NODE == 1)
 		if (ret != -1)	/* successfully received event or coredump case */
 			break;
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
 		if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
 			mtk8250_uart_end_record(cif_dev->tty);
 #endif
@@ -833,7 +833,7 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 	btmtk_uart_delete_fw_own_timer(cif_dev);
 #endif
 
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
 	if (cif_dev->hub_en)
 		mtk8250_uart_dump(cif_dev->tty);
 #endif
@@ -1215,6 +1215,7 @@ static void btmtk_uart_chip_reset_notify(struct btmtk_dev *bdev)
 }
 
 
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
 static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev, bool do_flush)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
@@ -1259,7 +1260,7 @@ static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev, bool do_flus
 		time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
 		if (time_diff >= TIME_BOUND_OF_TTY_FLUSH) {
 			BTMTK_ERR("%s: flush time takes %lu ms", __func__, time_diff);
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
 			if (cif_dev->hub_en)
 				mtk8250_uart_dump(cif_dev->tty);
 #endif
@@ -1269,7 +1270,7 @@ static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev, bool do_flus
 	return flush_retry;
 
 }
-
+#endif
 
 static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset)
@@ -1328,9 +1329,8 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			else if (time_diff >= TIME_BOUND_OF_FW_PKG_DL) {
 				BTMTK_ERR("%s:, download single packet more than 2s [%lu]",
 					__func__, time_diff);
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
-				if (cif_dev->hub_en)
-					mtk8250_uart_dump(cif_dev->tty);
+#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
+				mtk8250_uart_dump(cif_dev->tty);
 #endif
 				ret = -1;
 				goto exit;
@@ -1385,11 +1385,13 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 
 	down(&cif_dev->tty_flush_sem);
 	/* wait tty buffer clean */
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	flush_retry = btmtk_uart_wait_tty_buffer_clean(bdev, TRUE);
 	if (flush_retry < 0) {
 		up(&cif_dev->tty_flush_sem);
 		return -1;
 	}
+#endif
 	while (len != cmd_len && count < BTMTK_MAX_SEND_RETRY
 			&& btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT) {
 		/* avoid uart_launcher get signal 9 close uart, and not notify driver */
@@ -2107,13 +2109,13 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 			atomic_set(&cif_dev->need_assert, 1);
 			wake_up_interruptible(&tx_wait_q);
 		}
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
 		else if (recv_fail_cnt < BTMTK_MAX_RECV_ERR_CNT) {
 			BTMTK_WARN("%s: recv error data, recv_fail_cnt[%d] count[%d]",
 					__func__, ++recv_fail_cnt, count);
+#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
 			mtk8250_uart_dump(cif_dev->tty);
-		}
 #endif
+		}
 	} else
 		recv_fail_cnt = 0;
 }
