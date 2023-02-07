@@ -123,9 +123,9 @@ static void btmtk_uart_create_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 static void btmtk_uart_delete_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 {
 	if (atomic_read(&cif_dev->fw_own_timer_flag)) {
-		del_timer_sync(&cif_dev->fw_own_timer);
 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
 		BTMTK_WARN("%s timer deleted", __func__);
+		del_timer_sync(&cif_dev->fw_own_timer);
 	} else
 		BTMTK_DBG_LIMITTED("%s: not create yet", __func__);
 }
