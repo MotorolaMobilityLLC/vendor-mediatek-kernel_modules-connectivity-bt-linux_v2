@@ -1399,6 +1399,8 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 			break;
 		}
 		ret = cif_dev->tty->ops->write(cif_dev->tty, cmd + len, cmd_len - len);
+		if (ret == 0)
+			udelay(500);
 		len += ret;
 		count++;
 	}
