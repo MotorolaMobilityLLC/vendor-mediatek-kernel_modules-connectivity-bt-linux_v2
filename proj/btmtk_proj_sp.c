@@ -223,8 +223,8 @@ void btmtk_uarthub_err_cb(unsigned int err_type)
 	if (((1 << dev0_tx_timeout_err) | (1 << dev0_tx_pkt_type_err) | (1 << dev0_rx_timeout_err)
 			| (1 << intfhub_dev0_tx_err) | (1 << rx_pkt_type_err)) & err_type) {
 		BTMTK_INFO("%s: dev0 err dump", __func__);
-#if IS_ENABLED(CONFIG_MTK_UARTDBG)
-		if (cif_dev->hub_en && btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_DISCONNECT)
+#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
+		if (btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_DISCONNECT)
 			mtk8250_uart_dump(cif_dev->tty);
 #endif
 	}
@@ -343,7 +343,7 @@ void btmtk_sp_coredump_start(void)
 		mtk8250_uart_hub_assert_bit_ctrl(1);
 		BTMTK_DBG("%s mtk8250_uart_hub_assert_bit_ctrl(1)", __func__);
 #endif
-#if IS_ENABLED(CONFIG_MTK_UARTDBG)
+#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
 		mtk8250_uart_dump(cif_dev->tty);
 #endif
 	}

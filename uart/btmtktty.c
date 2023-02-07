@@ -834,8 +834,7 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 #endif
 
 #if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
-	if (cif_dev->hub_en)
-		mtk8250_uart_dump(cif_dev->tty);
+	mtk8250_uart_dump(cif_dev->tty);
 #endif
 
 	if (state == BTMTK_STATE_INIT || fstate == BTMTK_FOPS_STATE_CLOSED
@@ -1261,8 +1260,7 @@ static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev, bool do_flus
 		if (time_diff >= TIME_BOUND_OF_TTY_FLUSH) {
 			BTMTK_ERR("%s: flush time takes %lu ms", __func__, time_diff);
 #if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
-			if (cif_dev->hub_en)
-				mtk8250_uart_dump(cif_dev->tty);
+			mtk8250_uart_dump(cif_dev->tty);
 #endif
 		}
 	}
