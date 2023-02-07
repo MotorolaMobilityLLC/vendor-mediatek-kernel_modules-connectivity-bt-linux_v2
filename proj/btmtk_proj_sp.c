@@ -471,7 +471,8 @@ int btmtk_pre_power_on_handler(void)
 
 #endif
 	/* reopen tty */
-	if(cif_dev != NULL && cif_dev->tty != NULL && cif_dev->tty->port != NULL) {
+	if(cif_dev != NULL && cif_dev->tty != NULL && cif_dev->tty->port != NULL
+		&& g_sbdev->is_pre_cal_done) {
 		BTMTK_INFO("%s tty_port[%p], port_count[%d]",
 				__func__, cif_dev->tty->port, cif_dev->tty->port->count);
 		if (cif_dev->tty->port->count == 0)

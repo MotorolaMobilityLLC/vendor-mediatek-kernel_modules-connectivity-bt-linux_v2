@@ -951,6 +951,11 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		return -EFAULT;
 	}
 
+	if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_DISCONNECT) {
+		BTMTK_WARN("%s: uart disconnected", __func__);
+		return -1;
+	}
+
 	/* reinit state */
 	BTMTK_INFO("%s: init bt assert_state[0], dump_comp", __func__);
 	atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
