@@ -346,7 +346,7 @@ void btmtk_sp_coredump_start(void)
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 		/* uarthub assert bit to avoid MD/ADSP send data */
 		mtk8250_uart_hub_assert_bit_ctrl(1);
-		BTMTK_DBG("%s mtk8250_uart_hub_assert_bit_ctrl(1)", __func__);
+		BTMTK_INFO("%s mtk8250_uart_hub_assert_bit_ctrl(1)", __func__);
 #endif
 #if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
 		mtk8250_uart_dump(cif_dev->tty);
@@ -387,8 +387,8 @@ void btmtk_sp_coredump_end(void)
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	/* uarthub reset */
 	if (cif_dev->hub_en) {
-		mtk8250_uart_hub_assert_bit_ctrl(0);
-		BTMTK_DBG("%s mtk8250_uart_hub_assert_bit_ctrl(0)", __func__);
+		//mtk8250_uart_hub_assert_bit_ctrl(0);
+		//BTMTK_DBG("%s mtk8250_uart_hub_assert_bit_ctrl(0)", __func__);
 		mtk8250_uart_hub_reset();
 		BTMTK_INFO("%s mtk8250_uart_hub_reset", __func__);
 	}
@@ -593,7 +593,11 @@ int btmtk_sp_close(void)
 	cancel_work_sync(&g_sbdev->reset_waker);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	btmtk_release_uarthub(true);
+	if (cif_dev->hub_en) {
+		mtk8250_uart_hub_assert_bit_ctrl(1);
+		BTMTK_INFO("%s mtk8250_uart_hub_assert_bit_ctrl(1)", __func__);
+		btmtk_release_uarthub(true);
+	}
 #else
 	/* EAP project not use btmtk_release_uarthub */
 	btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
