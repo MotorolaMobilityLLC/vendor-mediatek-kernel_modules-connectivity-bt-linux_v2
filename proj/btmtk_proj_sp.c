@@ -40,7 +40,6 @@
 #define POWER_ON_RX_PINCTRL_NAME	("bt_combo_uart_rx_aux")
 #define RST_ON_PINCTRL_NAME		("bt_rst_on")
 #define RST_OFF_PINCTRL_NAME		("bt_rst_off")
-#define INIT_STATE_PINCTRL_NAME		("bt_combo_gpio_init")
 #define BTMTK_UART_NAME			("btmtk_uart")
 #define BT_FIND_MY_PHONE_HIGH	("bt-find-my-phone-high")
 #define BT_FIND_MY_PHONE_LOW	("bt-find-my-phone-low")
@@ -523,49 +522,20 @@ int btmtk_set_gpio_default(void)
 		return -1;
 	}
 
-	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
-	btmtk_dump_gpio_state();
-	msleep(10);
-	if(!bmain_info->find_my_phone_mode)
-		btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
-	else
-		BTMTK_INFO("%s: into find my phone mode, skip set tx/rx gpio PD", __func__);
-
-	return 0;
-}
-
-/* for bt close flow, add tty close */
-int btmtk_set_gpio_default_for_close(void)
-{
-	struct btmtk_uart_dev *cif_dev = NULL;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-
-	BTMTK_DBG("%s: start", __func__);
-
-	if (g_sbdev == NULL) {
-		BTMTK_ERR("%s: bdev is NULL", __func__);
-		return -1;
-	}
-	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
-	if (!cif_dev) {
-		BTMTK_ERR("%s: cif_dev is NULL", __func__);
-		return -1;
-	}
-	cif_dev->is_pre_on_done = FALSE;
-	BTMTK_DBG("%s: is_pre_on_done false", __func__);
+	/* wait PRE_ON_PINCTRL_NAME */
+	msleep(20);
 
 	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 	btmtk_dump_gpio_state();
 	msleep(50);
+
 	if(!bmain_info->find_my_phone_mode)
 		btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
 	else
 		BTMTK_INFO("%s: into find my phone mode, skip set tx/rx gpio PD", __func__);
-	cif_dev->tty->ops->close(cif_dev->tty, NULL);
 
 	return 0;
 }
-
 
 static int btmtk_power_on_notify_handler(void)
 {
@@ -624,8 +594,14 @@ int btmtk_sp_close(void)
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	btmtk_release_uarthub(true);
+#else
+	/* EAP project not use btmtk_release_uarthub */
+	btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
 #endif
-	btmtk_set_gpio_default_for_close();
+	btmtk_set_gpio_default();
+	BTMTK_INFO("%s: tty close", __func__);
+	cif_dev->tty->ops->close(cif_dev->tty, NULL);
+	cif_dev->is_pre_on_done = FALSE;
 
 	return 0;
 }
