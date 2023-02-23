@@ -529,6 +529,26 @@ exit:
 	return ret;
 }
 
+int btmtk_uart_send_enable_ctxrtx(struct hci_dev *hdev)
+{
+	u8 cmd[] = {0x01, 0x6F, 0xFC, 0x2C, 0x01, 0x08, 0x28, 0x00,
+				0x01, 0x01, 0x00, 0x03, 0x10, 0x00, 0x09, 0x80,
+				0x02, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF,
+				0x34, 0x53, 0x00, 0x70, 0x00, 0x00, 0x02, 0x00,
+				0xFF, 0xFF, 0xFF, 0xFF, 0x44, 0x53, 0x00, 0x70,
+				0x00, 0x00, 0x04, 0x00, 0xFF, 0xFF, 0xFF, 0xFF};
+	u8 evt[] = {0x04, 0xE4, 0x08, 0x02, 0x08, 0x04, 0x00, 0x00,
+				0x00, 0x00, 0x03};
+	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	int ret = -1;
+
+	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), evt, sizeof(evt), DELAY_TIMES,
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+
+	BTMTK_INFO("%s done", __func__);
+	return ret;
+}
+
 int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_cfg)
 {
 	u8 baud_115200[] = { 0x01, 0x6F, 0xFC, 0x0A, 0x01, 0x04,
@@ -580,8 +600,8 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 	default:
 		/* default chip baud is 115200 */
 		cmd = baud_115200;
-		return 0;
-		//break;
+		//return 0;
+		break;
 	}
 
 	switch (uart_cfg->fc) {
@@ -1001,6 +1021,14 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		btmtk_uart_trigger_assert(bdev);
 		goto exit;
 	}
+
+	if (uart_cfg.fc == UART_HW_FC) {
+		BTMTK_INFO("support HW flow control");
+		ret = btmtk_uart_send_enable_ctxrtx(bdev->hdev);
+		if (ret < 0)
+			goto exit;
+	}
+
 	/* set chip baud and flowcontrol to config setting */
 	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
 	if (ret < 0)
