@@ -1183,6 +1183,8 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 		/* enable ADSP,MD when fw dl done*/
 		ret = mtk8250_uart_hub_fifo_ctrl(0);
 		BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(0) ret[%d]", __func__, ret);
+		mtk8250_uart_hub_assert_bit_ctrl(0);
+		BTMTK_INFO("%s mtk8250_uart_hub_assert_bit_ctrl(0)", __func__);
 	}
 #endif
 	btmtk_read_pmic_state(bdev);
