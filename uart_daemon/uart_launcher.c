@@ -255,17 +255,8 @@ int osi_system(const char *cmd)
 //---------------------------------------------------------------------------
 static void uart_launcher_sig_handler(int signum)
 {
-    BPRINT_I("%s: sig[%d] fd[%d]", __func__, signum,gTtyFd);
+    BPRINT_I("%s: sig[%d] fd[%d]", __func__, signum, gTtyFd);
     cont = 0;
-    if (gTtyFd > 0) {
-        if (ioctl(gTtyFd, HCIUARTDEINIT, NULL) < 0)
-            BPRINT_E("set HCIUARTDEINIT error");
-        BPRINT_I("unlock_flock");
-        unlock_flock(gTtyFd, &fl, F_UNLCK, SEEK_SET);
-        close(gTtyFd);
-        gTtyFd = -1;
-    }
-    BPRINT_I("%s: exit fd[%d]", __func__, gTtyFd);
 }
 
 //---------------------------------------------------------------------------
@@ -452,10 +443,10 @@ restart:
         goto restart;
     }
 
+    BPRINT_I("%s: deinit flow fd[%d]", __func__, gTtyFd);
+
     if (gTtyFd < 0)
         goto exit;
-
-    BPRINT_I("%s: reset to default baudrate fd[%d]", __func__, gTtyFd);
 
     /* before exit daemon, return baud to default */
     if (chang_baud_rate | flow_control) {
@@ -463,7 +454,7 @@ restart:
         sUartConfig.fc = UART_DISABLE_FC;
         err = ioctl(gTtyFd, HCIUARTSETBAUD, &sUartConfig);
         if (err < 0) {
-            BPRINT_E("set HCIUARTSETBAUD error %d", err);
+            BPRINT_E("ioctl HCIUARTSETBAUD error:[%d] %s", errno, strerror(errno));
             goto exit;
         }
 
@@ -472,7 +463,7 @@ restart:
 
         err = ioctl(gTtyFd, HCIUARTSETWAKEUP, NULL);
         if (err < 0) {
-            BPRINT_E("set HCIUARTSETWAKEUP error %d", err);
+            BPRINT_E("ioctl HCIUARTSETWAKEUP error:[%d] %s", errno, strerror(errno));
             goto exit;
         }
     }
@@ -482,8 +473,11 @@ exit:
     /* unlock ttyFd */
     if (gTtyFd > 0) {
         err = ioctl(gTtyFd, HCIUARTDEINIT, NULL);
-        if (err < 0)
-            BPRINT_E("set HCIUARTDEINIT error %d", err);
+        if (err < 0) {
+            BPRINT_E("ioctl HCIUARTDEINIT error:[%d] %s", errno, strerror(errno));
+            BPRINT_I("deinit fail, wait...");
+            (void)usleep(1000 * 1000);
+        }
         BPRINT_I("unlock_flock");
         unlock_flock(gTtyFd, &fl, F_UNLCK, SEEK_SET);
         close(gTtyFd);
