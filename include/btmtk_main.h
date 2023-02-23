@@ -648,6 +648,7 @@ struct btmtk_dev {
 	unsigned char	power_state;
 	unsigned char	fops_state;
 	unsigned char	interface_state;
+	unsigned char	blank_state;
 	struct btmtk_cif_state *cif_state;
 
 	/* io buffer for usb control transfer */

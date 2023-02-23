@@ -146,6 +146,7 @@ ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
     CFILES += proj/btmtk_proj_sp.c proj/btmtk_proj_sp_debug.c
     ccflags-y += -DANDROID_OS
     ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/connectivity/power_throttling
+    ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2/
 #else ifeq ($(MTK_PROJ_TYPE), ce)
 else
     CFILES += proj/btmtk_proj_ce.c
