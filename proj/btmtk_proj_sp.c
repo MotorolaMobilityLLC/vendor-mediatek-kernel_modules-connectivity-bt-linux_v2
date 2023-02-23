@@ -26,6 +26,9 @@
 #include <linux/of_gpio.h>
 #include <linux/gpio.h>
 #include <linux/interrupt.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+#include "mtk_disp_notify.h"
+#endif
 
 
 #define READ_PMIC_STATE_CMD_LEN		16
@@ -1049,6 +1052,101 @@ static irqreturn_t btmtk_host_wake_isr(int irq, void *dev)
 }
 #endif
 
+/*
+ *******************************************************************************
+ *			 bt notify fw blank state feature
+ *******************************************************************************
+ */
+
+enum wmt_blank_state {
+	// wmt parameter: 0(screen off) / 1(screen on)
+	WMT_PARA_SCREEN_OFF = 0,
+	WMT_PARA_SCREEN_ON = 1
+};
+
+int btmtk_intcmd_wmt_blank_status(unsigned char blank_state) {
+	u8 cmd[] = { 0x01, 0x5D, 0xFC, 0x03, 0x00, 0x04, 0x00};
+	u8 evt[] = {0x04, 0x0E, 0x07, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x04};
+	int ret;
+
+	BTMTK_INFO("%s: blank_state[%d]", __func__, blank_state);
+	cmd[6] = blank_state;
+	ret = btmtk_main_send_cmd(g_sbdev,
+			cmd, sizeof(cmd), evt, sizeof(evt),
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+	if (ret < 0)
+		BTMTK_ERR("%s faill to set blank_state[%d] to fw", __func__, blank_state);
+
+	return ret;
+}
+
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v)
+{
+	int *data = (int *)v;
+	int32_t new_state = 0;
+	/*
+		MTK_DISP_EARLY_EVENT_BLANK (0x00): This event will happen before lcm suspend/resume
+		MTK_DISP_EVENT_BLANK (0x01): This event will happen after lcm suspend/resume
+		MTK_DISP_BLANK_UNBLANK (0x00): which means display resume (power on)
+		MTK_DISP_BLANK_POWERDOWN (0x01): which mean display suspend (power off)
+	*/
+
+	BTMTK_INFO("%s: before_after_blank[%ld], blank_power_down[%d], chip_state[%d]",
+				__func__, value, *data, btmtk_get_chip_state(g_sbdev));
+	if (value == MTK_DISP_EARLY_EVENT_BLANK) {
+		switch (*data) {
+			case MTK_DISP_BLANK_UNBLANK:
+				new_state = WMT_PARA_SCREEN_ON;
+				break;
+			case MTK_DISP_BLANK_POWERDOWN:
+				new_state = WMT_PARA_SCREEN_OFF;
+				break;
+			default:
+				BTMTK_DBG("%s: goto end", __func__);
+				goto end;
+		}
+
+		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_WORKING) {
+			BTMTK_DBG("%s: blank state [%d]->[%d], and send cmd", __func__, g_sbdev->blank_state, new_state);
+			g_sbdev->blank_state = new_state;
+			btmtk_intcmd_wmt_blank_status(g_sbdev->blank_state);
+		} else {
+			BTMTK_DBG("%s: blank state [%d]->[%d]", __func__, g_sbdev->blank_state, new_state);
+			g_sbdev->blank_state = new_state;
+		}
+	}
+end:
+	BTMTK_INFO("%s: end", __func__);
+	return 0;
+}
+
+struct notifier_block btmtk_disp_notifier = {
+	.notifier_call = btmtk_disp_notify_cb,
+};
+#endif
+
+static void btmtk_fb_notify_register(void)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+	BTMTK_INFO("%s", __func__);
+
+	if (mtk_disp_notifier_register("btmtk_disp_notifier", &btmtk_disp_notifier)) {
+		BTMTK_ERR("%s: Register mtk_disp_notifier failed", __func__);
+	}
+#endif
+
+}
+
+static void btmtk_fb_notify_unregister(void)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+	BTMTK_INFO("%s", __func__);
+	mtk_disp_notifier_unregister(&btmtk_disp_notifier);
+#endif
+}
+
 int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
@@ -1146,6 +1244,8 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 
 	btmtk_dev_link_uart();
 
+	btmtk_fb_notify_register();
+
 	connv3_sub_drv_ops_register(CONNV3_DRV_TYPE_BT, &btmtk_drv_cbs);
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en) {
@@ -1160,6 +1260,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 
 int btmtk_connv3_sub_drv_deinit(void)
 {
+	btmtk_fb_notify_unregister();
 	return connv3_sub_drv_ops_unregister(CONNV3_DRV_TYPE_BT);
 }
 
