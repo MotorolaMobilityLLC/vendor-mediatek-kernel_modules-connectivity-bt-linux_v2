@@ -1013,7 +1013,12 @@ int btmtk_set_pcm_pin_mux(void)
 	return 0;
 }
 
-#if (CFG_SUPPORT_HOSTWAKE == 1)
+/*
+ *******************************************************************************
+ *			 fw wakeup host through irq feature
+ *******************************************************************************
+ */
+
 static irqreturn_t btmtk_host_wake_isr(int irq, void *dev)
 {
 	struct btmtk_dev *bdev = (struct btmtk_dev *)dev;
@@ -1030,7 +1035,46 @@ static irqreturn_t btmtk_host_wake_isr(int irq, void *dev)
 
 	return IRQ_HANDLED;
 }
-#endif
+
+int btmtk_register_wakeup_irq(struct btmtk_dev *bdev, struct tty_struct *tty) {
+	int ret;
+	int irq;
+
+	bdev->wakeup_irq = of_get_gpio(tty->dev->of_node, 0);
+	if (!gpio_is_valid(bdev->wakeup_irq)) {
+		BTMTK_ERR("[ERR] %s: uanble to get bt host wake gpio", __func__);
+		return -1;
+	}
+
+	ret = gpio_request(bdev->wakeup_irq, "hostwake_gpio");
+	if (unlikely(ret)) {
+		BTMTK_ERR("[ERR] %s: request host wake gpio fail", __func__);
+		gpio_free(bdev->wakeup_irq);
+		return -1;
+	}
+
+	gpio_direction_input(bdev->wakeup_irq);
+	irq = gpio_to_irq(bdev->wakeup_irq);
+	ret = request_irq(irq, btmtk_host_wake_isr, IRQF_TRIGGER_RISING,
+					"bt_hostwake", (void *)bdev);
+
+	if (ret) {
+		BTMTK_ERR("[ERR] %s: request irq for bt hostwake fail: %d", __func__, ret);
+		gpio_free(bdev->wakeup_irq);
+		return -1;
+	}
+
+	ret = enable_irq_wake(irq);
+	if (ret) {
+		BTMTK_ERR("%s: enable irq_wake failed ret = %d", __func__, ret);
+		gpio_free(bdev->wakeup_irq);
+		return -1;
+	}
+	BTMTK_INFO("%s: request irq(%d) for bt hostwake done", __func__, irq);
+
+	return 0;
+}
+
 
 /*
  *******************************************************************************
@@ -1175,49 +1219,33 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	if(ret < 0)
 		BTMTK_ERR("[ERR] %s: mediatek,bt sleep-en ret[%d]", __func__, ret);
 
+	ret = of_property_read_string(tty->dev->of_node, "flavor-bin", &bdev->flavor_bin);
+	if(ret < 0){
+		const static char default_flavor[] = "1";
+		bdev->flavor_bin = default_flavor;
+		BTMTK_ERR("[ERR] %s: mediatek,bt flavor-bin ret[%d], using default flavor[1]", __func__, ret);
+	}
+
+	if (strncmp(bdev->flavor_bin, "eap", strlen("eap")) == 0) {
+		BTMTK_WARN("EAP project");
+		bdev->is_eap = true;
+	}
+
 	pinctrl_ptr = devm_pinctrl_get(tty->dev);
 	if (IS_ERR(pinctrl_ptr)) {
 		BTMTK_ERR("[ERR] %s: fail to get bt pinctrl", __func__);
-		return -1;
+		//return -1;
 	}
 
 	btmtk_pinctrl_exec(BT_FIND_MY_PHONE_HIGH);
 	btmtk_pinctrl_exec(BT_FIND_MY_PHONE_LOW);
-#if (CFG_SUPPORT_HOSTWAKE == 1)
-	if (cif_dev->sleep_en) {
-		int irq;
-		bdev->wakeup_irq = of_get_gpio(tty->dev->of_node, 0);
-		if (!gpio_is_valid(bdev->wakeup_irq)) {
-			BTMTK_ERR("[ERR] %s: uanble to get bt host wake gpio", __func__);
-			return -1;
-		}
 
-		ret = gpio_request(bdev->wakeup_irq, "hostwake_gpio");
-		if (unlikely(ret)) {
-			BTMTK_ERR("[ERR] %s: request host wake gpio fail", __func__);
-			gpio_free(bdev->wakeup_irq);
-			return -1;
-		}
-
-		gpio_direction_input(bdev->wakeup_irq);
-		irq = gpio_to_irq(bdev->wakeup_irq);
-		ret = request_irq(irq, btmtk_host_wake_isr, IRQF_TRIGGER_RISING,
-						"bt_hostwake", (void *)bdev);
-
-		if (ret) {
-			BTMTK_ERR("[ERR] %s: request irq for bt hostwake fail: %d", __func__, ret);
-			gpio_free(bdev->wakeup_irq);
-		}
-
-		ret = enable_irq_wake(irq);
-		if (ret) {
-			BTMTK_ERR("%s: enable irq_wake failed ret = %d", __func__, ret);
-			gpio_free(bdev->wakeup_irq);
-			return -1;
-		}
-		BTMTK_INFO("%s: request irq(%d) for bt hostwake done", __func__, irq);
-	}
-#endif
+	if (bdev->is_eap && cif_dev->sleep_en) {
+		ret = btmtk_register_wakeup_irq(bdev, tty);
+		if (ret < 0)
+			BTMTK_WARN("%s: btmtk_register_wakeup_irq fail", __func__);
+	} else
+		BTMTK_INFO("%s: not support fw wakeup irq", __func__);
 
 	/* set gpio to default */
 	btmtk_set_gpio_default();
@@ -1550,6 +1578,11 @@ static void btmtk_dump_gpio_state(void)
 #define GET_BIT(V, INDEX) ((V & (0x1U << INDEX)) >> INDEX)
 
 	unsigned int aux, dir, out;
+
+	if (g_sbdev->is_eap) {
+		BTMTK_INFO("%s: EAP project, not support", __func__);
+		return;
+	}
 
 	if (vir_0x1000_5000 == NULL)
 		vir_0x1000_5000 = ioremap(0x10005000, 0x500);
