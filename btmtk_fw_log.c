@@ -1302,6 +1302,12 @@ coredump_fail_unlock:
 		BTMTK_INFO_LIMITTED("fw log counter[%d]", fwlog_count);
 		bmain_info->hif_hook.log_handler(skb->data, skb->len);
 		return 1;
+	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
+				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
+				skb->data[1] == 0x06 && bmain_info->hif_hook.met_log_handler) {
+		skb_pull(skb, 4);
+		bmain_info->hif_hook.met_log_handler(skb->data, skb->len);
+		return 1;
 	}
 
 	return 0;
