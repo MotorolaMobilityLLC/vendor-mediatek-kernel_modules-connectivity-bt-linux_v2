@@ -642,6 +642,8 @@ struct btmtk_dev {
 	unsigned char	*rom_patch_bin_file_name;
 	unsigned int	chip_id;
 	unsigned int	flavor;
+	const char	*flavor_bin;
+	bool		is_eap;
 	unsigned int	dualBT;
 	unsigned int	fw_version;
 	unsigned char	dongle_index;
@@ -684,10 +686,8 @@ struct btmtk_dev {
 	/* UDS work for only wifi on*/
 	struct work_struct  pwr_on_uds_work;
 
-#if (CFG_SUPPORT_HOSTWAKE == 1)
-	/* wakeup irq */
+	/* fw wakeup host irq */
 	int	wakeup_irq;
-#endif
 #endif
 	/* completion */
 	struct completion	dump_comp;

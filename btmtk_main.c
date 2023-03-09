@@ -2466,7 +2466,7 @@ int btmtk_dynamic_load_rom_patch(struct btmtk_dev *bdev, u32 binInfo)
 #if (USE_DEVICE_NODE == 0)
 							"BT_RAM_CODE_MT6639_2_1_hdr.bin");
 #else
-							"BT_RAM_CODE_MT6639_1_1_hdr.bin");
+							"BT_RAM_CODE_MT6639_%s_1_hdr.bin", bdev->flavor_bin);
 							//"BT_RAM_CODE_MT6639_1_1_nonenc_hdr.bin");
 #endif
 
@@ -2539,7 +2539,7 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag)
 #if (USE_DEVICE_NODE == 0)
 					"BT_RAM_CODE_MT6639_2_1_hdr.bin");
 #else
-					"BT_RAM_CODE_MT6639_1_1_hdr.bin");
+					"BT_RAM_CODE_MT6639_%s_1_hdr.bin", bdev->flavor_bin);
 					//"BT_RAM_CODE_MT6639_1_1_nonenc_hdr.bin");
 #endif
 
