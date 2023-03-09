@@ -847,6 +847,7 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s tty_port[%p]", __func__, cif_dev->tty->port);
 	/* driver dump */
 	btmtk_hci_snoop_print_to_log();
+	btmtk_dump_gpio_state();
 
 #if (SLEEP_ENABLE == 1)
 	/* incase do fw own in debug sop flow */
@@ -964,6 +965,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	msleep(100);
 
 	btmtk_set_uart_rx_aux();
+	btmtk_dump_gpio_state();
 
 	if (connv3_ext_32k_on()) {
 		BTMTK_ERR("connv3_ext_32k_on failed!");
