@@ -2828,6 +2828,7 @@ int btmtk_cif_register(void)
 	hook.log_get_buf_size = btmtk_connsys_log_get_buf_size;
 	hook.log_deinit = btmtk_connsys_log_deinit;
 	hook.log_handler = btmtk_connsys_log_handler;
+	hook.met_log_handler = btmtk_met_log_handler;
 	hook.init = btmtk_chardev_init;
 	hook.dump_debug_sop = btmtk_uart_sp_dump_debug_sop;
 	hook.dump_hif_debug_sop = btmtk_hif_sp_dump_debug_sop;
@@ -2907,5 +2908,43 @@ ssize_t btmtk_connsys_log_read_to_user(char __user *buf, size_t count)
 unsigned int btmtk_connsys_log_get_buf_size(void)
 {
 	return connv3_log_get_buf_size(CONNV3_DEBUG_TYPE_BT);
+}
+
+#define MET_LOG_MAX_BUF_SIZE (256 * 2 + 64)
+int btmtk_met_log_handler(u8 *buf, u32 size)
+{
+	const static int module_id = 0x00;
+	const static int project_id = 0x6985;
+	const static int adie_id = 0x6639;
+	const static int adie_ver = 0x0000;
+	unsigned int i = 0;
+	int len = 0;
+	uint8_t raw_buf[MET_LOG_MAX_BUF_SIZE] = {0};
+
+	if ((size & 0x03) != 0 || size == 0) {
+		BTMTK_ERR("%s: packet size should be multiple of 4", __func__);
+		return -1;
+	}
+
+
+	for (i = 0; i <= size - 4; i += 4) {
+		len = snprintf(raw_buf, MET_LOG_MAX_BUF_SIZE, "%s%02X%02X%02X%02X,",
+					   raw_buf, buf[i+3], buf[i+2], buf[i+1], buf[i]);
+		if (len <= 0) {
+			BTMTK_ERR("%s: snprintf error len = %d", __func__, len);
+			return -1;
+		}
+
+		if (((i + 4) & 0xFF) == 0 || i == size - 4) {
+			raw_buf[len - 1] = '\0';
+			BTMTK_INFO("MCU_MET_DATA:%02X%04X%04X%04X,%s",
+						module_id, project_id,
+						adie_id, adie_ver,
+						raw_buf);
+			memset(raw_buf, 0,	MET_LOG_MAX_BUF_SIZE);
+		}
+	}
+
+	return 0;
 }
 #endif
