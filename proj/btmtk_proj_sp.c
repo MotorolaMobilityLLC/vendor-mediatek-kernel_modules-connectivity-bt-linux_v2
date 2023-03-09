@@ -51,11 +51,12 @@ extern struct btmtk_dev *g_sbdev;
 int g_bt_state;
 
 /* dump gpio */
-static void __iomem *vir_0x1000_5000 = NULL; /* GPIO */
+static void __iomem *vir_0x1000_5000 = NULL; /* GPIO_BASE */
+static void __iomem *vir_0x11C0_0000 = NULL; /* IOCFG_RM_BASE */
+
 #define CONSYS_REG_READ(addr) (*((volatile unsigned int *)(addr)))
 
 extern void btmtk_uart_trigger_assert_by_tx_thread(struct btmtk_dev *bdev);
-static void btmtk_dump_gpio_state(void);
 
 static inline int btmtk_pinctrl_exec(const char *name);
 
@@ -489,7 +490,7 @@ int btmtk_pre_power_on_handler(void)
 		if (cif_dev->tty->port->count == 0)
 			cif_dev->tty->ops->open(cif_dev->tty, NULL);
 	}
-
+	btmtk_dump_gpio_state();
 	btmtk_pinctrl_exec(POWER_ON_TX_PINCTRL_NAME);
 	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
 	btmtk_dump_gpio_state();
@@ -527,13 +528,13 @@ int btmtk_set_gpio_default(void)
 	msleep(20);
 
 	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
-	btmtk_dump_gpio_state();
 	msleep(50);
 
 	if(!bmain_info->find_my_phone_mode)
 		btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
 	else
 		BTMTK_INFO("%s: into find my phone mode, skip set tx/rx gpio PD", __func__);
+	btmtk_dump_gpio_state();
 
 	return 0;
 }
@@ -1575,11 +1576,11 @@ int32_t btmtk_intcmd_wmt_utc_sync(void)
 }
 
 
-static void btmtk_dump_gpio_state(void)
+void btmtk_dump_gpio_state(void)
 {
 #define GET_BIT(V, INDEX) ((V & (0x1U << INDEX)) >> INDEX)
 
-	unsigned int aux, dir, out;
+	unsigned int aux, dir, out, pu, pd;
 
 	if (g_sbdev->is_eap) {
 		BTMTK_INFO("%s: EAP project, not support", __func__);
@@ -1590,14 +1591,24 @@ static void btmtk_dump_gpio_state(void)
 		vir_0x1000_5000 = ioremap(0x10005000, 0x500);
 
 	if (vir_0x1000_5000 == NULL) {
-		BTMTK_ERR("%s: vir_0x1000_5000[%p]", __func__, vir_0x1000_5000);
+		BTMTK_ERR("%s: GPIO_BASE vir_0x1000_5000", __func__);
 		return;
 	}
 
-	/* 0x1000_5000
+	if (vir_0x11C0_0000 == NULL)
+		vir_0x11C0_0000 = ioremap(0x11C00000, 0x500);
+
+	if (vir_0x11C0_0000 == NULL) {
+		BTMTK_ERR("%s: IOCFG_RM_BASE vir_0x11C0_0000", __func__);
+		return;
+	}
+
+	/* 0x1000_5000 (GPIO_BASE)
 	 * 	0x0070	GPIO_DIR7
 	 * 		0: GPIO Dir. as Input; 1: GPIO Dir. as Output
 	 * 		GPIO_DIR register for GPIO224~GPIO241; GPIO242~GPIO255:
+	 *		0: 224
+	 *		1: 225
 	 * 		2: 226
 	 * 		3: 227
 	 * 		4: 228
@@ -1613,8 +1624,38 @@ static void btmtk_dump_gpio_state(void)
 	 * 		101:;110:;111:;
 	 * 	0x0170	GPIO_DOUT7
 	 * 		0: GPIO output low; 1: GPIO output high;
+	 *		0: 224
+	 *		1: 225
 	 * 		16: 240
+	 * 	0x04C0	GPIO_MODE30
+	 * 		[2:0]    Aux mode of PAD_BT_UTXD
+	 * 		000:B:GPIO224;
+	 * 		001:O:UTXD3;
+	 * 		010:O:UARTHUB_UART_TX;
+	 * 		011:I1:URXD3;
+	 * 		100:O:MD_MCIF_UTXD0;
+	 * 		101:;110:;111:;
+	 *
+	 * 		[6:4]    Aux mode of PAD_BT_URXD
+	 * 		000:B:GPIO225;
+	 * 		001:I1:URXD3;
+	 * 		010:I1:UARTHUB_UART_RX;
+	 * 		011:O:UTXD3;
+	 * 		100:I1:MD_MCIF_URXD0;
+	 * 		101:;110:;111:;
 	 */
+
+	/* 0x11C0_0000 (IOCFG_RM_BASE)
+	 * 	0x0040	PU
+	 *		0: 225
+	 *		1: 224
+	 * 	0x0030	PD
+	 *		0: 225
+	 *		1: 224
+	 */
+
+
+	/* GPIO 240 reset pin */
 	aux = CONSYS_REG_READ(vir_0x1000_5000 + 0x04E0);
 	dir = CONSYS_REG_READ(vir_0x1000_5000 + 0x0070);
 	out = CONSYS_REG_READ(vir_0x1000_5000 + 0x0170);
@@ -1622,6 +1663,21 @@ static void btmtk_dump_gpio_state(void)
 	BTMTK_DBG("%s: aux[0x%08x] dir[0x%08x] out[0x%08x]", __func__,aux, dir, out);
 	BTMTK_INFO("%s: GPIO_240 aux=[%d] dir=[%s] out[%d]", __func__,
 		((aux & 0x07)), (GET_BIT(dir, 16) ? "OUT" : "IN"), GET_BIT(out, 16));
+
+	/* GPIO 224 TX */
+	aux = CONSYS_REG_READ(vir_0x1000_5000 + 0x04C0);
+	pu = CONSYS_REG_READ(vir_0x11C0_0000 + 0x0040);
+	pd = CONSYS_REG_READ(vir_0x11C0_0000 + 0x0030);
+	BTMTK_DBG("%s: aux[0x%08x] dir[0x%08x] out[0x%08x]", __func__,aux, dir, out);
+	BTMTK_INFO("%s: GPIO_224 aux=[%d] dir=[%s] out[%d] PU[%d] PD[%d]", __func__,
+		((aux & 0x07)), (GET_BIT(dir, 0) ? "OUT" : "IN"), GET_BIT(out, 0),
+		GET_BIT(pu, 1), GET_BIT(pd, 1));
+
+	/* GPIO 225 RX */
+	BTMTK_DBG("%s: aux[0x%08x] dir[0x%08x] out[0x%08x]", __func__,aux, dir, out);
+	BTMTK_INFO("%s: GPIO_225 aux=[%d] dir=[%s] out[%d] PU[%d] PD[%d]", __func__,
+		((aux & 0x70) >> 4), (GET_BIT(dir, 1) ? "OUT" : "IN"), GET_BIT(out, 1),
+		GET_BIT(pu, 0), GET_BIT(pd, 0));
 
 }
 
