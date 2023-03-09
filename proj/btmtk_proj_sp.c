@@ -1120,8 +1120,8 @@ int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v
 		MTK_DISP_BLANK_POWERDOWN (0x01): which mean display suspend (power off)
 	*/
 
-	BTMTK_INFO("%s: before_after_blank[%ld], blank_power_down[%d], chip_state[%d]",
-				__func__, value, *data, btmtk_get_chip_state(g_sbdev));
+	BTMTK_INFO("%s: before_after_blank[%ld], blank_power_down[%d], fops_state[%d]",
+				__func__, value, *data, btmtk_fops_get_state(g_sbdev));
 	if (value == MTK_DISP_EARLY_EVENT_BLANK) {
 		switch (*data) {
 			case MTK_DISP_BLANK_UNBLANK:
@@ -1135,7 +1135,7 @@ int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v
 				goto end;
 		}
 
-		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_WORKING) {
+		if (btmtk_fops_get_state(g_sbdev) == BTMTK_FOPS_STATE_OPENED) {
 			BTMTK_DBG("%s: blank state [%d]->[%d], and send cmd", __func__, g_sbdev->blank_state, new_state);
 			g_sbdev->blank_state = new_state;
 			btmtk_intcmd_wmt_blank_status(g_sbdev->blank_state);
