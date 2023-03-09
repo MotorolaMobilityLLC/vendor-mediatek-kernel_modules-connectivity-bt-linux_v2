@@ -2250,9 +2250,9 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		if (cif_dev->hub_en) {
 			ret = mtk8250_uart_hub_dev0_clear_tx_request();
 			BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_tx_request, ret[%d]", __func__, ret);
+			/* record host wakeup info to fw, b[4] = AP, b[5] = MD, b[6] = ADSP */
+			cmd[9] = cmd[9] | ((mtk8250_uart_hub_get_host_wakeup_status() & 0xf) << 4);
 		}
-		/* record host wakeup info to fw, b[4] = AP, b[5] = MD, b[6] = ADSP */
-		cmd[9] = cmd[9] | ((mtk8250_uart_hub_get_host_wakeup_status() & 0xf) << 4);
 #endif
 
 		/* two different event for fw allow sleep or not */
@@ -2262,7 +2262,8 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		if (bdev->io_buf[7]) {
 			/* re-set tx request */
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-			btmtk_wakeup_uarthub();
+			if (cif_dev->hub_en)
+				btmtk_wakeup_uarthub();
 #endif
 			BTMTK_WARN("%s fw not allow sleep, keep drv own, cmd[9] = 0x%02x", __func__, cmd[9]);
 			cif_dev->own_state = BTMTK_DRV_OWN;
@@ -2285,7 +2286,8 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		atomic_set(&cif_dev->fw_wake, 0);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-		btmtk_release_uarthub(false);
+		if (cif_dev->hub_en)
+			btmtk_release_uarthub(false);
 #endif
 		__pm_relax(bt_trx_wakelock);
 		BTMTK_INFO("%s success, cmd[9] = 0x%02x", __func__, cmd[9]);

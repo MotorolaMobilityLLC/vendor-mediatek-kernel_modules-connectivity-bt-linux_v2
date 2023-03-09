@@ -302,15 +302,13 @@ void btmtk_release_uarthub(bool force)
 		return;
 	}
 	/* force is for only bt off flow */
-	if (cif_dev->hub_en && force) {
-		/* set tx/rx gpio PU */
-		btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
+	if (force) {
 		ret = mtk8250_uart_hub_dev0_clear_tx_request();
 		BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_tx_request ret[%d]", __func__, ret);
 	}
 
 	/* Clr TX,RX request, let uarthub can sleep */
-	if (cif_dev->hub_en && (cif_dev->sleep_en || force)) {
+	if (cif_dev->sleep_en || force) {
 		ret =  mtk8250_uart_hub_dev0_clear_rx_request(cif_dev->tty);
 		BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_rx_request ret[%d]", __func__, ret);
 		if (ret)
@@ -342,16 +340,19 @@ void btmtk_sp_coredump_start(void)
 	BTMTK_INFO("%s: set bt assert_state[1]", __func__);
 	atomic_set(&g_sbdev->assert_state, BTMTK_ASSERT_START);
 
-	if (cif_dev->hub_en && btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_DISCONNECT) {
+
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	if (cif_dev->hub_en) {
 		/* uarthub assert bit to avoid MD/ADSP send data */
 		mtk8250_uart_hub_assert_bit_ctrl(1);
 		BTMTK_INFO("%s mtk8250_uart_hub_assert_bit_ctrl(1)", __func__);
+	}
 #endif
+
 #if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
+	if (btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_DISCONNECT)
 		mtk8250_uart_dump(cif_dev->tty);
 #endif
-	}
 
 
 }
@@ -456,29 +457,29 @@ int btmtk_pre_power_on_handler(void)
 	ret = btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	if (cif_dev->hub_en) {
+		/* use uarthub multi-host mode (default) */
+		ret = mtk8250_uart_hub_enable_bypass_mode(0);
+		BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
 
-	/* use uarthub multi-host mode (default) */
-	ret = mtk8250_uart_hub_enable_bypass_mode(0);
-	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
+		ret = mtk8250_uart_hub_dev0_set_rx_request();
+		BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_rx_request ret[%d]", __func__, ret);
+		ret = btmtk_wakeup_uarthub();
 
-	ret = mtk8250_uart_hub_dev0_set_rx_request();
-	BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_rx_request ret[%d]", __func__, ret);
-	ret = btmtk_wakeup_uarthub();
+		if(ret < 0)
+			return ret;
 
-	if(ret < 0)
-		return ret;
+		ret = mtk8250_uart_hub_reset_flow_ctrl();
+		BTMTK_DBG("%s mtk8250_uart_hub_reset_flow_ctrl ret[%d]", __func__, ret);
 
-	ret = mtk8250_uart_hub_reset_flow_ctrl();
-	BTMTK_DBG("%s mtk8250_uart_hub_reset_flow_ctrl ret[%d]", __func__, ret);
+		/* disable ADSP,MD when fw dl */
+		ret = mtk8250_uart_hub_fifo_ctrl(1);
+		BTMTK_DBG("%s: Set mtk8250_uart_hub_fifo_ctrl(1) ret[%d]", __func__, ret);
 
-	/* disable ADSP,MD when fw dl */
-	ret = mtk8250_uart_hub_fifo_ctrl(1);
-	BTMTK_DBG("%s: Set mtk8250_uart_hub_fifo_ctrl(1) ret[%d]", __func__, ret);
-
-	/* use uarthub bypass mode*/
-	ret = mtk8250_uart_hub_enable_bypass_mode(1);
-	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
-
+		/* use uarthub bypass mode*/
+		ret = mtk8250_uart_hub_enable_bypass_mode(1);
+		BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
+	}
 #endif
 	/* reopen tty */
 	if(cif_dev != NULL && cif_dev->tty != NULL && cif_dev->tty->port != NULL
@@ -592,16 +593,17 @@ int btmtk_sp_close(void)
 
 	cancel_work_sync(&g_sbdev->reset_waker);
 
+	/* set tx/rx gpio PU */
+	btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
+
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en) {
 		mtk8250_uart_hub_assert_bit_ctrl(1);
 		BTMTK_INFO("%s mtk8250_uart_hub_assert_bit_ctrl(1)", __func__);
 		btmtk_release_uarthub(true);
 	}
-#else
-	/* EAP project not use btmtk_release_uarthub */
-	btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
 #endif
+
 	btmtk_set_gpio_default();
 	BTMTK_INFO("%s: tty close", __func__);
 	cif_dev->tty->ops->close(cif_dev->tty, NULL);
