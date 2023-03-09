@@ -2081,7 +2081,7 @@ static int btmtk_uart_tty_compat_ioctl(struct tty_struct *tty,
 
 	return err;
 }
-#if (CFG_SUPPORT_HOSTWAKE == 1)
+
 void btmtk_wakeup_host(struct btmtk_dev *bdev)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
@@ -2106,7 +2106,7 @@ void btmtk_wakeup_host(struct btmtk_dev *bdev)
 	atomic_set(&cif_dev->fw_wake, 1);
 	wake_up_interruptible(&tx_wait_q);
 }
-#endif
+
 #if (defined(ANDROID_OS) && (KERNEL_VERSION(5, 15, 0) > LINUX_VERSION_CODE)) || defined(LINUX_OS)
 static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, char *flags, int count)
 #else
@@ -2349,20 +2349,20 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			usleep_range(4000, 4100);
 		} else {
 			u8 wakeup_cmd[] = { 0xFF };
-#if (CFG_SUPPORT_HOSTWAKE == 1)
-			ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN,
-					DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
-
-#else
-			int i = 0;
-			for (i = 0; i < 3; i++) {
-				/* no need to wait event */
-				ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
+			if (bdev->is_eap) {
+				ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN,
 						DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
-				/* wait a while for fw wakeup */
-				usleep_range(6000, 6100);
+
+			} else {
+				int i = 0;
+				for (i = 0; i < 3; i++) {
+					/* no need to wait event */
+					ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
+							DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+					/* wait a while for fw wakeup */
+					usleep_range(6000, 6100);
+				}
 			}
-#endif
 		}
 
 		do {
@@ -2829,9 +2829,7 @@ int btmtk_cif_register(void)
 	hook.dump_hif_debug_sop = btmtk_hif_sp_dump_debug_sop;
 	hook.whole_reset = btmtk_sp_whole_chip_reset;
 	hook.trigger_assert = btmtk_uart_trigger_assert;
-#if (CFG_SUPPORT_HOSTWAKE == 1)
 	hook.wakeup_host = btmtk_wakeup_host;
-#endif
 #endif
 	hook.open = btmtk_uart_open;
 	hook.close = btmtk_uart_close;
