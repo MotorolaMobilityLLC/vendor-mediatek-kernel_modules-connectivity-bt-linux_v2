@@ -66,6 +66,9 @@
 static int set_speed(int fd, struct termios *ti, int speed);
 int setup_uart_param (int hComPort, int iBaudrate, struct UART_CONFIG *sUartConfig);
 
+#ifdef __ANDROID__
+static int notifyFd = -1;
+#endif
 static int gTtyFd = -1;
 static int cont = 1;    /** loop continue running */
 struct flock fl;
@@ -355,6 +358,25 @@ int main(int argc, char *argv[])
             break;
     }
 
+#ifdef __ANDROID__
+    /* open bt_uart_launcher_notify */
+    BPRINT_I("open /proc/stpbt/bt_uart_launcher_notify");
+    /* node may not ready, retry 20 times */
+    while (1) {
+        notifyFd= open("/proc/stpbt/bt_uart_launcher_notify", O_RDONLY);
+        BPRINT_I("open done bt_uart_launcher_notify fd[%d]", notifyFd);
+        if (notifyFd < 0) {
+            if (retry > 20) {
+                BPRINT_E("bt_uart_launcher_notify %d, error", notifyFd);
+            } else {
+                retry++;
+                (void)usleep(1000 * 1000);
+            }
+        } else
+            break;
+    }
+#endif
+
     /* flock the device node */
     BPRINT_I("flock the device node");
     if (fcntl(gTtyFd, F_SETLK, &fl) < 0) {
@@ -469,7 +491,16 @@ restart:
     }
 
 exit:
-    BPRINT_I("%s: exit fd[%d]", __func__, gTtyFd);
+#ifdef __ANDROID__
+    BPRINT_I("%s: exit notifyFd[%d]", __func__, notifyFd);
+    if (notifyFd > 0) {
+        close(notifyFd);
+        notifyFd= -1;
+    }
+#endif
+
+    BPRINT_I("%s: exit ttyFd[%d]", __func__, gTtyFd);
+
     /* unlock ttyFd */
     if (gTtyFd > 0) {
         err = ioctl(gTtyFd, HCIUARTDEINIT, NULL);

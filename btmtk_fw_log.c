@@ -47,6 +47,11 @@ static int btmtk_proc_open(struct inode *inode, struct  file *file);
 static int btmtk_proc_chip_reset_count_open(struct inode *inode, struct  file *file);
 static int btmtk_proc_chip_reset_count_show(struct seq_file *m, void *v);
 
+int btmtk_proc_uart_launcher_notify_open(struct inode *inode, struct file *file);
+int btmtk_proc_uart_launcher_notify_close(struct inode *inode, struct file *file);
+ssize_t btmtk_proc_uart_launcher_notify_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos);
+
+
 #if (KERNEL_VERSION(5, 6, 0) > LINUX_VERSION_CODE)
 static const struct file_operations BT_proc_fops = {
 	.open = btmtk_proc_open,
@@ -59,6 +64,13 @@ static const struct file_operations BT_proc_chip_reset_count_fops = {
 	.read = seq_read,
 	.release = single_release,
 };
+
+static const struct file_operations BT_proc_uart_launcher_notify_fops = {
+	.open = btmtk_proc_uart_launcher_notify_open,
+	.read = btmtk_proc_uart_launcher_notify_read,
+	.release = btmtk_proc_uart_launcher_notify_close,
+};
+
 #else
 static const struct proc_ops BT_proc_fops = {
 	.proc_open = btmtk_proc_open,
@@ -71,6 +83,13 @@ static const struct proc_ops BT_proc_chip_reset_count_fops = {
 	.proc_read = seq_read,
 	.proc_release = single_release,
 };
+
+static const struct proc_ops BT_proc_uart_launcher_notify_fops = {
+	.proc_open = btmtk_proc_uart_launcher_notify_open,
+	.proc_read = btmtk_proc_uart_launcher_notify_read,
+	.proc_release = btmtk_proc_uart_launcher_notify_close,
+};
+
 #endif
 __weak int32_t btmtk_intcmd_wmt_utc_sync(void)
 {
@@ -79,6 +98,12 @@ __weak int32_t btmtk_intcmd_wmt_utc_sync(void)
 }
 
 __weak int32_t btmtk_intcmd_set_fw_log(uint8_t flag)
+{
+	BTMTK_ERR("weak function %s not implement", __func__);
+	return -1;
+}
+
+__weak int btmtk_uart_launcher_deinit(void)
 {
 	BTMTK_ERR("weak function %s not implement", __func__);
 	return -1;
@@ -158,6 +183,12 @@ static void btmtk_proc_create_new_entry(void)
 	proc_show_entry =  proc_create("bt_fw_version", 0640, bmain_info->proc_dir, &BT_proc_fops);
 	if (proc_show_entry == NULL) {
 		BTMTK_ERR("Unable to creat bt_fw_version node");
+		remove_proc_entry("stpbt", NULL);
+	}
+
+	proc_show_entry =  proc_create("bt_uart_launcher_notify", 0640, bmain_info->proc_dir, &BT_proc_uart_launcher_notify_fops);
+	if (proc_show_entry == NULL) {
+		BTMTK_ERR("Unable to creat bt_uart_launcher_notify node");
 		remove_proc_entry("stpbt", NULL);
 	}
 
@@ -765,6 +796,23 @@ exit:
 
 	return ret;	/* If input is correct should return the same length */
 #endif // CFG_ENABLE_DEBUG_WRITE == 0
+}
+
+int btmtk_proc_uart_launcher_notify_open(struct inode *inode, struct file *file){
+	BTMTK_INFO("%s: Start.", __func__);
+	return 0;
+}
+
+int btmtk_proc_uart_launcher_notify_close(struct inode *inode, struct file *file){
+	BTMTK_INFO("%s: Start.", __func__);
+	btmtk_uart_launcher_deinit();
+	BTMTK_INFO("%s: End.", __func__);
+	return 0;
+}
+
+ssize_t btmtk_proc_uart_launcher_notify_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos){
+	BTMTK_INFO("%s: Start.", __func__);
+	return 0;
 }
 
 int btmtk_fops_openfwlog(struct inode *inode, struct file *file)
