@@ -642,6 +642,7 @@ struct btmtk_dev {
 	unsigned char	*rom_patch_bin_file_name;
 	unsigned int	chip_id;
 	unsigned int	flavor;
+	const char	*flavor_bin;
 	unsigned int	dualBT;
 	unsigned int	fw_version;
 	unsigned char	dongle_index;

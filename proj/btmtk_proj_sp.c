@@ -1070,6 +1070,13 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	if(ret < 0)
 		BTMTK_ERR("[ERR] %s: mediatek,bt sleep-en ret[%d]", __func__, ret);
 
+	ret = of_property_read_string(tty->dev->of_node, "flavor-bin", &bdev->flavor_bin);
+	if(ret < 0){
+		const static char default_flavor[] = "1";
+		bdev->flavor_bin = default_flavor;
+		BTMTK_ERR("[ERR] %s: mediatek,bt flavor-bin ret[%d], using default flavor[1]", __func__, ret);
+	}
+
 	pinctrl_ptr = devm_pinctrl_get(tty->dev);
 	if (IS_ERR(pinctrl_ptr)) {
 		BTMTK_ERR("[ERR] %s: fail to get bt pinctrl", __func__);
