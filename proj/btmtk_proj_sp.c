@@ -1052,30 +1052,37 @@ int btmtk_register_wakeup_irq(struct btmtk_dev *bdev, struct tty_struct *tty) {
 	ret = gpio_request(bdev->wakeup_irq, "hostwake_gpio");
 	if (unlikely(ret)) {
 		BTMTK_ERR("[ERR] %s: request host wake gpio fail", __func__);
-		gpio_free(bdev->wakeup_irq);
 		return -1;
 	}
 
-	gpio_direction_input(bdev->wakeup_irq);
+	ret = gpio_direction_input(bdev->wakeup_irq);
+	if (ret) {
+		BTMTK_ERR("[ERR] %s: gpio_direction_input fail: %d", __func__, ret);
+		goto exit;
+	}
+
 	irq = gpio_to_irq(bdev->wakeup_irq);
 	ret = request_irq(irq, btmtk_host_wake_isr, IRQF_TRIGGER_RISING,
 					"bt_hostwake", (void *)bdev);
 
 	if (ret) {
 		BTMTK_ERR("[ERR] %s: request irq for bt hostwake fail: %d", __func__, ret);
-		gpio_free(bdev->wakeup_irq);
-		return -1;
+		goto exit;
 	}
 
 	ret = enable_irq_wake(irq);
 	if (ret) {
 		BTMTK_ERR("%s: enable irq_wake failed ret = %d", __func__, ret);
-		gpio_free(bdev->wakeup_irq);
-		return -1;
+		goto exit;
 	}
 	BTMTK_INFO("%s: request irq(%d) for bt hostwake done", __func__, irq);
 
 	return 0;
+
+exit:
+	gpio_free(bdev->wakeup_irq);
+	return -1;
+
 }
 
 
