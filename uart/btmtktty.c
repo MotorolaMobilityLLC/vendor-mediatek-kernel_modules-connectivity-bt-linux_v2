@@ -2286,6 +2286,7 @@ unlock:
 static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 {
 	int ret = 0, retry = BTMTK_MAX_WAKEUP_RETRY;
+	int wait_uart_resume_cnt = BTMTK_MAX_WAIT_UART_RESUME_CNT;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	u8 fw_own_clr_cmd[] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x03, 0x02, 0x00, 0x03, 0x01 };
 	u8 evt[] = { 0x04, 0xE4, 0x07, 0x02, 0x03, 0x03, 0x00, 0x00, 0x03, 0x01 };
@@ -2305,10 +2306,12 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 	cif_dev->own_state = BTMTK_DRV_OWNING;
 	__pm_stay_awake(bt_trx_wakelock);
-	while (bdev->suspend_state) {
+	while (bdev->suspend_state && --wait_uart_resume_cnt) {
 		usleep_range(1000, 1100);
-		BTMTK_DBG("%s wait system resume", __func__);
+		BTMTK_DBG("%s wait uart resume", __func__);
 	}
+	if (!wait_uart_resume_cnt)
+		BTMTK_ERR("%s wait uart resume timeout", __func__);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en && cif_dev->sleep_en) {
