@@ -368,9 +368,10 @@ int main(int argc, char *argv[])
         if (notifyFd < 0) {
             if (retry > 20) {
                 BPRINT_E("bt_uart_launcher_notify %d, error", notifyFd);
+	        break;
             } else {
                 retry++;
-                (void)usleep(1000 * 1000);
+                (void)usleep(1000 * 100);
             }
         } else
             break;
