@@ -1704,23 +1704,7 @@ static int btmtk_uart_set_pinmux(struct btmtk_dev *bdev)
 
 static int btmtk_uart_deinit(struct btmtk_dev *bdev)
 {
-#if (USE_DEVICE_NODE == 1)
-	int cnt = 10;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-
-	while (btmtk_fops_get_state(bdev) != BTMTK_FOPS_STATE_CLOSED && cnt--) {
-		BTMTK_INFO("wait bt close, fops(%d)", btmtk_fops_get_state(bdev));
-		msleep(100); /* wait BT close */
-	}
-
-	if (bmain_info->hif_hook.cif_mutex_lock)
-		bmain_info->hif_hook.cif_mutex_lock(bdev);
-
-	btmtk_set_chip_state(bdev, BTMTK_STATE_DISCONNECT);
-
-	if (bmain_info->hif_hook.cif_mutex_unlock)
-		bmain_info->hif_hook.cif_mutex_unlock(bdev);
-#endif
+	BTMTK_INFO("%s", __func__);
 	return 0;
 }
 

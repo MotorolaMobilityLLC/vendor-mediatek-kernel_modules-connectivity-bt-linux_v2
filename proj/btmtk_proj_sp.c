@@ -1790,5 +1790,32 @@ int btmtk_find_my_phone_cmd(void)
 	return ret;
 }
 
+int btmtk_uart_launcher_deinit(void)
+{
+	int cnt = 30;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	while (g_sbdev->fops_state != BTMTK_FOPS_STATE_CLOSED && --cnt) {
+		BTMTK_INFO("%s: wait bt close, fops[%d] count[%d]", __func__, g_sbdev->fops_state, cnt);
+		msleep(100); /* wait BT close */
+	}
+
+	if (bmain_info->hif_hook.cif_mutex_lock)
+		bmain_info->hif_hook.cif_mutex_lock(g_sbdev);
+
+	btmtk_set_chip_state(g_sbdev, BTMTK_STATE_DISCONNECT);
+
+	if (bmain_info->hif_hook.cif_mutex_unlock)
+		bmain_info->hif_hook.cif_mutex_unlock(g_sbdev);
+
+	// if not wait to BT close
+	if (!cnt) {
+		BTMTK_INFO("%s: BT not closed fops(%d)", __func__, g_sbdev->fops_state);
+		msleep(50);
+	}
+
+	return 0;
+}
+
 #endif // (USE_DEVICE_NODE == 1)
 
