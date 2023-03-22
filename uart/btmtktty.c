@@ -1248,7 +1248,6 @@ static void btmtk_uart_chip_reset_notify(struct btmtk_dev *bdev)
 }
 
 
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
 static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev, bool do_flush)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
@@ -1302,7 +1301,6 @@ static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev, bool do_flus
 	return flush_retry;
 
 }
-#endif
 
 static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset)
@@ -1417,13 +1415,13 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 
 	down(&cif_dev->tty_flush_sem);
 	/* wait tty buffer clean */
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+
 	flush_retry = btmtk_uart_wait_tty_buffer_clean(bdev, TRUE);
 	if (flush_retry < 0) {
 		up(&cif_dev->tty_flush_sem);
 		return -1;
 	}
-#endif
+
 	while (len != cmd_len && count < BTMTK_MAX_SEND_RETRY
 			&& btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT) {
 		/* avoid uart_launcher get signal 9 close uart, and not notify driver */
