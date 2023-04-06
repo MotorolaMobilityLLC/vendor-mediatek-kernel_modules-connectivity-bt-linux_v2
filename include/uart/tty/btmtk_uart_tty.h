@@ -188,6 +188,7 @@ struct btmtk_uart_dev {
 	u32			hub_en;
 	u32			sleep_en;
 	u32			flush_en;
+	u8			hub_bypass_only;
 
 	/* For uarthub setting */
 	u8			fw_hub_en;
@@ -251,6 +252,7 @@ struct btmtk_uart_dev {
  */
 #define BTMTK_HUB_EN		(1 << 0)
 #define BTMTK_SLEEP_EN		(1 << 1)
+#define BTMTK_UARTHUB_BYPASS_ONLY	(1 << 2)
 
 
 //int btmtk_cif_send_calibration(struct hci_dev *hdev);
