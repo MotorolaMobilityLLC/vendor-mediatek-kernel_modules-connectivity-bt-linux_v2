@@ -1079,11 +1079,12 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	}
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	if (cif_dev->hub_en) {
+	if (cif_dev->hub_en && !cif_dev->hub_bypass_only) {
 		/* uarhub setting */
 		cif_dev->fw_hub_en = 1;
 		cif_dev->crc_en = 1;
-	}
+	} else
+		BTMTK_INFO("%s hub_bypass_only, not send hub_en to fw", __func__);
 #endif
 
 	cif_dev->fw_dl_ready = 1;
@@ -1097,11 +1098,12 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	}
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	if (cif_dev->hub_en) {
+	if (cif_dev->hub_en && !cif_dev->hub_bypass_only) {
 		/* after fw dl, use uarthub multi-host mode */
 		ret = mtk8250_uart_hub_enable_bypass_mode(0);
 		BTMTK_INFO("%s after fw dl, mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
-	}
+	} else
+		BTMTK_INFO("%s: hub_bypass_only, not set mtk8250_uart_hub_enable_bypass_mode(0)", __func__);
 #endif
 
 	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
@@ -1183,10 +1185,13 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 	}
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en) {
-		int ret = 0;
-		/* enable ADSP,MD when fw dl done*/
-		ret = mtk8250_uart_hub_fifo_ctrl(0);
-		BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(0) ret[%d]", __func__, ret);
+		if (!cif_dev->hub_bypass_only) {
+			int ret = 0;
+			/* enable ADSP,MD when fw dl done*/
+			ret = mtk8250_uart_hub_fifo_ctrl(0);
+			BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(0) ret[%d]", __func__, ret);
+		} else
+			BTMTK_INFO("%s: hub_bypass_only, not set mtk8250_uart_hub_fifo_ctrl(0)", __func__);
 		mtk8250_uart_hub_assert_bit_ctrl(0);
 		BTMTK_INFO("%s mtk8250_uart_hub_assert_bit_ctrl(0)", __func__);
 	}
@@ -1224,10 +1229,16 @@ static int btmtk_uart_set_para(struct btmtk_dev *bdev, int val)
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+
+	BTMTK_INFO("%s:[old] hub_en[%d] sleep_en[%d] hub_bypass_only[%d]", __func__
+				, cif_dev->hub_en, cif_dev->sleep_en, cif_dev->hub_bypass_only);
+
 	cif_dev->hub_en = !!(val & BTMTK_HUB_EN);
 	cif_dev->sleep_en = !!(val & BTMTK_SLEEP_EN);
-
-	BTMTK_INFO("%s hub_en[%d] sleep_en[%d]", __func__, cif_dev->hub_en, cif_dev->sleep_en);
+	cif_dev->hub_bypass_only = !!(val & BTMTK_UARTHUB_BYPASS_ONLY);
+	
+	BTMTK_INFO("%s:[new] hub_en[%d] sleep_en[%d] hub_bypass_only[%d]", __func__
+				, cif_dev->hub_en, cif_dev->sleep_en, cif_dev->hub_bypass_only);
 	return 0;
 }
 
