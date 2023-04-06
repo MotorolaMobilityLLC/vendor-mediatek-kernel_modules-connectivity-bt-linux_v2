@@ -778,28 +778,28 @@ void btmtk_hci_snoop_print_to_log(void)
 		"RX ISO to stack",
 		"RX ISO From FW"
 #else
-		"Command from stack",
-		"Tx from Driver",		/* for sp uart */
-		"Event to stack",
-		"Data From TTY",		/* for sp uart */
-		"ADV Event to stack",
-		"ADV Event From FW",
-		"NOCP Event to stack",
-		"NOCP Event From FW",
-		"TX ACL from stack",
-		"TX ACL to FW",
-		"RX ACL to stack",
-		"RX ACL From FW",
-		"TX ISO from stack",
-		"Data to TTY",		/* for sp uart */
-		"RX ISO to stack",
-		"RX ISO From FW"
+		"Tx_CMD_from_Stack",
+		"Tx_from_Drv",		/* for sp uart */
+		"Rx_EVT_to_Stack",
+		"Rx_from_TTY",		/* for sp uart */
+		"ADV_EVT_to_Stack",
+		"ADV_EVT_from_FW",
+		"NOCP_EVT_to_Stack",
+		"NOCP_EVT_from_FW",
+		"Tx_ACL_from_Stack",
+		"Tx_ACL_to_FW",
+		"Rx_ACL_to_Stack",
+		"Rx_ACL_from_FW",
+		"Tx_ISO_from_Stack",
+		"Tx_to_TTY",		/* for sp uart */
+		"Rx_ISO_to_Stack",
+		"Rx_ISO_from_FW"
 #endif
 		};
 
 
 	for (snoop_index = 0; snoop_index < HCI_SNOOP_TYPE_MAX; snoop_index++) {
-		BTMTK_INFO("HCI %s Dump: Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data",
+		BTMTK_INFO("*** Dump %s *** (Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data)",
 			snoop_str[snoop_index]);
 		if (main_info.snoop[snoop_index].index >= (HCI_SNOOP_ENTRY_NUM - 1))
 			index = 0;
@@ -809,7 +809,8 @@ void btmtk_hci_snoop_print_to_log(void)
 			if (main_info.snoop[snoop_index].len[index] > 0)
 				BTMTK_INFO_RAW(main_info.snoop[snoop_index].buf[index],
 					main_info.snoop[snoop_index].len[index],
-					"time(%s)-act_len(%d)-len(%d):", main_info.snoop[snoop_index].timestamp[index],
+					"[%s] time(%s)-act_len(%d)-len(%d):", snoop_str[snoop_index],
+					main_info.snoop[snoop_index].timestamp[index],
 					main_info.snoop[snoop_index].actual_len[index],
 					main_info.snoop[snoop_index].len[index]);
 			index++;
