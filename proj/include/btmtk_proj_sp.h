@@ -105,6 +105,31 @@ struct btmtk_dypwr_st {
 #endif
 };
 
+struct gpio_info {
+	u16	offset;
+	u8	bit;
+};
+
+struct bt_gpio {
+	u8			num;
+	u32			gpio_base;	/* for aux/dir/out */
+	u32			pu_pd_base;	/* for pu/pd */
+	u16			remap_len;
+	void __iomem		*gpio_remap_base;
+	void __iomem		*pu_pd_remap_base;
+	struct gpio_info	aux;
+	struct gpio_info	dir;
+	struct gpio_info	out;
+	struct gpio_info	pu;
+	struct gpio_info	pd;
+};
+
+struct platform_prop {
+	struct bt_gpio		tx_gpio;
+	struct bt_gpio		rx_gpio;
+	struct bt_gpio		rst_gpio;
+};
+
 void btmtk_async_trx_work(struct work_struct *work);
 void btmtk_pwr_on_uds_work(struct work_struct *work);
 int btmtk_pwrctrl_pre_on(struct btmtk_dev *bdev);

@@ -13,13 +13,13 @@
 #include <linux/gpio/consumer.h>
 #include <linux/of_device.h>
 #include <linux/of.h>
-#include <linux/of_device.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include "btmtk_main.h"
 #include "conninfra.h"
 #include "connfem.h"
 #include "btmtk_proj_sp.h"
+#include "btmtk_proj_sp_platform.h"
 #include "btmtk_uart_tty.h"
 #include "btmtk_fw_log.h"
 #include <linux/platform_device.h>
@@ -49,10 +49,7 @@
 static struct pinctrl *pinctrl_ptr;
 extern struct btmtk_dev *g_sbdev;
 int g_bt_state;
-
-/* dump gpio */
-static void __iomem *vir_0x1000_5000 = NULL; /* GPIO_BASE */
-static void __iomem *vir_0x11C0_0000 = NULL; /* IOCFG_RM_BASE */
+struct platform_prop *g_platform_prop = NULL;
 
 #define CONSYS_REG_READ(addr) (*((volatile unsigned int *)(addr)))
 
@@ -1181,6 +1178,83 @@ static void btmtk_fb_notify_unregister(void)
 #endif
 }
 
+#define PLATFORM_LEN 4
+void btmtk_platform_prop_register(struct btmtk_dev *bdev) {
+	struct btmtk_uart_dev *cif_dev = NULL;
+	char platform_str[PLATFORM_LEN + 1] = {0};
+	struct device_node *root_node;
+	const char *model, *mt_ptr;
+	int ret;
+	u32 platform;
+
+	BTMTK_DBG("%s start", __func__);
+
+	if (!bdev) {
+		BTMTK_ERR("[ERR] bdev is NULL");
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("[ERR] cif_dev is NULL");
+		return;
+	}
+
+	/* get root node of dts */
+	root_node = of_find_node_by_path("/");
+	if (!root_node) {
+		BTMTK_ERR("[ERR] %s: root node not found", __func__);
+		return;
+	}
+
+	ret = of_property_read_string(root_node, "model", &model);
+	if (ret < 0) {
+		BTMTK_ERR("[ERR] %s: root_node model ret[%d]", __func__, ret);
+		return;
+	}
+
+	BTMTK_INFO("%s: root_node model[%s]", __func__, model);
+
+	/* dts module property is "....MTXXXX"
+	 * so parsing the platform id XXXX after MT
+	 */
+	mt_ptr = strstr(model, "MT");
+	if (mt_ptr != NULL) {
+		if (strlen(mt_ptr) > PLATFORM_LEN + 2) {
+			strncpy(platform_str, mt_ptr + 2, PLATFORM_LEN);
+			platform_str[PLATFORM_LEN] = '\0';
+			BTMTK_INFO("%s: platform[%s]", __func__, platform_str);
+		} else {
+			BTMTK_WARN("%s: can not find platform id in dts root node", __func__);
+			return;
+		}
+	} else {
+		BTMTK_WARN("%s: can not find MTXXXX in dts root node", __func__);
+		return;
+	}
+
+	/* str to u32 */
+	ret = kstrtou32(platform_str, 0, &platform);
+	if (ret) {
+		BTMTK_WARN("%s: convert platform string failed ret[%d]", __func__, ret);
+		return;
+	}
+
+	/* register platform data */
+	switch (platform) {
+		case 6985:
+			g_platform_prop = &MT6985_prop;
+			break;
+		case 6989:
+			BTMTK_INFO("%s: platform[%u] not create yet", __func__, platform);
+			//g_platform_prop = &MT6989_prop;
+			break;
+		default:
+			BTMTK_WARN("%s: not recognize platform[%u]", __func__, platform);
+			break;
+	}
+}
+
 int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
@@ -1256,6 +1330,8 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 			BTMTK_WARN("%s: btmtk_register_wakeup_irq fail", __func__);
 	} else
 		BTMTK_INFO("%s: not support fw wakeup irq", __func__);
+
+	btmtk_platform_prop_register(bdev);
 
 	/* set gpio to default */
 	btmtk_set_gpio_default();
@@ -1582,37 +1658,21 @@ int32_t btmtk_intcmd_wmt_utc_sync(void)
 	return 0;
 }
 
+/*******************************************************************************
+*                           bt gpio dump
+********************************************************************************
+*/
 
-void btmtk_dump_gpio_state(void)
-{
 #define GET_BIT(V, INDEX) ((V & (0x1U << INDEX)) >> INDEX)
 
+void btmtk_dump_gpio_state_(struct bt_gpio gpio, char *tag)
+{
 	unsigned int aux, dir, out, pu, pd;
 
-	if (g_sbdev->is_eap) {
-		BTMTK_INFO("%s: EAP project, not support", __func__);
-		return;
-	}
-
-	if (vir_0x1000_5000 == NULL)
-		vir_0x1000_5000 = ioremap(0x10005000, 0x500);
-
-	if (vir_0x1000_5000 == NULL) {
-		BTMTK_ERR("%s: GPIO_BASE vir_0x1000_5000", __func__);
-		return;
-	}
-
-	if (vir_0x11C0_0000 == NULL)
-		vir_0x11C0_0000 = ioremap(0x11C00000, 0x500);
-
-	if (vir_0x11C0_0000 == NULL) {
-		BTMTK_ERR("%s: IOCFG_RM_BASE vir_0x11C0_0000", __func__);
-		return;
-	}
-
-	/* 0x1000_5000 (GPIO_BASE)
+	/* MT6985 example
+	 * 0x1000_5000 (GPIO_BASE)
 	 * 	0x0070	GPIO_DIR7
-	 * 		0: GPIO Dir. as Input; 1: GPIO Dir. as Output
+	 * 		0: Input; 1: Output
 	 * 		GPIO_DIR register for GPIO224~GPIO241; GPIO242~GPIO255:
 	 *		0: 224
 	 *		1: 225
@@ -1661,33 +1721,47 @@ void btmtk_dump_gpio_state(void)
 	 *		1: 224
 	 */
 
+	if (gpio.gpio_remap_base == NULL)
+		gpio.gpio_remap_base = ioremap(gpio.gpio_base, gpio.remap_len);
 
-	/* GPIO 240 reset pin */
-	aux = CONSYS_REG_READ(vir_0x1000_5000 + 0x04E0);
-	dir = CONSYS_REG_READ(vir_0x1000_5000 + 0x0070);
-	out = CONSYS_REG_READ(vir_0x1000_5000 + 0x0170);
+	if (gpio.gpio_remap_base == NULL) {
+		BTMTK_ERR("%s: [%s] gpio_remap_base failed", __func__, tag);
+		return;
+	}
 
+	if (gpio.pu_pd_remap_base == NULL)
+		gpio.pu_pd_remap_base = ioremap(gpio.pu_pd_base, gpio.remap_len);
+
+	if (gpio.pu_pd_remap_base == NULL) {
+		BTMTK_ERR("%s:[%s] pu_pd_remap_base failed", __func__, tag);
+		return;
+	}
+
+	aux = CONSYS_REG_READ(gpio.gpio_remap_base + gpio.aux.offset);
+	dir = CONSYS_REG_READ(gpio.gpio_remap_base + gpio.dir.offset);
+	out = CONSYS_REG_READ(gpio.gpio_remap_base + gpio.out.offset);
+	pu = CONSYS_REG_READ(gpio.pu_pd_remap_base + gpio.pu.offset);
+	pd = CONSYS_REG_READ(gpio.pu_pd_remap_base + gpio.pd.offset);
 	BTMTK_DBG("%s: aux[0x%08x] dir[0x%08x] out[0x%08x]", __func__,aux, dir, out);
-	BTMTK_INFO("%s: GPIO_240 aux=[%d] dir=[%s] out[%d]", __func__,
-		((aux & 0x07)), (GET_BIT(dir, 16) ? "OUT" : "IN"), GET_BIT(out, 16));
-
-	/* GPIO 224 TX */
-	aux = CONSYS_REG_READ(vir_0x1000_5000 + 0x04C0);
-	pu = CONSYS_REG_READ(vir_0x11C0_0000 + 0x0040);
-	pd = CONSYS_REG_READ(vir_0x11C0_0000 + 0x0030);
-	BTMTK_DBG("%s: aux[0x%08x] dir[0x%08x] out[0x%08x]", __func__,aux, dir, out);
-	BTMTK_INFO("%s: GPIO_224 aux=[%d] dir=[%s] out[%d] PU[%d] PD[%d]", __func__,
-		((aux & 0x07)), (GET_BIT(dir, 0) ? "OUT" : "IN"), GET_BIT(out, 0),
-		GET_BIT(pu, 1), GET_BIT(pd, 1));
-
-	/* GPIO 225 RX */
-	BTMTK_DBG("%s: aux[0x%08x] dir[0x%08x] out[0x%08x]", __func__,aux, dir, out);
-	BTMTK_INFO("%s: GPIO_225 aux=[%d] dir=[%s] out[%d] PU[%d] PD[%d]", __func__,
-		((aux & 0x70) >> 4), (GET_BIT(dir, 1) ? "OUT" : "IN"), GET_BIT(out, 1),
-		GET_BIT(pu, 0), GET_BIT(pd, 0));
-
+	BTMTK_INFO("[%s] num[%d] aux[%d] dir[%s] out[%d] pu[%d] pd[%d]",
+			tag, gpio.num,
+			(((aux >> gpio.aux.bit) & 0x07)),
+			(GET_BIT(dir, gpio.dir.bit) ? "OUT" : "IN"),
+			GET_BIT(out, gpio.out.bit),
+			GET_BIT(pu, gpio.pu.bit),
+			GET_BIT(pd, gpio.pd.bit));
 }
 
+void btmtk_dump_gpio_state(void)
+{
+	if (g_platform_prop == NULL) {
+		BTMTK_WARN("%s: g_platform_prop not register yet", __func__);
+		return;
+	}
+	btmtk_dump_gpio_state_(g_platform_prop->rst_gpio, "RST_PIN");
+	btmtk_dump_gpio_state_(g_platform_prop->tx_gpio, "TX_GPIO");
+	btmtk_dump_gpio_state_(g_platform_prop->rx_gpio, "RX_GPIO");
+}
 
 /*******************************************************************************
 *                           bt host debug information for low power
