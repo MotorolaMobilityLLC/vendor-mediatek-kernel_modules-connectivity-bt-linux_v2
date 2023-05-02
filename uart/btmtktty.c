@@ -1285,7 +1285,7 @@ static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev, bool do_flus
 			count = tty_chars_in_buffer(cif_dev->tty);
 			if (count == 0)
 				break;
-			/* only wait 30ms for tty buffer clean */
+			/* only wait 100ms for tty buffer clean */
 			/* use udelay instead of usleep_range incase of sleep too long */
 			usleep_range(500, 550);
 		} while (flush_retry++ < BTMTK_MAX_WAIT_RETRY);
