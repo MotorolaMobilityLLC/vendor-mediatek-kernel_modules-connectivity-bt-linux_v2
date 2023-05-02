@@ -1360,6 +1360,11 @@ coredump_fail_unlock:
 		skb_pull(skb, 4);
 		bmain_info->hif_hook.met_log_handler(skb->data, skb->len);
 		return 1;
+	} else if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
+				skb->len > 7 && skb->data[0] == 0xFF &&
+				skb->data[2] == 0x3A && skb->data[3] == 0xFC) {
+		BTMTK_INFO_RAW(skb->data, skb->len, "%s: FW Schedule Event:", __func__);
+		return 1;
 	}
 
 	return 0;
