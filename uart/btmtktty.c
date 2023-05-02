@@ -2136,6 +2136,27 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	//BTMTK_INFO_RAW(data, count, "%s: count[%d]", __func__, count);
 
 	/* if flag is BTMTK_FW_OWNING not set driver own , because data is fw own event */
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	if (cif_dev->own_state == BTMTK_FW_OWN &&
+	    !atomic_read(&cif_dev->fw_wake) &&
+	    data != NULL && count > 0 && data[0] != 0xFF) {
+		unsigned int index = 0, _count = count;
+		u8 *buf = (u8 *)data;
+
+		BTMTK_INFO_RAW(data, count, "%s: recv none 0xFF as first byte in FW own state", __func__);
+		while (_count && *(buf + index) != 0xFF) {
+			index++;
+			_count--;
+		}
+
+		if (_count > 0) {
+			count = _count;
+			data = buf + index;
+		} else
+			return;
+		BTMTK_INFO_RAW(data, count, "%s: data after trim", __func__);
+	}
+#endif
 	if (data != NULL && (count > 1 || data[0] != 0x00) && cif_dev->own_state != BTMTK_FW_OWNING) {
 		atomic_set(&cif_dev->need_drv_own, 1);
 		atomic_set(&cif_dev->fw_wake, 1);
