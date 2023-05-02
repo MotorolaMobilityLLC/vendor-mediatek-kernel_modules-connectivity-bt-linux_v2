@@ -551,10 +551,14 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	}
 
 	if (strncmp(i_fwlog_buf, "FindMyPhone=", strlen("FindMyPhone=")) == 0) {
-		u8 val = *(i_fwlog_buf + strlen("FindMyPhone=")) - '0';
+		ret = kstrtou32(i_fwlog_buf + strlen("FindMyPhone="), 0, &bmain_info->find_my_phone_mode);
 
-		bmain_info->find_my_phone_mode = val;
-		BTMTK_INFO("%s: FindMyPhone[%d]", __func__, bmain_info->find_my_phone_mode);
+		if (ret) {
+			BTMTK_WARN("%s: convert string failed ret[%d]", __func__, ret);
+			goto exit;
+		}
+
+		BTMTK_INFO("%s: FindMyPhone[%u]", __func__, bmain_info->find_my_phone_mode);
 		ret = count;
 		goto exit;
 	}
