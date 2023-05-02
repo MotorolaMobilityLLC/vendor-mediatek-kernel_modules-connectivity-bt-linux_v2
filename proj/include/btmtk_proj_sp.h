@@ -169,7 +169,7 @@ void btmtk_hif_sp_dump_debug_sop(struct btmtk_dev *bdev);
 void btmtk_hif_dump_work(struct work_struct *work);
 
 /* find my phone mode api */
-int btmtk_find_my_phone_cmd(void);
+int btmtk_find_my_phone_cmd(u32 hr);
 
 void btmtk_dump_gpio_state(void);
 
