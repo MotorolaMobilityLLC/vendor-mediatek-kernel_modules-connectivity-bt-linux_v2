@@ -2750,8 +2750,10 @@ static int btmtk_pm_notification(struct notifier_block *this, unsigned long even
 	case PM_POST_SUSPEND:
 		btmtk_cif_resume();
 #if (USE_DEVICE_NODE == 1)
-		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_WORKING)
+		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_WORKING) {
 			bthost_debug_print();
+			btmtk_query_fw_schedule_info(g_sbdev);
+		}
 #endif
 		break;
 	default:
