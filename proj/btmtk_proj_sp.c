@@ -1852,6 +1852,23 @@ void bthost_debug_save(uint32_t id, uint32_t value, char* desc)
 	BTMTK_WARN("%s: no space for %d\n", __func__, id);
 }
 
+void btmtk_query_fw_schedule_info(struct btmtk_dev *bdev)
+{
+	u8 cmd[] = { 0x01, 0x3A, 0xFC, 0x02, 0xA0, 0x00 };
+	static unsigned long last_query_time = 0;
+	int ret = 0;
+
+	if (last_query_time == 0 ||
+		jiffies - last_query_time >= msecs_to_jiffies(QUERY_FW_SCHEDULE_INTERVAL)) {
+		BTMTK_INFO("%s", __func__);
+		last_query_time = jiffies;
+		ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd), NULL, 0,
+				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+		if (ret < 0)
+			BTMTK_ERR("%s: failed, ret[%d]", __func__, ret);
+	}
+}
+
 /*******************************************************************************
 *                           bt find my phone mode
 ********************************************************************************
