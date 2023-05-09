@@ -989,6 +989,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	reinit_completion(&bdev->dump_comp);
 	memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
 	bdev->is_whole_chip_reset = FALSE;
+	bmain_info->dbg_send = 0;
 
 	/* set tty host baud and flowcontrol to default value */
 	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);

@@ -813,6 +813,8 @@ struct btmtk_main_info {
 
 	atomic_t fwlog_ref_cnt;
 	u32 find_my_phone_mode;
+	u8	dbg_send;
+	u8	dbg_send_opcode[2];
 };
 
 static inline int is_mt6639(u32 chip_id)
