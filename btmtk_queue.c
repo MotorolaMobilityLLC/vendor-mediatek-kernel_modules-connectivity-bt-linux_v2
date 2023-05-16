@@ -123,6 +123,7 @@ static s32 rx_pkt_enqueue(u8 *buffer, u32 length)
 s32 rx_skb_enqueue(struct sk_buff *skb)
 {
 	s32 ret = 0;
+	u8 i = 0;
 
 	if (!skb || skb->len == 0) {
 		BTMTK_WARN("Inavlid data event, skip, skb = NULL or skb len = 0");
@@ -130,22 +131,19 @@ s32 rx_skb_enqueue(struct sk_buff *skb)
 		goto end;
 	}
 
-#if 0
 	#define WAIT_TIMES 40
 
 	/*
 	 * FW will block the data if it's buffer is full,
 	 * driver can wait a interval for native process to read out
 	 */
-	if (g_bt_dbg_st.rx_buf_ctrl == TRUE) {
-		for (i = 0; i < WAIT_TIMES; i++) {
-			if (!is_rx_queue_res_available(skb->len + 1))
-				usleep_range(USLEEP_5MS_L, USLEEP_5MS_H);
-			else
-				break;
-		}
+
+	for (i = 0; i < WAIT_TIMES; i++) {
+		if (is_rx_queue_res_available(skb->len + 1))
+			break;
+		else
+			usleep_range(5000, 5500);
 	}
-#endif
 
 	if (!is_rx_queue_res_available(skb->len + 1)) {
 		BTMTK_WARN("rx packet drop!!!");
