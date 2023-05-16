@@ -1318,7 +1318,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset)
 {
 	int cur_len = 0;
-	int flush_retry = 0, max_pkt_cnt = 0;
+	int max_pkt_cnt = 0;
 	int ret = -1;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	s32 sent_len;
@@ -1362,29 +1362,31 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			}
 
 			time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
-			if (ret == UPLOAD_PATCH_UNIT) {
-				max_pkt_cnt++;
-				/* reset start time for next packet */
-				start_time = jiffies;
-			} else if (ret == 0)
-				udelay(500);
-			else if (time_diff >= TIME_BOUND_OF_FW_PKG_DL) {
-				BTMTK_ERR("%s:, download single packet more than 2s [%lu]",
-					__func__, time_diff);
+			if (time_diff >= TIME_BOUND_OF_FW_PKG_DL) {
+				BTMTK_ERR("%s:, download single patch more than %d s [%lu]",
+						__func__, TIME_BOUND_OF_FW_PKG_DL, time_diff);
 #if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
 				mtk8250_uart_dump(cif_dev->tty);
 #endif
 				ret = -1;
 				goto exit;
-			} else
-				BTMTK_DBG("%s, sent_len[%d] tty_write[%d], flush_retry[%d] max_pkt_cnt[%d]",
-							__func__, sent_len, ret, flush_retry, max_pkt_cnt);
+			}
+
+			if (ret == UPLOAD_PATCH_UNIT)
+				max_pkt_cnt++;
+			else if (ret == 0)
+				udelay(500);
+			else
+				BTMTK_DBG("%s, sent_len[%d] tty_write[%d] max_pkt_cnt[%d]",
+						__func__, sent_len, ret, max_pkt_cnt);
 			cur_len += ret;
 		} else
 			break;
 	}
 	up(&cif_dev->tty_flush_sem);
-	BTMTK_INFO("%s: patch done max_pkt_cnt[%d], send wmt dl phase3 cmd ", __func__, max_pkt_cnt);
+	time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
+	BTMTK_INFO("%s: patch done, cost %lu ms, max_pkt_cnt[%d], send wmt dl phase3 cmd ",
+			__func__, time_diff, max_pkt_cnt);
 
 	/* seperate phase 3 cmd with dma mode content */
 	usleep_range(1000, 1100);
