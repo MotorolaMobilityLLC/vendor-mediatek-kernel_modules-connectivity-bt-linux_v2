@@ -126,7 +126,7 @@ struct mtk_stp_hdr {
 /* Time bound for flush tty: 100ms */
 #define TIMT_BOUND_OF_CHARS_WAIT 10
 #define TIME_BOUND_OF_TTY_FLUSH	100
-#define TIME_BOUND_OF_FW_PKG_DL 2000
+#define TIME_BOUND_OF_FW_PKG_DL 3000
 
 typedef int (*pdwnc_func) (u8 fgReset);
 typedef int (*reset_func_ptr2) (unsigned int gpio, int init_value);
