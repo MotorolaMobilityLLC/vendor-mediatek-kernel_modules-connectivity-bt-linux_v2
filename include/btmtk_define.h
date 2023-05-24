@@ -438,6 +438,13 @@ struct debug_reg_struct {
 
 #define ERRNUM 0xFF
 
+/* ioctl */
+#define COMBO_IOC_MAGIC				0xb0
+#define COMBO_IOCTL_BT_HOST_DEBUG	_IOW(COMBO_IOC_MAGIC, 4, void*)
+#define COMBO_IOCTL_BT_INTTRX		_IOW(COMBO_IOC_MAGIC, 5, void*)
+#define IOCTL_BT_HOST_DEBUG_BUF_SIZE	(32)
+#define IOCTL_BT_HOST_INTTRX_SIZE		(128)
+
 void btmtk_getUTCtime(struct bt_utc_struct *utc);
 
 #if DEBUG_DUMP_TIME
