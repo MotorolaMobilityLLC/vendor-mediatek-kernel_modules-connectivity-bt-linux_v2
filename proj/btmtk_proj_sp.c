@@ -1512,6 +1512,10 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	ret = of_property_read_u32(tty->dev->of_node, "uart-irq-en", &cif_dev->uart_irq_en);
 	if(ret < 0)
 		BTMTK_ERR("[ERR] %s: mediatek,bt uart-irq-en ret[%d]", __func__, ret);
+	else {
+		cif_dev->uart_irq_en = 0;
+		BTMTK_WARN("%s: temp disable uart-irq-en", __func__);
+	}
 
 	ret = of_property_read_string(tty->dev->of_node, "flavor-bin", &bdev->flavor_bin);
 	if(ret < 0){
@@ -1564,7 +1568,8 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 		BTMTK_DBG("%s mtk8250_uart_hub_register_cb ret[%d]", __func__, ret);
 	}
 #endif
-	BTMTK_INFO("%s end, baudrate[%d] hub_en[%d] sleep_en[%d]", __func__, cif_dev->baudrate, cif_dev->hub_en, cif_dev->sleep_en);
+	BTMTK_INFO("%s end, baudrate[%d] hub_en[%d] sleep_en[%d] uart_irq_en[%d]",
+			__func__, cif_dev->baudrate, cif_dev->hub_en, cif_dev->sleep_en, cif_dev->uart_irq_en);
 	return 0;
 }
 
