@@ -567,8 +567,12 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 				 0x06, 0x00, 0x01, 0x80, 0x96, 0x98, 0x00, 0x03 };
 	u8 baud_12M[] = { 0x01, 0x6F, 0xFC, 0x0A, 0x01, 0x04,
 				 0x06, 0x00, 0x01, 0x00, 0x1B, 0xB7, 0x00, 0x03 };
+	u8 baud_24M[] = { 0x01, 0x6F, 0xFC, 0x0B, 0x01, 0x04,
+				 0x06, 0x00, 0x01, 0x00, 0x36, 0x6E, 0x01, 0x00, 0x03 };
 	u8 event[] = {0x04, 0xE4, 0x06, 0x02, 0x04, 0x02, 0x00, 0x00, 0x01};
 	u8 *cmd = NULL;
+	u8 fc_offset = BT_FLOWCTRL_OFFSET;
+	u8 hub_crc_rhw_offset = BT_HUB_CRC_RHW_OFFSET;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	int ret = -1;
@@ -599,6 +603,11 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 	case 12000000:
 		cmd = baud_12M;
 		break;
+	case 24000000:
+		cmd = baud_24M;
+		fc_offset++;
+		hub_crc_rhw_offset++;
+		break;
 	default:
 		/* default chip baud is 115200 */
 		cmd = baud_115200;
@@ -608,21 +617,21 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 
 	switch (uart_cfg->fc) {
 	case UART_HW_FC:
-		cmd[BT_FLOWCTRL_OFFSET] = BT_HW_FC;
+		cmd[fc_offset] = BT_HW_FC;
 		break;
 	case UART_MTK_SW_FC:
 	case UART_LINUX_FC:
-		cmd[BT_FLOWCTRL_OFFSET] = BT_SW_FC;
+		cmd[fc_offset] = BT_SW_FC;
 		break;
 	default:
 		/* default disable flow control */
-		cmd[BT_FLOWCTRL_OFFSET] = BT_NONE_FC;
+		cmd[fc_offset] = BT_NONE_FC;
 	}
 
 	/* uarthub setting
-	 * ex: 0x13 means hub enable, rhw disable, crc disable
+	 * ex: thes last byte means hub enable, rhw disable, crc disable
 	 */
-	cmd[13] = (cif_dev->fw_hub_en << 4 | !cif_dev->rhw_en << 1 | !cif_dev->crc_en << 0);
+	cmd[hub_crc_rhw_offset] = (cif_dev->fw_hub_en << 4 | !cif_dev->rhw_en << 1 | !cif_dev->crc_en << 0);
 
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, SETBAUD_CMD_LEN, event, SETBAUD_EVT_LEN, 0,
@@ -634,7 +643,7 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 	}
 
 	cif_dev->uart_baudrate_set = 1;
-	BTMTK_INFO("%s done", __func__);
+	BTMTK_INFO("%s done, fc_offset[%d], hub_crc_rhw_offset[%d]", __func__, fc_offset, hub_crc_rhw_offset);
 
 	return 0;
 }
