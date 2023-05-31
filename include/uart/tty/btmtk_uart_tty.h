@@ -72,6 +72,7 @@ struct mtk_stp_hdr {
 #define BT_REG_VALUE_LEN 4
 
 /* MCU baud define */
+#define BT_HUB_CRC_RHW_OFFSET 13
 #define BT_FLOWCTRL_OFFSET 12
 #define BT_NONE_FC 0x00
 #define BT_HW_FC 0x40
