@@ -2255,7 +2255,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 				goto err;
 			}
 		}
-		BTMTK_INFO("%s end", __func__);
+		BTMTK_DBG("%s end", __func__);
 	}
 
 err:
@@ -4387,7 +4387,7 @@ int bt_open(struct hci_dev *hdev)
 	if (main_info.hif_hook.pre_open) {
 		ret = main_info.hif_hook.pre_open(bdev);
 		if (ret < 0) {
-			BTMTK_ERR("%s: pre_open fail", __func__);
+			BTMTK_DBG("%s: pre_open fail", __func__);
 			goto failed;
 		}
 	}

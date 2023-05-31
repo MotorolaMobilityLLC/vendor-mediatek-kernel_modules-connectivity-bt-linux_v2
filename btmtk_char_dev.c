@@ -439,11 +439,10 @@ OUT:
 
 int _ioctl_copy_evt_to_buf(uint8_t *buf, int len)
 {
-	BTMTK_INFO("%s", __func__);
 	memset(ioc_buf, 0x00, sizeof(ioc_buf));
 	ioc_buf[0] = 0x04; // evt packet type
 	memcpy(ioc_buf + 1, buf, len); // copy evt to ioctl buffer
-	BTMTK_INFO_RAW(ioc_buf, len + 1, "%s: len[%d] RX: ", __func__, len + 1);
+	BTMTK_DBG_RAW(ioc_buf, len + 1, "%s: len[%d] RX: ", __func__, len + 1);
 	return 0;
 }
 
@@ -476,7 +475,7 @@ static long BT_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long
 		if (copy_from_user(ioc_buf, (uint8_t __user *)arg, IOCTL_BT_HOST_INTTRX_SIZE))
 			retval = -EFAULT;
 		else {
-			BTMTK_INFO_RAW(ioc_buf, ioc_buf[3] + 4, "%s: len[%d] TX: ", __func__, ioc_buf[3] + 4);
+			BTMTK_DBG_RAW(ioc_buf, ioc_buf[3] + 4, "%s: len[%d] TX: ", __func__, ioc_buf[3] + 4);
 			/* DynamicAdjustTxPower function */
 			if (ioc_buf[0] == 0x01 && ioc_buf[1] == 0x2D && ioc_buf[2] == 0xFC) {
 				if (ioc_buf[4] == HCI_CMD_DY_ADJ_PWR_QUERY)
@@ -534,7 +533,7 @@ static int BT_open(struct inode *inode, struct file *file)
 		if (ret) {
 			BTMTK_WARN_LIMITTED("%s: retry[%d] ret[%d] is_pre_cal_done[%d]"
 							, __func__, ret, retry, g_sbdev->is_pre_cal_done);
-			msleep(20);
+			msleep(50);
 		}
 	} while ((ret == -EIO || ret == -EAGAIN) && retry++ < BT_OPEN_MAX_RETRY);
 
