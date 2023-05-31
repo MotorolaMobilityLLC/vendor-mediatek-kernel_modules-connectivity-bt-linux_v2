@@ -127,7 +127,7 @@ void fw_log_bt_state_cb(uint8_t state)
 	uint8_t on_off;
 	/* sp use BTMTK_FOPS_STATE_OPENED to judge state */
 	on_off = (state == FUNC_ON) ? BT_FWLOG_ON : BT_FWLOG_OFF;
-	BTMTK_INFO("%s: current_bt_on(0x%x) state_cb(%d) need_on_off(0x%x)", __func__, g_bt_on, state, on_off);
+	BTMTK_INFO_LIMITTED("%s: current_bt_on(0x%x) state_cb(%d) need_on_off(0x%x)", __func__, g_bt_on, state, on_off);
 
 	if (g_bt_on != on_off) {
 		// changed
