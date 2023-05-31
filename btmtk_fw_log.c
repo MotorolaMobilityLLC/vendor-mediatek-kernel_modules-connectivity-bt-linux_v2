@@ -792,9 +792,19 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	/* intercept dbg event */
 	if (skb->len > 2) {
 		bmain_info->dbg_send = 1;
-		memcpy(bmain_info->dbg_send_opcode, (skb->data + 1), 2);
-		BTMTK_INFO("dbg_node_send_opcode is [%02x, %02x]", bmain_info->dbg_send_opcode[0],
-				bmain_info->dbg_send_opcode[1]);
+		if (skb->data[1] == 0x6F && skb->data[2] == 0xFC) {
+			if (skb->len < 6) {
+				ret = -1;
+				BTMTK_ERR("%s invalid wmt cmd format", __func__);
+				goto free_skb;
+			}
+			bmain_info->dbg_send_opcode[0] = skb->data[5];
+			BTMTK_INFO("wmt dbg_node_send_opcode is [%02x]", bmain_info->dbg_send_opcode[0]);
+		} else {
+			memcpy(bmain_info->dbg_send_opcode, (skb->data + 1), 2);
+			BTMTK_INFO("dbg_node_send_opcode is [%02x, %02x]", bmain_info->dbg_send_opcode[0],
+					bmain_info->dbg_send_opcode[1]);
+		}
 	}
 	ret = bmain_info->hif_hook.send_cmd(pp_bdev[hci_idx], skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST);
 	if (ret < 0) {
@@ -1385,12 +1395,20 @@ coredump_fail_unlock:
 				skb->data[2] == 0x3A && skb->data[3] == 0xFC) {
 		BTMTK_INFO_RAW(skb->data, skb->len, "%s: FW Schedule Event:", __func__);
 		return 1;
-	} else if (bt_cb(skb)->pkt_type == HCI_EVENT_PKT && bmain_info->dbg_send
-				&& skb->len > 4 &&
+	} else if (bmain_info->dbg_send && bt_cb(skb)->pkt_type == HCI_EVENT_PKT &&
+				skb->len > 4 &&
 				skb->data[3] == bmain_info->dbg_send_opcode[0] &&
 				skb->data[4] == bmain_info->dbg_send_opcode[1]) {
 		bmain_info->dbg_send = 0;
 		BTMTK_INFO_RAW(skb->data, skb->len, "%s: dbg_node_event len[%d] %02x", __func__,
+					skb->len + 1, hci_skb_pkt_type(skb));
+		return 1;
+	} else if (bmain_info->dbg_send && bt_cb(skb)->pkt_type == HCI_EVENT_PKT &&
+				skb->len > 3 &&
+				skb->data[0] == 0xE4 &&
+				bmain_info->dbg_send_opcode[0] == skb->data[3]) {
+		bmain_info->dbg_send = 0;
+		BTMTK_INFO_RAW(skb->data, skb->len, "%s: wmt dbg_node_event len[%d] %02x", __func__,
 					skb->len + 1, hci_skb_pkt_type(skb));
 		return 1;
 	}
