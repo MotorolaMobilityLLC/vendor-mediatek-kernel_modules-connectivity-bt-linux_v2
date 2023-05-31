@@ -945,7 +945,7 @@ int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 	uint32_t cmd_len = 0, i = 0, offset = 0;
 	const uint32_t pin_struct_size = sizeof(struct connfem_epaelna_pin);
 
-	BTMTK_INFO("%s", __func__);
+	BTMTK_DBG("%s", __func__);
 
 	/* Get data from connfem_api */
 	connfem_epaelna_get_fem_info(&fem_info);
@@ -1108,7 +1108,7 @@ static irqreturn_t btmtk_irq_handler(int irq, void *arg)
 {
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	BTMTK_INFO("%s: irq[%d]", __func__, irq);
+	BTMTK_DBG("%s: irq[%d]", __func__, irq);
 	if (irq == btmtk_uart_waekup_irq.irq_num) {
 		bt_disable_irq(UART_WAKEUP_IRQ);
 		atomic_set(&g_sbdev->get_uart_wakeup_irq, 1);
@@ -1180,7 +1180,7 @@ int btmtk_register_uart_wakeup_irq(struct btmtk_dev *bdev, struct tty_struct *tt
 
 void btmtk_uart_wakeup_irq_disable(void)
 {
-	BTMTK_INFO("%s: start", __func__);
+	BTMTK_DBG("%s: start", __func__);
 	if (uart_wakeup_irq_remap_base == NULL) {
 		BTMTK_WARN("%s: uart_wakeup_irq_remap_base not remap yet", __func__);
 		return;
@@ -1683,7 +1683,7 @@ int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb)
 	if (!btmtk_pwrctrl_support())
 		return 0;
 
-	BTMTK_INFO("%s: lp_cur_lv[%d], dy_max_dbm[%d], dy_min_dbm[%d], lp_bdy_dbm[%d], fw_sel_dbm[%d]",
+	BTMTK_DBG("%s: lp_cur_lv[%d], dy_max_dbm[%d], dy_min_dbm[%d], lp_bdy_dbm[%d], fw_sel_dbm[%d]",
 		__func__,
 		cif_dev->dy_pwr.lp_cur_lv,
 		cif_dev->dy_pwr.dy_max_dbm,
@@ -1712,7 +1712,7 @@ int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb)
 		cif_dev->dy_pwr.dy_max_dbm = bdev->io_buf[8];
 		cif_dev->dy_pwr.dy_min_dbm = bdev->io_buf[9];
 		cif_dev->dy_pwr.lp_bdy_dbm = bdev->io_buf[10];
-		BTMTK_INFO("%s: dy_max_dbm[%d], dy_min_dbm[%d], lp_bdy_dbm[%d]",
+		BTMTK_DBG("%s: dy_max_dbm[%d], dy_min_dbm[%d], lp_bdy_dbm[%d]",
 				    __func__,
 				    cif_dev->dy_pwr.dy_max_dbm,
 				    cif_dev->dy_pwr.dy_min_dbm,
@@ -1819,7 +1819,7 @@ int btmtk_pwrctrl_pre_on(struct btmtk_dev *bdev)
 	cif_dev->dy_pwr.lp_cur_lv = CONN_PWR_THR_LV_0;
 	conn_pwr_drv_pre_on(CONN_PWR_DRV_BT, &cif_dev->dy_pwr.lp_cur_lv);
 #endif
-	BTMTK_INFO("%s: lp_cur_bat_lv = %d", __func__, cif_dev->dy_pwr.lp_cur_lv);
+	BTMTK_INFO_LIMITTED("%s: lp_cur_bat_lv = %d", __func__, cif_dev->dy_pwr.lp_cur_lv);
 	return 0;
 }
 
@@ -1965,13 +1965,23 @@ void btmtk_dump_gpio_state_(struct bt_gpio gpio, char *tag)
 	pu = CONSYS_REG_READ(gpio.pu_pd_remap_base + gpio.pu.offset);
 	pd = CONSYS_REG_READ(gpio.pu_pd_remap_base + gpio.pd.offset);
 	BTMTK_DBG("%s: aux[0x%08x] dir[0x%08x] out[0x%08x]", __func__,aux, dir, out);
-	BTMTK_INFO("[%s] num[%d] aux[%d] dir[%s] out[%d] pu[%d] pd[%d]",
-			tag, gpio.num,
-			(((aux >> gpio.aux.bit) & 0x07)),
-			(GET_BIT(dir, gpio.dir.bit) ? "OUT" : "IN"),
-			GET_BIT(out, gpio.out.bit),
-			GET_BIT(pu, gpio.pu.bit),
-			GET_BIT(pd, gpio.pd.bit));
+	if (atomic_read(&g_sbdev->assert_state)) {
+		BTMTK_INFO("[%s] num[%d] aux[%d] dir[%s] out[%d] pu[%d] pd[%d]",
+				tag, gpio.num,
+				(((aux >> gpio.aux.bit) & 0x07)),
+				(GET_BIT(dir, gpio.dir.bit) ? "OUT" : "IN "),
+				GET_BIT(out, gpio.out.bit),
+				GET_BIT(pu, gpio.pu.bit),
+				GET_BIT(pd, gpio.pd.bit));
+	} else {
+		BTMTK_DBG("[%s] num[%d] aux[%d] dir[%s] out[%d] pu[%d] pd[%d]",
+				tag, gpio.num,
+				(((aux >> gpio.aux.bit) & 0x07)),
+				(GET_BIT(dir, gpio.dir.bit) ? "OUT" : "IN "),
+				GET_BIT(out, gpio.out.bit),
+				GET_BIT(pu, gpio.pu.bit),
+				GET_BIT(pd, gpio.pd.bit));
+	}
 }
 
 void btmtk_dump_gpio_state(void)

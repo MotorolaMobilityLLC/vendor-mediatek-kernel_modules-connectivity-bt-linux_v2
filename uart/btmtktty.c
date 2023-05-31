@@ -858,7 +858,6 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s tty_port[%p]", __func__, cif_dev->tty->port);
 	/* driver dump */
 	btmtk_hci_snoop_print_to_log();
-	btmtk_dump_gpio_state();
 
 #if (SLEEP_ENABLE == 1)
 	/* incase do fw own in debug sop flow */
@@ -879,6 +878,8 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 	/* set this bt on is already asserted, not trigger assert anymore */
 	BTMTK_INFO("%s: set bt assert_state[1]", __func__);
 	atomic_set(&bdev->assert_state, BTMTK_ASSERT_START);
+
+	btmtk_dump_gpio_state();
 
 	if (cif_dev->rhw_en == 0) {
 		/* not enable rhw yet, do hif dump */
@@ -989,7 +990,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	}
 
 	/* reinit state */
-	BTMTK_INFO("%s: init bt assert_state[0], dump_comp", __func__);
+	BTMTK_DBG("%s: init bt assert_state[0], dump_comp", __func__);
 	atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
 	atomic_set(&bmain_info->subsys_reset, BTMTK_RESET_DONE);
 	bmain_info->chip_reset_flag = 0;
@@ -1178,7 +1179,7 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 
 	struct btmtk_uart_dev *cif_dev = NULL;
 
-	BTMTK_INFO("%s", __func__);
+	BTMTK_DBG("%s", __func__);
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -1199,7 +1200,7 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 			int ret = 0;
 			/* enable ADSP,MD when fw dl done*/
 			ret = mtk8250_uart_hub_fifo_ctrl(0);
-			BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(0) ret[%d]", __func__, ret);
+			BTMTK_DBG("%s: Set mtk8250_uart_hub_fifo_ctrl(0) ret[%d]", __func__, ret);
 		} else
 			BTMTK_INFO("%s: hub_bypass_only, not set mtk8250_uart_hub_fifo_ctrl(0)", __func__);
 		mtk8250_uart_hub_assert_bit_ctrl(0);
@@ -2360,7 +2361,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 	/* disable irq to avoid uart_wakeup_rq triggered when already drv own */
 	if (cif_dev->uart_irq_en) {
-		BTMTK_INFO("%s: drv_own start", __func__);
+		BTMTK_DBG("%s: drv_own start", __func__);
 		btmtk_uart_wakeup_irq_disable();
 	}
 	cif_dev->own_state = BTMTK_DRV_OWNING;

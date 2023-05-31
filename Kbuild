@@ -178,7 +178,9 @@ $(MOD_NAME)-objs := $(CFILES:.c=.o)
 obj-m += $(MOD_NAME).o
 
 ifneq ($(TARGET_BUILD_VARIANT), user)
+ifneq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
 ccflags-y += -DBTMTK_DEBUG_SOP
+endif
 endif
 
 #VPATH = /opt/toolchains/gcc-linaro-aarch64-linux-gnu-4.9-2014.09_linux
