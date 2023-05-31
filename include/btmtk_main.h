@@ -688,6 +688,9 @@ struct btmtk_dev {
 
 	/* fw wakeup host irq */
 	int	wakeup_irq;
+
+	/* uart wakeup irq */
+	atomic_t	get_uart_wakeup_irq;
 #endif
 	/* completion */
 	struct completion	dump_comp;

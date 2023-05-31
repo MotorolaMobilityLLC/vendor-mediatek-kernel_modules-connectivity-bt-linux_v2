@@ -131,6 +131,19 @@ struct platform_prop {
 	struct bt_gpio		rst_gpio;
 };
 
+#define IRQ_NAME_SIZE	(20)
+struct bt_irq_ctrl {
+	uint32_t irq_num;
+	uint8_t name[IRQ_NAME_SIZE];
+	u_int8_t active;
+	spinlock_t lock;
+	unsigned long flags;
+};
+enum bt_irq_type {
+	UART_WAKEUP_IRQ,
+	BTMTK_IRQ_MAX
+};
+
 void btmtk_async_trx_work(struct work_struct *work);
 void btmtk_pwr_on_uds_work(struct work_struct *work);
 int btmtk_pwrctrl_pre_on(struct btmtk_dev *bdev);
@@ -175,6 +188,10 @@ int btmtk_find_my_phone_cmd(u32 hr);
 void btmtk_dump_gpio_state(void);
 
 int btmtk_uart_launcher_deinit(void);
+
+/* uart_wakeup_irq */
+void btmtk_uart_wakeup_irq_disable(void);
+void btmtk_uart_wakeup_irq_enable(void);
 
 #endif // (USE_DEVICE_NODE == 1)
 #endif
