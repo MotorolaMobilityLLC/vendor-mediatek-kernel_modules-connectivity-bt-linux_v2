@@ -47,6 +47,8 @@
 #endif
 
 #define PROC_ROOT_DIR "stpbt"
+#define PROC_BT_FW_VERSION "bt_fw_version"
+#define PROC_BT_UART_LAUNCHER_NOTIFY "bt_uart_launcher_notify"
 #define PROC_BT_CHIP_RESET_COUNT "bt_chip_reset_count"
 
 struct btmtk_fops_fwlog {
