@@ -2311,6 +2311,10 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 			btmtk_release_uarthub(false);
 #endif
 		__pm_relax(bt_trx_wakelock);
+
+		if (cif_dev->uart_irq_en)
+			btmtk_uart_wakeup_irq_enable();
+
 		BTMTK_INFO("%s success, cmd[9] = 0x%02x", __func__, cmd[9]);
 	}
 unlock:
@@ -2331,6 +2335,12 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		return -1;
 	}
 
+	/* if drv own is triggered by uart_wakeup_irq, need to clear as soon as possible */
+	if (atomic_read(&g_sbdev->get_uart_wakeup_irq)) {
+		BTMTK_INFO("%s: handle get_uart_wakeup_irq", __func__);
+		btmtk_uart_wakeup_irq_disable();
+	}
+
 	UART_OWN_MUTEX_LOCK();
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	if (cif_dev->own_state == BTMTK_DRV_OWN || cif_dev->own_state == BTMTK_OWN_FAIL) {
@@ -2339,6 +2349,11 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		goto unlock;
 	}
 
+	/* disable irq to avoid uart_wakeup_rq triggered when already drv own */
+	if (cif_dev->uart_irq_en) {
+		BTMTK_INFO("%s: drv_own start", __func__);
+		btmtk_uart_wakeup_irq_disable();
+	}
 	cif_dev->own_state = BTMTK_DRV_OWNING;
 	__pm_stay_awake(bt_trx_wakelock);
 	while (bdev->suspend_state && --wait_uart_resume_cnt) {

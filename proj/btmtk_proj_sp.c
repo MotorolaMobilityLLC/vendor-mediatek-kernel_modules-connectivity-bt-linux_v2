@@ -26,6 +26,7 @@
 #include <linux/of_gpio.h>
 #include <linux/gpio.h>
 #include <linux/interrupt.h>
+#include <linux/of_irq.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 #include "mtk_disp_notify.h"
 #endif
@@ -46,13 +47,39 @@
 
 
 #if (USE_DEVICE_NODE == 1)
+/*============================================================================*/
+/* Global variable */
+/*============================================================================*/
+
+static struct bt_irq_ctrl *bt_irq_table[BTMTK_IRQ_MAX];
+static struct bt_irq_ctrl btmtk_uart_waekup_irq = {.name = "UART_WAKEUP_IRQ"};
 static struct pinctrl *pinctrl_ptr;
 extern struct btmtk_dev *g_sbdev;
 int g_bt_state;
 struct platform_prop *g_platform_prop = NULL;
+static void __iomem		*uart_wakeup_irq_remap_base = NULL;
+
+/*============================================================================*/
+/* BIT operation */
+/*============================================================================*/
 
 #define CONSYS_REG_READ(addr) (*((volatile unsigned int *)(addr)))
+#ifndef BIT
+#define BIT(n)                          (1UL << (n))
+#endif
+#define SET_BIT(addr, bit) \
+                        (*((volatile uint32_t *)(addr))) |= ((uint32_t)bit)
+#define CLR_BIT(addr, bit) \
+                        (*((volatile uint32_t *)(addr))) &= ~((uint32_t)bit)
+#define REG_READL(addr) \
+                        readl((volatile uint32_t *)(addr))
+#define REG_WRITEL(addr, val) \
+                        writel(val, (volatile uint32_t *)(addr))
 
+
+/*============================================================================*/
+/* Function Prototype */
+/*============================================================================*/
 extern void btmtk_uart_trigger_assert_by_tx_thread(struct btmtk_dev *bdev);
 
 static inline int btmtk_pinctrl_exec(const char *name);
@@ -1015,6 +1042,180 @@ int btmtk_set_pcm_pin_mux(void)
 
 /*
  *******************************************************************************
+ *			 fw wakeup host through uart_wakeup_irq feature
+ *******************************************************************************
+ */
+
+void bt_free_irq(enum bt_irq_type irq_type)
+{
+		struct bt_irq_ctrl *pirq;
+
+		if (irq_type >= BTMTK_IRQ_MAX) {
+				BTMTK_ERR("Invalid irq_type %d!", irq_type);
+				return;
+		}
+
+		pirq = bt_irq_table[irq_type];
+		if (pirq) {
+				pirq->active = FALSE;
+				disable_irq_wake(pirq->irq_num);
+				free_irq(pirq->irq_num, pirq);
+				bt_irq_table[irq_type] = NULL;
+		}
+}
+
+void bt_disable_irq(enum bt_irq_type irq_type)
+{
+		struct bt_irq_ctrl *pirq;
+
+		if (irq_type >= BTMTK_IRQ_MAX) {
+				BTMTK_ERR("Invalid irq_type %d!", irq_type);
+				return;
+		}
+
+		pirq = bt_irq_table[irq_type];
+		if (pirq) {
+				spin_lock_irqsave(&pirq->lock, pirq->flags);
+				if (pirq->active) {
+						disable_irq_nosync(pirq->irq_num);
+						pirq->active = FALSE;
+				}
+				spin_unlock_irqrestore(&pirq->lock, pirq->flags);
+		}
+}
+
+void bt_enable_irq(enum bt_irq_type irq_type)
+{
+		struct bt_irq_ctrl *pirq;
+
+		if (irq_type >= BTMTK_IRQ_MAX) {
+				BTMTK_ERR("Invalid irq_type %d!", irq_type);
+				return;
+		}
+
+		pirq = bt_irq_table[irq_type];
+		if (pirq) {
+				spin_lock_irqsave(&pirq->lock, pirq->flags);
+				if (!pirq->active) {
+						enable_irq(pirq->irq_num);
+						pirq->active = TRUE;
+				}
+				spin_unlock_irqrestore(&pirq->lock, pirq->flags);
+		}
+}
+
+static irqreturn_t btmtk_irq_handler(int irq, void *arg)
+{
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	BTMTK_INFO("%s: irq[%d]", __func__, irq);
+	if (irq == btmtk_uart_waekup_irq.irq_num) {
+		bt_disable_irq(UART_WAKEUP_IRQ);
+		atomic_set(&g_sbdev->get_uart_wakeup_irq, 1);
+		if (bmain_info->hif_hook.wakeup_host)
+			bmain_info->hif_hook.wakeup_host(g_sbdev);
+	}
+
+	return IRQ_HANDLED;
+}
+
+int32_t bt_request_irq(enum bt_irq_type irq_type, struct tty_struct *tty)
+{
+	uint32_t irq_num = 0;
+	int32_t ret = 0;
+	unsigned long irq_flags = 0;
+	struct bt_irq_ctrl *pirq = NULL;
+
+	if (!tty->dev->of_node) {
+		BTMTK_ERR("[ERR] %s: mediatek,bt of_node not found", __func__);
+		return -1;
+	}
+
+	irq_num = irq_of_parse_and_map(tty->dev->of_node, irq_type);
+
+	switch (irq_type) {
+	case UART_WAKEUP_IRQ:
+		irq_flags = IRQF_TRIGGER_HIGH | IRQF_SHARED;
+		pirq = &btmtk_uart_waekup_irq;
+		BTMTK_DBG("irqNum of UART_WAKEUP_IRQ = %d", irq_num);
+		break;
+	default:
+		BTMTK_ERR("Invalid irq_type %d!", irq_type);
+		return -EINVAL;
+	}
+
+	pirq->irq_num = irq_num;
+	spin_lock_init(&pirq->lock);
+
+	ret = request_irq(irq_num, btmtk_irq_handler, irq_flags,
+			pirq->name, pirq);
+	if (ret) {
+		BTMTK_ERR("Request %s (%u) failed! ret(%d)", pirq->name, irq_num, ret);
+		return ret;
+	}
+
+	ret = enable_irq_wake(irq_num);
+	if (ret) {
+		BTMTK_ERR("enable_irq_wake %s (%u) failed! ret(%d)", pirq->name, irq_num, ret);
+	}
+
+	BTMTK_INFO("Request %s (%u) succeed, pirq = %p, flag = 0x%08lx", pirq->name, irq_num, pirq, irq_flags);
+	bt_irq_table[irq_type] = pirq;
+	pirq->active = TRUE;
+
+	return 0;
+}
+
+int btmtk_register_uart_wakeup_irq(struct btmtk_dev *bdev, struct tty_struct *tty)
+{
+	if (uart_wakeup_irq_remap_base == NULL)
+		uart_wakeup_irq_remap_base = ioremap(0X11036050, 0x10);
+	if (uart_wakeup_irq_remap_base == NULL) {
+		BTMTK_ERR("%s: uart_wakeup_irq_remap_base failed", __func__);
+		return -1;
+	}
+
+	return bt_request_irq(UART_WAKEUP_IRQ, tty);
+}
+
+void btmtk_uart_wakeup_irq_disable(void)
+{
+	BTMTK_INFO("%s: start", __func__);
+	if (uart_wakeup_irq_remap_base == NULL) {
+		BTMTK_WARN("%s: uart_wakeup_irq_remap_base not remap yet", __func__);
+		return;
+	}
+
+	/* Regardless of whether it is casued by uart_wakeup_irq, irq needs to be cleared when drv own */
+	bt_disable_irq(UART_WAKEUP_IRQ);
+
+	/* disable uart_eint_wakeup_en */
+	CLR_BIT(uart_wakeup_irq_remap_base, BIT(0));
+
+	/* clr uart_wakeup_eint */
+	SET_BIT(uart_wakeup_irq_remap_base, BIT(1));
+	CLR_BIT(uart_wakeup_irq_remap_base, BIT(1));
+
+	atomic_set(&g_sbdev->get_uart_wakeup_irq, 0);
+}
+
+void btmtk_uart_wakeup_irq_enable(void)
+{
+	BTMTK_INFO("%s: start", __func__);
+	if (uart_wakeup_irq_remap_base == NULL) {
+		BTMTK_WARN("%s: uart_wakeup_irq_remap_base not remap yet", __func__);
+		return;
+	}
+
+	/* enable uart_eint_wakeup_en */
+	SET_BIT(uart_wakeup_irq_remap_base, BIT(0));
+
+	/* enable sw uart_wakeup _irq */
+	bt_enable_irq(UART_WAKEUP_IRQ);
+}
+
+/*
+ *******************************************************************************
  *			 fw wakeup host through irq feature
  *******************************************************************************
  */
@@ -1039,6 +1240,11 @@ static irqreturn_t btmtk_host_wake_isr(int irq, void *dev)
 int btmtk_register_wakeup_irq(struct btmtk_dev *bdev, struct tty_struct *tty) {
 	int ret;
 	int irq;
+
+	if (!tty->dev->of_node) {
+		BTMTK_ERR("[ERR] %s: mediatek,bt of_node not found", __func__);
+		return -1;
+	}
 
 	bdev->wakeup_irq = of_get_gpio(tty->dev->of_node, 0);
 	if (!gpio_is_valid(bdev->wakeup_irq)) {
@@ -1247,7 +1453,7 @@ void btmtk_platform_prop_register(struct btmtk_dev *bdev) {
 			break;
 		case 6989:
 			BTMTK_INFO("%s: platform[%u] not create yet", __func__, platform);
-			//g_platform_prop = &MT6989_prop;
+			g_platform_prop = &MT6989_prop;
 			break;
 		default:
 			BTMTK_WARN("%s: not recognize platform[%u]", __func__, platform);
@@ -1303,6 +1509,10 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	if(ret < 0)
 		BTMTK_ERR("[ERR] %s: mediatek,bt sleep-en ret[%d]", __func__, ret);
 
+	ret = of_property_read_u32(tty->dev->of_node, "uart-irq-en", &cif_dev->uart_irq_en);
+	if(ret < 0)
+		BTMTK_ERR("[ERR] %s: mediatek,bt uart-irq-en ret[%d]", __func__, ret);
+
 	ret = of_property_read_string(tty->dev->of_node, "flavor-bin", &bdev->flavor_bin);
 	if(ret < 0){
 		const static char default_flavor[] = "1";
@@ -1329,7 +1539,14 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 		if (ret < 0)
 			BTMTK_WARN("%s: btmtk_register_wakeup_irq fail", __func__);
 	} else
-		BTMTK_INFO("%s: not support fw wakeup irq", __func__);
+		BTMTK_WARN("%s: not support fw wakeup irq", __func__);
+
+	if (cif_dev->uart_irq_en) {
+		ret = btmtk_register_uart_wakeup_irq(bdev, tty);
+		if (ret < 0)
+			BTMTK_WARN("%s: btmtk_register_uart_wakeup_irq fail", __func__);
+	} else
+		BTMTK_WARN("%s: not support uart wakeup irq", __func__);
 
 	btmtk_platform_prop_register(bdev);
 

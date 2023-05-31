@@ -188,6 +188,7 @@ struct btmtk_uart_dev {
 	u32			hub_en;
 	u32			sleep_en;
 	u32			flush_en;
+	u32			uart_irq_en;
 	u8			hub_bypass_only;
 
 	/* For uarthub setting */
