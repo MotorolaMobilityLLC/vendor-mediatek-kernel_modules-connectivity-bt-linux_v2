@@ -1334,7 +1334,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	s32 sent_len;
 	u8 cmd[LD_PATCH_CMD_LEN] = {0x02, 0x6F, 0xFC, 0x05, 0x00, 0x01, 0x01, 0x01, 0x00, PATCH_PHASE3};
 	u8 event[LD_PATCH_EVT_LEN] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
-	unsigned long start_time = 0, time_diff = 0;
+	unsigned long end_time = 0, dump_time = 0, record_time = 0;
 
 	if (bdev == NULL || image == NULL || fwbuf == NULL) {
 		BTMTK_ERR("%s: invalid parameters!", __func__);
@@ -1344,8 +1344,15 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	BTMTK_DBG("%s: loading rom patch... start", __func__);
 
+#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
+	if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
+		mtk8250_uart_start_record(cif_dev->tty);
+#endif
+
 	down(&cif_dev->tty_flush_sem);
-	start_time = jiffies;
+	record_time = jiffies;
+	end_time = jiffies + msecs_to_jiffies(TIME_BOUND_OF_FW_PKG_DL);
+	dump_time = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
 	while (1) {
 		sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT) ?
 				(UPLOAD_PATCH_UNIT) : (section_dl_size - cur_len);
@@ -1371,10 +1378,20 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 				goto exit;
 			}
 
-			time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
-			if (time_diff >= TIME_BOUND_OF_FW_PKG_DL) {
-				BTMTK_ERR("%s:, download single patch more than %d s [%lu]",
-						__func__, TIME_BOUND_OF_FW_PKG_DL, time_diff);
+			/* every 500ms dump uart state */
+			if (time_after(jiffies, dump_time)) {
+				BTMTK_WARN("%s: download single patch more than %d ms, tty_chars_in_buffer[%d]",
+						__func__, WOBLE_EVENT_INTERVAL_TIMO, tty_chars_in_buffer(cif_dev->tty));
+#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
+				if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
+					mtk8250_uart_end_record(cif_dev->tty);
+#endif
+				dump_time = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
+			}
+
+			if (time_after(jiffies, end_time)) {
+				BTMTK_ERR("%s: download single patch more than %d ms, tty_chars_in_buffer[%d]",
+						__func__, TIME_BOUND_OF_FW_PKG_DL, tty_chars_in_buffer(cif_dev->tty));
 #if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
 				mtk8250_uart_dump(cif_dev->tty);
 #endif
@@ -1394,9 +1411,9 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			break;
 	}
 	up(&cif_dev->tty_flush_sem);
-	time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
+	record_time = jiffies_to_msecs(jiffies) - jiffies_to_msecs(record_time);
 	BTMTK_INFO("%s: patch done, cost %lu ms, max_pkt_cnt[%d], send wmt dl phase3 cmd ",
-			__func__, time_diff, max_pkt_cnt);
+			__func__, record_time, max_pkt_cnt);
 
 	/* seperate phase 3 cmd with dma mode content */
 	usleep_range(1000, 1100);
