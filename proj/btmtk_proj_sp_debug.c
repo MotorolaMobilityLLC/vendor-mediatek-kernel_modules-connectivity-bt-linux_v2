@@ -276,7 +276,7 @@ int CONNV3_RHW_READ(uint32_t addr, uint32_t *val)
 
 static inline void btmtk_dump_bg_mcu_core(void)
 {
-	uint32_t i = 0, org_value, value, cr_count = 0x26 + 4;
+	uint32_t i = 0, org_value = 0, value = 0, cr_count = 0x26 + 4;
 
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG MCU core registers] - mcu_flg1, mcu_flg2 count[%d]", RHW_DBG_TAG, cr_count);
@@ -305,7 +305,7 @@ static inline void btmtk_dump_bg_mcu_core(void)
 
 static inline void btmtk_dump_dsp_debug_flags(void)
 {
-	uint32_t i = 0, value, cr_count = 0x17 + 1;
+	uint32_t i = 0, value = 0, cr_count = 0x17 + 1;
 
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG DSP debug flags] - mcu_flg3, mcu_flg4 count[%d]", RHW_DBG_TAG, cr_count);
@@ -328,7 +328,7 @@ static inline void btmtk_dump_dsp_debug_flags(void)
 
 static inline void btmtk_dump_mcusys_clk_gals_debug_flags(void)
 {
-	uint32_t i = 0, value, cr_count = 4 + 8;
+	uint32_t i = 0, value = 0, cr_count = 4 + 8;
 
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG MCUSYS CLK and GALS debug flags] - mcu_flg5, mcu_flg6 count[%d]", RHW_DBG_TAG, cr_count);
@@ -357,7 +357,7 @@ static inline void btmtk_dump_mcusys_clk_gals_debug_flags(void)
 
 static inline void btmtk_dump_mcu_pc_lr(void)
 {
-	uint32_t i = 0, value, cr_count = 0x55;
+	uint32_t i = 0, value = 0, cr_count = 0x55;
 
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG MCU PC/LR log] - mcu_flg7[84:168] cpu_dbg_pc_log0 ~ conn_debug_port84 count[%d]"
@@ -375,7 +375,7 @@ static inline void btmtk_dump_mcu_pc_lr(void)
 
 static inline void btmtk_dump_dsp_pc_lr(void)
 {
-	uint32_t i = 0, value, cr_count = 0x44;
+	uint32_t i = 0, value = 0, cr_count = 0x44;
 
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG DSP PC/LR log] - mcu_flg7[169:236] cpu1_dbg_pc_log0 ~ cpu1_lr count[%d]"
@@ -393,7 +393,7 @@ static inline void btmtk_dump_dsp_pc_lr(void)
 
 static inline void btmtk_dump_peri_debug_flags(void)
 {
-	uint32_t i = 0, value, cr_count = 4 + 6;
+	uint32_t i = 0, value = 0, cr_count = 4 + 6;
 
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG PERI debug flags] - mcu_flg11, mcu_flg12 count[%d]", RHW_DBG_TAG, cr_count);
@@ -419,7 +419,7 @@ static inline void btmtk_dump_peri_debug_flags(void)
 
 static inline void btmtk_dump_bus_debug_flags(void)
 {
-	uint32_t i = 0, value, cr_count = 10 + 15 + 17;
+	uint32_t i = 0, value = 0, cr_count = 10 + 15 + 17;
 
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG BUS debug flags] - mcu_flg13, mcu_flg14, mcu_flg16 count[%d]", RHW_DBG_TAG, cr_count);
@@ -456,7 +456,7 @@ static inline void btmtk_dump_bus_debug_flags(void)
 
 static inline void btmtk_dump_dma_uart_debug_flags(void)
 {
-	uint32_t i = 0, value, cr_count = 8 + 1 + 14 + 17;
+	uint32_t i = 0, value = 0, cr_count = 8 + 1 + 14 + 17;
 
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG DMA and UART debug flags] - mcu_flg19, mcu_flg20, mcu_flg23, mcu_flg24 count[%d]"
@@ -505,7 +505,7 @@ static inline void btmtk_dump_dma_uart_debug_flags(void)
 
 static inline void btmtk_dump_cryto_debug_flags(void)
 {
-	uint32_t value, cr_count = 1 + 1;
+	uint32_t value = 0, cr_count = 1 + 1;
 
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [BG CRYPTO debug flags] - mcu_flg21, mcu_flg22 (optional) count[%d]", RHW_DBG_TAG, cr_count);
@@ -523,7 +523,7 @@ static inline void btmtk_dump_cryto_debug_flags(void)
 
 static inline void btmtk_dump_dma_uart_cfg2(void)
 {
-	uint32_t value, pos, forward_dump_count = 8, cr_count = 8 + 8 + 1;
+	uint32_t value = 0, pos = 0, forward_dump_count = 8, cr_count = 8 + 8 + 1;
 	BT_DUMP_CR_INIT(cr_count);
 
 	/* dma_cfg1 */
@@ -569,8 +569,8 @@ static inline void btmtk_dump_dma_uart_cfg2(void)
 
 static inline void btmtk_dump_dma_uart_cfg3(void)
 {
-	uint32_t value, pos, cr_count = 8;
-	uint32_t base, vff_size;
+	uint32_t value = 0, pos = 0, cr_count = 8;
+	uint32_t base = 0, vff_size = 0;
 	BT_DUMP_CR_INIT(cr_count);
 
 	/* dma_cfg3 */
@@ -599,8 +599,8 @@ static inline void btmtk_dump_dma_uart_cfg3(void)
 
 static inline void btmtk_dump_dma_uart_cfg4(void)
 {
-	uint32_t value, pos, cr_count = 8;
-	uint32_t base, vff_size;
+	uint32_t value = 0, pos = 0, cr_count = 8;
+	uint32_t base = 0, vff_size = 0;
 	BT_DUMP_CR_INIT(cr_count);
 
 	/* dma_cfg4 */
@@ -627,7 +627,7 @@ static inline void btmtk_dump_dma_uart_cfg4(void)
 
 static inline void btmtk_dump_bt_mcysys_vlp(void)
 {
-	uint32_t value, cr_count = 10, i = 0;
+	uint32_t value = 0, cr_count = 10, i = 0;
 	BT_DUMP_CR_INIT(cr_count);
 
 	BTMTK_INFO("%s [BT MCUSYS VLP] - mcu_vlp_flg0 count[%d]" , RHW_DBG_TAG, cr_count);
@@ -735,6 +735,7 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 	btmtk_dump_dma_uart_cfg3();
 	btmtk_dump_dma_uart_cfg4();
 	btmtk_dump_bt_mcysys_vlp();
+
 	/* cannot call connv3_conninfra_bus_dump at here, connv3_cored may trigger assert */
 	BTMTK_INFO("%s: end", __func__);
 }

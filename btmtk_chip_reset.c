@@ -157,8 +157,8 @@ void btmtk_reset_waker(struct work_struct *work)
 				BTMTK_ERR("btmtk init failed!");
 				goto L0RESET;
 			}
-#if (USE_DEVICE_NODE == 0)
 
+#if (USE_DEVICE_NODE == 0)
 			err = btmtk_load_rom_patch(bdev);
 			if (err < 0) {
 				BTMTK_INFO("btmtk load rom patch failed!");

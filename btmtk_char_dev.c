@@ -543,7 +543,7 @@ static int BT_open(struct inode *inode, struct file *file)
 
 	bthost_debug_init();
 
-	BTMTK_INFO("BT turn on OK!");
+	BTMTK_INFO("BT turn on OK");
 	return 0;
 }
 
@@ -581,7 +581,7 @@ static int BT_close(struct inode *inode, struct file *file)
 		return ret;
 	}
 
-	BTMTK_INFO("BT turn off OK!");
+	BTMTK_INFO("BT turn off OK");
 	return 0;
 }
 
