@@ -471,6 +471,7 @@ restart:
     }
 
 exit:
+
 #ifdef __ANDROID__
     BPRINT_I("%s: exit notifyFd[%d]", __func__, notifyFd);
     if (notifyFd > 0) {

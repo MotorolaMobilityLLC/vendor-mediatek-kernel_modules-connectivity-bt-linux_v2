@@ -1332,6 +1332,7 @@ int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v
 
 	BTMTK_INFO("%s: before_after_blank[%ld], blank_power_down[%d], fops_state[%d]",
 				__func__, value, *data, btmtk_fops_get_state(g_sbdev));
+
 	if (value == MTK_DISP_EARLY_EVENT_BLANK) {
 		switch (*data) {
 			case MTK_DISP_BLANK_UNBLANK:

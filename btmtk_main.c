@@ -935,7 +935,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 	while (count) {
 		int i, len;
 
-		if (!skb) {
+		if (unlikely(!skb)) {
 			/* ignore first byte as 0xFF (FW wakeup) & 0x00 (noise from uart) */
 			while (count > 1 && (*buffer == 0xFF || *buffer == 0x00)) {
 				BTMTK_INFO("%s, receive 0x%02X in pkt head, pkt_len[%d]", __func__, buffer[0], count);
@@ -948,7 +948,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 					continue;
 
 				skb = bt_skb_alloc((&pkts[i])->maxlen, GFP_KERNEL);
-				if (!skb) {
+				if (unlikely(!skb)) {
 					BTMTK_ERR("%s, alloc skb failed!", __func__);
 					return ERR_PTR(-ENOMEM);
 				}
@@ -959,7 +959,7 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 			}
 
 			/* Check for invalid packet type */
-			if (!skb) {
+			if (unlikely(!skb)) {
 				if (is_mt66xx(bdev->chip_id)) {
 					if (*buffer == 0xFF || *buffer == 0x00) {
 						BTMTK_INFO("%s: skip 0x%02X pkt", __func__, *buffer);
@@ -2081,6 +2081,12 @@ static int btmtk_parsing_fw_rom_patch(struct btmtk_dev *bdev,
 	bdev->sectionMap_table = kmalloc_array(section_num,
 			sizeof(struct _Section_Map), GFP_KERNEL);
 
+	if (bdev->sectionMap_table == NULL) {
+		BTMTK_ERR("%s: sectionMap_table is NULL", __func__);
+		ret = -1;
+		goto exit;
+	}
+
 	do {
 		sectionMap = (struct _Section_Map *)(fwbuf + FW_ROM_PATCH_HEADER_SIZE +
 				FW_ROM_PATCH_GD_SIZE + FW_ROM_PATCH_SEC_MAP_SIZE * loop_count);
@@ -2653,18 +2659,14 @@ int btmtk_load_rom_patch(struct btmtk_dev *bdev)
 #if CFG_SUPPORT_BT_DL_ZB_PATCH
 		if (is_mt7902(bdev->chip_id)) {
 			err = btmtk_load_rom_patch_connac3(bdev, ZB_DOWNLOAD);
-			if (err < 0) {
+			if (err < 0)
 				BTMTK_WARN("%s: btmtk_load_rom_patch ZB patch failed!", __func__);
-				err = 0;
-			}
 		}
 #endif
 #if CFG_SUPPORT_BT_DL_WIFI_PATCH
 		err = btmtk_load_rom_patch_connac3(bdev, WIFI_DOWNLOAD);
-		if (err < 0) {
+		if (err < 0)
 			BTMTK_WARN("%s: btmtk_load_rom_patch wifi patch failed!", __func__);
-			err = 0;
-		}
 #endif
 
 	} else if (is_mt66xx(bdev->chip_id)) {
@@ -3721,7 +3723,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: send assert cmd", __func__);
 
 	skb = alloc_skb(ASSERT_CMD_LEN + BT_SKB_RESERVE, GFP_KERNEL);
-	if (!skb) {
+	if (unlikely(!skb)) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		goto exit;
 	}
@@ -3734,7 +3736,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 #else
 	ret = main_info.hif_hook.send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES, (int)BTMTK_TX_PKT_SEND_DIRECT);
 #endif
-	if (ret < 0) {
+	if (ret < 0 && skb) {
 		BTMTK_ERR("%s failed!!", __func__);
 		kfree_skb(skb);
 		skb = NULL;
@@ -4310,7 +4312,7 @@ err:
 
 	/* clean rx queues */
 	skb_queue_purge(&bdev->rx_q);
-	if (!IS_ERR_OR_NULL(bdev->rx_skb))
+	if (likely(bdev->rx_skb))
 		kfree_skb(bdev->rx_skb);
 	bdev->rx_skb = NULL;
 
@@ -4577,6 +4579,7 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		goto exit;
 	}
 	memcpy(skb_tmp, &hci_skb_pkt_type(skb), 1);
+
 #if ENABLESTP
 	skb = mtk_add_stp(bdev, skb);
 #endif
