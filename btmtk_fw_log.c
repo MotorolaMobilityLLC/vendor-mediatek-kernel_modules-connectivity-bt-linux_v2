@@ -414,7 +414,7 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 		BTMTK_DBG("%s: socket buffer length error(count: %d, skb.len: %d)",
 			__func__, (int)count, skb->len);
 	}
-	if (skb) {
+	if (likely(skb)) {
 		kfree_skb(skb);
 		skb = NULL;
 	}
@@ -694,7 +694,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	}
 
 	skb = alloc_skb(count + BT_SKB_RESERVE, GFP_KERNEL);
-	if (!skb) {
+	if (unlikely(!skb)) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		ret = -ENOMEM;
 		goto exit;
@@ -789,6 +789,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 	btmtk_dispatch_fwlog_bluetooth_kpi(pp_bdev[hci_idx], skb->data, skb->len, KPI_WITHOUT_TYPE);
 #endif
+
 	/* intercept dbg event */
 	if (skb->len > 2) {
 		bmain_info->dbg_send = 1;

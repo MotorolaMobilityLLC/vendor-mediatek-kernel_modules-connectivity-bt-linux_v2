@@ -42,7 +42,6 @@
  *			     P R I V A T E   D A T A
  *******************************************************************************
  */
-//extern struct bt_dbg_st g_bt_dbg_st;
 
 static struct bt_ring_buffer_mgmt g_rx_buffer;
 static BT_RX_EVENT_CB g_rx_event_cb;
