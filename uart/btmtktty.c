@@ -124,7 +124,7 @@ static void btmtk_uart_delete_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 {
 	if (atomic_read(&cif_dev->fw_own_timer_flag)) {
 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
-		BTMTK_WARN("%s timer deleted", __func__);
+		BTMTK_WARN("%s: timer deleted", __func__);
 		del_timer_sync(&cif_dev->fw_own_timer);
 	} else
 		BTMTK_DBG_LIMITTED("%s: not create yet", __func__);
@@ -235,7 +235,7 @@ int btmtk_uart_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 
 		/* in normal case, cif_send success would kfree_skb in tx_thread */
 		/* but in this case, would not pass by tx_thread, so need not kfree_skb */
-		if (ret >= 0 && skb) {
+		if (unlikely(ret >= 0 && skb)) {
 			kfree_skb(skb);
 			skb = NULL;
 		}
@@ -1026,7 +1026,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	do {
 		/* clean rx queues */
 		skb_queue_purge(&bdev->rx_q);
-		if (!IS_ERR_OR_NULL(bdev->rx_skb))
+		if (bdev->rx_skb)
 			kfree_skb(bdev->rx_skb);
 		bdev->rx_skb = NULL;
 
@@ -1183,6 +1183,7 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return;
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
@@ -1338,10 +1339,15 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 
 	if (bdev == NULL || image == NULL || fwbuf == NULL) {
 		BTMTK_ERR("%s: invalid parameters!", __func__);
-		ret = -1;
-		goto exit;
+		return -1;
 	}
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
 	BTMTK_DBG("%s: loading rom patch... start", __func__);
 
 #if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
@@ -1438,8 +1444,8 @@ exit:
 int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		const int cmd_len, int retry, int delay)
 {
-	int ret = -1;
-	u32 len = 0, count = 0, flush_retry = 0;
+	int ret = -1, flush_retry = 0;
+	u32 len = 0, count = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
 
 	if (bdev == NULL) {
@@ -1448,6 +1454,11 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+
+	if (cif_dev == NULL || cif_dev->tty == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
 
 	if (bdev->is_whole_chip_reset) {
 		BTMTK_WARN("%s: whole chip reset happened, don't send cmd", __func__);
@@ -1548,7 +1559,7 @@ static int btmtk_uart_tx_thread(void *data)
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	struct sk_buff *skb;
 	u32 thread_flag = 0;
-	int ret = 0;
+	int ret;
 
 	BTMTK_INFO("%s start", __func__);
 
@@ -1556,7 +1567,7 @@ static int btmtk_uart_tx_thread(void *data)
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return -1;
 	}
-	/* avoid unused var for USE_DEVICE_NODE == 0 */
+	/* avoid unused var for SLEEP_ENABLE == 0 */
 	ret = 0;
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
@@ -2431,6 +2442,8 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 					usleep_range(6000, 6100);
 				}
 			}
+			if (ret < 0)
+				BTMTK_ERR("%s btmtk_main_send_cmd 0xFF fail, ret[%d]", __func__, ret);
 		}
 
 		do {
