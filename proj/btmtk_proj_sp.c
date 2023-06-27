@@ -1535,7 +1535,9 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 		//return -1;
 	}
 
+	/* if support PowerOffBLE, this operation would notify fw leave PowerOffBLE mode */
 	btmtk_pinctrl_exec(BT_FIND_MY_PHONE_HIGH);
+	usleep_range(5000, 5100);
 	btmtk_pinctrl_exec(BT_FIND_MY_PHONE_LOW);
 
 	if (bdev->is_eap && cif_dev->sleep_en) {
