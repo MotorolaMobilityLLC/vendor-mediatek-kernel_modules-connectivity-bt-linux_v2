@@ -419,10 +419,12 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	/* if just protect event, another cmd would reinit event_compare_status */
 	down(&cif_dev->evt_comp_sem);
 	/* if send cmd without drv own, not direct send cmd incase of tx_thread cant not do drv own with send_and_recv */
-	if (cif_dev->own_state != BTMTK_DRV_OWN && pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT
-		&& atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_RUNNING
-		&& atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_DONE) {
-		BTMTK_ERR("%s: wait driver own retry", __func__);
+	if (pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT &&
+		(cif_dev->own_state != BTMTK_DRV_OWN ||
+		atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_RUNNING ||
+		atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_DONE)) {
+
+		BTMTK_WARN("%s: wait driver own retry", __func__);
 		up(&cif_dev->evt_comp_sem);
 		return -EAGAIN;
 	}
