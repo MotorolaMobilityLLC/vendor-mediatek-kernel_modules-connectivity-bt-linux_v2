@@ -1386,8 +1386,8 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 
 			/* every 500ms dump uart state */
 			if (time_after(jiffies, dump_time)) {
-				BTMTK_WARN("%s: download single patch more than %d ms, tty_chars_in_buffer[%d]",
-						__func__, WOBLE_EVENT_INTERVAL_TIMO, tty_chars_in_buffer(cif_dev->tty));
+				BTMTK_WARN("%s: download single patch more than %d ms, tty_chars_in_buffer[%d], cur_len[%d]",
+						__func__, WOBLE_EVENT_INTERVAL_TIMO, tty_chars_in_buffer(cif_dev->tty), cur_len);
 #if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
 				if (btmtk_get_chip_state(bdev) != BTMTK_STATE_DISCONNECT)
 					mtk8250_uart_end_record(cif_dev->tty);
@@ -1396,8 +1396,8 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			}
 
 			if (time_after(jiffies, end_time)) {
-				BTMTK_ERR("%s: download single patch more than %d ms, tty_chars_in_buffer[%d]",
-						__func__, TIME_BOUND_OF_FW_PKG_DL, tty_chars_in_buffer(cif_dev->tty));
+				BTMTK_ERR("%s: download single patch more than %d ms, tty_chars_in_buffer[%d], cur_len[%d]",
+						__func__, TIME_BOUND_OF_FW_PKG_DL, tty_chars_in_buffer(cif_dev->tty), cur_len);
 #if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
 				mtk8250_uart_dump(cif_dev->tty);
 #endif
@@ -1418,8 +1418,8 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	}
 	up(&cif_dev->tty_flush_sem);
 	record_time = jiffies_to_msecs(jiffies) - jiffies_to_msecs(record_time);
-	BTMTK_INFO("%s: patch done, cost %lu ms, max_pkt_cnt[%d], send wmt dl phase3 cmd ",
-			__func__, record_time, max_pkt_cnt);
+	BTMTK_INFO("%s: patch done, cost %lu ms, max_pkt_cnt[%d], cur_len[%d], send wmt dl phase3 cmd ",
+			__func__, record_time, max_pkt_cnt, cur_len);
 
 	/* seperate phase 3 cmd with dma mode content */
 	usleep_range(1000, 1100);
