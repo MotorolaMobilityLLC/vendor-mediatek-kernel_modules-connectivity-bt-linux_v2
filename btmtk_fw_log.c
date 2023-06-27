@@ -1199,6 +1199,11 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		static int dump_data_counter;
 		static int dump_data_length;
 
+		if (atomic_read(&bdev->assert_state) == BTMTK_ASSERT_END) {
+			BTMTK_INFO_LIMITTED("%s: coredump already end, skip data", __func__);
+			return 1;
+		}
+
 		/* remove acl header 6F FC LL LL */
 		skb_pull(skb, 4);
 
