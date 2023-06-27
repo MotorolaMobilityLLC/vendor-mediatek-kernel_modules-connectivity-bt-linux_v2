@@ -4212,6 +4212,12 @@ int bt_close(struct hci_dev *hdev)
 		return ret;
 	}
 
+	fstate = btmtk_fops_get_state(bdev);
+	if (fstate == BTMTK_FOPS_STATE_CLOSED) {
+		BTMTK_WARN("%s: BT already closed", __func__);
+		goto exit;
+	}
+
 	if(bdev->is_whole_chip_reset) {
 		BTMTK_WARN("%s: is_whole_chip_reset, fstate(%d)", __func__, fstate);
 		if (main_info.hif_hook.cif_mutex_lock)
@@ -4219,10 +4225,9 @@ int bt_close(struct hci_dev *hdev)
 		goto unlock;
 	}
 
-	fstate = btmtk_fops_get_state(bdev);
 	if (fstate != BTMTK_FOPS_STATE_OPENED) {
 		BTMTK_WARN("%s: fops is not allow close(%d)", __func__, fstate);
-		goto err;
+		goto exit;
 	}
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSING);
 
@@ -4273,10 +4278,8 @@ int bt_close(struct hci_dev *hdev)
 	if (state != BTMTK_STATE_STANDBY && main_info.reset_stack_flag != HW_ERR_CODE_CORE_DUMP
 		&& main_info.reset_stack_flag != HW_ERR_CODE_CHIP_RESET) {
 		ret = btmtk_send_deinit_cmds(bdev);
-		if (ret < 0) {
+		if (ret < 0)
 			BTMTK_ERR("%s, btmtk_send_deinit_cmds failed", __func__);
-			goto unlock;
-		}
 	} else
 		BTMTK_WARN("%s, SKIP by state[%d], reset_stack_flag[%d]", __func__, state, main_info.reset_stack_flag);
 #endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
@@ -4289,33 +4292,32 @@ unlock:
 	fstate = btmtk_fops_get_state(bdev);
 	if (fstate == BTMTK_FOPS_STATE_CLOSED)
 		BTMTK_WARN("%s: fops is already close", __func__);
-	else
+	else {
 		main_info.hif_hook.close(hdev);
+
+		/* avoid reset start at new bt on */
+		btmtk_reset_timer_del(bdev);
+
+		state = btmtk_get_chip_state(bdev);
+
+		if (state != BTMTK_STATE_DISCONNECT)
+			btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
+
+		btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
+
+		main_info.reset_stack_flag = HW_ERR_NONE;
+		bdev->get_hci_reset = 0;
+
+		/* clean rx queues */
+		skb_queue_purge(&bdev->rx_q);
+		if (likely(bdev->rx_skb))
+			kfree_skb(bdev->rx_skb);
+		bdev->rx_skb = NULL;
+	}
 
 	if (main_info.hif_hook.cif_mutex_unlock)
 		main_info.hif_hook.cif_mutex_unlock(bdev);
 exit:
-#if (USE_DEVICE_NODE == 1)
-	/* avoid reset start at new bt on */
-	btmtk_reset_timer_del(bdev);
-	state = btmtk_get_chip_state(bdev);
-
-	if (state != BTMTK_STATE_DISCONNECT)
-		btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
-
-#endif
-	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
-
-err:
-	main_info.reset_stack_flag = HW_ERR_NONE;
-	bdev->get_hci_reset = 0;
-
-	/* clean rx queues */
-	skb_queue_purge(&bdev->rx_q);
-	if (likely(bdev->rx_skb))
-		kfree_skb(bdev->rx_skb);
-	bdev->rx_skb = NULL;
-
 	BTMTK_INFO("%s end state[%d], reset_stack_flag[%d]", __func__, state, main_info.reset_stack_flag);
 	return 0;
 }
