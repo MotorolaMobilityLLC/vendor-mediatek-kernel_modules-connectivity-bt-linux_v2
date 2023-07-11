@@ -1776,7 +1776,7 @@ int btmtk_set_tx_power(struct btmtk_dev *bdev, int8_t req_val, BT_RX_EVT_HANDLER
 		return 1;
 	}
 
-	BTMTK_INFO("%s: set_val[%d]", __func__, dy_pwr->set_val);
+	BTMTK_INFO("%s: set_val[%d], isblocking[%d]", __func__, dy_pwr->set_val, isblocking);
 
 	dy_pwr->cb = cb;
 	if (isblocking)
