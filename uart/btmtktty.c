@@ -154,6 +154,9 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 		return -EINVAL;
 	}
 
+	/* stop tx thread before releasing uarthub trx request */
+	btmtk_tx_thread_exit(bdev->cif_dev);
+
 #if (SLEEP_ENABLE == 1)
 	btmtk_uart_delete_fw_own_timer(cif_dev);
 #endif
@@ -162,8 +165,6 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 	btmtk_sp_close();
 
 	__pm_relax(bt_trx_wakelock);
-
-	btmtk_tx_thread_exit(bdev->cif_dev);
 
 	if (!cif_dev->is_pre_cal) {
 		int ret = 0;
