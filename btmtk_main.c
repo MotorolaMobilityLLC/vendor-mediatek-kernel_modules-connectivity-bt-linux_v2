@@ -2220,7 +2220,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 			BTMTK_DBG("%s: patch_status %d", __func__, patch_status);
 
 			if (patch_status > PATCH_READY || patch_status == PATCH_ERR) {
-				BTMTK_ERR("%s: patch_status error", __func__);
+				BTMTK_ERR("%s: error patch_status[%d]", __func__, patch_status);
 				ret = -1;
 				goto err;
 			} else if (patch_status == PATCH_READY) {
