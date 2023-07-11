@@ -858,16 +858,17 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 	}
 
 	BTMTK_INFO("%s tty_port[%p]", __func__, cif_dev->tty->port);
+
+#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
+	mtk8250_uart_dump(cif_dev->tty);
+#endif
+
 	/* driver dump */
 	btmtk_hci_snoop_print_to_log();
 
 #if (SLEEP_ENABLE == 1)
 	/* incase do fw own in debug sop flow */
 	btmtk_uart_delete_fw_own_timer(cif_dev);
-#endif
-
-#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
-	mtk8250_uart_dump(cif_dev->tty);
 #endif
 
 	if (state == BTMTK_STATE_INIT || fstate == BTMTK_FOPS_STATE_CLOSED

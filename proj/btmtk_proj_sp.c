@@ -1609,8 +1609,15 @@ static void btmtk_send_set_tx_power_cmd(struct btmtk_dev *bdev)
 	ret = btmtk_main_send_cmd(bdev, cmd_set, sizeof(cmd_set),
 				evt_set, sizeof(evt_set), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 
-	if (ret < 0)
+	if (ret < 0) {
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
+		return;
+	}
+
+	if (bdev->io_buf == NULL) {
+		BTMTK_ERR("%s: io_buf is NULL", __func__);
+		return;
+	}
 
 	if (bdev->io_buf[6] != HCI_EVT_CC_STATUS_SUCCESS)
 		BTMTK_ERR("%s: status error[0x%02x]!", __func__, bdev->io_buf[6]);
