@@ -528,8 +528,11 @@ static int BT_open(struct inode *inode, struct file *file)
 			return -1;
 		}
 		/* wait pre-cal done */
-		if (g_sbdev->is_pre_cal_done)
+		if (g_sbdev->is_pre_cal_done) {
+			/* wait uds_work done or remove uds_work from workqueue */
+			cancel_work_sync(&g_sbdev->pwr_on_uds_work);
 			ret = bt_open(g_sbdev->hdev);
+		}
 		if (ret) {
 			BTMTK_WARN_LIMITTED("%s: retry[%d] ret[%d] is_pre_cal_done[%d]"
 							, __func__, ret, retry, g_sbdev->is_pre_cal_done);
@@ -578,7 +581,8 @@ static int BT_close(struct inode *inode, struct file *file)
 
 	__pm_stay_awake(bt_wakelock);
 	BTMTK_INFO("%s: major %d minor %d (pid %d)", __func__, imajor(inode), iminor(inode), current->pid);
-
+	/* wait uds_work done or remove uds_work from workqueue */
+	cancel_work_sync(&g_sbdev->pwr_on_uds_work);
 	ret = bt_close(g_sbdev->hdev);
 	__pm_relax(bt_wakelock);
 
