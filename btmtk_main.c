@@ -4604,9 +4604,10 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				goto exit;
 			}
 		}
+#endif
 		/* save hci cmd pkt for debug */
 		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD_STACK, skb->data, skb->len);
-#endif
+
 		if (skb->len == FW_COREDUMP_CMD_LEN &&
 			!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
 			BTMTK_WARN("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
@@ -4625,8 +4626,33 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				goto exit;
 			}
 		} else if (skb->len == HCI_RESET_CMD_LEN &&
-				!memcmp(skb->data, reset_cmd, HCI_RESET_CMD_LEN))
-			BTMTK_INFO("%s: got command: 0x03 0C 00 (HCI_RESET)", __func__);
+				!memcmp(skb->data, reset_cmd, HCI_RESET_CMD_LEN)) {
+#if (USE_DEVICE_NODE == 1)
+			u8 drv_own_retry = 10;
+			// u8 evt[] = { 0x04, 0x0E, 0x04, 0x01, 0x03, 0x0C };
+
+			BTMTK_INFO("%s: got command: 0x03 0x0C 0x00 (HCI_RESET)", __func__);
+
+			do {
+				ret = main_info.hif_hook.send_and_recv(bdev, skb, skb->data, 3,
+						DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST);
+			} while (ret == -EAGAIN && drv_own_retry--);
+
+			if (ret < 0) {
+				BTMTK_ERR("%s host call send_and_recv failed,ret[%d]", __func__, ret);
+				/* ERRNUM is used to handle when skb has been sent successful,
+				 * but wait related event failed, in this case, we don't need to free skb here,
+				 * otherwise, it will be double free.
+				 */
+				if (ret != -ERRNUM && skb) {
+					kfree_skb(skb);
+					skb = NULL;
+				}
+			}
+			goto exit;
+#endif
+			BTMTK_INFO("%s: got command: 0x03 0x0C 0x00 (HCI_RESET)", __func__);
+		}
 #if (USE_DEVICE_NODE == 0)
 	} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
 		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ACL_STACK, skb->data, skb->len);
