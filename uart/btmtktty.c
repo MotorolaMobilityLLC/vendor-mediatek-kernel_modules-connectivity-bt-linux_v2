@@ -317,7 +317,17 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		skb->len >= event_need_compare_len) {
 		memset(bdev->io_buf, 0, IO_BUF_SIZE);
-#if (USE_DEVICE_NODE == 0)
+#if (USE_DEVICE_NODE == 1)
+		/* cmd from stack would pass 0x01, 0xXX, 0xXX as event_need_compare */
+		if (event_need_compare_len == 2 && skb->len > 5 &&
+				memcmp(&skb->data[3], event_need_compare, event_need_compare_len) == 0) {
+			BTMTK_INFO("%s: compare opcode[0x%02X%02X] from stack success",
+					__func__, skb->data[4], skb->data[3]);
+			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+			/* return 0 not drop event by driver */
+			return 0;
+		}
+#else // (USE_DEVICE_NODE == 0)
 		if ((skb->len == (GETBAUD_EVT_LEN - HCI_TYPE_SIZE + BAUD_SIZE)) &&
 			memcmp(skb->data, &get_baudrate_event[1], GETBAUD_EVT_LEN - 1) == 0) {
 			BTMTK_INFO("%s: GET BAUD = %02X %02X %02X, FC = %02X", __func__,
@@ -431,9 +441,8 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	}
 
 	if (event) {
-		if (event_len > EVENT_COMPARE_SIZE) {
-			BTMTK_ERR("%s, event_len (%d) > EVENT_COMPARE_SIZE(%d), error",
-				__func__, event_len, EVENT_COMPARE_SIZE);
+		if (event_len > EVENT_COMPARE_SIZE || event_len <= 1) {
+			BTMTK_ERR("%s, invalid event_len (%d)", __func__, event_len);
 			up(&cif_dev->evt_comp_sem);
 			return -1;
 		}

@@ -1310,7 +1310,7 @@ int btmtk_intcmd_wmt_blank_status(unsigned char blank_state) {
 	cmd[6] = blank_state;
 	ret = btmtk_main_send_cmd(g_sbdev,
 			cmd, sizeof(cmd), evt, sizeof(evt),
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 	if (ret < 0)
 		BTMTK_ERR("%s faill to set blank_state[%d] to fw", __func__, blank_state);
 
