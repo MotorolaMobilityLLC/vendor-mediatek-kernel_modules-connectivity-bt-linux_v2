@@ -908,6 +908,7 @@ int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_recv_iso(struct hci_dev *hdev, struct sk_buff *skb);
 #if (USE_DEVICE_NODE == 1)
+int btmtk_recv_sco(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_recv_rhw(struct hci_dev *hdev, struct sk_buff *skb);
 #endif
 int btmtk_send_init_cmds(struct btmtk_dev *hdev);
