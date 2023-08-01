@@ -1118,7 +1118,11 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 
 static const struct h4_recv_pkt mtk_recv_pkts[] = {
 	{ H4_RECV_ACL,      .recv = btmtk_recv_acl },
+#if (USE_DEVICE_NODE == 1)
+	{ H4_RECV_SCO,      .recv = btmtk_recv_sco },
+#else
 	{ H4_RECV_SCO,      .recv = hci_recv_frame },
+#endif
 	{ H4_RECV_EVENT,    .recv = btmtk_recv_event },
 	{ H4_RECV_ISO,      .recv = btmtk_recv_iso },
 #if (USE_DEVICE_NODE == 1)
@@ -1583,6 +1587,31 @@ int btmtk_recv_iso(struct hci_dev *hdev, struct sk_buff *skb)
 }
 
 #if (USE_DEVICE_NODE == 1)
+int btmtk_recv_sco(struct hci_dev *hdev, struct sk_buff *skb)
+{
+	struct btmtk_dev *bdev = NULL;
+
+	if (hdev == NULL || skb == NULL) {
+		BTMTK_ERR("%s, invalid parameters!", __func__);
+		return -EINVAL;
+	}
+
+	bdev = hci_get_drvdata(hdev);
+	if (bdev == NULL || bdev->workqueue == NULL) {
+		BTMTK_ERR("%s, bdev or workqueue is invalid!", __func__);
+		kfree_skb(skb);
+		skb = NULL;
+		return -EINVAL;
+	}
+
+	BTMTK_DBG_RAW(skb->data, skb->len, "%s:", __func__);
+
+	skb_queue_tail(&bdev->rx_q, skb);
+	queue_work(bdev->workqueue, &bdev->rx_work);
+
+	return 0;
+}
+
 int btmtk_recv_rhw(struct hci_dev *hdev, struct sk_buff *skb)
 {
 	struct btmtk_dev *bdev = NULL;
@@ -4645,10 +4674,14 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				 * otherwise, it will be double free.
 				 */
 				if (ret != -ERRNUM && skb) {
+					BTMTK_ERR("%s kfree skb", __func__);
 					kfree_skb(skb);
 					skb = NULL;
 				}
+				/* avoid kfree_skb in btmtk_send_data */
+				ret = 0;
 			}
+
 			goto exit;
 #endif
 			BTMTK_INFO("%s: got command: 0x03 0x0C 0x00 (HCI_RESET)", __func__);
@@ -4658,6 +4691,33 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ACL_STACK, skb->data, skb->len);
 	} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
 		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ISO_STACK, skb->data, skb->len);
+#else
+	} else if (hci_skb_pkt_type(skb) == MTK_HCI_SCODATA_PKT) {
+		/* for VTS SOC data loopback test workaround
+		 * Uarthub and BT uart SOC format not sync
+		 */
+		u8 new_soc_hd[] = { 0x03, 0x00, 0x00, 0x00, 0x00};
+
+		BTMTK_INFO_RAW(skb->data, skb->len, "%s: VTS TX before rearrange[%d]:",
+					__func__, skb->len);
+
+		/* original:  03 AA BB   LL      PP PP PP
+		 * rearrange: 03 AA LL+2 LL+1 BB PP PP PP
+		 */
+		new_soc_hd[1] = skb->data[1];
+		new_soc_hd[2] = skb->data[3] + 2;
+		new_soc_hd[3] = skb->data[3] + 1;
+		new_soc_hd[4] = skb->data[2];
+
+		skb_tmp = skb_push(skb, 1);
+		if (!skb_tmp) {
+			BTMTK_ERR("%s, skb_put failed!", __func__);
+			ret = -ENOMEM;
+			goto exit;
+		}
+		memcpy(skb_tmp, new_soc_hd, sizeof(new_soc_hd));
+		BTMTK_INFO_RAW(skb->data, skb->len, "%s: VTS TX after rearrange[%d]:",
+				__func__, skb->len);
 #endif
 	}
 
@@ -4762,6 +4822,28 @@ static void btmtk_rx_work(struct work_struct *work)
 			kfree_skb(skb);
 			skb = NULL;
 			continue;
+		} else if (hci_skb_pkt_type(skb) == MTK_HCI_SCODATA_PKT) {
+			/* for VTS SOC data loopback test workaround
+			 * Uarthub and BT uart SOC format not sync
+			 *
+			 * rearrange: 03 AA LL+2 LL+1 BB PP PP PP
+			 * original:  03 AA BB   LL 	  PP PP PP
+			 */
+			u8 original_soc_hd[] = { 0x00, 0x00, 0x00 };
+			original_soc_hd[0] = skb->data[0];
+			original_soc_hd[1] = skb->data[3];
+			original_soc_hd[2] = skb->data[1] - 2;
+
+			BTMTK_INFO_RAW(skb->data, skb->len, "%s: VTS RX before rearrange[%d]: %02x",
+					__func__, skb->len + 1, hci_skb_pkt_type(skb));
+
+			/* remove 1 byte */
+			skb_pull(skb, 1);
+			memcpy(skb->data, original_soc_hd, sizeof(original_soc_hd));
+
+			BTMTK_INFO_RAW(skb->data, skb->len, "%s: VTS RX after rearrange[%d]: %02x",
+					__func__, skb->len + 1, hci_skb_pkt_type(skb));
+
 #endif
 		}
 

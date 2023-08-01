@@ -417,12 +417,6 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		/* for cancel fw own if fw own timer just complete */
 		atomic_set(&cif_dev->need_drv_own, 1);
 	}
-
-	if (cif_dev->own_state == BTMTK_FW_OWN || cif_dev->own_state == BTMTK_OWN_FAIL) {
-		BTMTK_ERR("%s: wait driver own fail", __func__);
-		return -1;
-	}
-
 #endif
 	btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD_HIF, skb->data, skb->len);
 	BTMTK_DBG_RAW(skb->data, skb->len, "%s: len[%d]", __func__, skb->len);
@@ -435,7 +429,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_RUNNING ||
 		atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_DONE)) {
 
-		BTMTK_WARN("%s: wait driver own retry", __func__);
+		BTMTK_WARN("%s: wait driver own retry, own_state[%d]", __func__, cif_dev->own_state);
 		up(&cif_dev->evt_comp_sem);
 		return -EAGAIN;
 	}
