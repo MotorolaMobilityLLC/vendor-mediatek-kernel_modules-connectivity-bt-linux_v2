@@ -1668,14 +1668,14 @@ void btmtk_pwr_on_uds_work(struct work_struct *work)
 	ret = bt_open(g_sbdev->hdev);
 
 	if (ret) {
-		BTMTK_ERR("%s: BT turn on fail!", __func__);
+		BTMTK_WARN("%s: BT turn on fail!", __func__);
 		return;
 	}
 	BTMTK_INFO("%s: BT turn on ok!", __func__);
 
 	ret = bt_close(g_sbdev->hdev);
 	if (ret) {
-		BTMTK_ERR("%s: BT turn off fail!", __func__);
+		BTMTK_WARN("%s: BT turn off fail!", __func__);
 		return;
 	}
 	BTMTK_INFO("%s: BT turn off ok!", __func__);
