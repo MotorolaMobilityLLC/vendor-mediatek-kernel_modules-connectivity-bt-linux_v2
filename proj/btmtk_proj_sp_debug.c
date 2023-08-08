@@ -210,7 +210,7 @@ int CONNV3_RHW_WRITE(uint32_t addr, uint32_t val)
 
 	if (btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_WORKING
 			|| btmtk_fops_get_state(g_sbdev) != BTMTK_FOPS_STATE_OPENED) {
-		BTMTK_WARN("%s: not in working state(%d) fops(%d)"
+		BTMTK_WARN_LIMITTED("%s: not in working state(%d) fops(%d)"
 			, __func__, btmtk_get_chip_state(g_sbdev), btmtk_fops_get_state(g_sbdev));
 		return -1;
 	}
@@ -249,7 +249,7 @@ int CONNV3_RHW_READ(uint32_t addr, uint32_t *val)
 
 	if (btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_WORKING
 			|| btmtk_fops_get_state(g_sbdev) != BTMTK_FOPS_STATE_OPENED) {
-		BTMTK_WARN("%s: not in working state(%d) fops(%d)"
+		BTMTK_WARN_LIMITTED("%s: not in working state(%d) fops(%d)"
 			, __func__, btmtk_get_chip_state(g_sbdev), btmtk_fops_get_state(g_sbdev));
 		return -1;
 	}

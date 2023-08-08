@@ -463,7 +463,7 @@ static long BT_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long
 		else {
 			uint32_t *pint32 = (uint32_t *)&ioc_buf[0];
 
-			BTMTK_INFO("%s: id[%x], value[0x%08x], desc[%s]", __func__, pint32[0], pint32[1], &ioc_buf[8]);
+			BTMTK_INFO_LIMITTED("%s: id[%x], value[0x%08x], desc[%s]", __func__, pint32[0], pint32[1], &ioc_buf[8]);
 			bthost_debug_save(pint32[0], pint32[1], (char *)&ioc_buf[8]);
 		}
 		break;
