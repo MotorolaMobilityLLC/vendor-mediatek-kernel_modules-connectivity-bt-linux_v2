@@ -1507,6 +1507,14 @@ static inline void btmtk_hif_dump_conninfra(void)
 	HIF_READ(0x7C060A00, &value);
 	BT_DUMP_CR_PRINT(value);
 
+	/* UNDEF in CODA */;
+	HIF_READ(0x7C060230, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	/* CONN_RGU_ON_BGFSYS_ON_TOP_PWR_CTL */;
+	HIF_READ(0x7C000020, &value);
+	BT_DUMP_CR_PRINT(value);
+
 	/* UNDEF in CODA */
 	HIF_READ(0x70025304, &value);
 	BT_DUMP_CR_PRINT(value);
