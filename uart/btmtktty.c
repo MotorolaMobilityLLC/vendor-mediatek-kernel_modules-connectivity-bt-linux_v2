@@ -1336,7 +1336,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset)
 {
 	int cur_len = 0;
-	u32 max_pkt_cnt = 0, zero_pkt_cnt = 0;
+	u32 max_pkt_cnt = 0, zero_pkt_cnt = 0, current_cpu = 0;
 	int ret = -1;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	s32 sent_len;
@@ -1383,14 +1383,17 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 				}
 				log_time = jiffies_to_msecs(jiffies) - jiffies_to_msecs(log_time);
 				if (log_time > TIME_DUMP_OF_FW_PKG_DL)
-					BTMTK_WARN("%s: while(1) loop more than %d ms, [%lu] ms",
-							__func__, TIME_DUMP_OF_FW_PKG_DL, log_time);
+					BTMTK_WARN("%s: while(1) loop more than %d ms, [%lu] ms, cpu[%u]",
+							__func__, TIME_DUMP_OF_FW_PKG_DL, log_time,  current_thread_info()->cpu);
 				log_time = jiffies;
+				current_cpu =  current_thread_info()->cpu;
 				ret = cif_dev->tty->ops->write(cif_dev->tty, fwbuf + section_offset + cur_len, sent_len);
 				log_time = jiffies_to_msecs(jiffies) - jiffies_to_msecs(log_time);
 				if (log_time > TIME_DUMP_OF_FW_PKG_DL)
 					BTMTK_WARN("%s: tty write more than %d ms, [%lu] ms, tty_chars_in_buffer[%d], cur_len[%d], write_cnt[%d]",
 							__func__, TIME_DUMP_OF_FW_PKG_DL, log_time, tty_chars_in_buffer(cif_dev->tty), cur_len, ret);
+				if(current_cpu !=  current_thread_info()->cpu)
+					BTMTK_DBG("%s: cpu changed in tty write [%u]->[%u]", __func__, current_cpu,  current_thread_info()->cpu);
 				log_time = jiffies;
 			} else {
 				BTMTK_WARN("%s: tty is closing, skip download", __func__);
@@ -1400,8 +1403,9 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 
 			/* every 500ms dump uart state */
 			if (time_after(jiffies, dump_time)) {
-				BTMTK_WARN("%s: download single patch more than %d ms, tty_chars_in_buffer[%d], cur_len[%d], zero_pkt[%d]",
-						__func__, WOBLE_EVENT_INTERVAL_TIMO, tty_chars_in_buffer(cif_dev->tty), cur_len, zero_pkt_cnt);
+				BTMTK_WARN("%s: download 1 patch more than %d ms, tty_chars[%d], cur_len[%d], zero_pkt[%d], cpu[%u]",
+						__func__, WOBLE_EVENT_INTERVAL_TIMO, tty_chars_in_buffer(cif_dev->tty),
+						cur_len, zero_pkt_cnt, current_thread_info()->cpu);
 #if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
 				mtk8250_uart_dump(cif_dev->tty);
 #endif
@@ -1410,18 +1414,18 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			}
 
 			if (time_after(jiffies, end_time)) {
-				BTMTK_ERR("%s: download single patch more than %d ms, tty_chars_in_buffer[%d], cur_len[%d]",
-						__func__, TIME_BOUND_OF_FW_PKG_DL, tty_chars_in_buffer(cif_dev->tty), cur_len);
+				BTMTK_ERR("%s: download 1 patch more than %d ms, tty_chars[%d], cur_len[%d], zero_pkt[%d], cpu[%u]",
+						__func__, TIME_BOUND_OF_FW_PKG_DL, tty_chars_in_buffer(cif_dev->tty),
+						cur_len, zero_pkt_cnt, current_thread_info()->cpu);
 				ret = -1;
 				goto exit;
 			}
 
 			if (ret == UPLOAD_PATCH_UNIT)
 				max_pkt_cnt++;
-			else if (ret == 0) {
-				udelay(500);
+			else if (ret == 0)
 				zero_pkt_cnt++;
-			} else
+			else
 				BTMTK_DBG("%s, sent_len[%d] tty_write[%d] max_pkt_cnt[%d]",
 						__func__, sent_len, ret, max_pkt_cnt);
 			cur_len += ret;
