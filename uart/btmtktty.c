@@ -574,9 +574,10 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 	u8 baud_12M[] = { 0x01, 0x6F, 0xFC, 0x0A, 0x01, 0x04,
 				 0x06, 0x00, 0x01, 0x00, 0x1B, 0xB7, 0x00, 0x03 };
 	u8 baud_24M[] = { 0x01, 0x6F, 0xFC, 0x0B, 0x01, 0x04,
-				 0x06, 0x00, 0x01, 0x00, 0x36, 0x6E, 0x01, 0x00, 0x03 };
+				 0x07, 0x00, 0x01, 0x00, 0x36, 0x6E, 0x01, 0x00, 0x03 };
 	u8 event[] = {0x04, 0xE4, 0x06, 0x02, 0x04, 0x02, 0x00, 0x00, 0x01};
 	u8 *cmd = NULL;
+	u8 cmd_len = SETBAUD_CMD_LEN;
 	u8 fc_offset = BT_FLOWCTRL_OFFSET;
 	u8 hub_crc_rhw_offset = BT_HUB_CRC_RHW_OFFSET;
 	struct btmtk_uart_dev *cif_dev = NULL;
@@ -613,6 +614,7 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 		cmd = baud_24M;
 		fc_offset++;
 		hub_crc_rhw_offset++;
+		cmd_len++;
 		break;
 	default:
 		/* default chip baud is 115200 */
@@ -640,7 +642,7 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 	cmd[hub_crc_rhw_offset] = (cif_dev->fw_hub_en << 4 | !cif_dev->rhw_en << 1 | !cif_dev->crc_en << 0);
 
 	ret = btmtk_main_send_cmd(bdev,
-			cmd, SETBAUD_CMD_LEN, event, SETBAUD_EVT_LEN, 0,
+			cmd, cmd_len, event, SETBAUD_EVT_LEN, 0,
 			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 
 	if (ret < 0) {
