@@ -479,14 +479,6 @@ int btmtk_pre_power_on_handler(void)
 		return 0;
 	}
 
-	/* close tty for reset */
-	if(cif_dev != NULL && cif_dev->tty != NULL && cif_dev->tty->port != NULL
-		&& cif_dev->tty->port->count == 1 && g_sbdev->is_pre_cal_done) {
-		BTMTK_INFO("%s tty_port[%p], port_count[%d], do tty close",
-				__func__, cif_dev->tty->port, cif_dev->tty->port->count);
-		cif_dev->tty->ops->close(cif_dev->tty, NULL);
-	}
-
 	ret = btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
@@ -516,12 +508,12 @@ int btmtk_pre_power_on_handler(void)
 #endif
 	/* reopen tty */
 	if(cif_dev != NULL && cif_dev->tty != NULL && cif_dev->tty->port != NULL
-		&& cif_dev->tty->port->count == 0 && g_sbdev->is_pre_cal_done) {
-		BTMTK_INFO("%s tty_port[%p], port_count[%d], do tty open",
+		&& g_sbdev->is_pre_cal_done) {
+		BTMTK_INFO("%s tty_port[%p], port_count[%d]",
 				__func__, cif_dev->tty->port, cif_dev->tty->port->count);
-		cif_dev->tty->ops->open(cif_dev->tty, NULL);
+		if (cif_dev->tty->port->count == 0)
+			cif_dev->tty->ops->open(cif_dev->tty, NULL);
 	}
-
 	btmtk_dump_gpio_state();
 	btmtk_pinctrl_exec(POWER_ON_TX_PINCTRL_NAME);
 	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
@@ -638,6 +630,8 @@ int btmtk_sp_close(void)
 #endif
 
 	btmtk_set_gpio_default();
+	BTMTK_INFO("%s: tty close", __func__);
+	cif_dev->tty->ops->close(cif_dev->tty, NULL);
 	cif_dev->is_pre_on_done = FALSE;
 
 	return 0;
