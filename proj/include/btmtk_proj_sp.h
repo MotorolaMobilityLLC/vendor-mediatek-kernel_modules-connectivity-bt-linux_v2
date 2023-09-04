@@ -186,6 +186,7 @@ void btmtk_hif_dump_work(struct work_struct *work);
 int btmtk_find_my_phone_cmd(u32 hr);
 
 void btmtk_dump_gpio_state(void);
+void btmtk_dump_gpio_state_unmap(void);
 
 int btmtk_uart_launcher_deinit(void);
 

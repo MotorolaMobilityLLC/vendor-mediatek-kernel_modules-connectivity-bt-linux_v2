@@ -2975,6 +2975,7 @@ int btmtk_cif_deregister(void)
 	}
 #if (USE_DEVICE_NODE == 1)
 	rx_queue_destroy();
+	btmtk_dump_gpio_state_unmap();
 #endif
 	BTMTK_INFO("%s: Done", __func__);
 	return 0;
