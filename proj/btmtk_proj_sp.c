@@ -1897,7 +1897,7 @@ int32_t btmtk_intcmd_wmt_utc_sync(void)
 
 #define GET_BIT(V, INDEX) ((V & (0x1U << INDEX)) >> INDEX)
 
-void btmtk_dump_gpio_state_(struct bt_gpio gpio, char *tag)
+void btmtk_dump_gpio_state_(struct bt_gpio *gpio, char *tag)
 {
 	unsigned int aux, dir, out, pu, pd;
 
@@ -1953,44 +1953,46 @@ void btmtk_dump_gpio_state_(struct bt_gpio gpio, char *tag)
 	 *		1: 224
 	 */
 
-	if (gpio.gpio_remap_base == NULL)
-		gpio.gpio_remap_base = ioremap(gpio.gpio_base, gpio.remap_len);
+	if (gpio->gpio_remap_base == NULL) {
+		BTMTK_INFO("%s: [%s] gpio_remap_base is NULL", __func__, tag);
+		gpio->gpio_remap_base = ioremap(gpio->gpio_base, gpio->remap_len);
+	}
 
-	if (gpio.gpio_remap_base == NULL) {
+	if (gpio->gpio_remap_base == NULL) {
 		BTMTK_ERR("%s: [%s] gpio_remap_base failed", __func__, tag);
 		return;
 	}
 
-	if (gpio.pu_pd_remap_base == NULL)
-		gpio.pu_pd_remap_base = ioremap(gpio.pu_pd_base, gpio.remap_len);
+	if (gpio->pu_pd_remap_base == NULL)
+		gpio->pu_pd_remap_base = ioremap(gpio->pu_pd_base, gpio->remap_len);
 
-	if (gpio.pu_pd_remap_base == NULL) {
+	if (gpio->pu_pd_remap_base == NULL) {
 		BTMTK_ERR("%s:[%s] pu_pd_remap_base failed", __func__, tag);
 		return;
 	}
 
-	aux = CONSYS_REG_READ(gpio.gpio_remap_base + gpio.aux.offset);
-	dir = CONSYS_REG_READ(gpio.gpio_remap_base + gpio.dir.offset);
-	out = CONSYS_REG_READ(gpio.gpio_remap_base + gpio.out.offset);
-	pu = CONSYS_REG_READ(gpio.pu_pd_remap_base + gpio.pu.offset);
-	pd = CONSYS_REG_READ(gpio.pu_pd_remap_base + gpio.pd.offset);
+	aux = CONSYS_REG_READ(gpio->gpio_remap_base + gpio->aux.offset);
+	dir = CONSYS_REG_READ(gpio->gpio_remap_base + gpio->dir.offset);
+	out = CONSYS_REG_READ(gpio->gpio_remap_base + gpio->out.offset);
+	pu = CONSYS_REG_READ(gpio->pu_pd_remap_base + gpio->pu.offset);
+	pd = CONSYS_REG_READ(gpio->pu_pd_remap_base + gpio->pd.offset);
 	BTMTK_DBG("%s: aux[0x%08x] dir[0x%08x] out[0x%08x]", __func__,aux, dir, out);
 	if (atomic_read(&g_sbdev->assert_state)) {
 		BTMTK_INFO("[%s] num[%d] aux[%d] dir[%s] out[%d] pu[%d] pd[%d]",
-				tag, gpio.num,
-				(((aux >> gpio.aux.bit) & 0x07)),
-				(GET_BIT(dir, gpio.dir.bit) ? "OUT" : "IN "),
-				GET_BIT(out, gpio.out.bit),
-				GET_BIT(pu, gpio.pu.bit),
-				GET_BIT(pd, gpio.pd.bit));
+				tag, gpio->num,
+				(((aux >> gpio->aux.bit) & 0x07)),
+				(GET_BIT(dir, gpio->dir.bit) ? "OUT" : "IN "),
+				GET_BIT(out, gpio->out.bit),
+				GET_BIT(pu, gpio->pu.bit),
+				GET_BIT(pd, gpio->pd.bit));
 	} else {
 		BTMTK_DBG("[%s] num[%d] aux[%d] dir[%s] out[%d] pu[%d] pd[%d]",
-				tag, gpio.num,
-				(((aux >> gpio.aux.bit) & 0x07)),
-				(GET_BIT(dir, gpio.dir.bit) ? "OUT" : "IN "),
-				GET_BIT(out, gpio.out.bit),
-				GET_BIT(pu, gpio.pu.bit),
-				GET_BIT(pd, gpio.pd.bit));
+				tag, gpio->num,
+				(((aux >> gpio->aux.bit) & 0x07)),
+				(GET_BIT(dir, gpio->dir.bit) ? "OUT" : "IN "),
+				GET_BIT(out, gpio->out.bit),
+				GET_BIT(pu, gpio->pu.bit),
+				GET_BIT(pd, gpio->pd.bit));
 	}
 }
 
@@ -2000,9 +2002,34 @@ void btmtk_dump_gpio_state(void)
 		BTMTK_WARN("%s: g_platform_prop not register yet", __func__);
 		return;
 	}
-	btmtk_dump_gpio_state_(g_platform_prop->rst_gpio, "RST_PIN");
-	btmtk_dump_gpio_state_(g_platform_prop->tx_gpio, "TX_GPIO");
-	btmtk_dump_gpio_state_(g_platform_prop->rx_gpio, "RX_GPIO");
+	btmtk_dump_gpio_state_(&g_platform_prop->rst_gpio, "RST_PIN");
+	btmtk_dump_gpio_state_(&g_platform_prop->tx_gpio, "TX_GPIO");
+	btmtk_dump_gpio_state_(&g_platform_prop->rx_gpio, "RX_GPIO");
+}
+
+void btmtk_dump_gpio_state_unmap_(struct bt_gpio *gpio, char *tag)
+{
+	BTMTK_INFO("%s: %s", __func__, tag);
+	if (gpio->gpio_remap_base != NULL) {
+		iounmap(gpio->gpio_remap_base);
+		gpio->gpio_remap_base = NULL;
+	}
+
+	if (gpio->pu_pd_remap_base != NULL) {
+		iounmap(gpio->pu_pd_remap_base);
+		gpio->pu_pd_remap_base = NULL;
+	}
+}
+
+void btmtk_dump_gpio_state_unmap(void)
+{
+	if (g_platform_prop == NULL) {
+		BTMTK_WARN("%s: g_platform_prop not register yet", __func__);
+		return;
+	}
+	btmtk_dump_gpio_state_unmap_(&g_platform_prop->rst_gpio, "RST_PIN");
+	btmtk_dump_gpio_state_unmap_(&g_platform_prop->tx_gpio, "TX_GPIO");
+	btmtk_dump_gpio_state_unmap_(&g_platform_prop->rx_gpio, "RX_GPIO");
 }
 
 /*******************************************************************************
