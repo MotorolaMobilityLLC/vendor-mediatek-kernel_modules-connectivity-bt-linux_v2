@@ -1605,6 +1605,12 @@ static void btmtk_send_set_tx_power_cmd(struct btmtk_dev *bdev)
 	uint8_t evt_set[] = { 0x04, 0x0E, 0x06, 0x01, 0x2D, 0xFC };
 	int ret = 0;
 
+	if (btmtk_fops_get_state(bdev) != BTMTK_FOPS_STATE_OPENED) {
+		BTMTK_WARN("%s: not in working state(%d) fops(%d)"
+			, __func__, btmtk_get_chip_state(bdev), btmtk_fops_get_state(bdev));
+		return;
+	}
+
 	cmd_set[5] = dy_pwr->set_val;
 	ret = btmtk_main_send_cmd(bdev, cmd_set, sizeof(cmd_set),
 				evt_set, sizeof(evt_set), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
