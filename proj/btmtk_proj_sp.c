@@ -1699,6 +1699,12 @@ int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb)
 	if (!btmtk_pwrctrl_support())
 		return 0;
 
+
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
 	BTMTK_DBG("%s: lp_cur_lv[%d], dy_max_dbm[%d], dy_min_dbm[%d], lp_bdy_dbm[%d], fw_sel_dbm[%d]",
 		__func__,
 		cif_dev->dy_pwr.lp_cur_lv,
@@ -1719,8 +1725,15 @@ int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb)
 	ret = btmtk_main_send_cmd(bdev, cmd_query, sizeof(cmd_query),
 				evt_query, sizeof(evt_query), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 
-	if (ret < 0)
-		BTMTK_ERR("%s: failed(%d)", __func__, ret);
+	if (ret < 0) {
+		BTMTK_ERR("%s: failed(%d), return", __func__, ret);
+		return ret;
+	}
+
+	if (bdev->io_buf == NULL) {
+		BTMTK_ERR("%s: bdev->io_buf is NULL", __func__);
+		return -1;
+	}
 
 	if (bdev->io_buf[6] != HCI_EVT_CC_STATUS_SUCCESS)
 		BTMTK_ERR("%s: status error[0x%02x]!", __func__, bdev->io_buf[6]);
