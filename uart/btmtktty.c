@@ -488,6 +488,14 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 				break;
 			}
 
+			/* if during re-download, not wait hci reset cmd.
+			 * Cuz in test mode, tool would use hci reset cmd to trigger re-download */
+			if (bdev->dynamic_fwdl_start && opcode[0] == 0x03 && opcode[1] == 0x0C) {
+				BTMTK_WARN("%s: hci reset cmd trigger re-download, don't wait evt", __func__);
+				ret = 0;
+				break;
+			}
+
 			/* error handle*/
 			if (btmtk_get_chip_state(bdev) == BTMTK_STATE_FW_DUMP || !atomic_read(&cif_dev->thread_status)) {
 				BTMTK_WARN("%s thread stopped or fw dumping, don't wait evt anymore!!", __func__);
