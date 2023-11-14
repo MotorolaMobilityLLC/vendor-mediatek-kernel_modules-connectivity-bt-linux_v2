@@ -678,6 +678,7 @@ struct btmtk_dev {
 	/* dynamic fw download */
 	struct work_struct  dynamic_fwdl_work;
 	unsigned int		fw_bin_info;
+	bool	dynamic_fwdl_start;
 
 #if (USE_DEVICE_NODE == 1)
 	/* asynchronize tx/rx */
