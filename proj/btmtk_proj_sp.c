@@ -630,7 +630,18 @@ int btmtk_sp_close(void)
 #endif
 
 	btmtk_set_gpio_default();
-	BTMTK_INFO("%s: tty close", __func__);
+
+	/* flush tty before tty close */
+	down(&cif_dev->tty_flush_sem);
+	BTMTK_INFO("%s: tty flush, tty_chars_in_buffer[%d]", __func__, tty_chars_in_buffer(cif_dev->tty));
+	/* stop uart auto send next pkt to avoid flush conflict with send pkt */
+	cif_dev->tty->flow.stopped = true;
+	tty_driver_flush_buffer(cif_dev->tty);
+	cif_dev->tty->flow.stopped = false;
+	up(&cif_dev->tty_flush_sem);
+
+
+	BTMTK_INFO("%s: tty close, tty_chars_in_buffer[%d]", __func__, tty_chars_in_buffer(cif_dev->tty));
 	cif_dev->tty->ops->close(cif_dev->tty, NULL);
 	cif_dev->is_pre_on_done = FALSE;
 
