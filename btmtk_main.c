@@ -184,10 +184,21 @@ int32_t btmtk_intcmd_set_fw_log(uint8_t flag)
 {
 	u8 fw_log_cmd[8] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x03 };
 	u8 evt[] = {0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00};
-	int ret;
+	int ret, retry = 20;
 
 	BTMTK_INFO("%s log level[0x%02X]", __func__, flag);
 	fw_log_cmd[7] = flag;
+
+	while (g_sbdev->dynamic_fwdl_start && --retry) {
+		BTMTK_INFO("%s: re-download on-goning, wait(%d)", __func__, retry);
+		msleep(50);
+	}
+
+	if (retry <= 0) {
+		BTMTK_WARN("%s re-download not done in 1s, skip", __func__);
+		return 0;
+	}
+
 	ret = btmtk_main_send_cmd(g_sbdev,
 			fw_log_cmd, sizeof(fw_log_cmd), evt, sizeof(evt),
 			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
@@ -4802,9 +4813,9 @@ static void btmtk_rx_work(struct work_struct *work)
 				 * blocking rx_work thread means waited event won't be handled in
 				 * rx_work thread, so here we create a new thread for dynamic fwdl.
 				 */
-				schedule_work(&bdev->dynamic_fwdl_work);
-				BTMTK_INFO_RAW(skb->data, skb->len, "%s: Get dynamic DL EVENT- ", __func__);
 				bdev->dynamic_fwdl_start = true;
+				BTMTK_INFO_RAW(skb->data, skb->len, "%s: Get dynamic DL EVENT- ", __func__);
+				schedule_work(&bdev->dynamic_fwdl_work);
 				/* Drop by driver, don't send to stack */
 				kfree_skb(skb);
 				skb = NULL;
