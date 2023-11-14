@@ -587,6 +587,14 @@ struct _Section_Map {
 	.lsize = 2, \
 	.maxlen = HCI_MAX_FRAME_SIZE
 
+struct btmtk_debug_info {
+	/* rx from btmtk_uart_tty_receive */
+	unsigned long rx_from_tty_time;
+	/* after rx_work done */
+	unsigned long event_status_assign_time;
+	unsigned long event_status_compared_time;
+};
+
 struct btmtk_dev {
 	struct hci_dev	*hdev;
 	unsigned long	hdev_flags;
@@ -697,6 +705,7 @@ struct btmtk_dev {
 	struct completion	dump_comp;
 
 	unsigned int on_fail_count;
+	struct btmtk_debug_info  rx_time_dump;
 };
 
 #if (USE_DEVICE_NODE == 1)

@@ -364,6 +364,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 #endif
 			bdev->recv_evt_len = skb->len;
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+			bdev->rx_time_dump.event_status_assign_time = jiffies;
 			BTMTK_DBG("%s, compare success", __func__);
 		} else {
 			BTMTK_INFO("%s compare fail", __func__);
@@ -518,8 +519,13 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 #endif
 
 	if (ret < 0) {
-		BTMTK_ERR("%s wait event timeout [0x%02x%02x], ret[%d]",
-				__func__,opcode[1], opcode[0], ret);
+		bdev->rx_time_dump.event_status_compared_time = jiffies_to_msecs(jiffies) - jiffies_to_msecs(bdev->rx_time_dump.event_status_assign_time);
+		bdev->rx_time_dump.event_status_assign_time = jiffies_to_msecs(bdev->rx_time_dump.event_status_assign_time) - jiffies_to_msecs(bdev->rx_time_dump.rx_from_tty_time);
+		BTMTK_ERR("%s wait event timeout [0x%02x%02x], rx work cost [%lu]ms, assign to compared cost [%lu]ms, ret[%d]",
+				__func__,opcode[1], opcode[0],
+				bdev->rx_time_dump.event_status_assign_time,
+				bdev->rx_time_dump.event_status_compared_time,
+				ret);
 		bdev->recv_evt_len = 0;
 		ret = -ERRNUM;
 	}
@@ -2235,6 +2241,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 
 	/* add hci device part */
 	ret = btmtk_recv(bdev->hdev, data, count);
+	bdev->rx_time_dump.rx_from_tty_time = jiffies;
 
 	/* debug for invalid buffer */
 	if ((ret == -EILSEQ || ret == -EMSGSIZE) && count > 1
