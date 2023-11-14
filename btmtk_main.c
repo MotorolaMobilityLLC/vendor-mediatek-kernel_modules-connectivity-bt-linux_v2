@@ -4552,7 +4552,7 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	/* parsing commands */
 	u8 fw_coredump_cmd[FW_COREDUMP_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
-	u8 fw_coredump_flag = 0;
+	u8 fw_coredump_flag = 0, retry = 20;
 	u8 reset_cmd[HCI_RESET_CMD_LEN] = { 0x01, 0x03, 0x0C, 0x00 };
 	struct btmtk_dev *bdev = NULL;
 	unsigned char *skb_tmp = NULL;
@@ -4621,6 +4621,17 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		bdev->iso_threshold = skb->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN] +
 					(skb->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN + 1]  << 8);
 		BTMTK_INFO("%s: Ble iso pkt size is %d", __func__, bdev->iso_threshold);
+	}
+
+	/* avoid host send data during re-download */
+	while (bdev->dynamic_fwdl_start && retry--) {
+		BTMTK_INFO("%s: re-download on-goning, wait(%d)", __func__, retry);
+		msleep(50);
+	}
+	/* avoid dynamic_fwdl_start flag keep blocking every cmd if something wrong. */
+	if (bdev->dynamic_fwdl_start && retry == 0) {
+		BTMTK_INFO("%s: wait re-download more than 1s, reset dynamic_fwdl_start flag", __func__);
+		bdev->dynamic_fwdl_start = false;
 	}
 
 	if (hci_skb_pkt_type(skb) == HCI_COMMAND_PKT) {
@@ -4749,6 +4760,7 @@ static void btmtk_dynamic_fwdl_work(struct work_struct *work)
 
 	BTMTK_INFO("%s enter", __func__);
 	btmtk_dynamic_load_rom_patch(bdev, bdev->fw_bin_info);
+	bdev->dynamic_fwdl_start = false;
 }
 
 static void btmtk_rx_work(struct work_struct *work)
@@ -4792,6 +4804,7 @@ static void btmtk_rx_work(struct work_struct *work)
 				 */
 				schedule_work(&bdev->dynamic_fwdl_work);
 				BTMTK_INFO_RAW(skb->data, skb->len, "%s: Get dynamic DL EVENT- ", __func__);
+				bdev->dynamic_fwdl_start = true;
 				/* Drop by driver, don't send to stack */
 				kfree_skb(skb);
 				skb = NULL;
