@@ -815,7 +815,10 @@ struct btmtk_main_info {
 	struct proc_dir_entry *proc_dir;
 	char fw_version_str[FW_VERSION_BUF_SIZE];
 
+	/* fw log */
+	u8	fw_log_on;
 	atomic_t fwlog_ref_cnt;
+
 	u32 find_my_phone_mode;
 	u8	dbg_send;
 	u8	dbg_send_opcode[2];
