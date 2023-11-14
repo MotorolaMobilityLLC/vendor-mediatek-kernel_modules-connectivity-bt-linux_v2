@@ -1306,7 +1306,13 @@ int btmtk_intcmd_wmt_blank_status(unsigned char blank_state) {
 	u8 evt[] = {0x04, 0x0E, 0x07, 0x01, 0x5D, 0xFC};
 	int ret;
 
+	if (g_sbdev->dynamic_fwdl_start) {
+		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
+		return 0;
+	}
+
 	BTMTK_INFO("%s: blank_state[%d]", __func__, blank_state);
+
 	cmd[6] = blank_state;
 	ret = btmtk_main_send_cmd(g_sbdev,
 			cmd, sizeof(cmd), evt, sizeof(evt),
@@ -1323,6 +1329,7 @@ int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v
 {
 	int *data = (int *)v;
 	int32_t new_state = 0;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	/*
 		MTK_DISP_EARLY_EVENT_BLANK (0x00): This event will happen before lcm suspend/resume
 		MTK_DISP_EVENT_BLANK (0x01): This event will happen after lcm suspend/resume
@@ -1330,8 +1337,8 @@ int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v
 		MTK_DISP_BLANK_POWERDOWN (0x01): which mean display suspend (power off)
 	*/
 
-	BTMTK_INFO("%s: before_after_blank[%ld], blank_power_down[%d], fops_state[%d]",
-				__func__, value, *data, btmtk_fops_get_state(g_sbdev));
+	BTMTK_INFO("%s: before_after_blank[%ld], blank_power_down[%d], fops_state[%d], fw_log_on[%d]",
+				__func__, value, *data, btmtk_fops_get_state(g_sbdev), bmain_info->fw_log_on);
 
 	if (value == MTK_DISP_EARLY_EVENT_BLANK) {
 		switch (*data) {
@@ -1346,7 +1353,7 @@ int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v
 				goto end;
 		}
 
-		if (btmtk_fops_get_state(g_sbdev) == BTMTK_FOPS_STATE_OPENED) {
+		if (btmtk_fops_get_state(g_sbdev) == BTMTK_FOPS_STATE_OPENED && bmain_info->fw_log_on) {
 			BTMTK_DBG("%s: blank state [%d]->[%d], and send cmd", __func__, g_sbdev->blank_state, new_state);
 			g_sbdev->blank_state = new_state;
 			btmtk_intcmd_wmt_blank_status(g_sbdev->blank_state);
@@ -1611,6 +1618,11 @@ static void btmtk_send_set_tx_power_cmd(struct btmtk_dev *bdev)
 		return;
 	}
 
+	if (g_sbdev->dynamic_fwdl_start) {
+		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
+		return;
+	}
+
 	cmd_set[5] = dy_pwr->set_val;
 	ret = btmtk_main_send_cmd(bdev, cmd_set, sizeof(cmd_set),
 				evt_set, sizeof(evt_set), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
@@ -1703,6 +1715,11 @@ int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb)
 	if (cif_dev == NULL) {
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
 		return -1;
+	}
+
+	if (g_sbdev->dynamic_fwdl_start) {
+		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
+		return 0;
 	}
 
 	BTMTK_DBG("%s: lp_cur_lv[%d], dy_max_dbm[%d], dy_min_dbm[%d], lp_bdy_dbm[%d], fw_sel_dbm[%d]",
@@ -1899,6 +1916,11 @@ int32_t btmtk_intcmd_wmt_utc_sync(void)
 	//connsys_log_get_utc_time(&sec, &usec);
 	memcpy(cmd + 6, &utc.sec, sizeof(uint32_t));
 	memcpy(cmd + 6 + sizeof(uint32_t), &utc.usec, sizeof(uint32_t));
+
+	if (g_sbdev->dynamic_fwdl_start) {
+		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
+		return 0;
+	}
 
 	ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd),
 		evt, sizeof(evt), DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
@@ -2174,6 +2196,11 @@ int btmtk_find_my_phone_cmd(u32 hr)
 	if (hr < 65536) {
 		cmd[13] = (hr & 0xFF);
 		cmd[14] = (hr >> 8) & 0xFF;
+	}
+
+	if (g_sbdev->dynamic_fwdl_start) {
+		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
+		return 0;
 	}
 
 	ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd), evt, sizeof(evt),
