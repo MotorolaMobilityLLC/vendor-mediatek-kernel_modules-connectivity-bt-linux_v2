@@ -658,7 +658,7 @@ struct btmtk_dev {
 	unsigned char	power_state;
 	unsigned char	fops_state;
 	unsigned char	interface_state;
-	unsigned char	blank_state;
+	atomic_t	blank_state;
 	struct btmtk_cif_state *cif_state;
 
 	/* io buffer for usb control transfer */
@@ -694,6 +694,8 @@ struct btmtk_dev {
 
 	/* UDS work for only wifi on*/
 	struct work_struct  pwr_on_uds_work;
+
+	struct work_struct  blank_state_work;
 
 	/* fw wakeup host irq */
 	int	wakeup_irq;

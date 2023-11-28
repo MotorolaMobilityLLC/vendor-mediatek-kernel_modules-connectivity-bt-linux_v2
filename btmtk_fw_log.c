@@ -156,7 +156,7 @@ void fw_log_bt_state_cb(uint8_t state)
 			if (g_log_current) {
 				btmtk_intcmd_set_fw_log(g_log_current);
 				/* if bt open or reset when screen off, still need to notify fw blank status */
-				btmtk_intcmd_wmt_blank_status(pp_bdev[hci_idx]->blank_state);
+				btmtk_intcmd_wmt_blank_status(atomic_read(&pp_bdev[hci_idx]->blank_state));
 				btmtk_intcmd_wmt_utc_sync();
 			}
 		}
@@ -916,7 +916,7 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 			if (g_bt_on) {
 				retval = btmtk_intcmd_set_fw_log(g_log_current);
 				/* if bt open or reset when screen off, still need to notify fw blank status */
-				btmtk_intcmd_wmt_blank_status(pp_bdev[hci_idx]->blank_state);
+				btmtk_intcmd_wmt_blank_status(atomic_read(&pp_bdev[hci_idx]->blank_state));
 				btmtk_intcmd_wmt_utc_sync();
 			}
 		}
@@ -934,7 +934,7 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 				// driver on and log on
 				retval = btmtk_intcmd_set_fw_log(g_log_current);
 				/* if bt open or reset when screen off, still need to notify fw blank status */
-				btmtk_intcmd_wmt_blank_status(pp_bdev[hci_idx]->blank_state);
+				btmtk_intcmd_wmt_blank_status(atomic_read(&pp_bdev[hci_idx]->blank_state));
 				btmtk_intcmd_wmt_utc_sync();
 			}
 		}
