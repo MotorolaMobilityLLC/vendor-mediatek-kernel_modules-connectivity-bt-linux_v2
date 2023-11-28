@@ -194,5 +194,7 @@ int btmtk_uart_launcher_deinit(void);
 void btmtk_uart_wakeup_irq_disable(void);
 void btmtk_uart_wakeup_irq_enable(void);
 
+int btmtk_intcmd_wmt_blank_status(unsigned char blank_state);
+
 #endif // (USE_DEVICE_NODE == 1)
 #endif
