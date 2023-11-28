@@ -1312,33 +1312,64 @@ enum wmt_blank_state {
 	WMT_PARA_SCREEN_ON = 1
 };
 
+void btmtk_blank_state_work(struct work_struct *work) {
+	static int current_blank_state = -1;
+	int new_state = 0;
+
+	new_state = atomic_read(&g_sbdev->blank_state);
+
+	if (current_blank_state != new_state) {
+		BTMTK_INFO("%s: blank_state[%d]->[%d]", __func__, current_blank_state, new_state);
+		current_blank_state = new_state;
+	} else {
+		BTMTK_INFO("%s: blank_state[%d] no need to change", __func__, current_blank_state);
+		return;
+	}
+
+	btmtk_intcmd_wmt_blank_status(current_blank_state);
+}
+
 int btmtk_intcmd_wmt_blank_status(unsigned char blank_state) {
 	u8 cmd[] = { 0x01, 0x5D, 0xFC, 0x03, 0x00, 0x04, 0x00};
 	u8 evt[] = {0x04, 0x0E, 0x07, 0x01, 0x5D, 0xFC};
-	int ret;
+	int ret = 0;
+
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	BTMTK_INFO("%s: blank_state[%d]", __func__, blank_state);
+
+	if (btmtk_fops_get_state(g_sbdev) != BTMTK_FOPS_STATE_OPENED) {
+		BTMTK_INFO("%s: bt already closed, not send blank status", __func__);
+		return 0;
+	}
+
+	if (!bmain_info->fw_log_on) {
+		BTMTK_INFO("%s: bt fw log is not enable, not send blank status", __func__);
+		return 0;
+	}
 
 	if (g_sbdev->dynamic_fwdl_start) {
 		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
 		return 0;
 	}
 
-	BTMTK_INFO("%s: blank_state[%d]", __func__, blank_state);
-
 	cmd[6] = blank_state;
 	ret = btmtk_main_send_cmd(g_sbdev,
 			cmd, sizeof(cmd), evt, sizeof(evt),
 			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+
 	if (ret < 0)
-		BTMTK_ERR("%s faill to set blank_state[%d] to fw", __func__, blank_state);
+		BTMTK_WARN("%s faill to set blank_state to fw", __func__);
 
 	return ret;
-}
 
+}
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v)
 {
 	int *data = (int *)v;
+	int ret = 0;
 	int32_t new_state = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	/*
@@ -1364,17 +1395,13 @@ int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v
 				goto end;
 		}
 
-		if (btmtk_fops_get_state(g_sbdev) == BTMTK_FOPS_STATE_OPENED && bmain_info->fw_log_on) {
-			BTMTK_DBG("%s: blank state [%d]->[%d], and send cmd", __func__, g_sbdev->blank_state, new_state);
-			g_sbdev->blank_state = new_state;
-			btmtk_intcmd_wmt_blank_status(g_sbdev->blank_state);
-		} else {
-			BTMTK_DBG("%s: blank state [%d]->[%d]", __func__, g_sbdev->blank_state, new_state);
-			g_sbdev->blank_state = new_state;
-		}
+		BTMTK_DBG("%s: blank state [%d]->[%d]", __func__, atomic_read(&g_sbdev->blank_state), new_state);
+		atomic_set(&g_sbdev->blank_state, new_state);
+		if (btmtk_fops_get_state(g_sbdev) == BTMTK_FOPS_STATE_OPENED && bmain_info->fw_log_on)
+			ret = schedule_work(&g_sbdev->blank_state_work);
 	}
 end:
-	BTMTK_INFO("%s: end", __func__);
+	BTMTK_INFO("%s: end, ret[%d]", __func__, ret);
 	return 0;
 }
 
@@ -1387,6 +1414,8 @@ static void btmtk_fb_notify_register(void)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	BTMTK_INFO("%s", __func__);
+
+	INIT_WORK(&g_sbdev->blank_state_work, btmtk_blank_state_work);
 
 	if (mtk_disp_notifier_register("btmtk_disp_notifier", &btmtk_disp_notifier)) {
 		BTMTK_ERR("%s: Register mtk_disp_notifier failed", __func__);
