@@ -5263,6 +5263,7 @@ int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus)
 	if (main_info.hif_hook.coredump_handler) {
 		BTMTK_INFO("%s: deinit coredump handle", __func__);
 		connv3_coredump_deinit(main_info.hif_hook.coredump_handler);
+		main_info.hif_hook.coredump_handler = NULL;
 	}
 #endif
 

@@ -2629,6 +2629,11 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 		return;
 	}
 
+	if (bdev->io_buf == NULL) {
+		BTMTK_WARN("%s already do disconnect flow, io_buf is NULL", __func__);
+		return;
+	}
+
 	cif_state = &bdev->cif_state[cif_event];
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
@@ -2663,6 +2668,7 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 #endif
 	}
 	wakeup_source_unregister(bt_trx_wakelock);
+	bt_trx_wakelock = NULL;
 	/* Set End/Error state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
 	btmtk_uart_cif_mutex_unlock(bdev);
