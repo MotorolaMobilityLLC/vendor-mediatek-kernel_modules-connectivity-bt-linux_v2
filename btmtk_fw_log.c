@@ -122,14 +122,28 @@ __weak int btmtk_uart_launcher_deinit(void)
 	return -1;
 }
 
+__weak int btmtk_intcmd_wmt_blank_status(unsigned char blank_state)
+{
+	BTMTK_ERR("weak function %s not implement", __func__);
+	return -1;
+}
+
 void fw_log_bt_state_cb(uint8_t state)
 {
 	uint8_t on_off;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	struct btmtk_dev **pp_bdev = btmtk_get_pp_bdev();
+	int hci_idx = 0;
 
 	/* sp use BTMTK_FOPS_STATE_OPENED to judge state */
 	on_off = (state == FUNC_ON) ? BT_FWLOG_ON : BT_FWLOG_OFF;
-	BTMTK_INFO_LIMITTED("%s: current_bt_on(0x%x) state_cb(%d) need_on_off(0x%x)", __func__, g_bt_on, state, on_off);
+	BTMTK_INFO_LIMITTED("%s: current_log(0x%x) current_bt_on(0x%x) state_cb(%d) need_on_off(0x%x)",
+				__func__, g_log_current, g_bt_on, state, on_off);
+
+	if (pp_bdev[hci_idx] == NULL) {
+		BTMTK_WARN("%s: pp_bdev[%d] == NULL", __func__, hci_idx);
+		return;
+	}
 
 	if (g_bt_on != on_off) {
 		// changed
@@ -141,6 +155,8 @@ void fw_log_bt_state_cb(uint8_t state)
 			g_bt_on = BT_FWLOG_ON;
 			if (g_log_current) {
 				btmtk_intcmd_set_fw_log(g_log_current);
+				/* if bt open or reset when screen off, still need to notify fw blank status */
+				btmtk_intcmd_wmt_blank_status(pp_bdev[hci_idx]->blank_state);
 				btmtk_intcmd_wmt_utc_sync();
 			}
 		}
@@ -899,6 +915,8 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 			g_log_current = g_log_on & g_log_level;
 			if (g_bt_on) {
 				retval = btmtk_intcmd_set_fw_log(g_log_current);
+				/* if bt open or reset when screen off, still need to notify fw blank status */
+				btmtk_intcmd_wmt_blank_status(pp_bdev[hci_idx]->blank_state);
 				btmtk_intcmd_wmt_utc_sync();
 			}
 		}
@@ -915,6 +933,8 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 			if (g_bt_on & g_log_on) {
 				// driver on and log on
 				retval = btmtk_intcmd_set_fw_log(g_log_current);
+				/* if bt open or reset when screen off, still need to notify fw blank status */
+				btmtk_intcmd_wmt_blank_status(pp_bdev[hci_idx]->blank_state);
 				btmtk_intcmd_wmt_utc_sync();
 			}
 		}
