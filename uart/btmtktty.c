@@ -101,6 +101,11 @@ static void btmtk_uart_update_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 
 	if (atomic_read(&cif_dev->fw_own_timer_flag)) {
 		BTMTK_DBG_LIMITTED("update fw own timer");
+		if (!cif_dev->fw_own_timer.function) {
+			BTMTK_WARN("%s: timer function is NULL ", __func__);
+			atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
+			return;
+		}
 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_INIT);
 		mod_timer(&cif_dev->fw_own_timer, jiffies + msecs_to_jiffies(FW_OWN_TIMEOUT));
 	} else
@@ -109,7 +114,7 @@ static void btmtk_uart_update_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 
 static void btmtk_uart_create_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 {
-	BTMTK_DBG("%s: create fw own timer", __func__);
+	BTMTK_INFO("%s: create fw own timer", __func__);
 #if (KERNEL_VERSION(4, 15, 0) > LINUX_VERSION_CODE)
 	init_timer(&cif_dev->fw_own_timer);
 	cif_dev->fw_own_timer.function = btmtk_fw_own_timer;
@@ -118,6 +123,7 @@ static void btmtk_uart_create_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 	timer_setup(&cif_dev->fw_own_timer, btmtk_fw_own_timer, 0);
 #endif
 	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_INIT);
+	BTMTK_INFO("%s: create fw own timer done", __func__);
 }
 
 static void btmtk_uart_delete_fw_own_timer(struct btmtk_uart_dev *cif_dev)
