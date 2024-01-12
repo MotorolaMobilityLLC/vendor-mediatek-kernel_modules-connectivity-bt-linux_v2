@@ -253,6 +253,13 @@ extern uint8_t _raw_buf_[];
 /* TODO, If usb use 901 patch unit size, download patch will timeout
  * because the timeout has been set to 1s
  */
+/* Current BT SDIO config GDMA with 4 bytes, 4 burst. In AHB BUS, burst transfer can no cross 0x400 (1K) boundary
+ * In BT driver, FW download using 2048 (original UPLOAD_PATCH_UNIT) = 4 (header) + 2044 (payload),
+ * 2044 * 2 = 4088 = 0xFF8, 0xFF8 + 0x10 (4 byte, 4 burst) = 0x1008, in this case,
+ * burst transfer accross the 0x400 boundary.
+ * If change to 1988 = 4 (header) + 1984 (payload), there are no burst transfer accross the 0x400 boundary,
+ * since each burst transfer step is 0x10 and start address always 16 byte aligned.
+ */
 #define UPLOAD_PATCH_UNIT	1988
 #define PATCH_INFO_SIZE		30
 /*#endif*/
