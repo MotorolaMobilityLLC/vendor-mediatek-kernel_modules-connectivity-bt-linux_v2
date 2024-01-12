@@ -10,7 +10,6 @@
 #include <linux/pm_wakeup.h>
 #include <linux/reboot.h>
 #include <linux/string.h>
-#include <linux/sched/clock.h>
 
 #include "btmtk_define.h"
 #include "btmtk_main.h"
