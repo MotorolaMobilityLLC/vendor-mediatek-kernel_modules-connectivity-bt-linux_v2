@@ -111,6 +111,7 @@ else ifeq ($(MTK_CHIP_IF), usb)
     ccflags-y += -I$(src)/include/usb
 else ifeq ($(MTK_CHIP_IF), uart_tty)
     MOD_NAME = btmtk_uart_unify
+    CONFIG_SUPPORT_DEVICE_NODE = n
     CFILES := uart/btmtktty.c btmtk_woble.c btmtk_chip_reset.c
     ccflags-y += -DCHIP_IF_UART_TTY
     ccflags-y += -I$(src)/include/uart/tty
@@ -120,7 +121,7 @@ else ifeq ($(MTK_CHIP_IF), uart_serdev)
     CFILES := uart/btmtkserdev.c
     ccflags-y += -I$(src)/include/uart/serdev
 else
-    MOD_NAME = btmtkbtif_unify
+    MOD_NAME = btmtk_btif_unify
     CFILES := btif/btmtk_btif.c
     ccflags-y += -DCHIP_IF_BTIF
     ccflags-y += -I$(src)/include/btif
@@ -143,10 +144,13 @@ endif
 $(info [BT_Drv] MTK_PROJ_TYPE = $(MTK_PROJ_TYPE) src = $(src))
 #ifeq ($(MTK_PROJ_TYPE), sp)
 ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
-    CFILES += proj/btmtk_proj_sp.c
+    CFILES += proj/btmtk_proj_sp.c proj/btmtk_proj_sp_debug.c
+    ccflags-y += -DANDROID_OS
+    ccflags-y += -I$(srctree)/drivers/misc/mediatek/connectivity/power_throttling
 #else ifeq ($(MTK_PROJ_TYPE), ce)
 else
-#    CFILES += proj/btmtk_proj_ce.c
+    CFILES += proj/btmtk_proj_ce.c
+    ccflags-y += -DLINUX_OS
 endif
 
 CFILES += btmtk_main.c btmtk_fw_log.c btmtk_buffer_mode.c
@@ -156,18 +160,21 @@ ccflags-y += -I$(src)/include/chip
 ccflags-y += -I$(src)/include/ -I$(src)/
 ccflags-y += -I$(src)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth -I$(src)/proj/include/
 
-ccflags-y += -DLINUX_OS
-ccflags-y += -Werror
 ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
   $(info [BT_Drv] TOP = $(TOP))
   $(info [BT_Drv] KBUILD_EXTRA_SYMBOLS = $(KBUILD_EXTRA_SYMBOLS))
   #KBUILD_EXTRA_SYMBOLS := /mfs/mtkslt1121/mtk24223/CAS_REAL/alps-dev-s0_bsp-connac3-1210--2022_03_08_12_00/merged/out_krn/target/product/mgk_64_k510/obj/ETC/conninfra.ko_intermediates/LINKED/Module.symvers
   CONN_INFRA_SRC := $(TOP)/vendor/mediatek/kernel_modules/connectivity/conninfra
+  CONN_FEM_SRC := $(TOP)/vendor/mediatek/kernel_modules/connectivity/connfem
   ccflags-y += -I$(CONN_INFRA_SRC)/include
   ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility
   ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/include
   ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/connsyslog
+  ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/coredump
+  ccflags-y += -I$(CONN_FEM_SRC)/include
 endif
+
+ccflags-y += -Werror
 
 $(MOD_NAME)-objs := $(CFILES:.c=.o)
 
@@ -208,9 +215,24 @@ ccs:
 	./util/checkpatch.pl -f ./uart/btmtk_uart_main.c
 	./util/checkpatch.pl -f ./include/usb/btmtk_usb.h
 	./util/checkpatch.pl -f ./usb/btmtkusb.c
+	./util/checkpatch.pl -f ./proj/btmtk_proj_ce.c
+	./util/checkpatch.pl -f ./proj/btmtk_proj_sp.c
 	./util/checkpatch.pl -f btmtk_fw_log.c
 	./util/checkpatch.pl -f btmtk_main.c
 	./util/checkpatch.pl -f btmtk_buffer_mode.c
 	./util/checkpatch.pl -f btmtk_woble.c
 	./util/checkpatch.pl -f btmtk_chip_reset.c
-
+	./util/checkpatch.pl -f btmtk_queue.c
+	./util/checkpatch.pl -f btmtk_char_dev.c
+	./util/checkpatch.pl -f btmtk_chip_common.c
+	./util/checkpatch.pl -f ./include/chip/btmtk_chip_common.h
+	./util/checkpatch.pl -f ./chip/btmtk_chip_66xx.c
+	./util/checkpatch.pl -f ./include/chip/btmtk_chip_66xx.h
+	./util/checkpatch.pl -f ./chip/btmtk_chip_6639.c
+	./util/checkpatch.pl -f ./include/chip/btmtk_chip_6639.h
+	./util/checkpatch.pl -f ./chip/btmtk_chip_7902.c
+	./util/checkpatch.pl -f ./include/chip/btmtk_chip_7902.h
+	./util/checkpatch.pl -f ./chip/btmtk_chip_7922.c
+	./util/checkpatch.pl -f ./include/chip/btmtk_chip_7922.h
+	./util/checkpatch.pl -f ./chip/btmtk_chip_7961.c
+	./util/checkpatch.pl -f ./include/chip/btmtk_chip_7961.h

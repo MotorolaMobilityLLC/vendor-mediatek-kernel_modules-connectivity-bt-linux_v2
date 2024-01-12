@@ -183,8 +183,6 @@
 #define READ_PINMUX_EVT_REAL_LEN 11
 #define READ_ISO_PACKET_SIZE_CMD_HDR_LEN 4
 
-#define PINMUX_REG_NUM 2
-
 #if BUILD_QA_DBG
 #define CFG_SHOW_FULL_MACADDR 1
 #define CFG_ENABLE_DEBUG_WRITE 1
@@ -244,10 +242,11 @@ struct btmtk_cif_state {
 };
 
 enum TX_TYPE {
-	BTMTK_TX_CMD_FROM_DRV = 0,	/* send hci cmd and wmt cmd by driver */
-	BTMTK_TX_ACL_FROM_DRV,	/* send acl pkt with load rompatch by driver */
-	BTMTK_TX_PKT_FROM_HOST,	/* send pkt from host, include acl and hci */
-	BTMTK_TX_PKT_SEND_DIRECT,/* send tx not through tx_thread */
+	BTMTK_TX_CMD_FROM_DRV = 0,		/* send hci cmd and wmt cmd by driver */
+	BTMTK_TX_ACL_FROM_DRV,			/* send acl pkt with load rompatch by driver */
+	BTMTK_TX_PKT_FROM_HOST,			/* send pkt from host, include acl and hci */
+	BTMTK_TX_PKT_SEND_DIRECT,		/* send tx not through tx_thread */
+	BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT,	/* send tx not through tx_thread and not trigger assert */
 };
 
 enum bt_state {
@@ -369,8 +368,8 @@ struct cali_data_s {
 
 struct h4_recv_pkt {
 	u8  type;	/* Packet type */
-	u8  hlen;	/* Header length */
-	u8  loff;	/* Data length offset in header */
+	u8  hlen;	/* Header length (not include pkt type)*/
+	u8  loff;	/* Data length offset in header (not include pkt type)*/
 	u8  lsize;	/* Data length field size */
 	u16 maxlen;	/* Max overall packet length */
 	int (*recv)(struct hci_dev *hdev, struct sk_buff *skb);
@@ -414,6 +413,32 @@ struct _Section_Map {
 
 #if (USE_DEVICE_NODE == 1)
 #define BT_HCI_MAX_FRAME_SIZE	4096
+
+
+#define RHW_WRITE_TYPE		0x40
+#define RHW_READ_TYPE		0x41
+
+#define RHW_VAL_LEN		4
+#define RHW_ADDR_LEN		4
+#define RHW_PKT_HDR_LEN		4
+#define RHW_PKT_LEN		13
+#define RHW_PKT_COMP_LEN	9
+#define RHW_ADDR_OFFSET_CMD	5
+#define RHW_VAL_OFFSET_CMD	9
+
+#define H4_RECV_RHW_WRITE \
+	.type = RHW_WRITE_TYPE, \
+	.hlen = RHW_PKT_HDR_LEN, \
+	.loff = 2, \
+	.lsize = 2, \
+	.maxlen = RHW_PKT_LEN
+
+#define H4_RECV_RHW_READ \
+	.type = RHW_READ_TYPE, \
+	.hlen = RHW_PKT_HDR_LEN, \
+	.loff = 2, \
+	.lsize = 2, \
+	.maxlen = RHW_PKT_LEN
 
 #define H4_RECV_ACL \
 	.type = HCI_ACLDATA_PKT, \
@@ -551,6 +576,13 @@ struct btmtk_dev {
 
 	struct cali_data_s cali_backup;
 
+#if (USE_DEVICE_NODE == 1)
+	/* asynchronize tx/rx */
+	struct work_struct  async_trx_work;
+
+	/* UDS work for only wifi on*/
+	struct work_struct  pwr_on_uds_work;
+#endif
 	/* completion */
 	struct completion	dump_comp;
 	struct completion	drv_own_comp;
@@ -598,6 +630,8 @@ typedef int (*cif_dl_dma_ptr)(struct btmtk_dev *bdev, u8 *image,
 typedef void (*cif_dump_debug_sop_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_waker_notify_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_enter_standby_ptr)(void);
+typedef int (*cif_set_para_ptr)(struct btmtk_dev *bdev, int val);
+typedef void (*cif_trigger_assert_ptr)(struct btmtk_dev *bdev);
 
 struct hif_hook_ptr {
 #if (USE_DEVICE_NODE == 1)
@@ -630,6 +664,8 @@ struct hif_hook_ptr {
 	cif_dump_debug_sop_ptr		dump_debug_sop;
 	cif_waker_notify_ptr		waker_notify;
 	cif_enter_standby_ptr		enter_standby;
+	cif_set_para_ptr		set_para;
+	cif_trigger_assert_ptr		trigger_assert;
 	void				*coredump_handler;
 };
 
@@ -816,6 +852,9 @@ int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count);
 int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_recv_acl(struct hci_dev *hdev, struct sk_buff *skb);
 int btmtk_recv_iso(struct hci_dev *hdev, struct sk_buff *skb);
+#if (USE_DEVICE_NODE == 1)
+int btmtk_recv_rhw(struct hci_dev *hdev, struct sk_buff *skb);
+#endif
 int btmtk_send_init_cmds(struct btmtk_dev *hdev);
 int btmtk_send_deinit_cmds(struct btmtk_dev *hdev);
 int btmtk_load_rom_patch(struct btmtk_dev *bdev);

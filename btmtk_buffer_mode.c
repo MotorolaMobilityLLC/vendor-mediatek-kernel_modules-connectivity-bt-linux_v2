@@ -258,9 +258,7 @@ static int btmtk_buffer_mode_set_bt_loss(struct btmtk_buffer_mode_struct *buffer
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
-
 }
-
 
 int btmtk_buffer_mode_send(struct btmtk_dev *bdev)
 {

@@ -2703,15 +2703,6 @@ int btmtk_usb_toggle_rst_pin(struct btmtk_dev *bdev)
 	struct device_node *node;
 	int rst_pin_num = 0;
 #endif
-	int cur = 0;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-
-
-	cur = atomic_cmpxchg(&bmain_info->chip_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
-	if (cur == BTMTK_RESET_DOING) {
-		BTMTK_INFO("%s: reset in progress, return", __func__);
-		return -1;
-	}
 
 	if (!bdev) {
 		BTMTK_WARN("%s: bdev is NULL!", __func__);

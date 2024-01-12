@@ -5,9 +5,7 @@
 #include "btmtk_fw_log.h"
 
 #if (USE_DEVICE_NODE == 1)
-#include "connv3_debug_utility.h"
-#include "connv3_mcu_log.h"
-#include "connv3.h"
+#include "btmtk_proj_sp.h"
 #endif
 
 /*
@@ -490,6 +488,17 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
+	if (strncmp(i_fwlog_buf, "set_para=", strlen("set_para=")) == 0) {
+		u8 val = *(i_fwlog_buf + strlen("set_para=")) - '0';
+
+		if (bmain_info->hif_hook.set_para)
+			bmain_info->hif_hook.set_para(pp_bdev[hci_idx], val);
+		else
+			BTMTK_WARN("%s: not support set_para", __func__);
+		ret = count;
+		goto exit;
+	}
+
 	if (strncmp(i_fwlog_buf, "chip_reset=", strlen("chip_reset=")) == 0) {
 		u8 val = *(i_fwlog_buf + strlen("chip_reset=")) - '0';
 
@@ -507,8 +516,12 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	}
 	if (strncmp(i_fwlog_buf, "subsys chip reset", strlen("subsys chip reset")) == 0) {
 		BTMTK_INFO("subsys chip reset");
-		bmain_info->chip_reset_flag = 0;
-		btmtk_reset_trigger(pp_bdev[hci_idx]);
+		if(bmain_info->hif_hook.trigger_assert)
+			bmain_info->hif_hook.trigger_assert(pp_bdev[hci_idx]);
+		else {
+			bmain_info->chip_reset_flag = 0;
+			btmtk_reset_trigger(pp_bdev[hci_idx]);
+		}
 		ret = count;
 		goto exit;
 	}
@@ -1059,6 +1072,9 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
 			btmtk_fwdump_wake_lock();
 
+			BTMTK_INFO("dumplog_queue_first1, skb_queue_len = %d",
+					skb_queue_len(&g_fwlog->dumplog_queue_first));
+
 			if (skb_queue_len(&g_fwlog->dumplog_queue_first) == 0) {
 				BTMTK_INFO("first coredump, save...");
 				dumplog_queue = &g_fwlog->dumplog_queue_first;
@@ -1158,7 +1174,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 	if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
 			skb->data[0] == 0x0E) {
 		if (skb_queue_len(&g_fwlog->usr_opcode_queue)) {
-			BTMTK_DBG("%s: opcode queue len is %d", __func__,
+			BTMTK_INFO("%s: opcode queue len is %d", __func__,
 					skb_queue_len(&g_fwlog->usr_opcode_queue));
 			skb_opcode = skb_dequeue(&g_fwlog->usr_opcode_queue);
 		}
@@ -1201,13 +1217,12 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			skb->data[1] == 0xfc) {
 		static int dump_data_counter;
 		static int dump_data_length;
-		//static int ori_log_lvl;
 
 		/* remove acl header 6F FC LL LL */
 		skb_pull(skb, 4);
 
 		state = btmtk_get_chip_state(bdev);
-		/* coredump info*/
+		/* coredump info */
 		if (state != BTMTK_STATE_FW_DUMP) {
 			BTMTK_INFO("%s: msg: %s len[%d]", __func__, skb->data, skb->len);
 			/* drop "Disable Cache" */
@@ -1236,9 +1251,6 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				return 1;
 			}
 
-			//ori_log_lvl = btmtk_log_lvl;
-			//btmtk_log_lvl = BTMTK_LOG_LVL_INFO;
-			//BTMTK_INFO("%s: FW dump begin, change log level [%d]->[%d]", __func__, ori_log_lvl, btmtk_log_lvl);
 			DUMP_TIME_STAMP("FW_dump_start");
 			/* Print too much log, it may cause kernel panic. */
 			dump_data_counter = 0;
@@ -1247,8 +1259,10 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				BTMTK_ERR("%s: coredump_handler is NULL", __func__);
 				goto coredump_fail;
 			}
+
+			btmtk_sp_coredump_start();
+
 			btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
-			reinit_completion(&bdev->dump_comp);
 			btmtk_fwdump_wake_lock();
 			line = __LINE__;
 			ret = connv3_coredump_start(
@@ -1289,7 +1303,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		/* print dump data to console */
 		if (dump_data_counter < 20)
 			BTMTK_INFO("%s: FW dump data (%d): %s",
-					__func__, dump_data_counter, &skb->data);
+					__func__, dump_data_counter, skb->data);
 		line = __LINE__;
 		ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "[M]", skb->data, skb->len);
 		if (ret)
@@ -1312,13 +1326,23 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			/* This is the latest coredump packet. */
 			BTMTK_INFO("%s: FW dump end, dump_data_counter[%d], dump_data_length[%d]",
 						__func__, dump_data_counter, dump_data_length);
-			//btmtk_log_lvl = ori_log_lvl;
+
+			btmtk_sp_coredump_end();
+
 			ret = connv3_coredump_end(bmain_info->hif_hook.coredump_handler, "BT assert");
-			if (bmain_info->hif_hook.waker_notify)
-				bmain_info->hif_hook.waker_notify(bdev);
-			BTMTK_DBG("%s: connv3_coredump_end", __func__);
+
 			if (ret)
 				goto coredump_fail;
+
+			/* if do complete and bt close with btmtk_reset_waker start
+			 * no need to wait hw_err event, cause bt already start close
+			 */
+
+			BTMTK_INFO("%s  complete dump_comp , coredump_end", __func__);
+			complete_all(&bdev->dump_comp);
+
+			if (bmain_info->hif_hook.waker_notify)
+				bmain_info->hif_hook.waker_notify(bdev);
 
 		}
 		return 1;

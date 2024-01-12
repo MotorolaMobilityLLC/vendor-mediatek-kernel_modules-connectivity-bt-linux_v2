@@ -17,7 +17,6 @@
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include "btmtk_main.h"
-#include "connv3.h"
 #include "conninfra.h"
 #include "connfem.h"
 #include "btmtk_proj_sp.h"
@@ -28,8 +27,10 @@
 #define READ_PMIC_STATE_CMD_LEN		16
 #define READ_PMIC_STATE_EVENT_LEN	16
 
+#define DEFAULT_STATE_PINCTRL_NAME	("bt_combo_gpio_init")
 #define PRE_ON_PINCTRL_NAME		("bt_combo_gpio_pre_on")
-#define POWER_ON_PINCTRL_NAME		("bt_combo_gpio_on")
+#define POWER_ON_TX_PINCTRL_NAME	("bt_combo_uart_tx_aux")
+#define POWER_ON_RX_PINCTRL_NAME	("bt_combo_uart_rx_aux")
 #define RST_ON_PINCTRL_NAME		("bt_rst_on")
 #define RST_OFF_PINCTRL_NAME		("bt_rst_off")
 #define INIT_STATE_PINCTRL_NAME		("bt_combo_gpio_init")
@@ -37,6 +38,164 @@
 
 #if (USE_DEVICE_NODE == 1)
 static struct pinctrl *pinctrl_ptr;
+extern struct btmtk_dev *g_sbdev;
+int g_bt_state;
+static struct wakeup_source *bt_trx_wakelock;
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+void btmtk_uarthub_err_cb(unsigned int err_type)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+	int state;
+
+	BTMTK_INFO("%s: err_type[%d]", __func__, err_type);
+
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return;
+	}
+
+	state = btmtk_get_chip_state(g_sbdev);
+
+	if (state != BTMTK_STATE_WORKING) {
+		BTMTK_ERR("%s: state[%d] is not working", __func__, state);
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+
+	if (cif_dev->tty  == NULL) {
+		BTMTK_ERR("%s: tty is NULL", __func__);
+		return;
+	}
+
+	if (((1 << dev0_tx_timeout_err) | (1 << dev0_tx_pkt_type_err) | (1 << dev0_rx_timeout_err)
+			| (1 << intfhub_dev0_tx_err)) & err_type) {
+		BTMTK_INFO("%s: dev0 err dump", __func__);
+		if (cif_dev->hub_en && btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_DISCONNECT)
+			mtk8250_uart_dump(cif_dev->tty);
+	}
+	return;
+}
+
+int btmtk_wakeup_uarthub(void) {
+	int ready_retry = 50, ret = 0;
+
+	/* Set TX,RX request */
+	ret = mtk8250_uart_hub_set_request();
+	if (ret) {
+		BTMTK_ERR("%s mtk8250_uart_hub_set_request fail ret[%d]", __func__, ret);
+		return -1;
+	}
+
+	/* Polling UARTHUB is ready state */
+	while (mtk8250_uart_hub_is_ready() <= 0 && --ready_retry) {
+		BTMTK_WARN("%s ready_retry[%d]", __func__, ready_retry);
+		usleep_range(1000, 1100);
+	}
+
+	if (ready_retry <= 0) {
+		ret = mtk8250_uart_hub_dump_with_tag("BT driver own");
+		BTMTK_ERR("%s mtk8250_uart_hub_dump_with_tag ready_retry[%d] ret[%d]", __func__, ready_retry, ret);
+		return -1;
+	}
+	__pm_stay_awake(bt_trx_wakelock);
+
+	return 0;
+}
+
+void btmtk_release_uarthub(bool force)
+{
+	int ret = -1;
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s: start", __func__);
+
+	if (!g_sbdev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+
+	/* Clr TX,RX request, let uarthub can sleep */
+	if (cif_dev->hub_en && (cif_dev->sleep_en || force)) {
+		ret =  mtk8250_uart_hub_clear_request();
+		if (ret)
+			BTMTK_ERR("%s  mtk8250_uart_hub_clear_request fail ret[%d]", __func__, ret);
+	}
+	__pm_relax(bt_trx_wakelock);
+	return;
+}
+
+
+#endif
+
+void btmtk_sp_coredump_start(void)
+{
+
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	if (!g_sbdev) {
+		BTMTK_ERR("%s: g_sbdev is NULL", __func__);
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+	BTMTK_INFO("%s: set bt assert_state[1]", __func__);
+	cif_dev->assert_state = 1;
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	/* uarthub assert bit to avoid MD/ADSP send data */
+	if (cif_dev->hub_en && btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_DISCONNECT) {
+		mtk8250_uart_hub_assert_bit_ctrl(1);
+		BTMTK_DBG("%s mtk8250_uart_hub_assert_bit_ctrl(1)", __func__);
+		mtk8250_uart_dump(cif_dev->tty);
+	}
+#endif
+
+}
+
+void btmtk_sp_coredump_end(void)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s: start", __func__);
+
+	if (!g_sbdev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	/* uarthub reset */
+	if (cif_dev->hub_en) {
+		mtk8250_uart_hub_assert_bit_ctrl(0);
+		BTMTK_DBG("%s mtk8250_uart_hub_assert_bit_ctrl(0)", __func__);
+		mtk8250_uart_hub_reset();
+		BTMTK_DBG("%s mtk8250_uart_hub_reset", __func__);
+	}
+#endif
+}
 
 static inline int btmtk_pinctrl_exec(const char *name)
 {
@@ -63,7 +222,7 @@ static inline int btmtk_pinctrl_exec(const char *name)
 
 	return 0;
 }
-static int btmtk_pre_power_on_handler(void)
+int btmtk_pre_power_on_handler(void)
 {
 	/*
 	 * Set BT_RST PU/OUPUT
@@ -72,10 +231,37 @@ static int btmtk_pre_power_on_handler(void)
 	int ret = 0;
 
 	btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
-	ret = btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
-	msleep(100);
-	BTMTK_DBG("%s: wait 100ms", __func__);
-	return ret;
+	btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
+
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+
+	/* use uarthub multi-host mode (default) */
+	ret = mtk8250_uart_hub_enable_bypass_mode(0);
+	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
+
+	ret = btmtk_wakeup_uarthub();
+
+	if(ret < 0)
+		return ret;
+
+	/* disable ADSP,MD when fw dl */
+	ret = mtk8250_uart_hub_fifo_ctrl(1);
+	BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(1) ret[%d]", __func__, ret);
+
+	/* use uarthub bypass mode */
+	ret = mtk8250_uart_hub_enable_bypass_mode(1);
+	BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
+
+#endif
+	btmtk_pinctrl_exec(POWER_ON_TX_PINCTRL_NAME);
+
+	return 0;
+}
+
+int btmtk_set_uart_rx_aux(void)
+{
+	BTMTK_DBG("%s: start", __func__);
+	return btmtk_pinctrl_exec(POWER_ON_RX_PINCTRL_NAME);
 }
 
 int btmtk_reset_pin_off(void)
@@ -84,34 +270,171 @@ int btmtk_reset_pin_off(void)
 	return btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 }
 
-int btmtk_post_power_on_handler(void)
+int btmtk_set_gpio_default(void)
 {
-	/* Set PCM pin function */
-	if (!btmtk_pinctrl_exec(POWER_ON_PINCTRL_NAME))
-		return -1;
-
-	return btmtk_read_pmic_state(NULL);
+	BTMTK_DBG("%s: start", __func__);
+	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
+	msleep(10);
+	return btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
 }
 
 static int btmtk_power_on_notify_handler(void)
 {
 	/* Execute BT power on then power off (if BT is off before this callback */
 	BTMTK_INFO("%s", __func__);
+
+	/* Don't block caller thread for connv3 API */
+	schedule_work(&g_sbdev->pwr_on_uds_work);
 	return 0;
+}
+
+int btmtk_sp_whole_chip_reset(struct btmtk_dev *bdev)
+{
+	BTMTK_DBG("%s: bt_state[%d]", __func__, g_bt_state);
+	return connv3_trigger_whole_chip_rst(CONNV3_DRV_TYPE_BT ,"BT whole chip reset");
 }
 
 static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 {
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+
+	if(bmain_info->hif_hook.trigger_assert == NULL) {
+		BTMTK_ERR("%s: hif_hook.trigger_assert is NULL", __func__);
+		return -1;
+	}
+
+	g_bt_state = btmtk_get_chip_state(g_sbdev);
+
 	/* Ask FW to do coredump */
-	BTMTK_INFO("%s", __func__);
+	BTMTK_ERR("%s: state[%d], reason[%s]", __func__, g_bt_state, reason);
+	if (g_bt_state < BTMTK_STATE_WORKING || g_bt_state == BTMTK_STATE_CLOSED) {
+		BTMTK_WARN("%s: BT is not on state, no need to trigger whole chip reset", __func__);
+		return 0;
+	} else {
+		atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DOING);
+		bmain_info->hif_hook.trigger_assert(g_sbdev);
+	}
+	BTMTK_INFO("%s: wait dump_comp ...", __func__);
+	if (!wait_for_completion_timeout(&g_sbdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT)))
+		BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
+
 	return 0;
 }
 
 static int btmtk_post_chip_rst_handler(void)
 {
-	BTMTK_INFO("%s", __func__);
-	return btmtk_send_hw_err_to_host(NULL);
+
+	BTMTK_INFO("%s: state[%d]", __func__, g_bt_state);
+	if (g_bt_state < BTMTK_STATE_WORKING || g_bt_state == BTMTK_STATE_CLOSED)
+		BTMTK_WARN("%s: BT is not on state, no need to send hw err", __func__);
+	else {
+		btmtk_set_chip_state(g_sbdev, BTMTK_STATE_WORKING);
+		btmtk_send_hw_err_to_host(g_sbdev);
+	}
+
+	/* move to bt open flow, ensure hw err event send to stack restart bt*/
+	//atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+
+	return 0;
 }
+
+
+int btmtk_pre_cal_pre_on_cb(void)
+{
+	BTMTK_INFO("%s start", __func__);
+	return btmtk_pre_power_on_handler();
+}
+
+int btmtk_pre_cal_pwr_on_cb(void)
+{
+	int ret = 0;
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s start", __func__);
+
+	/* Turn on BT */
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("g_sbdev == NULL");
+		return -1;
+	}
+
+	if (g_sbdev->hdev == NULL) {
+		BTMTK_ERR("g_sbdev->hdev == NULL");
+		return -1;
+	}
+
+	if (g_sbdev->hdev->open == NULL) {
+		BTMTK_ERR("g_sbdev->hdev->open == NULL");
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("[ERR] cif_dev is NULL");
+		return -1;
+	}
+	cif_dev->is_pre_cal = TRUE;
+
+	ret = g_sbdev->hdev->open(g_sbdev->hdev);
+	cif_dev->is_pre_cal = FALSE;
+	if (ret) {
+		BTMTK_ERR("%s: BT turn on fail!", __func__);
+		return ret;
+	}
+	BTMTK_INFO("%s: BT turn on ok!", __func__);
+
+	return ret;
+}
+int btmtk_pre_cal_do_cal_cb(void)
+{
+	int ret = 0;
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s start", __func__);
+
+	/* Todo pre-cal cmd */
+	/* Todo precal BK */
+
+	/* err handle for uart disconnect */
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev == NULL", __func__);
+		return -1;
+	}
+
+	if (g_sbdev->hdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev->hdev == NULL", __func__);
+		return -1;
+	}
+
+	if (g_sbdev->hdev->close == NULL) {
+		BTMTK_ERR("%s: g_sbdev->hdev->close == NULL", __func__);
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("[ERR] cif_dev is NULL");
+		return -1;
+	}
+
+	cif_dev->is_pre_cal = TRUE;
+	ret = g_sbdev->hdev->close(g_sbdev->hdev);
+	cif_dev->is_pre_cal = FALSE;
+	if (ret) {
+		BTMTK_ERR("%s: BT turn off fail!", __func__);
+		return ret;
+	}
+	BTMTK_INFO("%s: BT turn off ok!", __func__);
+
+	return 0;
+}
+
+
 
 struct connv3_whole_chip_rst_cb btmtk_whole_chip_rst_cb = {
 	.pre_whole_chip_rst = btmtk_pre_chip_rst_handler,
@@ -123,6 +446,13 @@ struct connv3_power_on_cb btmtk_pwr_on_cb = {
 	.power_on_notify = btmtk_power_on_notify_handler,
 };
 
+struct connv3_pre_calibration_cb btmtk_pre_cal_cb = {
+	.pre_on_cb = btmtk_pre_cal_pre_on_cb,
+	.pwr_on_cb = btmtk_pre_cal_pwr_on_cb,
+	.do_cal_cb = btmtk_pre_cal_do_cal_cb,
+};
+
+
 /* connv3_sub_drv_ops_cb
  *
  *    All callbacks needs by conninfra driver, 3 types of callback functions
@@ -130,13 +460,7 @@ struct connv3_power_on_cb btmtk_pwr_on_cb = {
  *    2. chip reset
  *    3. pre-calibration
  */
-#if 0 // can not build
-struct connv3_sub_drv_ops_cb btmtk_drv_cbs = {
-	.pwr_on_cb = btmtk_pwr_on_cb,
-	.rst_cb = btmtk_whole_chip_rst_cb,
-	//.pre_cal_cb = NULL,
-};
-#endif
+
 
 int btmtk_read_pmic_state(struct btmtk_dev *bdev)
 {
@@ -157,6 +481,7 @@ int btmtk_read_pmic_state(struct btmtk_dev *bdev)
 int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 {
 	struct connfem_epaelna_fem_info fem_info;
+	struct connfem_epaelna_fem_info bt_fem_info;
 	struct connfem_epaelna_flags_common common_flag;
 	struct connfem_epaelna_pin_info pin_info;
 	struct connfem_epaelna_flags_bt bt_flag;
@@ -173,6 +498,7 @@ int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 	/* Get data from connfem_api */
 	connfem_epaelna_get_fem_info(&fem_info);
 	connfem_epaelna_get_pin_info(&pin_info);
+	connfem_epaelna_get_bt_fem_info(&bt_fem_info);
 	connfem_epaelna_get_flags(CONNFEM_SUBSYS_NONE, &common_flag);
 	connfem_epaelna_get_flags(CONNFEM_SUBSYS_BT, &bt_flag);
 
@@ -196,10 +522,11 @@ int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 	 * BBBB : 2.4G part = VID + PID
 	 * CC : 1 byte Rx Mode info
 	 * DDDDDDDD: 4 bytes SPDT info
+	 * ZZZZZZZZ: 4 bytes BT dedicate efem ID
 	 *
 	 * RX: 04 E4 06 02 55 02 00 01 SS (SS : status)
-	*/
-	cmd_len = sizeof(cmd_header) + pin_info.count * pin_struct_size + 8;
+	 */
+	cmd_len = sizeof(cmd_header) + pin_info.count * pin_struct_size + 12;
 	cmd = vmalloc(cmd_len);
 	if (!cmd) {
 		BTMTK_ERR("unable to allocate confem command");
@@ -241,6 +568,9 @@ int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 	cmd[offset++] = common_flag.fe_conn_spdt;
 	cmd[offset++] = common_flag.fe_reserved;
 
+	memcpy(&cmd[offset], &bt_fem_info.id, sizeof(bt_fem_info.id));
+	offset += sizeof(bt_fem_info.id);
+
 	BTMTK_INFO_RAW(cmd, offset, "%s: Send: ", __func__);
 
 	ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
@@ -263,9 +593,11 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct tty_struct *tty = NULL;
 	struct connv3_sub_drv_ops_cb btmtk_drv_cbs;
+	int ret;
 
 	btmtk_drv_cbs.pwr_on_cb = btmtk_pwr_on_cb;
 	btmtk_drv_cbs.rst_cb = btmtk_whole_chip_rst_cb;
+	btmtk_drv_cbs.pre_cal_cb = btmtk_pre_cal_cb;
 	BTMTK_INFO("%s start", __func__);
 	if (!bdev) {
 		BTMTK_ERR("[ERR] bdev is NULL");
@@ -288,21 +620,294 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	if (!tty->dev->of_node)
 		BTMTK_ERR("[ERR] %s: mediatek,bt of_node not found", __func__);
 
+	ret = of_property_read_u32(tty->dev->of_node, "baudrate", &cif_dev->baudrate);
+	if (ret < 0)
+		BTMTK_ERR("[ERR] %s: mediatek,bt baudrate ret[%d]", __func__, ret);
+
+	ret = of_property_read_u32(tty->dev->of_node, "hub-en", &cif_dev->hub_en);
+	if (ret < 0)
+		BTMTK_ERR("[ERR] %s: mediatek,bt hub-en ret[%d]", __func__, ret);
+
+	ret = of_property_read_u32(tty->dev->of_node, "sleep-en", &cif_dev->sleep_en);
+	if(ret < 0)
+		BTMTK_ERR("[ERR] %s: mediatek,bt sleep-en ret[%d]", __func__, ret);
+
+	/* temp: for disable sleep */
+	cif_dev->sleep_en = 0;
+
 	pinctrl_ptr = devm_pinctrl_get(tty->dev);
 	if (IS_ERR(pinctrl_ptr)) {
 		BTMTK_ERR("[ERR] %s: fail to get bt pinctrl", __func__);
 		return -1;
 	}
-	//btmtk_pinctrl_exec(INIT_STATE_PINCTRL_NAME);
+
+	/* set gpio to default */
+	btmtk_set_gpio_default();
+
 	connv3_sub_drv_ops_register(CONNV3_DRV_TYPE_BT, &btmtk_drv_cbs);
-	BTMTK_INFO("%s end", __func__);
+	bt_trx_wakelock = wakeup_source_register(NULL, "bt_drv_trx");
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	if (cif_dev->hub_en) {
+		ret = mtk8250_uart_hub_register_cb(btmtk_uarthub_err_cb);
+		BTMTK_DBG("%s mtk8250_uart_hub_register_cb ret[%d]", __func__, ret);
+	}
+#endif
+	BTMTK_INFO("%s end, baudrate[%d] hub_en[%d] sleep_en[%d]", __func__, cif_dev->baudrate, cif_dev->hub_en, cif_dev->sleep_en);
 	return 0;
 }
 
 
 int btmtk_connv3_sub_drv_deinit(void)
 {
+	wakeup_source_unregister(bt_trx_wakelock);
 	return connv3_sub_drv_ops_unregister(CONNV3_DRV_TYPE_BT);
 }
+
+/*
+ *******************************************************************************
+ *                       bt power throttling feature
+ *******************************************************************************
+ */
+static inline bool btmtk_pwrctrl_support(void)
+{
+	return TRUE;
+}
+
+static void btmtk_send_set_tx_power_cmd(struct btmtk_dev *bdev)
+{
+	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	struct btmtk_dypwr_st *dy_pwr = &cif_dev->dy_pwr;
+	uint8_t cmd_set[6] = { 0x01, 0x2D, 0xFC, 0x02, 0x02, 0x00 };
+	uint8_t evt_set[] = { 0x04, 0x0E, 0x06, 0x01, 0x2D, 0xFC };
+
+	cmd_set[5] = dy_pwr->set_val;
+	btmtk_main_send_cmd(bdev, cmd_set, sizeof(cmd_set),
+				evt_set, sizeof(evt_set), 0, 0, BTMTK_TX_CMD_FROM_DRV);
+
+	if (bdev->io_buf[6] != HCI_EVT_CC_STATUS_SUCCESS)
+		BTMTK_ERR("%s: status error[0x%02x]!", __func__, bdev->io_buf[6]);
+	else {
+		dy_pwr->fw_sel_dbm = bdev->io_buf[8];
+		BTMTK_INFO("%s: fw_sel_dbm[%d]", __func__, dy_pwr->fw_sel_dbm);
+	}
+
+	if (dy_pwr->cb != NULL)
+		dy_pwr->cb(dy_pwr->buf, dy_pwr->len);
+}
+
+void btmtk_async_trx_work(struct work_struct *work)
+{
+	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, async_trx_work);
+
+	btmtk_send_set_tx_power_cmd(bdev);
+}
+
+void btmtk_pwr_on_uds_work(struct work_struct *work)
+{
+	//struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, pwr_on_uds_work);
+	int ret = 0;
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s start", __func__);
+
+	/* err handle for uart disconnect */
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev == NULL", __func__);
+		return;
+	}
+
+	if (g_sbdev->hdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev->hdev == NULL", __func__);
+		return;
+	}
+
+	if (g_sbdev->hdev->close == NULL) {
+		BTMTK_ERR("%s: g_sbdev->hdev->close == NULL", __func__);
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("[ERR] cif_dev is NULL");
+		return;
+	}
+
+	ret = g_sbdev->hdev->open(g_sbdev->hdev);
+	if (ret) {
+		BTMTK_ERR("%s: BT turn on fail!", __func__);
+		return;
+	}
+	BTMTK_INFO("%s: BT turn on ok!", __func__);
+
+	ret = g_sbdev->hdev->close(g_sbdev->hdev);
+	if (ret) {
+		BTMTK_ERR("%s: BT turn off fail!", __func__);
+		return;
+	}
+	BTMTK_INFO("%s: BT turn off ok!", __func__);
+
+}
+
+
+int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb)
+{
+	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	uint8_t cmd_query[] = { 0x01, 0x2D, 0xFC, 0x01, 0x01 };
+	uint8_t evt_query[] = { 0x04, 0x0E, 0x08, 0x01, 0x2D, 0xFC };
+
+	if (!btmtk_pwrctrl_support())
+		return 0;
+
+	BTMTK_INFO("%s: lp_cur_lv[%d], dy_max_dbm[%d], dy_min_dbm[%d], lp_bdy_dbm[%d], fw_sel_dbm[%d]",
+		__func__,
+		cif_dev->dy_pwr.lp_cur_lv,
+		cif_dev->dy_pwr.dy_max_dbm,
+		cif_dev->dy_pwr.dy_min_dbm,
+		cif_dev->dy_pwr.lp_bdy_dbm,
+		cif_dev->dy_pwr.fw_sel_dbm);
+
+	/*
+	 * Query
+	 * Cmd: 01 2D FC 01 01
+	 * Evt: 04 0E 08 01 2D FC SS 01 XX YY ZZ
+	 * SS: Status
+	 * XX: Dynamic range Max dBm
+	 * YY: Dynamic range Min dBm
+	 * ZZ: Low power region boundary dBm
+	 */
+	btmtk_main_send_cmd(bdev, cmd_query, sizeof(cmd_query),
+				evt_query, sizeof(evt_query), 0, 0, BTMTK_TX_CMD_FROM_DRV);
+
+	if (bdev->io_buf[6] != HCI_EVT_CC_STATUS_SUCCESS)
+		BTMTK_ERR("%s: status error[0x%02x]!", __func__, bdev->io_buf[6]);
+	else {
+		cif_dev->dy_pwr.dy_max_dbm = bdev->io_buf[8];
+		cif_dev->dy_pwr.dy_min_dbm = bdev->io_buf[9];
+		cif_dev->dy_pwr.lp_bdy_dbm = bdev->io_buf[10];
+		BTMTK_INFO("%s: dy_max_dbm[%d], dy_min_dbm[%d], lp_bdy_dbm[%d]",
+				    __func__,
+				    cif_dev->dy_pwr.dy_max_dbm,
+				    cif_dev->dy_pwr.dy_min_dbm,
+				    cif_dev->dy_pwr.lp_bdy_dbm);
+	}
+
+	if (cb)
+		cb(cif_dev->dy_pwr.buf, cif_dev->dy_pwr.len);
+
+	return 0;
+}
+
+int btmtk_set_tx_power(struct btmtk_dev *bdev, int8_t req_val, BT_RX_EVT_HANDLER_CB cb)
+{
+	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	struct btmtk_dypwr_st *dy_pwr = &cif_dev->dy_pwr;
+	bool isblocking = (cb) ? TRUE : FALSE;
+
+	/*
+	 * Set
+	 * Cmd: 01 2D FC 02 02 RR
+	 * Evt: 04 0E 06 01 2D FC SS 02 XX
+	 * RR: Requested TX power upper limitation dBm
+	 * SS: Status
+	 * XX: Selected TX power upper limitation dBm
+	 */
+
+	/* do not send if not support */
+	if (dy_pwr->dy_max_dbm <= dy_pwr->dy_min_dbm) {
+		BTMTK_INFO("%s: invalid dbm range, skip set cmd", __func__);
+		return 1;
+	}
+
+	/* value select flow */
+	if (req_val >= dy_pwr->dy_min_dbm) {
+		dy_pwr->set_val = req_val;
+		/* check max limitation */
+		if (dy_pwr->set_val > dy_pwr->dy_max_dbm)
+			dy_pwr->set_val = dy_pwr->dy_max_dbm;
+		/* power throttling limitation */
+		if (dy_pwr->lp_cur_lv >= CONN_PWR_THR_LV_4) { //TODO_PWRCTRL
+			dy_pwr->set_val = dy_pwr->lp_bdy_dbm;
+			/* lp_bdy_dbm may be larger than dy_max_dbm, check again */
+			if (dy_pwr->set_val > dy_pwr->dy_max_dbm)
+				dy_pwr->set_val = dy_pwr->dy_max_dbm;
+		}
+	} else {
+		BTMTK_INFO("%s: invalid dbm value, skip set cmd", __func__);
+		return 1;
+	}
+
+	BTMTK_INFO("%s: set_val[%d]", __func__, dy_pwr->set_val);
+
+	dy_pwr->cb = cb;
+	if (isblocking)
+		btmtk_send_set_tx_power_cmd(bdev);
+	else
+		/* Don't block caller thread for set operation */
+		schedule_work(&bdev->async_trx_work);
+	return 0;
+}
+
+
+int btmtk_pwrctrl_level_change_cb(enum conn_pwr_event_type type, void *data)
+{
+	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	int8_t set_val = cif_dev->dy_pwr.dy_max_dbm;
+
+	BTMTK_INFO("%s", __func__);
+	switch (type) {
+	case CONN_PWR_EVENT_LEVEL:
+		cif_dev->dy_pwr.lp_cur_lv = *((int *) data);
+		BTMTK_INFO("%s: lp_cur_bat_lv = %d", __func__, cif_dev->dy_pwr.lp_cur_lv);
+		btmtk_set_tx_power(g_sbdev, set_val, NULL);
+		break;
+	case CONN_PWR_EVENT_MAX_TEMP:
+		BTMTK_ERR("Unsupport now");
+		break;
+	default:
+		BTMTK_ERR("Uknown type for power throttling callback");
+		break;
+	}
+
+	return 0;
+}
+
+int btmtk_pwrctrl_pre_on(struct btmtk_dev *bdev)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	if (!btmtk_pwrctrl_support())
+		return 0;
+
+	if (!bdev) {
+		BTMTK_ERR("[ERR] bdev is NULL");
+		return -1;
+	}
+
+	cif_dev = bdev->cif_dev;
+	memset(&cif_dev->dy_pwr, 0x00, sizeof(cif_dev->dy_pwr));
+	cif_dev->dy_pwr.lp_cur_lv = CONN_PWR_THR_LV_0;
+	conn_pwr_drv_pre_on(CONN_PWR_DRV_BT, &cif_dev->dy_pwr.lp_cur_lv);
+	BTMTK_INFO("%s: lp_cur_bat_lv = %d", __func__, cif_dev->dy_pwr.lp_cur_lv);
+	return 0;
+}
+
+void btmtk_pwrctrl_post_off(void)
+{
+	if (!btmtk_pwrctrl_support())
+		return;
+
+	conn_pwr_drv_post_off(CONN_PWR_DRV_BT);
+}
+
+void btmtk_pwrctrl_register_evt(void)
+{
+	if (!btmtk_pwrctrl_support())
+		return;
+
+	BTMTK_INFO("%s", __func__);
+	/* Register callbacks for power throttling feature */
+	conn_pwr_register_event_cb(CONN_PWR_DRV_BT, (CONN_PWR_EVENT_CB)btmtk_pwrctrl_level_change_cb);
+}
+
 #endif // (USE_DEVICE_NODE == 1)
 

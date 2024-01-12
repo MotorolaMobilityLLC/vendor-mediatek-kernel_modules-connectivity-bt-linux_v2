@@ -14,6 +14,7 @@
 MODULE_LICENSE("Dual BSD/GPL");
 
 #if (USE_DEVICE_NODE == 1)
+#include "btmtk_proj_sp.h"
 
 /*
  *******************************************************************************
@@ -28,14 +29,14 @@ MODULE_LICENSE("Dual BSD/GPL");
  *                              C O N S T A N T S
  *******************************************************************************
  */
-#define BT_BUFFER_SIZE				(2048)
+#define BT_BUFFER_SIZE				(4096)
 #define FTRACE_STR_LOG_SIZE			(256)
 #define COMBO_IOC_MAGIC				0xb0
 #define COMBO_IOCTL_BT_HOST_DEBUG	_IOW(COMBO_IOC_MAGIC, 4, void*)
 #define COMBO_IOCTL_BT_INTTRX		_IOW(COMBO_IOC_MAGIC, 5, void*)
 #define IOCTL_BT_HOST_DEBUG_BUF_SIZE	(32)
 #define IOCTL_BT_HOST_INTTRX_SIZE		(128)
-
+#define TRIGGER_HW_ERR_EVT_COUNT	(1000)
 /*
  *******************************************************************************
  *                             D A T A   T Y P E S
@@ -93,6 +94,7 @@ static int32_t bt_ftrace_flag;
 static uint32_t rstflag = CHIP_RESET_NONE;
 static uint8_t HCI_EVT_HW_ERROR[] = {0x04, 0x10, 0x01, 0x00};
 static loff_t rd_offset;
+static uint32_t hw_err_retry;
 
 /*
  *******************************************************************************
@@ -234,7 +236,7 @@ static ssize_t __bt_write(uint8_t *buf, size_t count, uint32_t flags)
 	retval = btmtk_send_data(g_sbdev->hdev, buf, count);
 
 	if (retval < 0)
-		BTMTK_ERR("bt_core_send_data failed, retval %d", retval);
+		BTMTK_ERR("%s: bt_core_send_data failed, retval %d", __func__, retval);
 	else if (retval == 0) {
 		/*
 		 * TX queue cannot be digested in time and no space is available for write.
@@ -243,13 +245,13 @@ static ssize_t __bt_write(uint8_t *buf, size_t count, uint32_t flags)
 		 * native program should not call write with no delay.
 		 */
 		if (flags & O_NONBLOCK) {
-			BTMTK_WARN("Non-blocking write, no space is available!");
+			BTMTK_WARN_LIMITTED("%s: Non-blocking write, no space is available!", __func__);
 			retval = -EAGAIN;
 		} else {
 			/* TODO: blocking write case */
 		}
 	} else
-		BTMTK_DBG("Write bytes %d/%zd", retval, count);
+		BTMTK_DBG("%s: Write bytes %d/%zd", __func__, retval, count);
 
 	return retval;
 }
@@ -339,7 +341,7 @@ static ssize_t BT_read(struct file *filp, char __user *buf, size_t count, loff_t
 			 * O_NONBLOCK is specified during open().
 			 */
 			if (filp->f_flags & O_NONBLOCK) {
-				BTMTK_ERR("Non-blocking read, whole chip reset occurs! rstflag=%d", rstflag);
+				BTMTK_ERR_LIMITTED("Non-blocking read, whole chip reset occurs! rstflag=%d", rstflag);
 				retval = -EIO;
 				goto OUT;
 			}
@@ -383,8 +385,18 @@ static ssize_t BT_read(struct file *filp, char __user *buf, size_t count, loff_t
 			 * O_NONBLOCK is specified during open().
 			 */
 			if (filp->f_flags & O_NONBLOCK) {
-				BTMTK_ERR("Non-blocking read, no data is available!");
+				BTMTK_ERR_LIMITTED("Non-blocking read, no data is available!");
 				retval = -EAGAIN;
+				if (hw_err_retry++ > TRIGGER_HW_ERR_EVT_COUNT) {
+					BTMTK_ERR("%s: hw_err_retry[%d] > %d", __func__, hw_err_retry
+								, TRIGGER_HW_ERR_EVT_COUNT);
+					retval = bt_report_hw_error(i_buf, count, &rd_offset);
+					if (rd_offset == sizeof(HCI_EVT_HW_ERROR))
+						rd_offset = 0;
+
+					if (copy_to_user(buf, i_buf, retval))
+						retval = -EFAULT;
+				}
 				goto OUT;
 			}
 
@@ -413,6 +425,7 @@ static ssize_t BT_read(struct file *filp, char __user *buf, size_t count, loff_t
 	}
 
 	if (copy_to_user(buf, i_buf, retval)) {
+		hw_err_retry = 0;
 		retval = -EFAULT;
 		if (rstflag == CHIP_RESET_NOTIFIED)
 			rstflag = CHIP_RESET_END;
@@ -456,7 +469,6 @@ static long BT_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long
 #endif
 		}
 		break;
-#if 0
 	case COMBO_IOCTL_BT_INTTRX:
 		/*
 		 * input: arg(buf_size = 128): hci cmd raw data
@@ -468,16 +480,16 @@ static long BT_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long
 			BTMTK_INFO_RAW(ioc_buf, ioc_buf[3] + 4, "%s: len[%d] TX: ", __func__, ioc_buf[3] + 4);
 			/* DynamicAdjustTxPower function */
 			if (ioc_buf[0] == 0x01 && ioc_buf[1] == 0x2D && ioc_buf[2] == 0xFC) {
-				if (btmtk_inttrx_DynamicAdjustTxPower(ioc_buf[4], ioc_buf[5],
-								ioctl_copy_evt_to_buf, TRUE) == 0) {
-					if (copy_to_user((uint8_t __user *)arg, ioc_buf, IOCTL_BT_HOST_INTTRX_SIZE))
-						retval = -EFAULT;
-				}
+				if (ioc_buf[4] == HCI_CMD_DY_ADJ_PWR_QUERY)
+					btmtk_query_tx_power(g_sbdev, _ioctl_copy_evt_to_buf);
+				else
+					btmtk_set_tx_power(g_sbdev, ioc_buf[5], _ioctl_copy_evt_to_buf);
+				if (copy_to_user((uint8_t __user *)arg, ioc_buf, IOCTL_BT_HOST_INTTRX_SIZE))
+					retval = -EFAULT;
 			} else
 				retval = -EFAULT;
 		}
 		break;
-#endif
 	default:
 		break;
 	}
@@ -493,9 +505,6 @@ static long BT_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long a
 static int BT_open(struct inode *inode, struct file *file)
 {
 	int32_t ret;
-
-	__pm_stay_awake(bt_wakelock);
-	BTMTK_INFO("major %d minor %d (pid %d)", imajor(inode), iminor(inode), current->pid);
 
 	/* Turn on BT */
 	if (g_sbdev == NULL) {
@@ -513,6 +522,12 @@ static int BT_open(struct inode *inode, struct file *file)
 		return -1;
 	}
 
+	/* incase of rc with pwr_on_uds_work */
+	flush_work(&g_sbdev->pwr_on_uds_work);
+
+	__pm_stay_awake(bt_wakelock);
+	BTMTK_INFO("major %d minor %d (pid %d)", imajor(inode), iminor(inode), current->pid);
+
 	ret = g_sbdev->hdev->open(g_sbdev->hdev);
 	if (ret) {
 		BTMTK_ERR("BT turn on fail!");
@@ -523,6 +538,7 @@ static int BT_open(struct inode *inode, struct file *file)
 	btmtk_register_rx_event_cb(BT_event_cb);
 
 	bt_ftrace_flag = 1;
+	hw_err_retry = 0;
 	__pm_relax(bt_wakelock);
 #if 0 // Simfex
 	bthost_debug_init();
@@ -535,13 +551,34 @@ static int BT_close(struct inode *inode, struct file *file)
 {
 	int32_t ret;
 
-	__pm_stay_awake(bt_wakelock);
-	BTMTK_INFO("%s: major %d minor %d (pid %d)", __func__, imajor(inode), iminor(inode), current->pid);
 	bt_ftrace_flag = 0;
 	//bt_core_unregister_rx_event_cb();
 
+	/* err handle for uart disconnect */
+	if (g_sbdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev == NULL", __func__);
+		return -1;
+	}
+
+	if (g_sbdev->hdev == NULL) {
+		BTMTK_ERR("%s: g_sbdev->hdev == NULL", __func__);
+		/* if bt closed after bt disconnected, would not able to set fops to closed */
+		/* Todo: how to excute bt_close flow to free unused data */
+		g_sbdev->fops_state = BTMTK_FOPS_STATE_CLOSED;
+		return -1;
+	}
+
+	if (g_sbdev->hdev->close == NULL) {
+		BTMTK_ERR("%s: g_sbdev->hdev->close == NULL", __func__);
+		g_sbdev->fops_state = BTMTK_FOPS_STATE_CLOSED;
+		return -1;
+	}
+	__pm_stay_awake(bt_wakelock);
+	BTMTK_INFO("%s: major %d minor %d (pid %d)", __func__, imajor(inode), iminor(inode), current->pid);
+
 	ret = g_sbdev->hdev->close(g_sbdev->hdev);
 	__pm_relax(bt_wakelock);
+
 #if 0 // Simfex
 	bthost_debug_init();
 #endif
