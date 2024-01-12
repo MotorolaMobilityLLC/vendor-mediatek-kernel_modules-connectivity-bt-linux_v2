@@ -65,7 +65,7 @@ static int btmtk_uart_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 	memcpy(&cmd[MCU_ADDRESS_OFFSET_CMD], &reg, sizeof(reg));
 
 	ret = btmtk_main_send_cmd(bdev, cmd, READ_REGISTER_CMD_LEN, event, READ_REGISTER_EVT_HDR_LEN, DELAY_TIMES,
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 
 	memcpy(val, bdev->io_buf + MCU_ADDRESS_OFFSET_EVT - HCI_TYPE_SIZE, sizeof(u32));
 	*val = le32_to_cpu(*val);
@@ -121,7 +121,7 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 }
 
 int btmtk_uart_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
-		int delay, int retry, int pkt_type)
+		int delay, int retry, int pkt_type, bool flag)
 {
 
 	return 0;
@@ -164,10 +164,17 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			BTMTK_INFO_RAW(event_need_compare, event_need_compare_len,
 				"%s: event_need_compare:", __func__);
 			BTMTK_INFO_RAW(skb->data, skb->len, "%s: skb->data:", __func__);
+
+			if (btmtk_vendor_cmd_filter(bdev, skb))
+				return 1;
+
 			return 0;
 		}
 
 		return 1;
+	} else {
+		if (btmtk_vendor_cmd_filter(bdev, skb))
+			return 1;
 	}
 
 	return 0;
@@ -176,7 +183,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		struct sk_buff *skb,
 		const uint8_t *event, const int event_len,
-		int delay, int retry, int pkt_type)
+		int delay, int retry, int pkt_type , bool flag)
 {
 	unsigned long comp_event_timo = 0, start_time = 0;
 	int ret = -1;
@@ -205,7 +212,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
 
-	ret = btmtk_uart_send_cmd(bdev, skb, delay, retry, pkt_type);
+	ret = btmtk_uart_send_cmd(bdev, skb, delay, retry, pkt_type, flag);
 	if (ret < 0) {
 		BTMTK_ERR("%s btmtk_uart_send_cmd failed!!", __func__);
 		goto fw_assert;

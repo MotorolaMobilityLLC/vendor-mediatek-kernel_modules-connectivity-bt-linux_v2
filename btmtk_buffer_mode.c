@@ -109,7 +109,7 @@ static int btmtk_buffer_mode_set_addr(struct btmtk_buffer_mode_struct *buffer_mo
 		ret = btmtk_main_send_cmd(buffer_mode->bdev,
 				cmd.content, cmd.len,
 				event.content, event.len,
-				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST);
+				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 	}
 
 	BTMTK_INFO("%s done", __func__);
@@ -144,7 +144,7 @@ static int btmtk_buffer_mode_set_radio(struct btmtk_buffer_mode_struct *buffer_m
 	ret = btmtk_main_send_cmd(buffer_mode->bdev,
 			cmd.content, cmd.len,
 			event.content, event.len,
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -166,7 +166,7 @@ static int btmtk_buffer_mode_set_group_boundary(struct btmtk_buffer_mode_struct 
 	ret = btmtk_main_send_cmd(buffer_mode->bdev,
 			cmd.content, cmd.len,
 			event.content, event.len,
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -189,7 +189,7 @@ static int btmtk_buffer_mode_set_power_offset(struct btmtk_buffer_mode_struct *b
 	ret = btmtk_main_send_cmd(buffer_mode->bdev,
 			cmd.content, cmd.len,
 			event.content, event.len,
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -224,7 +224,7 @@ static int btmtk_buffer_mode_set_compensation(struct btmtk_buffer_mode_struct *b
 	ret = btmtk_main_send_cmd(buffer_mode->bdev,
 			cmd.content, cmd.len,
 			event.content, event.len,
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -245,7 +245,7 @@ static int btmtk_buffer_mode_set_compensation_by_channel(struct btmtk_buffer_mod
 	ret = btmtk_main_send_cmd(buffer_mode->bdev,
 			cmd.content, cmd.len,
 			event.content, event.len,
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 
 	BTMTK_INFO("%s done", __func__);
 
@@ -268,7 +268,7 @@ static int btmtk_buffer_mode_set_bt_loss(struct btmtk_buffer_mode_struct *buffer
 	ret = btmtk_main_send_cmd(buffer_mode->bdev,
 			cmd.content, cmd.len,
 			event.content, event.len,
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;

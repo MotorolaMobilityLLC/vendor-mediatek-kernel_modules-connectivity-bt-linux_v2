@@ -549,7 +549,7 @@ void btmtk_get_cmd_or_event(struct btmtk_dev *bdev,
 
 int btmtk_send_cmd_to_fw(struct btmtk_dev *bdev,
 		enum cmd_index_s cmd_type, enum cmd_index_s evt_type,
-		int delay, int retry, int pkt_type)
+		int delay, int retry, int pkt_type, bool flag)
 {
 	int ret = 0;	/* if successful, 0 */
 	struct data_struct cmd = {0}, event = {0};
@@ -572,7 +572,7 @@ int btmtk_send_cmd_to_fw(struct btmtk_dev *bdev,
 	ret = btmtk_main_send_cmd(bdev,
 			cmd.content, cmd.len,
 			event.content, event.len,
-			delay, retry, pkt_type);
+			delay, retry, pkt_type, flag);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed, type is %d", __func__, cmd_type);
 
@@ -751,7 +751,7 @@ static int btmtk_set_audio_pin_mux_common(struct btmtk_dev *bdev)
 
 		BTMTK_INFO_RAW(write_pinmux_cmd.content, write_pinmux_cmd.len, "%s: Send CMD:", __func__);
 		ret = btmtk_main_send_cmd(bdev, write_pinmux_cmd.content, write_pinmux_cmd.len,
-				write_pinmux_event.content, write_pinmux_event.len, 0, 0, BTMTK_TX_PKT_FROM_HOST);
+				write_pinmux_event.content, write_pinmux_event.len, 0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 		if (ret < 0) {
 			BTMTK_ERR("%s: failed(%d)", __func__, ret);
 			goto exit;

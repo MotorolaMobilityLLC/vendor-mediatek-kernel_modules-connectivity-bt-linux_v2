@@ -64,7 +64,7 @@ int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 	if (is_support_unify_woble(bdev)) {
 		ret = btmtk_send_cmd_to_fw(bdev,
 				RES_APCF_CMD, RES_APCF_EVT,
-				0, 0, BTMTK_TX_PKT_FROM_HOST);
+				0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NEED_FILTER);
 		BTMTK_INFO("%s: ret %d", __func__, ret);
 	} else
 		BTMTK_WARN("%s: not support for 0x%x", __func__, bdev->chip_id);
@@ -198,7 +198,7 @@ static int btmtk_send_woble_read_BDADDR_cmd(struct btmtk_dev *bdev)
 	}
 	ret = btmtk_send_cmd_to_fw(bdev,
 			READ_ADDRESS_CMD, READ_ADDRESS_EVT,
-			0, 0, BTMTK_TX_PKT_FROM_HOST);
+			0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 
 	/*BD address will get in btmtk_rx_work*/
 	if (ret < 0)
@@ -217,7 +217,7 @@ static int btmtk_send_unify_woble_suspend_default_cmd(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: begin", __func__);
 	ret = btmtk_send_cmd_to_fw(bdev,
 		WOBLE_ENABLE_DEFAULT_CMD, WOBLE_ENABLE_DEFAULT_EVT,
-		0, 0, BTMTK_TX_PKT_FROM_HOST);
+		0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 
@@ -233,7 +233,7 @@ static int btmtk_send_unify_woble_resume_default_cmd(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: begin", __func__);
 	ret = btmtk_send_cmd_to_fw(bdev,
 		WOBLE_DISABLE_DEFAULT_CMD, WOBLE_DISABLE_DEFAULT_EVT,
-		0, 0, BTMTK_TX_PKT_FROM_HOST);
+		0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 
@@ -250,7 +250,7 @@ static int btmtk_send_woble_suspend_cmd(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: not support woble, send radio off cmd", __func__);
 	ret = btmtk_send_cmd_to_fw(bdev,
 		RADIO_OFF_CMD, RADIO_OFF_EVT,
-		0, 0, BTMTK_TX_PKT_FROM_HOST);
+		0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 
@@ -265,7 +265,7 @@ static int btmtk_send_woble_resume_cmd(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: begin", __func__);
 	ret = btmtk_send_cmd_to_fw(bdev,
 		RADIO_ON_CMD, RADIO_ON_EVT,
-		0, 0, BTMTK_TX_PKT_FROM_HOST);
+		0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 
@@ -279,7 +279,7 @@ static int btmtk_set_Woble_APCF_filter_parameter(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: begin", __func__);
 	ret = btmtk_send_cmd_to_fw(bdev,
 		APCF_FILTER_CMD, APCF_FILTER_EVT,
-		0, 0, BTMTK_TX_PKT_FROM_HOST);
+		0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s: end ret %d", __func__, ret);
 	else
@@ -331,7 +331,7 @@ static int btmtk_set_Woble_APCF(struct btmtk_woble *bt_woble)
 #endif
 			ret = btmtk_main_send_cmd(bdev, bt_woble->woble_setting_apcf[i].content,
 				bt_woble->woble_setting_apcf[i].length, event.content, event.len, 0, 0,
-				BTMTK_TX_PKT_FROM_HOST);
+				BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 			if (ret < 0) {
 				BTMTK_ERR("%s: manufactur_data error ret %d", __func__, ret);
 				return ret;
@@ -341,7 +341,7 @@ static int btmtk_set_Woble_APCF(struct btmtk_woble *bt_woble)
 		BTMTK_INFO("%s: use default manufactur data", __func__);
 		memcpy(cmd.content + 10, bdev->bdaddr, BD_ADDRESS_SIZE);
 		ret = btmtk_main_send_cmd(bdev, cmd.content, cmd.len,
-			event.content, event.len, 0, 0, BTMTK_TX_PKT_FROM_HOST);
+			event.content, event.len, 0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 		if (ret < 0) {
 			BTMTK_ERR("%s: manufactur_data error ret %d", __func__, ret);
 			return ret;
@@ -443,7 +443,7 @@ static int btmtk_set_Woble_Radio_Off(struct btmtk_woble *bt_woble)
 		ret = btmtk_main_send_cmd(bdev, radio_off, length,
 			bt_woble->woble_setting_radio_off_comp_event.content,
 			bt_woble->woble_setting_radio_off_comp_event.length, 0, 0,
-			BTMTK_TX_PKT_FROM_HOST);
+			BTMTK_TX_PKT_FROM_HOST, CMD_NEED_FILTER);
 
 		kfree(radio_off);
 		radio_off = NULL;
@@ -473,7 +473,7 @@ static int btmtk_set_Woble_Radio_On(struct btmtk_woble *bt_woble)
 			bt_woble->woble_setting_radio_on.length,
 			bt_woble->woble_setting_radio_on_comp_event.content,
 			bt_woble->woble_setting_radio_on_comp_event.length, 0, 0,
-			BTMTK_TX_PKT_FROM_HOST);
+			BTMTK_TX_PKT_FROM_HOST, CMD_NEED_FILTER);
 	} else { /* use default */
 		BTMTK_WARN("%s: use default radio on cmd", __func__);
 		ret = btmtk_send_unify_woble_resume_default_cmd(bdev);
@@ -490,7 +490,7 @@ static int btmtk_del_Woble_APCF_index(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s, enter", __func__);
 	ret = btmtk_send_cmd_to_fw(bdev,
 		APCF_DELETE_CMD, APCF_DELETE_EVT,
-		0, 0, BTMTK_TX_PKT_FROM_HOST);
+		0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s: got error %d", __func__, ret);
 
@@ -524,7 +524,7 @@ static int btmtk_set_Woble_APCF_Resume(struct btmtk_woble *bt_woble)
 				bt_woble->woble_setting_apcf_resume[i].content,
 				bt_woble->woble_setting_apcf_resume[i].length,
 				event.content, event.len,
-				0, 0, BTMTK_TX_PKT_FROM_HOST);
+				0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 			if (ret < 0) {
 				BTMTK_ERR("%s: Send apcf resume fail %d", __func__, ret);
 				return ret;
@@ -548,7 +548,7 @@ static void btmtk_check_wobx_debug_log(struct btmtk_dev *bdev)
 
 	ret = btmtk_send_cmd_to_fw(bdev,
 		CHECK_WOBX_DEBUG_CMD, CHECK_WOBX_DEBUG_EVT,
-		0, 0, BTMTK_TX_PKT_FROM_HOST);
+		0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 

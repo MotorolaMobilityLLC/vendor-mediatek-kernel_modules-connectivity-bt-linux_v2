@@ -59,7 +59,7 @@ static int btmtk_read_pin_mux_setting_7961(struct btmtk_dev *bdev, const uint8_t
 
 	BTMTK_INFO("%s enter", __func__);
 	ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
-			event, event_len, 0, 0, BTMTK_TX_PKT_FROM_HOST);
+			event, event_len, 0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 
@@ -84,7 +84,7 @@ static int btmtk_write_pin_mux_setting_7961(struct btmtk_dev *bdev, uint8_t *cmd
 	cmd[cmd_len - 1] = ((value & 0xFF000000) >> 24);
 
 	ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
-			event, event_len, 0, 0, BTMTK_TX_PKT_FROM_HOST);
+			event, event_len, 0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 

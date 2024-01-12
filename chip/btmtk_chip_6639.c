@@ -60,7 +60,7 @@ int btmtk_cif_connac3_calibration_restore(struct btmtk_dev *bdev)
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, CAL_DATA_CMD_LEN,
 			event, CAL_DATA_EVNET_LEN,
-			WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 	if (ret < 0) {
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 		ret = -1;
@@ -125,7 +125,7 @@ int btmtk_cif_connac3_calibration_restore(struct btmtk_dev *bdev)
 			BTMTK_INFO_RAW(image, packet_len + 12, "%s, send, len = %d", __func__, (packet_len + 12));
 
 			ret = btmtk_main_send_cmd(bdev, image, packet_len + 12,
-					event, CAL_DATA_EVNET_LEN - 1, delay, retry, BTMTK_TX_ACL_FROM_DRV);
+					event, CAL_DATA_EVNET_LEN - 1, delay, retry, BTMTK_TX_ACL_FROM_DRV, CMD_NO_NEED_FILTER);
 			if (ret < 0) {
 				BTMTK_ERR("%s: send cal data failed, terminate", __func__);
 				goto err;
@@ -169,7 +169,7 @@ int btmtk_cif_connac3_calibration_backup_send(struct btmtk_dev *bdev)
 	do {
 		BTMTK_INFO_RAW(cmd, cmd_len, "%s, send, len(%d)", __func__, cmd_len);
 		ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
-			NULL, 0, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_ACL_FROM_DRV);
+			NULL, 0, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_ACL_FROM_DRV, CMD_NO_NEED_FILTER);
 		while (time_before(jiffies, single_timo)) {
 			usleep_range(10, 100);
 			if (calibration_status <= BTMTK_CAL_DATA_STATE_END) {
@@ -242,7 +242,7 @@ static int btmtk_bt_open(struct btmtk_dev *bdev)
 
 	ret = btmtk_send_cmd_to_fw(bdev,
 			SET_EFEM1_CMD, SET_EFEM1_EVT,
-			WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 	if (ret < 0) {
 		BTMTK_ERR("%s, btmtk_calibration_flow failed!", __func__);
 		goto exit;

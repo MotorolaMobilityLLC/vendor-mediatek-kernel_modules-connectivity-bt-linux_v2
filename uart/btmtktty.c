@@ -194,7 +194,7 @@ static int btmtk_send_to_tx_queue(struct btmtk_uart_dev *cif_dev, struct sk_buff
 }
 
 int btmtk_uart_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
-		int delay, int retry, int pkt_type)
+		int delay, int retry, int pkt_type, bool flag)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
 	int ret = -1;
@@ -245,7 +245,7 @@ static int btmtk_uart_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 
 	ret = btmtk_main_send_cmd(bdev,
 			cmd.content, cmd.len, event.content, event.len,
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 
 	memcpy(val, bdev->io_buf + MCU_ADDRESS_OFFSET_EVT - HCI_TYPE_SIZE, sizeof(u32));
 	*val = le32_to_cpu(*val);
@@ -350,7 +350,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		struct sk_buff *skb,
 		const uint8_t *event, const int event_len,
-		int delay, int retry, int pkt_type)
+		int delay, int retry, int pkt_type, bool flag)
 {
 	unsigned long comp_event_timo = 0, start_time = 0;
 	int ret = 0;
@@ -442,7 +442,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		opcode[0] = skb->data[1];
 		opcode[1] = skb->data[2];
 	}
-	ret = btmtk_uart_send_cmd(bdev, skb, delay, retry, pkt_type);
+	ret = btmtk_uart_send_cmd(bdev, skb, delay, retry, pkt_type, CMD_NO_NEED_FILTER);
 
 	if (ret < 0) {
 		BTMTK_ERR("%s btmtk_uart_send_cmd failed!!", __func__);
@@ -529,7 +529,7 @@ int btmtk_uart_send_enable_ctxrtx(struct hci_dev *hdev)
 	int ret = -1;
 
 	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), evt, sizeof(evt), DELAY_TIMES,
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV,CMD_NO_NEED_FILTER);
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -627,7 +627,7 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, SETBAUD_CMD_LEN, event, SETBAUD_EVT_LEN, 0,
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
@@ -649,9 +649,9 @@ static int btmtk_uart_send_query_uart_cmd(struct hci_dev *hdev)
 
 	ret = btmtk_main_send_cmd(bdev, cmd, GETBAUD_CMD_LEN, event, GETBAUD_EVT_LEN, DELAY_TIMES,
 #if (USE_DEVICE_NODE == 0)
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 #else
-			RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+			RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
 #endif
 	if (ret < 0) {
 		BTMTK_ERR("%s btmtk_uart_send_query_uart_cmd failed!!", __func__);
@@ -672,9 +672,9 @@ static int btmtk_uart_read_chip_id_cmd(struct hci_dev *hdev)
 
 	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), DELAY_TIMES,
 #if (USE_DEVICE_NODE == 0)
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 #else
-			RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+			RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
 #endif
 	if (ret < 0) {
 		BTMTK_ERR("%s btmtk_uart_read_chip_id_cmd failed, set bdev->chip_id to 0x6653", __func__);
@@ -715,13 +715,13 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 		BTMTK_INFO("%s: chip_id = 0x%x", __func__, bdev->chip_id);
 		if (!cif_dev->fw_dl_ready && bdev->chip_id == 0x6639)
 			ret = btmtk_main_send_cmd(bdev, cmd + 4, 1, event, WAKEUP_EVT_LEN,
-					0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+					0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 		else
 			ret = btmtk_main_send_cmd(bdev, cmd + 4, 1, event2, WAKEUP_EVT_LEN + 1,
-					0, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+					0, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
 	} else
 		ret = btmtk_main_send_cmd(bdev, cmd, WAKEUP_CMD_LEN, event, WAKEUP_EVT_LEN,
-				0, 0, BTMTK_TX_CMD_FROM_DRV);
+				0, 0, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
@@ -766,9 +766,9 @@ static int btmtk_uart_send_xo_param_cmd(struct hci_dev *hdev, CONNXO_CFG_PARAM_S
 
 	ret = btmtk_main_send_cmd(bdev, cmd, cmd_len, event, sizeof(event), DELAY_TIMES,
 #if (USE_DEVICE_NODE == 0)
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 #else
-			RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+			RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
 
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
@@ -997,7 +997,7 @@ static int btmtk_uart_driver_own_cmd(struct btmtk_dev *bdev)
 	int ret = 0;
 
 	ret = btmtk_main_send_cmd(bdev, fw_own_clr_cmd, 10, evt, OWNTYPE_EVT_LEN,
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed, ret[%d]", __func__, ret);
 	return ret;
@@ -1330,7 +1330,7 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 				/* 28. If DEV0_BT_AWAKE is 0, send 0xFF */
 				if (mtk8250_uart_hub_get_bt_awake_sta() == 0) {
 					u8 wakeup_cmd[] = { 0xFF };
-					ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+					ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
 					if (ret < 0)
 						BTMTK_ERR("%s btmtk_main_send_cmd 0xFF fail when DEV0_BT_AWAKE is 0, ret[%d]", __func__, ret);
 				}
@@ -1544,7 +1544,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			event, LD_PATCH_EVT_LEN,
 			PATCH_DOWNLOAD_PHASE3_DELAY_TIME,
 			PATCH_DOWNLOAD_PHASE3_RETRY,
-			BTMTK_TX_ACL_FROM_DRV);
+			BTMTK_TX_ACL_FROM_DRV, CMD_NO_NEED_FILTER);
 	if (ret < 0) {
 		BTMTK_ERR("%s: send wmd dl cmd failed, terminate!", __func__);
 		return ret;
@@ -2379,7 +2379,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s", __func__);
 	ret = btmtk_main_send_cmd(bdev, cmd, FWOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN,
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 
 	return ret;
 }
@@ -2392,7 +2392,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s", __func__);
 	ret = btmtk_main_send_cmd(bdev, cmd, DRVOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN,
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 
 	return ret;
 }
@@ -2438,7 +2438,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 
 		/* two different event for fw allow sleep or not */
 		ret = btmtk_main_send_cmd(bdev, cmd, FWOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN - 3,
-				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
 		/* evt[7] = 1 for no sleep */
 		if (bdev->io_buf[7]) {
 			/* re-set tx request */
@@ -2548,7 +2548,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			u8 wakeup_cmd[] = { 0xFF };
 			 if (bdev->is_eap) {
 				if (!cif_dev->sleep_flow_hw_mech_en) {
-					ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+					ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
 				} else {
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 					/* new wakeup flow */
@@ -2559,7 +2559,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 					BTMTK_INFO("%s: Set DEVx_HOST_AWAKE = 1, ret = %d ", __func__, ret);
 
 					if (mtk8250_uart_hub_get_bt_awake_sta()== 0) {
-						ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+						ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
 					}
 
 					do {
@@ -2573,7 +2573,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 				for (i = 0; i < 3; i++) {
 					/* no need to wait event */
 					ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
-							DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+							DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
 					/* wait a while for fw wakeup */
 					usleep_range(6000, 6100);
 				}
@@ -2586,7 +2586,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			/* fw own clr cmd for notice is wakeup by bt driver */
 			/* let retry = 0 for only wait for event 500ms */
 			ret = btmtk_main_send_cmd(bdev, fw_own_clr_cmd, 10, evt, OWNTYPE_EVT_LEN,
-					DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+					DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
 			if (ret < 0)
 				BTMTK_ERR("%s fw_own_clr_cmd fail retry[%d]", __func__, retry);
 		} while (ret < 0 && --retry);

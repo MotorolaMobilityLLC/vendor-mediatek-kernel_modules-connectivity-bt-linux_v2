@@ -302,6 +302,7 @@ extern uint8_t _raw_buf_[];
 #define BD_ADDRESS_SIZE 6
 #define PHASE1_WMT_CMD_COUNT 255
 #define VENDOR_CMD_COUNT 255
+#define FILTER_VENDOR_CMD_COUNT 255
 
 #define BT_CFG_NAME "bt.cfg"
 #define BT_CFG_NAME_PREFIX "bt_mt"
@@ -312,8 +313,10 @@ extern uint8_t _raw_buf_[];
 #define BT_UNIFY_WOBLE_TYPE "UNIFY_WOBLE_TYPE"
 #define BT_WOBLE_BY_EINT "SUPPORT_WOBLE_BY_EINT"
 #define BT_DONGLE_RESET_PIN "BT_DONGLE_RESET_GPIO_PIN"
-#define BT_RESET_DONGLE "SUPPORT_DONGLE_RESET"
+#define BT_SUBSYS_RESET_DONGLE "SUPPORT_DONGLE_SUBSYS_RESET"
+#define BT_WHOLE_RESET_DONGLE "SUPPORT_DONGLE_WHOLE_RESET"
 #define BT_FULL_FW_DUMP "SUPPORT_FULL_FW_DUMP"
+#define BT_FILTER_VENDOR_CMD "FILTER_CMD"
 #define BT_WOBLE_WAKELOCK "SUPPORT_WOBLE_WAKELOCK"
 #define BT_WOBLE_FOR_BT_DISABLE "SUPPORT_WOBLE_FOR_BT_DISABLE"
 #define BT_RESET_STACK_AFTER_WOBLE "RESET_STACK_AFTER_WOBLE"
@@ -366,7 +369,8 @@ struct fw_cfg_struct {
 struct bt_cfg_struct {
 	bool	support_unify_woble;	/* support unify woble or not */
 	bool	support_woble_by_eint;		/* support woble by eint or not */
-	bool	support_dongle_reset;		/* support chip reset or not */
+	bool	support_dongle_subsys_reset;	/*support subsys reset or not*/
+	bool	support_dongle_whole_reset;	/*support whole reset or not*/
 	bool	support_full_fw_dump;		/* dump full fw coredump or not */
 	bool	support_woble_wakelock;		/* support when woble error, do wakelock or not */
 	bool	support_woble_for_bt_disable;		/* when bt disable, support enter susend or not */
@@ -383,6 +387,7 @@ struct bt_cfg_struct {
 	struct fw_cfg_struct phase1_wmt_cmd[PHASE1_WMT_CMD_COUNT];
 	struct fw_cfg_struct vendor_cmd[VENDOR_CMD_COUNT];
 	bool	support_bt_single_sku;
+	struct fw_cfg_struct filter_vendor_cmd[FILTER_VENDOR_CMD_COUNT];
 	bool	support_audio_setting;			/* support audio set pinmux */
 	struct fw_cfg_struct audio_cmd;	/* support on audio enable command customization */
 	struct fw_cfg_struct audio_pinmux_num;	/* support on set audio pinmux num command customization */

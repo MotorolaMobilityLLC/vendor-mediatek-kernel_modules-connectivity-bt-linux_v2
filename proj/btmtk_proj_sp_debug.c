@@ -123,7 +123,7 @@ int RHW_WRITE(uint32_t addr, uint32_t val)
 	memcpy(&evt[RHW_ADDR_OFFSET_CMD], &addr, RHW_ADDR_LEN);
 
 	ret = btmtk_main_send_cmd(g_sbdev, cmd, RHW_PKT_LEN, evt, RHW_PKT_COMP_LEN, DELAY_TIMES,
-			RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT);
+			RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT, CMD_NO_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s failed, rhw_fail_cnt[%d]", __func__, ++cif_dev->rhw_fail_cnt);
 
@@ -164,7 +164,7 @@ int RHW_READ(uint32_t addr, uint32_t *val)
 	memcpy(&evt[RHW_ADDR_OFFSET_CMD], &addr, sizeof(addr));
 
 	ret = btmtk_main_send_cmd(g_sbdev, cmd, RHW_PKT_LEN, evt, RHW_PKT_COMP_LEN, DELAY_TIMES,
-			RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT);
+			RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT, CMD_NO_NEED_FILTER);
 
 	if (ret >= 0) {
 		memcpy(val, g_sbdev->io_buf + RHW_PKT_COMP_LEN, sizeof(u32));
@@ -211,7 +211,7 @@ int CONNV3_RHW_WRITE(uint32_t addr, uint32_t val)
 	memcpy(&cmd[FW_CR_CMD_DATA_OFFSET], &val, FW_CR_DATA_LEN);
 
 	ret = btmtk_main_send_cmd(g_sbdev, cmd, FW_CR_WR_CMD_PKT_LEN, evt, FW_CR_WR_EVT_PKT_LEN,
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s failed", __func__);
 
@@ -250,7 +250,7 @@ int CONNV3_RHW_READ(uint32_t addr, uint32_t *val)
 
 	ret = btmtk_main_send_cmd(g_sbdev, cmd, FW_CR_RD_CMD_PKT_LEN,
 			evt, FW_CR_EVT_DATA_OFFSET, DELAY_TIMES,
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 
 	if (ret >= 0) {
 		memcpy(val, g_sbdev->io_buf + FW_CR_EVT_DATA_OFFSET, sizeof(u32));

@@ -74,7 +74,7 @@ int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 	do {
 		err = btmtk_send_cmd_to_fw(bdev,
 				WIFI_PATCH_QUERY_CMD, WIFI_PATCH_QUERY_EVT,
-				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 		if (err < 0) {
 			BTMTK_ERR("%s: send wifi patch query failed!", __func__);
 			return PATCH_ERR;
@@ -118,7 +118,7 @@ int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 
 	err = btmtk_send_cmd_to_fw(bdev,
 			WIFI_PATCH_ENABLE_CMD, WIFI_PATCH_ENABLE_EVT,
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 	if (err < 0) {
 		BTMTK_ERR("%s: send wifi patch enable failed!", __func__);
 		return PATCH_ERR;
