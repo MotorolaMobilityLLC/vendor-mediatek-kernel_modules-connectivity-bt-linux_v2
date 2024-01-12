@@ -45,9 +45,6 @@ static char event_compare_status;
 static DEFINE_MUTEX(btmtk_usb_ops_mutex);
 #define USB_OPS_MUTEX_LOCK()	mutex_lock(&btmtk_usb_ops_mutex)
 #define USB_OPS_MUTEX_UNLOCK()	mutex_unlock(&btmtk_usb_ops_mutex)
-static DEFINE_MUTEX(btmtk_usb_handle_mutex);
-#define USB_handle_MUTEX_LOCK()		mutex_lock(&btmtk_usb_handle_mutex)
-#define USB_handle_MUTEX_UNLOCK()	mutex_unlock(&btmtk_usb_handle_mutex)
 
 MODULE_DEVICE_TABLE(usb, btusb_table);
 
@@ -2212,16 +2209,6 @@ static void btmtk_usb_cif_mutex_lock(struct btmtk_dev *bdev)
 static void btmtk_usb_cif_mutex_unlock(struct btmtk_dev *bdev)
 {
 	USB_OPS_MUTEX_UNLOCK();
-}
-
-void btmtk_usb_handle_mutex_lock(struct btmtk_dev *bdev)
-{
-	USB_handle_MUTEX_LOCK();
-}
-
-void btmtk_usb_handle_mutex_unlock(struct btmtk_dev *bdev)
-{
-	USB_handle_MUTEX_UNLOCK();
 }
 
 static inline void btusb_free_frags(struct btmtk_dev *bdev)
@@ -4422,18 +4409,15 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	uint32_t gpio_num = 0;
 	int val = 0;
 
-	btmtk_usb_handle_mutex_lock(bdev);
 
 	if (!bdev) {
 		BTMTK_ERR("%s: bdev is NULL, return", __func__);
-		btmtk_usb_handle_mutex_unlock(bdev);
 		return -1;
 	}
 
 	state = btmtk_get_chip_state(bdev);
 	if (state == BTMTK_STATE_DISCONNECT) {
 		BTMTK_INFO("%s:usb disconnect is doing, return", __func__);
-		btmtk_usb_handle_mutex_unlock(bdev);
 		return -1;
 	}
 
@@ -4509,16 +4493,16 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 
 		BTMTK_INFO("%s: set gpio done", __func__);
 		gpio_free(gpio_num);
+		btmtk_usb_open(bdev->hdev);
 	} else {
 		if (bmain_info->hif_hook_chip.bt_subsys_reset) {
 			ret = bmain_info->hif_hook_chip.bt_subsys_reset(bdev);
-			btmtk_usb_handle_mutex_unlock(bdev);
+			btmtk_usb_open(bdev->hdev);
 			return ret;
 		}
 	}
 
 	BTMTK_ERR("%s: subsys reset no register", __func__);
-	btmtk_usb_handle_mutex_unlock(bdev);
 	return -1;
 }
 
@@ -4770,6 +4754,8 @@ static int btusb_probe(struct usb_interface *intf,
 	init_usb_anchor(&cif_dev->ctrl_anchor);
 	init_usb_anchor(&cif_dev->ble_isoc_anchor);
 	spin_lock_init(&bdev->rxlock);
+
+	init_waitqueue_head(&bdev->p_woble_fail_q);
 
 	err = btmtk_cif_allocate_memory(cif_dev);
 	if (err < 0) {
@@ -5209,12 +5195,12 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 		return;
 	}
 
-	btmtk_usb_handle_mutex_lock(bdev);
+	btmtk_handle_mutex_lock(bdev);
 
 	state = btmtk_get_chip_state(bdev);
 	if (state == BTMTK_STATE_DISCONNECT) {
 		BTMTK_INFO("%s:usb disconnect is doing, return", __func__);
-		btmtk_usb_handle_mutex_unlock(bdev);
+		btmtk_handle_mutex_unlock(bdev);
 		return;
 	}
 
@@ -5224,7 +5210,7 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
 		/* Error */
 		BTMTK_WARN("%s intf[%d] priv setting is NULL", __func__, ifnum_base);
-		btmtk_usb_handle_mutex_unlock(bdev);
+		btmtk_handle_mutex_unlock(bdev);
 		return;
 	}
 
@@ -5233,11 +5219,9 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 	if (!cif_dev) {
 		BTMTK_WARN("%s: cif_dev is NULL!", __func__);
-		btmtk_usb_handle_mutex_unlock(bdev);
+		btmtk_handle_mutex_unlock(bdev);
 		return;
 	}
-
-	btmtk_handle_mutex_lock(bdev);
 
 	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
@@ -5262,7 +5246,6 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 	/* Set End/Error state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
 	btmtk_handle_mutex_unlock(bdev);
-	btmtk_usb_handle_mutex_unlock(bdev);
 }
 
 #ifdef CONFIG_PM
@@ -5442,8 +5425,6 @@ int btmtk_cif_register(void)
 	hook.enter_standby = btmtk_usb_enter_standby;
 	hook.write_uhw_register = btmtk_cif_write_uhw_register;
 	hook.read_uhw_register = btmtk_cif_read_uhw_register;
-	hook.handle_mutex_lock = btmtk_handle_mutex_lock;
-	hook.handle_mutex_unlock = btmtk_handle_mutex_unlock;
 	btmtk_reg_hif_hook(&hook);
 
 	retval = usb_register(&btusb_driver);
@@ -5661,6 +5642,7 @@ static int btmtk_usb_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 	int state = 0;
 
 	btmtk_handle_mutex_lock(bdev);
+	state = btmtk_get_chip_state(bdev);
 	if (state == BTMTK_STATE_DISCONNECT) {
 		BTMTK_ERR("%s: state is disconnect, return", __func__);
 		btmtk_handle_mutex_unlock(bdev);

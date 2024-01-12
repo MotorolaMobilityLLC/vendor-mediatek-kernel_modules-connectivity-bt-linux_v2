@@ -1168,6 +1168,12 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 	if (!g_fwlog)
 		return 0;
 
+	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_DISCONNECT) {
+		BTMTK_ERR("%s: state is disconnect, return", __func__);
+		return 0;
+	}
+
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, HCI_RESET_EVT, hci_reset_event);
 
 	if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
