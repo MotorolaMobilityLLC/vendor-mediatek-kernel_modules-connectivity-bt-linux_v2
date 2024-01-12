@@ -369,7 +369,7 @@ enum {
 
 /* Please keep sync with btmtk_set_state function */
 enum {
-	/* BTMTK_STATE_UNKNOWN = 0, */
+	BTMTK_STATE_UNKNOWN = 0,
 	BTMTK_STATE_INIT = 1,
 	BTMTK_STATE_DISCONNECT,
 	BTMTK_STATE_PROBE,
@@ -386,7 +386,7 @@ enum {
 
 /* Please keep sync with btmtk_fops_set_state function */
 enum {
-	/* BTMTK_FOPS_STATE_UNKNOWN = 0, */
+	BTMTK_FOPS_STATE_UNKNOWN = 0,
 	BTMTK_FOPS_STATE_INIT = 1,
 	BTMTK_FOPS_STATE_OPENING,	/* during opening */
 	BTMTK_FOPS_STATE_OPENED,	/* open in fops_open */

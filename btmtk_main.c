@@ -2517,7 +2517,7 @@ retry_again:
 			break;
 		case 2:			 /* TODO:retry */
 			if (retry > 0) {
-				/* comment from fw, we need to retry a sec until power on sucessfully. */
+				/* comment from fw, we need to retry a sec until power on successfully. */
 				retry--;
 				BTMTK_INFO("%s: need to try again", __func__);
 				msleep(50);
@@ -3092,7 +3092,7 @@ static void btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_d
 			BTMTK_ERR("btmtk_usb_load_code_from_setting_files %s failed!!", BT_CFG_NAME);
 			return;
 		}
-		snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s", BT_CFG_NAME);
+		(void)snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s", BT_CFG_NAME);
 	}
 
 	btmtk_load_bt_cfg_item(&bdev->bt_cfg, bdev->setting_file, bdev);
@@ -4311,7 +4311,7 @@ static void btmtk_rx_work(struct work_struct *work)
 
 void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 {
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	unsigned char fstate = BTMTK_FOPS_STATE_UNKNOWN;
 
 	if (!bdev)
 		return;
