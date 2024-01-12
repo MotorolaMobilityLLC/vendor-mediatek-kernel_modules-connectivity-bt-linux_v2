@@ -849,7 +849,7 @@ static int btmtk_RegisterBTIrq(struct btmtk_woble *bt_woble)
 		bt_woble->wobt_irq = irq_of_parse_and_map(eint_node, 0);
 		BTMTK_INFO("woble_irq number:%d", bt_woble->wobt_irq);
 		if (bt_woble->wobt_irq) {
-			of_property_read_u32_array(eint_node, "interrupts",
+			(void)of_property_read_u32_array(eint_node, "interrupts",
 						   interrupts, ARRAY_SIZE(interrupts));
 			bt_woble->wobt_irqlevel = interrupts[1];
 			if (request_irq(bt_woble->wobt_irq, (void *)btmtk_woble_isr,
