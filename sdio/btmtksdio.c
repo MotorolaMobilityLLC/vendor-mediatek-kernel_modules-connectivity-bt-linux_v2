@@ -1257,24 +1257,14 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 					attr_len = *(p + 1);
 					attr_type = *(p + 2);
 					BTMTK_INFO("attr_len = 0x%x, attr_type = 0x%x", attr_len, attr_type);
-					switch (attr_type) {
-					case WOBX_TRIGGER_INFO_ADDR_TYPE:
-						break;
-					case WOBX_TRIGGER_INFO_ADV_DATA_TYPE:
-						break;
-					case WOBX_TRIGGER_INFO_TRACE_LOG_TYPE:
-						break;
-					case WOBX_TRIGGER_INFO_SCAN_LOG_TYPE:
-						break;
-					case WOBX_TRIGGER_INFO_TRIGGER_CNT_TYPE:
+					if (WOBX_TRIGGER_INFO_TRIGGER_CNT_TYPE == attr_type) {
 						BTMTK_INFO("wakeup times(via BT) = %02X%02X%02X%02X",
 							*(p + 6), *(p + 5), *(p + 4), *(p + 3));
 						break;
-					default:
-						BTMTK_ERR("%s: unexpected attribute type(0x%x)", __func__, attr_type);
-						return 1;
+					} else {
+						p += 1 + attr_len;	// 1: len
+						continue;
 					}
-					p += 1 + attr_len;	// 1: len
 				}
 			}
 
