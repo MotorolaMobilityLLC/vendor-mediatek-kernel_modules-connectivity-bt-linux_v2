@@ -45,7 +45,8 @@ static const struct usb_device_id btusb_table[] = {
 	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x7922, 0xe0, 0x01, 0x01) },
 	/* Mediatek MT7902 */
 	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x7902, 0xe0, 0x01, 0x01) },
-
+	/* Mediatek MT6639 */
+	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x6639, 0xe0, 0x01, 0x01) },
 	{ }	/* Terminating entry */
 };
 
@@ -1184,7 +1185,7 @@ static int btmtk_usb_open(struct hci_dev *hdev)
 
 	ifnum_base = cif_dev->intf->cur_altsetting->desc.bInterfaceNumber;
 
-	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
+	if (is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
 		BTMTK_INFO("%s 7961 submit urb\n", __func__);
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
 			if (cif_dev->reset_intr_ep) {
@@ -1693,7 +1694,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		}
 
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
-			if ((is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) &&
+			if ((is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) &&
 					cif_dev->bulk_cmd_tx_ep)
 				urb = alloc_bulk_cmd_urb(hdev, skb);
 			else
@@ -1863,7 +1864,7 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	}
 
 
-	if (is_mt7922(bdev->chip_id) || is_mt7902(bdev->chip_id)) {
+	if (is_mt6639(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7902(bdev->chip_id)) {
 		delay = PATCH_DOWNLOAD_PHASE3_SECURE_BOOT_DELAY_TIME;
 		reg_value = BT_GDMA_DONE_7922_VALUE_W;
 	} else {
@@ -1872,7 +1873,7 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	}
 
 	/* Poll the register until dma dl is completed */
-	if (is_mt7961(bdev->chip_id) || is_mt7922(bdev->chip_id)) {
+	if (is_mt6639(bdev->chip_id) || is_mt7961(bdev->chip_id) || is_mt7922(bdev->chip_id)) {
 		do {
 			btmtk_cif_write_uhw_register(bdev, BT_GDMA_DONE_ADDR_W, reg_value);
 			btmtk_cif_read_uhw_register(bdev, BT_GDMA_DONE_ADDR_R, &value);
@@ -2165,7 +2166,7 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 {
 	int val, retry = 10;
 	u32 mcu_init_done = MCU_BT0_INIT_DONE;
-
+	u32 bt_subsys_cr;
 	cancel_work_sync(&bdev->work);
 	cancel_work_sync(&bdev->waker);
 
@@ -2185,12 +2186,16 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	/* read interrupt EP15 CR */
 	btmtk_cif_read_uhw_register(bdev, BT_WDT_STATUS, &val);
 
+	if (is_mt6639(bdev->chip_id))
+		bt_subsys_cr = BT_SUBSYS_RST_6639;
+	else
+		bt_subsys_cr = BT_SUBSYS_RST;
 	/* Write Reset CR to 1 */
-	btmtk_cif_read_uhw_register(bdev, BT_SUBSYS_RST, &val);
+	btmtk_cif_read_uhw_register(bdev, bt_subsys_cr, &val);
 	BTMTK_INFO("%s: read Reset CR : 0x%08x", __func__, val);
 	val |= (1 << 0);
 	BTMTK_INFO("%s: write 1 to Reset CR : 0x%08x", __func__, val);
-	btmtk_cif_write_uhw_register(bdev, BT_SUBSYS_RST, val);
+	btmtk_cif_write_uhw_register(bdev, bt_subsys_cr, val);
 
 	btmtk_cif_write_uhw_register(bdev, UDMA_INT_STA_BT, 0x000000FF);
 	btmtk_cif_read_uhw_register(bdev, UDMA_INT_STA_BT, &val);
@@ -2198,14 +2203,14 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	btmtk_cif_read_uhw_register(bdev, UDMA_INT_STA_BT1, &val);
 
 	/* Write Reset CR to 0 */
-	btmtk_cif_read_uhw_register(bdev, BT_SUBSYS_RST, &val);
+	btmtk_cif_read_uhw_register(bdev, bt_subsys_cr, &val);
 	BTMTK_INFO("%s: read Reset CR : 0x%08x", __func__, val);
 	val &= ~(1 << 0);
 	BTMTK_INFO("%s: write 0 to Reset CR : 0x%08x", __func__, val);
-	btmtk_cif_write_uhw_register(bdev, BT_SUBSYS_RST, val);
+	btmtk_cif_write_uhw_register(bdev, bt_subsys_cr, val);
 
 	/* Read reset CR */
-	btmtk_cif_read_uhw_register(bdev, BT_SUBSYS_RST, &val);
+	btmtk_cif_read_uhw_register(bdev, bt_subsys_cr, &val);
 
 	if (bdev->dualBT)
 		mcu_init_done |= MCU_BT1_INIT_DONE;
