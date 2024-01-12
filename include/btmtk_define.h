@@ -41,13 +41,18 @@
 #endif
 
 /** Driver version */
-#define VERSION "8.0.2023091101"
+
+#define VERSION "8.0.2023092403"
 #define SUBVER ":connac3_dev"
 
 #if CFG_SUPPORT_WAKEUP_IRQ
 #define WAKEUP_BT_IRQ 1
 #else
 #define WAKEUP_BT_IRQ 0
+#endif
+
+#ifndef BTMTK_RUNTIME_ENABLE
+#define BTMTK_RUNTIME_ENABLE 0
 #endif
 
 #define ENABLESTP FALSE
@@ -155,34 +160,14 @@ extern uint8_t btmtk_log_lvl;
 #define PR_CONT(fmt, ...) printk(KERN_CONT KERN_WARNING fmt, ##__VA_ARGS__)
 #endif
 
-#if (USE_DEVICE_NODE == 0)
-struct btmtk_dev *bdev __attribute__((weak)) = NULL;
 #define BTMTK_ERR(fmt, ...)	 \
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR) { \
-		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') PRINTF_INFO("[btmtk_err] %s ***"fmt"***\n", bdev->hdev->name, ##__VA_ARGS__); \
-		else PRINTF_INFO("[btmtk_err] ***"fmt"***\n", ##__VA_ARGS__);} } while (0)
+	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR) PRINTF_INFO("[btmtk_err] ***"fmt"***\n", ##__VA_ARGS__); } while (0)
 #define BTMTK_WARN(fmt, ...)	\
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN) { \
-		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') PRINTF_INFO("[btmtk_warn] %s "fmt"\n", bdev->hdev->name, ##__VA_ARGS__); \
-		else PRINTF_INFO("[btmtk_warn] "fmt"\n", ##__VA_ARGS__);} } while (0)
+	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN) PRINTF_INFO("[btmtk_warn] "fmt"\n", ##__VA_ARGS__); } while (0)
 #define BTMTK_INFO(fmt, ...)	\
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) { \
-		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') PRINTF_INFO("[btmtk_info] %s "fmt"\n", bdev->hdev->name, ##__VA_ARGS__); \
-		else PRINTF_INFO("[btmtk_info] "fmt"\n", ##__VA_ARGS__);} } while (0)
+	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) PRINTF_INFO("[btmtk_info] "fmt"\n", ##__VA_ARGS__); } while (0)
 #define BTMTK_DBG(fmt, ...)	 \
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) { \
-		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') PRINTF_INFO("[btmtk_dbg] %s "fmt"\n", bdev->hdev->name, ##__VA_ARGS__); \
-		else PRINTF_INFO("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__);} } while (0)
-#else
-#define BTMTK_ERR(fmt, ...)	 \
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR) pr_info("[btmtk_err] ***"fmt"***\n", ##__VA_ARGS__); } while (0)
-#define BTMTK_WARN(fmt, ...)	\
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN) pr_info("[btmtk_warn] "fmt"\n", ##__VA_ARGS__); } while (0)
-#define BTMTK_INFO(fmt, ...)	\
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) pr_info("[btmtk_info] "fmt"\n", ##__VA_ARGS__); } while (0)
-#define BTMTK_DBG(fmt, ...)	 \
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) pr_info("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__); } while (0)
-#endif
+	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) PRINTF_INFO("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__); } while (0)
 
 #define BTMTK_ERR_LIMITTED(fmt, ...)	\
 	do { \
@@ -209,32 +194,6 @@ extern uint8_t _raw_buf_[];
 			printk_ratelimited(KERN_WARNING "[btmtk_info_limit] "fmt"\n", ##__VA_ARGS__);	\
 	} while (0)
 
-#if (USE_DEVICE_NODE == 0)
-#define BTMTK_INFO_RAW(p, l, fmt, ...)						\
-	do {	\
-		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) {	\
-			int cnt_ = 0;	\
-			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
-			const unsigned char *ptr = p;	\
-			for (cnt_ = 0; cnt_ < len_; ++cnt_)	\
-				(void)snprintf(_raw_buf_+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
-			_raw_buf_[3*cnt_] = '\0';	\
-			if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') { \
-				if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-					PR_CONT("[btmtk_info] %s "fmt" %s\n", bdev->hdev->name, ##__VA_ARGS__, _raw_buf_);	\
-				} else {	\
-					PR_CONT("[btmtk_info] %s "fmt" %s (prtail)\n", bdev->hdev->name, ##__VA_ARGS__, _raw_buf_);	\
-				}	\
-			} else { \
-				if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-					PR_CONT("[btmtk_info] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
-				} else {	\
-					PR_CONT("[btmtk_info] "fmt" %s (prtail)\n", ##__VA_ARGS__, _raw_buf_);	\
-				}	\
-			} \
-		}	\
-	} while (0)
-#else
 #define BTMTK_INFO_RAW(p, l, fmt, ...)						\
 	do {	\
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) {	\
@@ -245,36 +204,13 @@ extern uint8_t _raw_buf_[];
 				(void)snprintf(_raw_buf_+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
 			_raw_buf_[3*cnt_] = '\0';	\
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-				pr_info("[btmtk_info] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
+				PR_CONT("[btmtk_info] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
 			} else {	\
-				pr_info("[btmtk_info] "fmt" %s (partial)\n", ##__VA_ARGS__, _raw_buf_);	\
+				PR_CONT("[btmtk_info] "fmt" %s (partial)\n", ##__VA_ARGS__, _raw_buf_);	\
 			}	\
 		}	\
 	} while (0)
-#endif
 
-#if (USE_DEVICE_NODE == 0)
-#define BTMTK_DBG_RAW(p, l, fmt, ...)						\
-	do {	\
-		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {	\
-			int cnt_ = 0;	\
-			int pos = 0;	\
-			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
-			const unsigned char *ptr = p;	\
-			for (pos = 0; pos < l; ) {	\
-				for (cnt_ = 0; cnt_ < len_ && pos < l; ++cnt_, ++pos) {	\
-					(void)snprintf(_raw_buf_+3*cnt_, 4, "%02X ", ptr[pos]);	\
-				}	\
-				_raw_buf_[3*cnt_] = '\0';	\
-				if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') { \
-					PR_CONT("[btmtk_debug] %s "fmt" %s\n", bdev->hdev->name, ##__VA_ARGS__, _raw_buf_);	\
-				} else { \
-					PR_CONT("[btmtk_debug] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
-				} \
-			}	\
-		}	\
-	} while (0)
-#else
 #define BTMTK_DBG_RAW(p, l, fmt, ...)						\
 	do {	\
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {	\
@@ -285,13 +221,12 @@ extern uint8_t _raw_buf_[];
 				(void)snprintf(_raw_buf_+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
 			_raw_buf_[3*cnt_] = '\0'; \
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-				pr_info("[btmtk_debug] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_); \
+				PR_CONT("[btmtk_debug] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_); \
 			} else {	\
-				pr_info("[btmtk_debug] "fmt" %s (partial)\n", ##__VA_ARGS__, _raw_buf_);	\
+				PR_CONT("[btmtk_debug] "fmt" %s (partial)\n", ##__VA_ARGS__, _raw_buf_);	\
 			}	\
 		}	\
 	} while (0)
-#endif
 
 #define BTMTK_CIF_IS_NULL(bdev, cif_event) \
 	(!bdev || !(&bdev->cif_state[cif_event]))
@@ -396,6 +331,8 @@ extern uint8_t _raw_buf_[];
 #define BT_AUDIO_ENABLE_CMD "AUDIO_ENABLE_CMD"
 #define BT_AUDIO_PINMUX_NUM "AUDIO_PINMUX_NUM"
 #define BT_AUDIO_PINMUX_MODE "AUDIO_PINMUX_MODE"
+#define BT_DEBUG_SOP_MODE "DEBUG_SOP_MODE"
+#define DTS_SUBSYS_RST "SUPPORT_DTS_SUBSYS_RST"
 #define BT_LOG_LVL "LOG_LVL"
 
 #define PM_KEY_BTW (0x0015) /* Notify PM the unify woble type */
@@ -446,6 +383,8 @@ struct bt_cfg_struct {
 	struct fw_cfg_struct audio_cmd;	/* support on audio enable command customization */
 	struct fw_cfg_struct audio_pinmux_num;	/* support on set audio pinmux num command customization */
 	struct fw_cfg_struct audio_pinmux_mode;	/* support on set audio pinmux mode command customization */
+	int debug_sop_mode; /* debug sop mode */
+	bool	support_dts_subsys_rst;
 };
 
 struct bt_utc_struct {

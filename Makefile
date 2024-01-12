@@ -187,7 +187,7 @@ else ifeq ($(MTK_CHIP_IF), uart_tty)
 else ifeq ($(MTK_CHIP_IF), uart_serdev)
     MOD_NAME = btmtk_uart_unify
     ccflags-y += -DCHIP_IF_UART_SERDEV
-    CFILES := uart/btmtkserdev.c
+    CFILES := uart/btmtkserdev.c btmtk_woble.c btmtk_chip_reset.c
     ccflags-y += -I$(KO_CODE_PATH)/include/uart/serdev
 else
     MOD_NAME = btmtk_btif_unify

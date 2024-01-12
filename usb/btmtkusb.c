@@ -650,6 +650,1536 @@ static void btmtk_usb_dump_debug_register(struct btmtk_dev *bdev,
 	}
 }
 
+int btmtk_r_debug_cr(struct btmtk_dev *bdev, char* section_name, u32 dump_index, u32 dump_r_addr, bool uhw, u32 *val)
+{
+	int status, retry = RETRY_CR_BOUNDARY;
+
+	do {
+		if (uhw)
+			status = btmtk_cif_read_uhw_register(bdev, dump_r_addr, val);
+		else
+			status = btmtk_usb_read_register(bdev, dump_r_addr, val);
+
+		if (!status) {
+			if (memcmp(section_name, "Current PC", sizeof("Current PC")) == 0
+						|| memcmp(section_name, "PC log index", sizeof("PC log index")) == 0
+						|| memcmp(section_name, "LR log index", sizeof("LR log index")) == 0) {
+				BTMTK_INFO("%s: %s=0x%08X", __func__, section_name, *val);
+			} else if (memcmp(section_name, "PC log", sizeof("PC log")) == 0
+				|| memcmp(section_name, "LR log", sizeof("LR log")) == 0) {
+				BTMTK_INFO("%s: %s(%d)=0x%08X", __func__, section_name, dump_index, *val);
+			} else if (strlen(section_name) >= PSOP_STRING_LEN) {
+				BTMTK_INFO("%s: =%s%02d=0x%08X=0x%08X", __func__, section_name, dump_index, *val, dump_r_addr);
+			} else {
+				BTMTK_INFO("%s: R(0x%08X) = 0x%08X", __func__, dump_r_addr, *val);
+			}
+
+			return status;
+		}
+
+		BTMTK_INFO("%s: read %x fail(%d)", __func__, dump_r_addr, retry);
+	} while (--retry);
+
+	return status;
+}
+
+int btmtk_w_debug_cr(struct btmtk_dev *bdev, u32 reg, u32 val, bool uhw)
+{
+	int status, retry = RETRY_CR_BOUNDARY;
+
+	do {
+		if (uhw)
+			status = btmtk_cif_write_uhw_register(bdev, reg, val);
+		else
+			status = btmtk_usb_write_register(bdev, reg, val);
+
+		if (!status)
+			break;
+	} while (--retry);
+
+	return status;
+}
+
+int btmtk_wr_debug_cr(struct btmtk_dev *bdev, char* section_name, u32 dump_index,
+								u32 flag_w_addr, u32 flag_w_val, u32 dump_r_addr, bool uhw, u32 *val)
+{
+	int status;
+
+	status = btmtk_w_debug_cr(bdev, flag_w_addr, flag_w_val, uhw);
+	if (status)
+		return status;
+
+	btmtk_r_debug_cr(bdev, section_name, dump_index, dump_r_addr, uhw, val);
+
+	return status;
+}
+
+void btmtk_show_dump_item(struct btmtk_dev *bdev, char* section_name, u32 dump_index,
+							u32 flag_w_addr, u32 flag_r_addr, u32 dump_value_start, u32 dump_w_offset,
+							u32 flag_num, bool uhw)
+{
+	int status, i;
+	u32 val;
+	u32 offset = 0;
+
+	for (i = 0; i < flag_num; i++) {
+		status = btmtk_wr_debug_cr(bdev, section_name, dump_index,
+						flag_w_addr,dump_value_start + offset, flag_r_addr, uhw, &val);
+		if (!status) {
+			offset += dump_w_offset;
+			dump_index += 1;
+		} else
+			break;
+	}
+}
+
+void btmtk_usb_check_DBG_status_dump(struct btmtk_dev *bdev)
+{
+	int val;
+	int r_index = 1;
+	int check_conn_infra_clock = 0;
+	int status;
+	int i;
+
+	if (is_connac3(bdev->chip_id)) {
+		BTMTK_INFO("%s: Debug info is dumping. Chip ID: %04x",
+					__func__, bdev->chip_id);
+		status = btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18023000, TRUE, &val);
+		if (status) {
+			BTMTK_INFO("%s: Avoid jamming, so end it directly.", __func__);
+			return;
+		}
+
+		val = val | BIT(0);
+		btmtk_w_debug_cr(bdev, 0x18023000, val, TRUE);
+
+		// Check the same addr which may be different
+		for (i = 0; i < POLLING_CR_BOUNDARY; i++) {
+			btmtk_r_debug_cr(bdev, "PSOP_1_3_A", r_index, 0x18023000, TRUE, &val);
+			check_conn_infra_clock = check_conn_infra_clock | val;
+			r_index += 1;
+		}
+
+		BTMTK_INFO("%s: ======CONN_INFRA_STATUS======", __func__);
+		if (is_mt6639(bdev->chip_id) && (check_conn_infra_clock & BIT(1)) && (check_conn_infra_clock & BIT(2))) {
+			BTMTK_INFO("%s: CONN_INFRA Clock: PASS", __func__);
+		} else if (is_mt7925(bdev->chip_id) && (check_conn_infra_clock & BIT(1)) && (check_conn_infra_clock & BIT(3))) {
+			BTMTK_INFO("%s: CONN_INFRA Clock: PASS", __func__);
+		} else {
+			BTMTK_INFO("%s: CONN_INFRA Clock: Error", __func__);
+		}
+
+		btmtk_r_debug_cr(bdev, "PSOP_1_3_A", 6, 0x18011000, TRUE, &val);
+		if (is_mt6639(bdev->chip_id) &&  ((val== 0x03010001) || (val == 0x03030002))) {
+			BTMTK_INFO("%s: CONN_INFRA ID: PASS", __func__);
+		} else if (is_mt7925(bdev->chip_id) && (val == 0x03030002)) {
+			BTMTK_INFO("%s: CONN_INFRA ID: PASS", __func__);
+		} else {
+			BTMTK_INFO("%s: CONN_INFRA ID: Error", __func__);
+		}
+
+		btmtk_r_debug_cr(bdev, "PSOP_1_3_A", 7, 0x18023400, TRUE, &val);
+		if (is_mt6639(bdev->chip_id) && ((val & 0x7) == 0x0)) {
+			BTMTK_INFO("%s: CONN_INFRA bus timeout: PASS", __func__);
+		} else if (is_mt7925(bdev->chip_id) && ((val & 0x3FF) == 0x0)) {
+			BTMTK_INFO("%s: CONN_INFRA bus timeout: PASS", __func__);
+		} else {
+			BTMTK_INFO("%s: CONN_INFRA bus timeout: Error", __func__);
+		}
+
+		if (bdev->chip_id == 0x6639) {
+			BTMTK_INFO("%s: ======WF_STATUS======", __func__);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18048A14, TRUE, &val);
+			if ((val & BIT(26)) == 0x0) {
+				BTMTK_INFO("%s: WF sleep protect: PASS", __func__);
+			} else {
+				BTMTK_INFO("%s: WF sleep protect: Error", __func__);
+			}
+
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x184B0010, TRUE, &val);
+			if (val == 0x03010001) {
+				BTMTK_INFO("%s: WF ID: PASS", __func__);
+			} else {
+				BTMTK_INFO("%s: WF ID: Error", __func__);
+			}
+
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1802362C, TRUE, &val);
+			if ((val & BIT(0)) == 0x0) {
+				BTMTK_INFO("%s: WF bus timeout: PASS", __func__);
+			} else {
+				BTMTK_INFO("%s:WF bus timeout: Error", __func__);
+			}
+
+			BTMTK_INFO("%s: ======BT_STATUS======", __func__);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011454, TRUE, &val);
+			if (((val & BIT(22)) == 0x0) && ((val & BIT(23)) == 0x0)) {
+				BTMTK_INFO("%s: BT sleep protect: PASS", __func__);
+			} else {
+				BTMTK_INFO("%s: BT sleep protect: Error", __func__);
+			}
+
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18812000, TRUE, &val);
+			if (val == 0x03000000) {
+				BTMTK_INFO("%s: BT ID: PASS", __func__);
+			} else {
+				BTMTK_INFO("%s: BT ID: Error", __func__);
+			}
+
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18023A0C, TRUE, &val);
+		} else if (bdev->chip_id == 0x7925) {
+			BTMTK_INFO("%s: ======WF_STATUS======", __func__);
+			btmtk_r_debug_cr(bdev, "PSOP_1_3_A", 8, 0x1804F304, TRUE, &val);
+			if ((val & BIT(26)) == 0x0) {
+				BTMTK_INFO("%s: WF sleep protect: PASS", __func__);
+			} else {
+				BTMTK_INFO("%s: WF sleep protect: Error", __func__);
+			}
+
+			btmtk_r_debug_cr(bdev, "PSOP_1_3_A", 9, 0x184B0010, TRUE, &val);
+			if (val == 0x03030002) {
+				BTMTK_INFO("%s: WF ID: PASS", __func__);
+			} else {
+				BTMTK_INFO("%s: WF ID: Error", __func__);
+			}
+
+			btmtk_r_debug_cr(bdev, "PSOP_1_3_A", 10, 0x1802362C, TRUE, &val);
+			if ((val & BIT(0)) == 0x0) {
+				BTMTK_INFO("%s: WF bus timeout: PASS", __func__);
+			} else {
+				BTMTK_INFO("%s: WF bus timeout: Error", __func__);
+			}
+
+			BTMTK_INFO("%s: ======BT_STATUS======", __func__);
+			btmtk_r_debug_cr(bdev, "PSOP_1_3_A", 11, 0x18011454, TRUE, &val);
+			if (((val & BIT(22)) == 0x0) && ((val & BIT(23)) == 0x0)) {
+				BTMTK_INFO("%s: BT sleep protect: PASS", __func__);
+			} else {
+				BTMTK_INFO("%s: BT sleep protect: Error", __func__);
+			}
+
+			btmtk_r_debug_cr(bdev, "PSOP_1_3_A", 12, 0x18812000, TRUE, &val);
+			if (val == 0x03020000) {
+				BTMTK_INFO("%s: BT ID: PASS", __func__);
+			} else {
+				BTMTK_INFO("%s: BT ID: Error", __func__);
+			}
+
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18001108, TRUE, &val);
+			val = val & ~(BIT(16) | BIT(17));
+			btmtk_w_debug_cr(bdev, 0x18001108, val, TRUE);
+			btmtk_w_debug_cr(bdev, 0x18023A0C, 0xC0041F00, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18023A10, TRUE, &val);
+			if ((val & BIT(24)) != 0x0) {
+				BTMTK_INFO("%s: BT bus timeout: PASS", __func__);
+			} else {
+				BTMTK_INFO("%s: BT bus timeout: Error", __func__);
+			}
+
+			btmtk_r_debug_cr(bdev, "PSOP_1_3_A", 13, 0x18011474, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_1_3_A", 14, 0x18C12000, TRUE, &val);
+			btmtk_wr_debug_cr(bdev, "PSOP_1_3_A", 15, 0x18023A0C, 0xC0041F00, 0x18023A10, TRUE, &val);
+		}
+	}
+
+	BTMTK_INFO("%s: END", __func__);
+}
+
+void btmtk_usb_pc_lr_dump(struct btmtk_dev *bdev)
+{
+	u32 val, w_value;
+	int status, i;
+
+	BTMTK_INFO("%s: Debug info is dumping. Chip ID: %04X", __func__, bdev->chip_id);
+
+	if (is_connac3(bdev->chip_id)) {
+		BTMTK_INFO("%s: BT PC/LR LOG", __func__);
+
+		// Check Current PC which may be different
+		for (i = 0; i < POLLING_CURRENT_PC; i++) {
+			status = btmtk_wr_debug_cr(bdev, "Current PC", 0, 0x18023A0C, 0xC0040D2A, 0x18023A10, TRUE, &val);
+			if (status) {
+				BTMTK_INFO("%s: Avoid jamming, so end it directly.", __func__);
+				return;
+			}
+		}
+
+		btmtk_wr_debug_cr(bdev, "PC log index", 0, 0x18023A0C, 0xC0040D20, 0x18023A10, TRUE, &val);
+		btmtk_show_dump_item(bdev, "PC log", 0, 0x18023A0C, 0x18023A10, 0xC0040D00, 0x1, 0x20, TRUE);
+		btmtk_wr_debug_cr(bdev, "LR log index", 0, 0x18023A0C, 0xC0040D4C, 0x18023A10, TRUE, &val);
+		btmtk_show_dump_item(bdev, "LR log", 0, 0x18023A0C, 0x18023A10, 0xC0040D2C, 0x1, 0x20, TRUE);
+
+		BTMTK_INFO("%s: MCU common register", __func__);
+		btmtk_show_dump_item(bdev, "SKIP", 0, 0x18023A0C, 0x18023A10, 0xC0040D21, 0x1, 0x9, TRUE);
+
+		BTMTK_INFO("%s: WF PC/LR LOG", __func__);
+
+		// Check Current PC which may be different
+		for (i = 0; i < POLLING_CURRENT_PC; i++) {
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1802360C, TRUE, &val);
+			val = (val & 0b11111111111111111111111111000000) | 0x22;
+			btmtk_w_debug_cr(bdev, 0x1802360C, val, TRUE);
+			btmtk_r_debug_cr(bdev, "Current PC", 0, 0x18023610, TRUE, &val);
+		}
+
+		btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1802360C, TRUE, &val);
+		val = (val & 0b11111111111111111111111111000000) | 0x20;
+		btmtk_w_debug_cr(bdev, 0x1802360C, val, TRUE);
+		btmtk_r_debug_cr(bdev, "PC log index", 0, 0x18023610, TRUE, &val);
+		for (w_value = 0x0; w_value < 0x20; w_value++) {
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1802360C, TRUE, &val);
+			val = (val & 0b11111111111111111111111111000000) | w_value;
+			btmtk_w_debug_cr(bdev, 0x1802360C, val, TRUE);
+			btmtk_r_debug_cr(bdev, "PC log", 0, 0x18023610, TRUE, &val);
+		}
+
+		btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18023614, TRUE, &val);
+		val = (val & 0b11111111111111111111111111000000) | 0x20;
+		btmtk_w_debug_cr(bdev, 0x18023614, val, TRUE);
+		btmtk_r_debug_cr(bdev, "LR log index", 0, 0x18023608, TRUE, &val);
+		for (w_value = 0x0; w_value < 0x20; w_value++) {
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18023614, TRUE, &val);
+			val = (val & 0b11111111111111111111111111000000) | w_value;
+			btmtk_w_debug_cr(bdev, 0x18023614, val, TRUE);
+			btmtk_r_debug_cr(bdev, "LR log", 0, 0x18023608, TRUE, &val);
+		}
+	}
+
+	BTMTK_INFO("%s: END", __func__);
+}
+
+void btmtk_usb_CONN_TOP_SPI_RD(struct btmtk_dev *bdev, char* section_name, u32 dump_index, u32 dump_r_addr, bool uhw)
+{
+	int status;
+	u32 val;
+
+	// Driver need to read A die CR with RFSPI_RD_CMD sequence
+	if (is_connac3(bdev->chip_id)) {
+		btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18098000, uhw, &val);
+		if ((val & BIT(5)) != BIT(5)) {
+			val = 0x0000B000 | dump_r_addr;
+			btmtk_w_debug_cr(bdev, 0x18098050, val, uhw);
+			btmtk_w_debug_cr(bdev, 0x18098054, 0x0, uhw);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18098000, uhw, &val);
+			if ((val & BIT(5)) != BIT(5)) {
+				status = btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18098058, uhw, &val);
+				if ((!status) && (strlen(section_name) >= PSOP_STRING_LEN))
+					BTMTK_INFO("%s: =%s%02d=0x%08X=0x%08X", __func__,
+						section_name, dump_index, val, dump_r_addr);
+			}
+		}
+	}
+}
+
+
+void btmtk_usb_slave_no_response_dump(struct btmtk_dev *bdev, u8 mode)
+{
+	u32 val, version, r_address, r_index;
+	bool  check = FALSE;
+	int status, i, j;
+
+	BTMTK_INFO("%s: mode: %02X", __func__, mode);
+
+	if (is_connac3(bdev->chip_id)) {
+		if (bdev->chip_id == 0x6639) {
+			BTMTK_INFO("%s: 8.CB_INFRA_CBTOP - sheet(Type 1)", __func__);
+			status = btmtk_r_debug_cr(bdev, "SKIP", 0, 0x7002801C, TRUE, &val);
+			if (status) {
+				BTMTK_INFO("%s: Avoid jamming, so end it directly.", __func__);
+				return;
+			}
+
+			val = val | 0x10000000;
+			btmtk_w_debug_cr(bdev, 0x7002801C, val, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025300, TRUE, &val);
+			val = val | 0x00000001;
+			btmtk_w_debug_cr(bdev, 0x70025300, val, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011404, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18023C00, TRUE, &val);
+
+			BTMTK_INFO("%s: 8.CB_INFRA_CBTOP - sheet(Type 2)",	__func__);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70026008, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1800EA04, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025300, TRUE, &val);
+			val = val | 0x00001110;
+			btmtk_w_debug_cr(bdev, 0x70025300, val, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025304, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025300, TRUE, &val);
+			val = val | 0x00000E0F;
+			btmtk_w_debug_cr(bdev, 0x70025300, val, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025304, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025300, TRUE, &val);
+			val = val | 0x00000C0D;
+			btmtk_w_debug_cr(bdev, 0x70025300, val, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025304, TRUE, &val);
+
+			BTMTK_INFO("%s: 8.CB_INFRA_CBTOP - sheet(Type 3)", __func__);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x7002801C, TRUE, &val);
+			val = val | 0x10000000;
+			btmtk_w_debug_cr(bdev, 0x7002801C, val, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025300, TRUE, &val);
+			val = val | 0x00000001;
+			btmtk_w_debug_cr(bdev, 0x70025300, val, TRUE);
+			btmtk_w_debug_cr(bdev, 0x70006150, 0x2, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011404, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70026000, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70006154, TRUE, &val);
+
+			BTMTK_INFO("%s: 8.CB_INFRA_CBTOP - sheet(Type 4)", __func__);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70026040, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70026050, TRUE, &val);
+
+			BTMTK_INFO("%s: 8.CB_INFRA_CBTOP - sheet(WFDMA2AP)", __func__);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70026100, TRUE, &val);
+		} else if (bdev->chip_id == 0x7925) {
+			BTMTK_INFO("%s: 8.CB_INFRA_CBTOP - presetting", __func__);
+			status = btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70026550, TRUE, &val);
+			if (status) {
+				BTMTK_INFO("%s: Avoid jamming, so end it directly.", __func__);
+				return;
+			}
+
+			val = (val & 0xFFFF0000) | 0x0C0B;
+			btmtk_w_debug_cr(bdev, 0x70026550, val, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025300, TRUE, &val);
+			val = (val & 0xFFFFFF00) | 0x1;
+			btmtk_w_debug_cr(bdev, 0x70025300, val, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x7002801C, TRUE, &val);
+			val = val | BIT(28);
+			btmtk_w_debug_cr(bdev, 0x7002801C, val, TRUE);
+
+			BTMTK_INFO("%s: 8.CB_INFRA_CBTOP", __func__);
+			btmtk_w_debug_cr(bdev, 0x70026558, 0x7000, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70007204, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x7002500C, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025004, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025014, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025400, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025404, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70026008, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70026000, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70026100, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025300, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70026550, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x7002801C, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70026554, TRUE, &val);
+			val = (val & 0x0000FFFF) | 0x74030000;
+			btmtk_w_debug_cr(bdev, 0x70026554, val, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x74030E48, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x74030E40, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x74030E44, TRUE, &val);
+			btmtk_w_debug_cr(bdev, 0x70003020, 0x0, TRUE);
+			btmtk_w_debug_cr(bdev, 0x70007150, 0x2, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70007154, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x74030150, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x74030154, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x74030184, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x74031010, TRUE, &val);
+			btmtk_w_debug_cr(bdev, 0x74030168, 0x22CC0100, TRUE);
+			btmtk_w_debug_cr(bdev, 0x74030164, 0x81804845, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x7403002C, TRUE, &val);
+		}
+
+		BTMTK_INFO("%s: 2.connsys_power_debug - sheet(dump_list_conn_infra_on)", __func__);
+		btmtk_r_debug_cr(bdev, "PSOP_2_1_B", 1, 0x18060A10, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "PSOP_2_1_B", 2, 0x18060014, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "PSOP_2_1_B", 3, 0x18060054, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "PSOP_2_1_B", 4, 0x18060010, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "PSOP_2_1_B", 5, 0x18060050, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "PSOP_2_1_B", 6, 0x18060018, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "PSOP_2_1_B", 7, 0x18060058, TRUE, &val);
+
+		BTMTK_INFO("%s: 1.conn_infra_bus_debug - sheet(status result) - A", __func__);
+		btmtk_w_debug_cr(bdev, 0x18023408, 0x00000000, TRUE);
+		btmtk_show_dump_item(bdev, "PSOP_1_1_A", 1, 0x1802340C, 0x18023404, 0x00010001, 0x00010000, 0x3, TRUE);
+		btmtk_wr_debug_cr(bdev, "PSOP_1_1_A", 4, 0x1802340C, 0x00010002, 0x18023404, TRUE, &val);
+		btmtk_show_dump_item(bdev, "PSOP_1_1_A", 5, 0x1802340C, 0x18023404, 0x00000003, 0x00010000, 0x4, TRUE);
+		btmtk_show_dump_item(bdev, "PSOP_1_1_A", 9, 0x1802340C, 0x18023404, 0x00010004, 0x00010000, 0x3, TRUE);
+		btmtk_r_debug_cr(bdev, "PSOP_1_1_A", 12, 0x18023400, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "PSOP_1_1_A", 13, 0x18023410, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "PSOP_1_1_A", 14, 0x18023414, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "PSOP_1_1_A", 15, 0x18023418, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "PSOP_1_1_A", 16, 0x18023434, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "PSOP_1_1_A", 17, 0x1800EA04, TRUE, &val);
+
+		BTMTK_INFO("%s: 7.conn_infra_cfg_clk - sheet(dump_list) - A", __func__);
+		if (bdev->chip_id == 0x6639) {
+			btmtk_r_debug_cr(bdev, "PSOP_7_1_A", 1, 0x18060A00, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_7_1_A", 2, 0x18060A0C, TRUE, &val);
+			btmtk_show_dump_item(bdev, "PSOP_7_1_A", 3, 0x1806015C, 0x18060A04, 0x0, 0x1, 0x8, TRUE);
+			btmtk_show_dump_item(bdev, "PSOP_7_1_A", 11, 0x18060160, 0x18060A08, 0x0, 0x1, 0x6, TRUE);
+		} else if (bdev->chip_id == 0x7925) {
+			btmtk_r_debug_cr(bdev, "PSOP_8_1_A", 1, 0x18060A00, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_8_1_A", 2, 0x18060A0C, TRUE, &val);
+			btmtk_show_dump_item(bdev, "PSOP_8_1_A", 3, 0x1806015C, 0x18060A04, 0x0, 0x1, 0x8, TRUE);
+			btmtk_show_dump_item(bdev, "PSOP_8_1_A", 11, 0x18060160, 0x18060A08, 0x0, 0x1, 0x6, TRUE);
+			btmtk_wr_debug_cr(bdev, "PSOP_8_1_A", 17, 0x18060160, 0x7, 0x18060A08, TRUE, &val);
+			btmtk_wr_debug_cr(bdev, "PSOP_8_1_A", 18, 0x18060160, 0x8, 0x18060A08, TRUE, &val);
+		}
+
+		// AP2CONN_INFRA OFF
+		for (j = 0; j <= RETRY_CR_BOUNDARY; j++) {
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18023000, TRUE, &val);
+			val = val | BIT(0);
+			btmtk_w_debug_cr(bdev, 0x18023000, val, TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18023000, TRUE, &val);
+		}
+
+		btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011000, TRUE, &version);
+		if (is_mt6639(bdev->chip_id)) {
+			if ((val & BIT(1)) && (val & BIT(3)) &&
+				((version == 0x03010001) || (version == 0x03010002))) {
+				BTMTK_INFO("%s: AP2CONN_INFRA_OFF readable", __func__);
+				check = TRUE;
+			}
+		} else if (is_mt7925(bdev->chip_id)) {
+			if ((val & BIT(1)) && (val & BIT(3)) && (version == 0x03030002)) {
+				BTMTK_INFO("%s: AP2CONN_INFRA_OFF readable", __func__);
+				check = TRUE;
+			}
+		}
+
+		if (check || mode) {
+			check = FALSE;
+			BTMTK_INFO("%s: 2.connsys_power_debug - sheet(dump_list_conn_infra_off)", __func__);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 1, 0x18011030, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 2, 0x18012050, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 3, 0x18001344, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 4, 0x18000400, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 5, 0x18000404, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 6, 0x180910A8, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 7, 0x18091120, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 8, 0x18091124, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 9, 0x18091128, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 10, 0x1809112C, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 11, 0x18091130, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 12, 0x18091134, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE, &val);
+			val = val & ~(BIT(21) | BIT(22));
+			btmtk_wr_debug_cr(bdev, "PSOP_2_1_C", 13, 0x18011100, val, 0x18011134, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE, &val);
+			val = (val & ~BIT(22)) | BIT(21);
+			btmtk_wr_debug_cr(bdev, "PSOP_2_1_C", 14, 0x18011100, val, 0x18011134, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE, &val);
+			val = (val & ~BIT(21)) | BIT(22);
+			btmtk_wr_debug_cr(bdev, "PSOP_2_1_C", 15, 0x18011100, val, 0x18011134, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE, &val);
+			val = (val | BIT(21)) | BIT(22);
+			btmtk_wr_debug_cr(bdev, "PSOP_2_1_C", 16, 0x18011100, val, 0x18011134, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 17, 0x18050C50, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 18, 0x18050C54, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 19, 0x18050C58, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 20, 0x18050C5C, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 21, 0x18050C60, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 22, 0x18050C64, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 23, 0x18098000, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 24, 0x18098050, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 25, 0x18098054, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 26, 0x18098058, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 27, 0x18098108, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 28, 0x18098004, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 29, 0x18001620, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 30, 0x18001610, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_2_1_C", 31, 0x18001600, TRUE, &val);
+
+			if (is_mt6639(bdev->chip_id)) {
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 1, 0xA10, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 2, 0x090, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 3, 0x08C, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 4, 0x0A0, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 5, 0x09C, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 6, 0xA40, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 7, 0xA48, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 8, 0x8E0, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 9, 0x094, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 10, 0x5B4, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 11, 0x2CC, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 12, 0x84C, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 13, 0x860, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 14, 0x861, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 15, 0xA70, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 16, 0xA20, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 17, 0x850, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 18, 0x85D, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 19, 0xC08, TRUE);
+			} else if (is_mt7925(bdev->chip_id)) {
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 1, 0xA10, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 2, 0x090, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 3, 0x08C, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 4, 0x0A0, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 5, 0x09C, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 9, 0x094, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 10, 0x5B4, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 11, 0x2CC, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 15, 0xA70, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 16, 0xA20, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 19, 0xC08, TRUE);
+				btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_D", 20, 0xAA0, TRUE);
+			}
+
+			btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_E", 1, 0x02C, TRUE);
+			btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_E", 2, 0x000, TRUE);
+			btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_E", 3, 0x750, TRUE);
+			btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_E", 4, 0xC50, TRUE);
+			btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_E", 5, 0xB08, TRUE);
+			btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_E", 6, 0x0B4, TRUE);
+			btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_E", 7, 0x580, TRUE);
+			btmtk_usb_CONN_TOP_SPI_RD(bdev, "PSOP_2_1_E", 8, 0x30C, TRUE);
+
+			BTMTK_INFO("%s: 1.conn_infra_bus_debug - sheet(status result) - B & C", __func__);
+			btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 1, 0x1802341C, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 2, 0x18023420, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 3, 0x18023424, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 4, 0x18023428, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 5, 0x1802342C, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 6, 0x18023430, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 7, 0x1800E128, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 8, 0x1800E12C, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 9, 0x1800E130, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 10, 0x1800E134, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 11, 0x1800E138, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 12, 0x1800E13C, TRUE, &val);
+			btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 13, 0x1800E140, TRUE, &val);
+			btmtk_show_dump_item(bdev, "PSOP_1_1_B", 14, 0x18023408, 0x18023404, 0x13, 0x1, 0x1B, TRUE);
+			btmtk_show_dump_item(bdev, "PSOP_1_1_B", 41, 0x18023408, 0x18023404, 0x1, 0x1, 0x12, TRUE);
+
+			if (is_mt6639(bdev->chip_id)) {
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 59, 0x18048280, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 60, 0x18048284, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 61, 0x18048288, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 62, 0x1804828C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 63, 0x18048290, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 64, 0x18049408, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 65, 0x1804940C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 66, 0x18049410, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 67, 0x18049414, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 68, 0x18049418, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 69, 0x1804941C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 70, 0x18049420, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 71, 0x18049424, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 72, 0x18049428, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 73, 0x1804942C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 74, 0x18049430, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 75, 0x18048320, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 76, 0x18048400, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 77, 0x18040D04, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 78, 0x18040D08, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 79, 0x18040D0C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 80, 0x18048310, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 81, 0x18048314, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 82, 0x18048318, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 83, 0x1804831C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_2_A", 1, 0x18011404, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_2_A", 2, 0x18011408, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_2_A", 3, 0x18011434, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_2_A", 4, 0x18011444, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_2_A", 5, 0x18011454, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_2_A", 6, 0x18011464, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_2_A", 7, 0x18011474, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_2_A", 8, 0x18011484, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_2_A", 9, 0x1801148C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_2_A", 10, 0x70028730, TRUE, &val);
+			} else if (bdev->chip_id == 0x7925) {
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 59, 0x1804F280, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 60, 0x1804F284, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 61, 0x1804F288, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 62, 0x1804F28C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 63, 0x1804F290, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 64, 0x1804F294, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 65, 0x1804F298, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 66, 0x1804F29C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 67, 0x1804F2A0, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 68, 0x18049408, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 69, 0x1804940C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 70, 0x18049410, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 71, 0x18049414, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 72, 0x18049418, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 73, 0x1804941C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 74, 0x18049420, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 75, 0x18049424, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 76, 0x18049428, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 77, 0x1804942C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 78, 0x18049430, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 79, 0x1804F650, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 80, 0x1804F700, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 81, 0x18060D04, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 82, 0x18060D08, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 83, 0x18060D0C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 84, 0x1804F610, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 85, 0x1804F614, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 86, 0x1804F618, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_B", 87, 0x1804F61C, TRUE, &val);
+				btmtk_wr_debug_cr(bdev, "PSOP_1_1_B", 88, 0x18023408, 0x0000002E, 0x18023404, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_C", 1, 0x18011404, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_C", 2, 0x18011408, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_C", 3, 0x18011434, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_C", 4, 0x180114A4, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_C", 5, 0x18011454, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_C", 6, 0x18011464, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_C", 7, 0x18011474, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_C", 8, 0x18011484, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_C", 9, 0x1801148C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_C", 10, 0x1801149C, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_C", 11, 0x180114AC, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "PSOP_1_1_C", 12, 0x70028730, TRUE, &val);
+			}
+
+			BTMTK_INFO("%s: 7.conn_infra_cfg_clk - sheet(dump_list) - B", __func__);
+			if (is_mt6639(bdev->chip_id)) {
+				btmtk_r_debug_cr(bdev, "PSOP_7_1_B", 1, 0x18023200, TRUE , &val);
+				btmtk_r_debug_cr(bdev, "PSOP_7_1_B", 2, 0x18011130, TRUE , &val);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE , &val);
+				val = val & ~(BIT(21) | BIT(22));
+				btmtk_wr_debug_cr(bdev, "PSOP_7_1_B", 3, 0x18011100, val, 0x18011134, TRUE , &val);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE , &val);
+				val = (val & ~BIT(22)) | BIT(21);
+				btmtk_wr_debug_cr(bdev, "PSOP_7_1_B", 4, 0x18011100, val, 0x18011134, TRUE , &val);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE , &val);
+				val = (val & ~BIT(21)) | BIT(22);
+				btmtk_wr_debug_cr(bdev, "PSOP_7_1_B", 5, 0x18011100, val, 0x18011134, TRUE , &val);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE , &val);
+				val = val | BIT(21) | BIT(22);
+				btmtk_wr_debug_cr(bdev, "PSOP_7_1_B", 6, 0x18011100, val, 0x18011134, TRUE , &val);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1801603C, TRUE , &val);
+				val = (val & 0b11111111111111111111111111000000) | 0b1110;
+				btmtk_w_debug_cr(bdev, 0x1801603C, val, TRUE);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1801603C, TRUE , &val);
+				val = (val & 0b11111111111111111111000000111111) | 0b10001000000;
+				btmtk_w_debug_cr(bdev, 0x1801603C, val, TRUE);
+				btmtk_w_debug_cr(bdev, 0x1801601C, 0x03020100, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016020, 0x07060504, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016024, 0x0B0A0908, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016028, 0x0F0E0D0C, TRUE);
+				btmtk_w_debug_cr(bdev, 0x1801602C, 0x13121110, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016030, 0x17161514, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016034, 0x1B1A1918, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016038, 0x1F1E1D1C, TRUE);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18016058, TRUE , &val);
+				val = val | BIT(1);
+				btmtk_w_debug_cr(bdev, 0x18016058, val, TRUE);
+				btmtk_r_debug_cr(bdev, "PSOP_7_1_B", 7, 0x18023200, TRUE , &val);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1801603C, TRUE , &val);
+				val = (val & 0b11111111111111111111111111000000) | 0b11000;
+				btmtk_w_debug_cr(bdev, 0x1801603C, val, TRUE);
+				btmtk_w_debug_cr(bdev, 0x1801601C, 0x03020100, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016020, 0x07060504, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016024, 0x0B0A0908, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016028, 0x0F0E0D0C, TRUE);
+				btmtk_w_debug_cr(bdev, 0x1801602C, 0x13121110, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016030, 0x17161514, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016034, 0x1B1A1918, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016038, 0x1F1E1D1C, TRUE);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18016058, TRUE , &val);
+				val = val | BIT(1);
+				btmtk_w_debug_cr(bdev, 0x18016058, val, TRUE);
+				btmtk_r_debug_cr(bdev, "PSOP_7_1_B", 8, 0x18023200, TRUE , &val);
+
+			} else if (is_mt7925(bdev->chip_id)) {
+				btmtk_r_debug_cr(bdev, "PSOP_8_1_B", 1, 0x18023200, TRUE , &val);
+				btmtk_r_debug_cr(bdev, "PSOP_8_1_B", 2, 0x18011130, TRUE , &val);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE , &val);
+				val = val & ~(BIT(21) | BIT(22));
+				btmtk_wr_debug_cr(bdev, "PSOP_8_1_B", 3, 0x18011100, val, 0x18011134, TRUE , &val);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE , &val);
+				val = (val & ~BIT(22)) | BIT(21);
+				btmtk_wr_debug_cr(bdev, "PSOP_8_1_B", 4, 0x18011100, val, 0x18011134, TRUE , &val);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE , &val);
+				val = (val & ~BIT(21)) | BIT(22);
+				btmtk_wr_debug_cr(bdev, "PSOP_8_1_B", 5, 0x18011100, val, 0x18011134, TRUE , &val);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE , &val);
+				val = val | BIT(21) | BIT(22);
+				btmtk_wr_debug_cr(bdev, "PSOP_8_1_B", 6, 0x18011100, val, 0x18011134, TRUE , &val);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1801603C, TRUE , &val);
+				val = (val & 0b11111111111111111111111111000000) | 0b1110;
+				btmtk_w_debug_cr(bdev, 0x1801603C, val, TRUE);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1801603C, TRUE , &val);
+				val = (val & 0b11111111111111111111000000111111) | 0b10001000000;
+				btmtk_w_debug_cr(bdev, 0x1801603C, val, TRUE);
+				btmtk_w_debug_cr(bdev, 0x1801601C, 0x03020100, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016020, 0x07060504, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016024, 0x0B0A0908, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016028, 0x0F0E0D0C, TRUE);
+				btmtk_w_debug_cr(bdev, 0x1801602C, 0x13121110, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016030, 0x17161514, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016034, 0x1B1A1918, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016038, 0x1F1E1D1C, TRUE);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18016058, TRUE , &val);
+				val = val | BIT(1);
+				btmtk_w_debug_cr(bdev, 0x18016058, val, TRUE);
+				btmtk_r_debug_cr(bdev, "PSOP_8_1_B", 7, 0x18023200, TRUE , &val);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1801603C, TRUE , &val);
+				val = (val & 0b11111111111111111111111111000000) | 0b11000;
+				btmtk_w_debug_cr(bdev, 0x1801603C, val, TRUE);
+				btmtk_w_debug_cr(bdev, 0x1801601C, 0x03020100, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016020, 0x07060504, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016024, 0x0B0A0908, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016028, 0x0F0E0D0C, TRUE);
+				btmtk_w_debug_cr(bdev, 0x1801602C, 0x13121110, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016030, 0x17161514, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016034, 0x1B1A1918, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18016038, 0x1F1E1D1C, TRUE);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18016058, TRUE , &val);
+				val = val | BIT(1);
+				btmtk_w_debug_cr(bdev, 0x18016058, val, TRUE);
+				btmtk_r_debug_cr(bdev, "PSOP_8_1_B", 8, 0x18023200, TRUE , &val);
+
+			}
+
+			// Check WFSYS
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1802362C, TRUE, &val);
+			if (val & BIT(0)) {
+				BTMTK_INFO("%s: Go to WFSYS", __func__);
+				check = TRUE;
+			}
+
+			if (check || mode) {
+				check = FALSE;
+				BTMTK_INFO("%s: 3.WF_TOP_debug - sheet(dump_list) - A & B", __func__);
+				btmtk_w_debug_cr(bdev, 0x18060B00, 0x1, TRUE);
+				btmtk_show_dump_item(bdev, "PSOP_3_1_A", 1, 0x18060B04, 0x18060B10, 0x0, 0x1, 0x5, TRUE);
+				btmtk_wr_debug_cr(bdev, "PSOP_3_1_A", 6, 0x18060B04, 0x10, 0x18060B10, TRUE, &val);
+				btmtk_wr_debug_cr(bdev, "PSOP_3_1_A", 7, 0x18060B04, 0x12, 0x18060B10, TRUE, &val);
+				btmtk_show_dump_item(bdev, "PSOP_3_1_A", 8, 0x18060B04, 0x18060B10, 0x17, 0x1, 0x5, TRUE);
+				btmtk_wr_debug_cr(bdev, "PSOP_3_1_A", 13, 0x18060B04, 0x1D, 0x18060B10, TRUE, &val);
+				btmtk_w_debug_cr(bdev, 0x18060B18, 0x1, TRUE);
+				btmtk_show_dump_item(bdev, "PSOP_3_1_B", 1, 0x18060B1C, 0x18023638, 0x0, 0x1, 0x5, TRUE);
+				btmtk_wr_debug_cr(bdev, "PSOP_3_1_B", 6, 0x18060B1C, 0x8, 0x18023638, TRUE, &val);
+
+				BTMTK_INFO("%s: 4.WF_BUS_debug - sheet(dump_list) - A", __func__);
+				btmtk_r_debug_cr(bdev, "PSOP_4_1_A", 0, 0x1802362C, TRUE, &val);
+				btmtk_w_debug_cr(bdev, 0x18023604, 0x4, TRUE);
+				btmtk_show_dump_item(bdev, "PSOP_4_1_A", 1, 0x18023628, 0x18023608, 0x10001, 0x10000, 0x9, TRUE);
+				if (is_mt6639(bdev->chip_id))
+					btmtk_show_dump_item(bdev, "PSOP_4_1_A", 10, 0x18023628, 0x18023608, 0x10002, 0x10000, 0x5, TRUE);
+				else if (is_mt7925(bdev->chip_id))
+					btmtk_show_dump_item(bdev, "PSOP_4_1_A", 10, 0x18023628, 0x18023608, 0x10002, 0x10000, 0x4, TRUE);
+
+				// Check [AP2WF] readable step2.3.
+				if (is_mt6639(bdev->chip_id)) {
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18048A14, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x184B0010, TRUE, &version);
+					if (((val & BIT(26)) != BIT(26)) && (version == 0x03010001)) {
+						BTMTK_INFO("%s: AP2WF readable", __func__);
+						check = TRUE;
+					}
+				} else if (is_mt7925(bdev->chip_id)) {
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1804F304, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x184B0010, TRUE, &version);
+					if (((val & BIT(26)) != BIT(26)) && (version == 0x03030002)) {
+						BTMTK_INFO("%s: AP2WF readable", __func__);
+						check = TRUE;
+					}
+				}
+
+				if (check || mode) {
+					check = FALSE;
+					BTMTK_INFO("%s: 3.WF_TOP_debug - sheet(dump_list) - C", __func__);
+					r_address = 0x184C1B00;
+					r_index = 1;
+					btmtk_r_debug_cr(bdev, "PSOP_3_1_C", r_index, r_address, TRUE, &val);
+					for (i = 0; i < 0x10; i++) {
+						r_address = r_address + 0x4;
+						r_index++;
+						btmtk_r_debug_cr(bdev, "PSOP_3_1_C", r_index, r_address, TRUE, &val);
+					}
+
+					r_address = 0x184C1B50;
+					r_index = 18;
+					btmtk_r_debug_cr(bdev, "PSOP_3_1_C", r_index, r_address, TRUE, &val);
+					for (i = 0; i < 0x10; i++) {
+						r_address = r_address + 0x4;
+						r_index++;
+						btmtk_r_debug_cr(bdev, "PSOP_3_1_C", r_index, r_address, TRUE, &val);
+					}
+
+					BTMTK_INFO("%s: 4.WF_BUS_debug - sheet(dump_list) - B & C", __func__);
+					if (is_mt6639(bdev->chip_id)) {
+						btmtk_w_debug_cr(bdev, 0x18400120, 0x810F0000, TRUE);
+						r_address = 0x18500408;
+						r_index = 2;
+						btmtk_r_debug_cr(bdev, "PSOP_4_1_B", r_index, r_address, TRUE, &val);
+						for (i = 0; i < 0xD; i++) {
+							r_address = r_address + 0x4;
+							r_index++;
+							btmtk_r_debug_cr(bdev, "PSOP_4_1_B", r_index, r_address, TRUE, &val);
+						}
+
+						btmtk_r_debug_cr(bdev, "PSOP_4_1_B", 16, 0x18500000, TRUE, &val);
+					} else if (is_mt7925(bdev->chip_id)) {
+						btmtk_r_debug_cr(bdev, "PSOP_4_1_B", 0, 0x1802362C, TRUE, &val);
+						btmtk_w_debug_cr(bdev, 0x18023604, 0x4, TRUE);
+						btmtk_w_debug_cr(bdev, 0x18400120, 0x810F0000, TRUE);
+						r_address = 0x18500408;
+						r_index = 2;
+						btmtk_r_debug_cr(bdev, "PSOP_4_1_B", r_index, r_address, TRUE, &val);
+						for (i = 0; i < 0xC; i++) {
+							r_address = r_address + 0x4;
+							r_index++;
+							btmtk_r_debug_cr(bdev, "PSOP_4_1_B", r_index, r_address, TRUE, &val);
+						}
+
+						btmtk_r_debug_cr(bdev, "PSOP_4_1_B", 15, 0x18500000, TRUE, &val);
+					}
+
+					btmtk_w_debug_cr(bdev, 0x18400120, 0x830C0000, TRUE);
+					btmtk_r_debug_cr(bdev, "PSOP_4_1_C", 1, 0x18501004, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "PSOP_4_1_C", 2, 0x18501010, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "PSOP_4_1_C", 3, 0x18501008, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "PSOP_4_1_C", 4, 0x1850100C, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "PSOP_4_1_C", 5, 0x18501000, TRUE, &val);
+				}
+			} else {
+				BTMTK_INFO("%s: Don't go to WFSYS", __func__);
+			}
+
+			if (is_mt6639(bdev->chip_id)) {
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18023A0C, TRUE, &val);
+				if ((val & BIT(24)) != BIT(24)) {
+					BTMTK_INFO("%s: Go to BGSYS", __func__);
+					check = TRUE;
+				}
+			} else if (is_mt7925(bdev->chip_id)) {
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18001108, TRUE, &val);
+				val = val & ~(BIT(16) | BIT(17));
+				btmtk_w_debug_cr(bdev, 0x18001108, val, TRUE);
+				btmtk_w_debug_cr(bdev, 0x18023A0C, 0xC0041F00, TRUE);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18023A10, TRUE, &val);
+				if ((val & BIT(24)) != BIT(24)) {
+					BTMTK_INFO("%s: Go to BGSYS", __func__);
+					check = TRUE;
+				}
+			}
+
+			if (check || mode) {
+				check = FALSE;
+				if (is_mt6639(bdev->chip_id)) {
+					BTMTK_INFO("%s: 5.BGFSYS status - sheet(bg_top_host_csr_dbg)", __func__);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_A", 1, 0x18060C04, 0x18060C00, 0x00030000, 0x10, 0x3, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_B", 1, 0x18023A1C, 0x18023A20, 0x00300000, 0x1, 0xB, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_C", 1, 0x18023A1C, 0x18023A20, 0x00300040, 0x1, 0x19, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_D", 1, 0x18023A1C, 0x18023A20, 0x00300080, 0x1, 0x4, TRUE);
+					btmtk_wr_debug_cr(bdev, "PSOP_5_1_E", 1, 0x18023A1C, 0x00300100, 0x18023A20, TRUE, &val);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_F", 1, 0x18023A0C, 0x18023A10, 0xC0000000, 0x1, 0x4, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_G", 1, 0x18023A0C, 0x18023A10, 0xC0000100, 0x1, 0x7, TRUE);
+				} else if (is_mt7925(bdev->chip_id)) {
+					BTMTK_INFO("%s: 5.BGFSYS status - sheet(vcore_off)", __func__);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18001108, TRUE, &val);
+					val = val & ~(0x00030000);
+					btmtk_w_debug_cr(bdev, 0x18001108, val, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_B", 1, 0x18023A0C, 0x18023A10, 0xC0000000, 0x1, 0x6, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_C", 1, 0x18023A0C, 0x18023A10, 0xC0000100, 0x1, 0x6, TRUE);
+					btmtk_wr_debug_cr(bdev, "PSOP_5_1_D", 1, 0x18023A0C, 0xC0000200, 0x18023A10, TRUE, &val);
+
+					BTMTK_INFO("%s: 5.BGFSYS status - sheet(vcore_on)", __func__);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18001108, TRUE, &val);
+					val = val & ~(0x000C0000);
+					btmtk_w_debug_cr(bdev, 0x18001108, val, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_E", 1, 0x18023A1C, 0x18023A20, 0x00300040, 0x1, 0x17, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_F", 1, 0x18023A1C, 0x18023A20, 0x00300001, 0x1, 0xC, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_G", 1, 0x18023A1C, 0x18023A20, 0x00300080, 0x1, 0x5, TRUE);
+					btmtk_wr_debug_cr(bdev, "PSOP_5_1_G", 6, 0x18023A1C, 0x00300100, 0x18023A20, TRUE, &val);
+					btmtk_wr_debug_cr(bdev, "PSOP_5_1_G", 7, 0x18023A1C, 0x00300140, 0x18023A20, TRUE, &val);
+
+					BTMTK_INFO("%s: 5.BGFSYS status - sheet(vlp)", __func__);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18023A24, TRUE, &val);
+					val = val & ~(0x00000007);
+					btmtk_w_debug_cr(bdev, 0x18023A24, val, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_H", 1, 0x18060C04, 0x18060C00, 0x00030000, 0x10, 0x3, TRUE);
+					btmtk_wr_debug_cr(bdev, "PSOP_5_1_H", 4, 0x18060C04, 0x00030050, 0x18060C00, TRUE, &val);
+				}
+
+				BTMTK_INFO("%s: 6.BGFSYS BUS debug method - sheet(dump cr via host_cr)", __func__);
+				if (is_mt7925(bdev->chip_id)) {
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18001108, TRUE, &val);
+					val = val & 0b11111111111111001111111111111111;
+					btmtk_w_debug_cr(bdev, 0x18001108, val, TRUE);
+				}
+
+				btmtk_show_dump_item(bdev, "PSOP_6_2_A", 1, 0x18023A0C, 0x18023A10, 0xC0041F00, 0x1, 0x11, TRUE);
+				if (is_mt7925(bdev->chip_id)) {
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18001108, TRUE, &val);
+					val = val & 0b11111111111111001111111111111111;
+					btmtk_w_debug_cr(bdev, 0x18001108, val, TRUE);
+				}
+
+				btmtk_show_dump_item(bdev, "PSOP_6_2_B", 1, 0x18023A0C, 0x18023A10, 0xC0041910, 0x10, 0x9, TRUE);
+				if (is_mt7925(bdev->chip_id)) {
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18001108, TRUE, &val);
+					val = val & 0b11111111111111001111111111111111;
+					btmtk_w_debug_cr(bdev, 0x18001108, val, TRUE);
+				}
+
+				btmtk_show_dump_item(bdev, "PSOP_6_2_C", 1, 0x18023A0C, 0x18023A10, 0xC0041B00, 0x1, 0x13, TRUE);
+
+				// [AP2BT] step 2. & 3.
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011454, TRUE, &val);
+				btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18812000, TRUE, &version);
+				if (is_mt6639(bdev->chip_id)) {
+					if (((val & BIT(22)) != BIT(22)) && ((val & BIT(23)) != BIT(23)) &&
+							version == 0x03000000) {
+						BTMTK_INFO("%s: AP2BT readable", __func__);
+						check = TRUE;
+					}
+				} else if (is_mt7925(bdev->chip_id)) {
+					if (((val & BIT(22)) != BIT(22)) && ((val & BIT(23)) != BIT(23)) &&
+							version == 0x03020000) {
+						BTMTK_INFO("%s: AP2BT readable", __func__);
+						check = TRUE;
+					}
+				}
+
+				if (check || mode) {
+					check = FALSE;
+					BTMTK_INFO("%s: 5.BGFSYS status - sheet(bg_top_apb_cr_dbg)", __func__);
+					btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 1, 0x18860000, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 2, 0x18860020, TRUE, &val);
+					if (is_mt6639(bdev->chip_id)) {
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 3, 0x18860024, TRUE, &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 4, 0x18860030, TRUE, &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 5, 0x18860034, TRUE, &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 6, 0x18860128, TRUE, &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 7, 0x18821120, TRUE, &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 8, 0x18821148, TRUE, &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 9, 0x18821200, TRUE, &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 10, 0x18821210, TRUE, &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 11, 0x18821504, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 12, 0x18821508, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 13, 0x1882150C, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 14, 0x18821510, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 15, 0x18821640, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 16, 0x18821644, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 17, 0x18821648, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 18, 0x1882164C, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 19, 0x18821700, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 20, 0x18820004, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 21, 0x18820010, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 22, 0x1882006C, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 23, 0x18820088, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 24, 0x18820090, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 25, 0x18812100, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 26, 0x18812104, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 27, 0x18812108, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 28, 0x18812114, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 29, 0x18812118, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 30, 0x18812120, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 31, 0x18812124, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 32, 0x18812150, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 33, 0x18812168, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 34, 0x1881216C, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 35, 0x18812170, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 36, 0x18812174, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 37, 0x18812178, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 38, 0x1881217C, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 39, 0x18812400, TRUE , &val);
+					} else if (is_mt7925(bdev->chip_id)) {
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 3, 0x18860028, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 4, 0x18860030, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 5, 0x18860034, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 6, 0x18860128, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 7, 0x1886012C, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 8, 0x18821120, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 9, 0x18821148, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 10, 0x18821200, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 11, 0x18821210, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 12, 0x18821504, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 13, 0x18821508, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 14, 0x1882150C, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 15, 0x18821510, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 16, 0x18821640, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 17, 0x18821644, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 18, 0x18821648, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 19, 0x1882164C, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 20, 0x18821700, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 21, 0x18820004, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 22, 0x18820010, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 23, 0x1882006C, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 24, 0x18820088, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 25, 0x18820090, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 26, 0x18812100, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 27, 0x18812104, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 28, 0x18812108, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 29, 0x18812114, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 30, 0x18812118, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 31, 0x18812120, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 32, 0x18812124, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 33, 0x18812150, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 34, 0x18812168, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 35, 0x1881216C, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 36, 0x18812170, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 37, 0x18812174, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 38, 0x18812178, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 39, 0x1881217C, TRUE , &val);
+						btmtk_r_debug_cr(bdev, "PSOP_5_2_A", 40, 0x18812400, TRUE , &val);
+					}
+				} else
+					BTMTK_INFO("%s: Don't go to BGSYS", __func__);
+			} else
+				BTMTK_INFO("%s: CONN_INFRA top owner", __func__);
+		}
+	}
+
+	BTMTK_INFO("%s: END", __func__);
+}
+
+void btmtk_usb_low_power_dump(struct btmtk_dev *bdev, u8 mode)
+{
+	u32 val, wfsys_status, btsys_status;
+	int status;
+
+	BTMTK_INFO("%s: mode: %02X", __func__, mode);
+
+	if (is_connac3(bdev->chip_id)) {
+		BTMTK_INFO("%s: 1.Power check - sheet1", __func__);
+		status = btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18060A00, TRUE, &val);
+		if (status) {
+			BTMTK_INFO("%s: Avoid jamming, so end it directly.", __func__);
+			return;
+		}
+
+		BTMTK_INFO("%s: 1.Power check - sheet3", __func__);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18060200, TRUE, &wfsys_status);
+		if ((wfsys_status & BIT(31)) || mode) {
+			BTMTK_INFO("%s: 3.Power check - sheet(dump_list) - A & B", __func__);
+			btmtk_w_debug_cr(bdev, 0x18060B00, 0x1, TRUE);
+			btmtk_show_dump_item(bdev, "PSOP_3_1_A", 1, 0x18060B04, 0x18060B10, 0x0, 0x1, 0x5, TRUE);
+			btmtk_wr_debug_cr(bdev, "PSOP_3_1_A", 6, 0x18060B04, 0x10, 0x18060B10, TRUE, &val);
+			btmtk_wr_debug_cr(bdev, "PSOP_3_1_A", 7, 0x18060B04, 0x12, 0x18060B10, TRUE, &val);
+			btmtk_show_dump_item(bdev, "PSOP_3_1_A", 8, 0x18060B04, 0x18060B10, 0x17, 0x1, 0x5, TRUE);
+			btmtk_wr_debug_cr(bdev, "PSOP_3_1_A", 13, 0x18060B04, 0x1D, 0x18060B10, TRUE, &val);
+			btmtk_w_debug_cr(bdev, 0x18060B18, 0x1, TRUE);
+			btmtk_show_dump_item(bdev, "PSOP_3_1_B", 1, 0x18060B1C, 0x18023638, 0x0, 0x1, 0x5, TRUE);
+			btmtk_wr_debug_cr(bdev, "PSOP_3_1_B", 6, 0x18060B1C, 0x8, 0x18023638, TRUE, &val);
+		}
+
+		if (!(wfsys_status & BIT(31)) || mode) {
+			BTMTK_INFO("%s: 1.Power check - sheet2", __func__);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18060230, TRUE, &btsys_status);
+
+			if ((btsys_status & BIT(3)) || mode) {
+				if (is_mt6639(bdev->chip_id)) {
+					BTMTK_INFO("%s: 2.BGFSYS status - sheet(bg_top_host_csr_dbg)", __func__);
+					btmtk_show_dump_item(bdev, "SKIP", 0, 0x18060C04, 0x18060C00, 0x30000, 0x10, 0x3, TRUE);
+					btmtk_show_dump_item(bdev, "SKIP", 0, 0x18023A1C, 0x18023A20, 0x300000, 0x1, 0xB, TRUE);
+					btmtk_show_dump_item(bdev, "SKIP", 0, 0x18023A1C, 0x18023A20, 0x300040, 0x1, 0x19, TRUE);
+					btmtk_show_dump_item(bdev, "SKIP", 0, 0x18023A1C, 0x18023A20, 0x300080, 0x1, 0x04, TRUE);
+					btmtk_wr_debug_cr(bdev, "SKIP", 0, 0x18023A1C, 0x00300100, 0x18023A20, TRUE, &val);
+					btmtk_show_dump_item(bdev, "SKIP", 0, 0x18023A0C, 0x18023A10, 0xc0000000, 0x1, 0x04, TRUE);
+					btmtk_show_dump_item(bdev, "SKIP", 0, 0x18023A0C, 0x18023A10, 0xc0000100, 0x1, 0x07, TRUE);
+				} else if (is_mt7925(bdev->chip_id)) {
+					BTMTK_INFO("%s: 2.BGFSYS status - sheet(vcore_off)", __func__);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18001108, TRUE, &val);
+					val = val & ~(0x00030000);
+					btmtk_w_debug_cr(bdev, 0x18001108, val, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_B", 1, 0x18023A0C, 0x18023A10, 0xC0000000, 0x1, 0x6, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_C", 1, 0x18023A0C, 0x18023A10, 0xC0000100, 0x1, 0x6, TRUE);
+					btmtk_wr_debug_cr(bdev, "PSOP_5_1_D", 1, 0x18023A0C, 0xC0000200, 0x18023A10, TRUE, &val);
+
+					BTMTK_INFO("%s: 2.BGFSYS status - sheet(vcore_on)", __func__);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18001108, TRUE, &val);
+					val = val & ~(0x000C0000);
+					btmtk_w_debug_cr(bdev, 0x18001108, val, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_E", 1, 0x18023A1C, 0x18023A20, 0x00300040, 0x1, 0x17, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_F", 1, 0x18023A1C, 0x18023A20, 0x00300001, 0x1, 0xC, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_G", 1, 0x18023A1C, 0x18023A20, 0x00300080, 0x1, 0x5, TRUE);
+					btmtk_wr_debug_cr(bdev, "PSOP_5_1_G", 6, 0x18023A1C, 0x00300100, 0x18023A20, TRUE, &val);
+					btmtk_wr_debug_cr(bdev, "PSOP_5_1_G", 7, 0x18023A1C, 0x00300140, 0x18023A20, TRUE, &val);
+
+					BTMTK_INFO("%s: 2.BGFSYS status - sheet(vlp)", __func__);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18023A24, TRUE, &val);
+					val = val & ~(0x00000007);
+					btmtk_w_debug_cr(bdev, 0x18023A24, val, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_5_1_H", 1, 0x18060C04, 0x18060C00, 0x00030000, 0x10, 0x3, TRUE);
+					btmtk_wr_debug_cr(bdev, "PSOP_5_1_H", 4, 0x18060C04, 0x00030050, 0x18060C00, TRUE, &val);
+				}
+			}
+
+			if (((btsys_status & BIT(3)) != BIT(3)) || mode) {
+				BTMTK_INFO("%s: 4.CONN INFRA status - sheet(dump_list)", __func__);
+				if (is_mt6639(bdev->chip_id)) {
+					btmtk_r_debug_cr(bdev, "PSOP_7_1_A", 1, 0x18060A00, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "PSOP_7_1_A", 2, 0x18060A0C, TRUE, &val);
+					btmtk_show_dump_item(bdev, "PSOP_7_1_A", 3, 0x1806015C, 0x18060A04, 0x0, 0x1, 0x8, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_7_1_A", 11, 0x18060160, 0x18060A08, 0x0, 0x1, 0x6, TRUE);
+					btmtk_r_debug_cr(bdev, "PSOP_7_1_B", 1, 0x18023200, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "PSOP_7_1_B", 2, 0x18011130, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE, &val);
+					val = val & ~(BIT(21) | BIT(22));
+					btmtk_wr_debug_cr(bdev, "PSOP_7_1_B", 3, 0x18011100, val, 0x18011134, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE, &val);
+					val = (val & ~BIT(22)) | BIT(21);
+					btmtk_wr_debug_cr(bdev, "PSOP_7_1_B", 4, 0x18011100, val, 0x18011134, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE, &val);
+					val = (val & ~BIT(21)) | BIT(22);
+					btmtk_wr_debug_cr(bdev, "PSOP_7_1_B", 5, 0x18011100, val, 0x18011134, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE, &val);
+					val = val | BIT(21) | BIT(22);
+					btmtk_wr_debug_cr(bdev, "PSOP_7_1_B", 6, 0x18011100, val, 0x18011134, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1801603C, TRUE, &val);
+					val = (val & 0b11111111111111111111111111000000) | 0b1110;
+					btmtk_w_debug_cr(bdev, 0x1801603C, val, TRUE);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1801603C, TRUE, &val);
+					val = (val & 0b11111111111111111111000000111111) | 0b10001000000;
+					btmtk_w_debug_cr(bdev, 0x1801603C, val, TRUE);
+					btmtk_w_debug_cr(bdev, 0x1801601C, 0x03020100, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016020, 0x07060504, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016024, 0x0B0A0908, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016028, 0x0F0E0D0C, TRUE);
+					btmtk_w_debug_cr(bdev, 0x1801602C, 0x13121110, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016030, 0x17161514, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016034, 0x1B1A1918, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016038, 0x1F1E1D1C, TRUE);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18016058, TRUE, &val);
+					val = val | BIT(1);
+					btmtk_w_debug_cr(bdev, 0x18016058, val, TRUE);
+					btmtk_r_debug_cr(bdev, "PSOP_7_1_B", 7, 0x18023200, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1801603C, TRUE, &val);
+					val = (val & 0b11111111111111111111111111000000) | 0b11000;
+					btmtk_w_debug_cr(bdev, 0x1801603C, val, TRUE);
+					btmtk_w_debug_cr(bdev, 0x1801601C, 0x03020100, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016020, 0x07060504, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016024, 0x0B0A0908, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016028, 0x0F0E0D0C, TRUE);
+					btmtk_w_debug_cr(bdev, 0x1801602C, 0x13121110, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016030, 0x17161514, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016034, 0x1B1A1918, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016038, 0x1F1E1D1C, TRUE);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18016058, TRUE, &val);
+					val = val | BIT(1);
+					btmtk_w_debug_cr(bdev, 0x18016058, val, TRUE);
+					btmtk_r_debug_cr(bdev, "PSOP_7_1_B", 8, 0x18023200, TRUE, &val);
+				} else if (is_mt7925(bdev->chip_id)) {
+					btmtk_r_debug_cr(bdev, "PSOP_8_1_A", 1, 0x18060A00, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "PSOP_8_1_A", 2, 0x18060A0C, TRUE, &val);
+					btmtk_show_dump_item(bdev, "PSOP_8_1_A", 3, 0x1806015C, 0x18060A04, 0x0, 0x1, 0x8, TRUE);
+					btmtk_show_dump_item(bdev, "PSOP_8_1_A", 11, 0x18060160, 0x18060A08, 0x0, 0x1, 0x6, TRUE);
+					btmtk_wr_debug_cr(bdev, "PSOP_8_1_A", 17, 0x18060160, 0x7, 0x18060A08, TRUE, &val);
+					btmtk_wr_debug_cr(bdev, "PSOP_8_1_A", 18, 0x18060160, 0x8, 0x18060A08, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "PSOP_8_1_B", 1, 0x18023200, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "PSOP_8_1_B", 2, 0x18011130, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE, &val);
+					val = val & ~(BIT(21) | BIT(22));
+					btmtk_wr_debug_cr(bdev, "PSOP_8_1_B", 3, 0x18011100, val, 0x18011134, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE, &val);
+					val = (val & ~BIT(22)) | BIT(21);
+					btmtk_wr_debug_cr(bdev, "PSOP_8_1_B", 4, 0x18011100, val, 0x18011134, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE, &val);
+					val = (val & ~BIT(21)) | BIT(22);
+					btmtk_wr_debug_cr(bdev, "PSOP_8_1_B", 5, 0x18011100, val, 0x18011134, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18011100, TRUE, &val);
+					val = val | BIT(21) | BIT(22);
+					btmtk_wr_debug_cr(bdev, "PSOP_8_1_B", 6, 0x18011100, val, 0x18011134, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1801603C, TRUE, &val);
+					val = (val & 0b11111111111111111111111111000000) | 0b1110;
+					btmtk_w_debug_cr(bdev, 0x1801603C, val, TRUE);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1801603C, TRUE, &val);
+					val = (val & 0b11111111111111111111000000111111) | 0b10001000000;
+					btmtk_w_debug_cr(bdev, 0x1801603C, val, TRUE);
+					btmtk_w_debug_cr(bdev, 0x1801601C, 0x03020100, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016020, 0x07060504, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016024, 0x0B0A0908, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016028, 0x0F0E0D0C, TRUE);
+					btmtk_w_debug_cr(bdev, 0x1801602C, 0x13121110, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016030, 0x17161514, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016034, 0x1B1A1918, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016038, 0x1F1E1D1C, TRUE);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18016058, TRUE, &val);
+					val = val | BIT(1);
+					btmtk_w_debug_cr(bdev, 0x18016058, val, TRUE);
+					btmtk_r_debug_cr(bdev, "PSOP_8_1_B", 7, 0x18023200, TRUE, &val);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x1801603C, TRUE, &val);
+					val = (val & 0b11111111111111111111111111000000) | 0b11000;
+					btmtk_w_debug_cr(bdev, 0x1801603C, val, TRUE);
+					btmtk_w_debug_cr(bdev, 0x1801601C, 0x03020100, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016020, 0x07060504, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016024, 0x0B0A0908, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016028, 0x0F0E0D0C, TRUE);
+					btmtk_w_debug_cr(bdev, 0x1801602C, 0x13121110, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016030, 0x17161514, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016034, 0x1B1A1918, TRUE);
+					btmtk_w_debug_cr(bdev, 0x18016038, 0x1F1E1D1C, TRUE);
+					btmtk_r_debug_cr(bdev, "SKIP", 0, 0x18016058, TRUE, &val);
+					val = val | BIT(1);
+					btmtk_w_debug_cr(bdev, 0x18016058, val, TRUE);
+					btmtk_r_debug_cr(bdev, "PSOP_8_1_B", 8, 0x18023200, TRUE, &val);
+				}
+			}
+		}
+	}
+
+	BTMTK_INFO("%s: END", __func__);
+}
+
+void btmtk_usb_trx_info_dump(struct btmtk_dev *bdev)
+{
+	u32 val;
+
+	BTMTK_INFO("%s: Debug info is dumping. Chip ID: %04x", __func__, bdev->chip_id);
+
+	btmtk_r_debug_cr(bdev, "SKIP", 0, TX3CSR2_TXFIFOADDR, TRUE, &val);
+	btmtk_r_debug_cr(bdev, "SKIP", 0, RX3CSR2_RXFIFOADDR, TRUE, &val);
+}
+
+void btmtk_usb_enable_DMA_debug(struct btmtk_dev *bdev)
+{
+	BTMTK_INFO("%s: Debug info is dumping. Chip ID: %04X", __func__, bdev->chip_id);
+
+    if (is_connac3(bdev->chip_id)) {
+        btmtk_w_debug_cr(bdev, 0x740003BC, 0x00000001, TRUE);
+        btmtk_w_debug_cr(bdev, 0x74000018, 0x00000001, TRUE);
+    } else {
+         BTMTK_INFO("%s: Unsupported Chip ID: %04X", __func__, bdev->chip_id);
+    }
+}
+
+void btmtk_usb_cbinfra_dump(struct btmtk_dev *bdev)
+{
+	u32 val;
+	u32 w_address, r_address = 0;
+	u32 r_index;
+	u32 CbInfraVlpReadOnly[] = {
+			0x70025000, 0x70025004, 0x70025008,
+			0x7002500C, 0x70025010, 0x70025014,
+			0x70025018, 0x7002501C, 0x70025020,
+			0x70025024, 0x70025028, 0x7002502C,
+			0x70025030, 0x70025034, 0x70025038,
+			0x7002503C, 0x70025040, 0x70025044,
+			0x70025048, 0x7002504C, 0x70025050,
+			0x70025054, 0x70025058, 0x7002505C,
+			0x70025060, 0x70025064, 0x70025068,
+			0x7002506C, 0x70025070, 0x70025074,
+			0x70025078, 0x7002507C, 0x70025080,
+			0x70025084, 0x700250F0, 0x70025100,
+			0x70025104, 0x70025108, 0x7002510C,
+			0x70025110, 0x70025114, 0x70025118,
+			0x7002511C, 0x70025120, 0x70025130,
+			0x70025140, 0x70025180, 0x70025210,
+			0x70025400, 0x70025404, 0x70025408,
+			0x7002540C, 0x70025410, 0x70025414};
+	u32 CbInfraVlpWriteRead[] = {
+			0x00010001, 0x00010203, 0x00010405,
+			0x00010607, 0x00010809, 0x00010A0B,
+			0x00010C0D, 0x00010E0F, 0x00011011,
+			0x00011213, 0x00011415, 0x00011617,
+			0x00011819};
+	u32 CbInfraVcoreOn[] = {
+			0x7002802C, 0x700283C0, 0x70028424,
+			0x70028428, 0x7002842C, 0x70028430,
+			0x70028434, 0x70028438, 0x7002843C,
+			0x70028520, 0x70028524, 0x70028528,
+			0x7002852C, 0x70028730, 0x70028734,
+			0x70028738, 0x7002873C, 0x70028900};
+	u32 CbInfraVcoreOff[] = {
+			0x70026000, 0x70026004, 0x70026008,
+			0x7002600C, 0x70026100, 0x70026104,
+			0x70026550, 0x70026554, 0x70026558,
+			0x70026A50, 0x70026A58, 0x70026A5C,
+			0x70026A60, 0x70026A64, 0x70026A68,
+			0x70026A6C, 0x70020004, 0x70020008,
+			0x70020080, 0x70020110, 0x70021060,
+			0x70021064, 0x70021068, 0x7002106C,
+			0x70021070, 0x70021074, 0x70021078,
+			0x7002107C, 0x70021080, 0x70021084,
+			0x70021088, 0x7002108C, 0x70021090,
+			0x70021094, 0x70021098, 0x7002109C,
+			0x700210A0};
+	u32 Pcie[] = {
+			0x74030150, 0x74030154, 0x74030184,
+			0x74031010};
+	u32 Cbtop[] = {
+			0x70000104, 0x70000248, 0x7000024C,
+			0x70007400, 0x70007404, 0x70003000,
+			0x74031204, 0x74031210, 0x74030184,
+			0x740331C0};
+
+	if (is_mt7925(bdev->chip_id)) {
+		BTMTK_INFO("%s: ==========Start dump extra CB top info==========", __func__);
+
+		BTMTK_INFO("%s: ==========Section E==========", __func__);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70026558, TRUE, &val);
+		val = (val & 0xFFFF0000) | 0x7000;
+		btmtk_w_debug_cr(bdev, 0x18016038, 0x1F1E1D1C, TRUE);
+		btmtk_w_debug_cr(bdev, 0x70026558, val, TRUE);
+		for (r_index = 0; r_index < sizeof(Cbtop) / sizeof(u32); r_index++) {
+			r_address = Cbtop[r_index];
+			btmtk_r_debug_cr(bdev, "SKIP", 0, r_address, TRUE, &val);
+		}
+
+		BTMTK_INFO("%s: ==========Section A==========", __func__);
+		for (r_index = 0; r_index < sizeof(CbInfraVlpReadOnly) / sizeof(u32); r_index++) {
+			r_address = CbInfraVlpReadOnly[r_index];
+			btmtk_r_debug_cr(bdev, "SKIP", 0, r_address, TRUE, &val);
+		}
+
+		for (r_index = 0; r_index < sizeof(CbInfraVlpWriteRead) / sizeof(u32); r_index++) {
+			w_address = 0x70025300;
+			r_address = 0x70025304;
+			btmtk_w_debug_cr(bdev, w_address, CbInfraVlpWriteRead[r_index], TRUE);
+			btmtk_r_debug_cr(bdev, "SKIP", 0, r_address, TRUE, &val);
+		}
+
+		BTMTK_INFO("%s: ==========Section B==========", __func__);
+		for (r_index = 0; r_index < sizeof(CbInfraVcoreOn) / sizeof(u32); r_index++) {
+			r_address = CbInfraVcoreOn[r_index];
+			btmtk_r_debug_cr(bdev, "SKIP", 0, r_address, TRUE, &val);
+		}
+
+		BTMTK_INFO("%s: ==========Section C==========", __func__);
+		for (r_index = 0; r_index < sizeof(CbInfraVcoreOff) / sizeof(u32); r_index++) {
+			r_address = CbInfraVcoreOff[r_index];
+			btmtk_r_debug_cr(bdev, "SKIP", 0, r_address, TRUE, &val);
+		}
+
+		BTMTK_INFO("%s: ==========Section D==========", __func__);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70026554, TRUE, &val);
+		val = (val & 0x0000FFFF) | 0x74030000;
+		btmtk_w_debug_cr(bdev, 0x70026554, val, TRUE);
+		for (r_index = 0; r_index < sizeof(Pcie) / sizeof(u32); r_index++) {
+			r_address = Pcie[r_index];
+			btmtk_r_debug_cr(bdev, "SKIP", 0, r_address, TRUE, &val);
+		}
+
+		btmtk_w_debug_cr(bdev, 0x74030168, 0x22CC0100, TRUE);
+		btmtk_w_debug_cr(bdev, 0x74030164, 0x81804845, TRUE);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, 0x7403002C, TRUE, &val);
+
+		BTMTK_INFO("%s: ==========Finish dump extra CB top info==========", __func__);
+	}
+}
+
+void btmtk_usb_info_dump(struct btmtk_dev *bdev)
+{
+	u32 val;
+	int status, i;
+	u32 r_address;
+
+	BTMTK_INFO("%s: Debug info is dumping. Chip ID: %04X", __func__, bdev->chip_id);
+
+	if (is_connac3(bdev->chip_id)) {
+		status = btmtk_r_debug_cr(bdev, "SKIP", 0, POWER_MANAGEMENT, TRUE, &val);
+		if (status) {
+			BTMTK_INFO("%s: Avoid jamming, so end it directly.", __func__);
+			return;
+		}
+
+		btmtk_r_debug_cr(bdev, "SKIP", 0, USB20_OPSTATE_SYS, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, SSUSB_IP_DEV_PDN, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, SSUSB_U2_PORT_PDN, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, MISC_CTRL, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, SSUSB_IP_SLEEP_STS, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, EPISR, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, EPIER, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, EPISR_MD, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, EPIER_MD, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, EPISR_UHW, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, EPIER_UHW, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, EP0CSR, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, EP0DISPATCH, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, SSUSB_IP_SPARE0, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, SSUSB_IP_SPARE1, TRUE, &val);
+	}
+
+	if (is_mt7925(bdev->chip_id)) {
+		btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025050, TRUE, &val);
+		btmtk_r_debug_cr(bdev, "SKIP", 0, 0x70025054, TRUE, &val);
+		BTMTK_INFO("%s: Data patch.", __func__);
+		r_address = 0x7C059410;
+		status = btmtk_r_debug_cr(bdev, "SKIP", 0, r_address, FALSE, &val);
+		if (status) {
+			BTMTK_INFO("%s: Avoid jamming, so end it directly.", __func__);
+			return;
+		}
+
+		for (i = 0; i < 0x2F; i++) {
+			r_address = r_address + 0x4;
+			btmtk_r_debug_cr(bdev, "SKIP", 0, r_address, FALSE, &val);
+		}
+
+		BTMTK_INFO("%s: Ctrl patch.", __func__);
+		r_address = 0x7C0594D0;
+		btmtk_r_debug_cr(bdev, "SKIP", 0, r_address, FALSE, &val);
+		for (i = 0; i < 0x2F; i++) {
+			r_address = r_address + 0x4;
+			btmtk_r_debug_cr(bdev, "SKIP", 0, r_address, FALSE, &val);
+		}
+	} else if (is_mt6639(bdev->chip_id)) {
+		BTMTK_INFO("%s: Data patch.", __func__);
+		r_address = 0x7C05B160;
+		status = btmtk_r_debug_cr(bdev, "SKIP", 0, r_address, FALSE, &val);
+		if (status) {
+			BTMTK_INFO("%s: Avoid jamming, so end it directly.", __func__);
+			return;
+		}
+
+		for (i = 0; i < 0x2F; i++) {
+			r_address = r_address + 0x4;
+			btmtk_r_debug_cr(bdev, "SKIP", 0, r_address, FALSE, &val);
+		}
+
+		BTMTK_INFO("%s: Ctrl patch.", __func__);
+		r_address = 0x7C05B220;
+		btmtk_r_debug_cr(bdev, "SKIP", 0, r_address, FALSE, &val);
+		for (i = 0; i < 0x2F; i++) {
+			r_address = r_address + 0x4;
+			btmtk_r_debug_cr(bdev, "SKIP", 0, r_address, FALSE, &val);
+		}
+	}
+}
+
+void btmtk_usb_get_dump_mode(struct btmtk_dev *bdev)
+{
+	BTMTK_INFO("%s: mode = %d", __func__, bdev->bt_cfg.debug_sop_mode);
+	bdev->dump_cnt++;
+	BTMTK_INFO("%s: =PSOP_START=%d, %04x, BT_DRV, 1",
+				__func__, bdev->dump_cnt, bdev->chip_id);
+
+	if (is_connac3(bdev->chip_id) && bdev->bt_cfg.debug_sop_mode != BTMTK_DBG_DEFAULT_STATE) {
+		btmtk_usb_cbinfra_dump(bdev);
+		btmtk_usb_info_dump(bdev);
+		btmtk_usb_pc_lr_dump(bdev);
+	}
+
+	switch (bdev->bt_cfg.debug_sop_mode) {
+	case BTMTK_DBG_DEFAULT_STATE:
+		BTMTK_INFO("%s: dump mode is 0, don't dump CR", __func__);
+		break;
+	case BTMTK_CHECK_DBG_STATUS:
+		btmtk_usb_check_DBG_status_dump(bdev);
+		break;
+	case BTMTK_PDBG_SLAVE_NO_RESPONSE_CONDITIONAL:
+		btmtk_usb_check_DBG_status_dump(bdev);
+		// mode 0: conditional dump, mode 1: full dump
+		btmtk_usb_slave_no_response_dump(bdev, 0);
+		break;
+	case BTMTK_PDBG_SLAVE_NO_RESPONSE_ALL:
+		btmtk_usb_check_DBG_status_dump(bdev);
+		// mode 0: conditional dump, mode 1: full dump
+		BTMTK_INFO("%s: trigger all btmtk_slave_no_response_dump.", __func__);
+		btmtk_usb_slave_no_response_dump(bdev, 1);
+		break;
+	case BTMTK_LOW_POWER_CONDITIONAL:
+		// mode 0: conditional dump, mode 1: full dump
+		btmtk_usb_low_power_dump(bdev, 0);
+		break;
+	case BTMTK_LOW_POWER_ALL:
+		// mode 0: conditional dump, mode 1: full dump
+		BTMTK_INFO("%s: trigger all btmtk_low_power_dump.", __func__);
+		btmtk_usb_low_power_dump(bdev, 1);
+		break;
+	case BTMTK_DBG_INFO:
+		btmtk_usb_info_dump(bdev);
+		btmtk_usb_trx_info_dump(bdev);
+		break;
+	default:
+		BTMTK_INFO("%s: trigger all relevant CR. dump_mode: %d", __func__, bdev->bt_cfg.debug_sop_mode);
+		btmtk_usb_pc_lr_dump(bdev);
+		btmtk_usb_check_DBG_status_dump(bdev);
+		btmtk_usb_slave_no_response_dump(bdev, 1);
+		btmtk_usb_low_power_dump(bdev, 1);
+		btmtk_usb_info_dump(bdev);
+		btmtk_usb_trx_info_dump(bdev);
+		break;
+	}
+}
+
 static void btmtk_usb_dump_debug_sop(struct btmtk_dev *bdev)
 {
 	/* dump mcu_sleep_wakeup_debug(BGFSYS_status),
@@ -660,8 +2190,16 @@ static void btmtk_usb_dump_debug_sop(struct btmtk_dev *bdev)
 		return;
 	}
 
+	if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT) {
+		BTMTK_ERR("%s chip state is disconnect, don't dump debug SOP", __func__);
+		return;
+	}
+
 	BTMTK_INFO("%s -debug sop dump start", __func__);
-	btmtk_usb_dump_debug_register(bdev, bdev->debug_sop_reg_dump);
+	if (is_connac3(bdev->chip_id))
+		btmtk_usb_get_dump_mode(bdev);
+	else
+		btmtk_usb_dump_debug_register(bdev, bdev->debug_sop_reg_dump);
 	BTMTK_INFO("%s -debug sop dump end", __func__);
 }
 
@@ -849,11 +2387,13 @@ static void btusb_intr_complete(struct urb *urb)
 			/* USB hif: recv both 0xff and fw dump end, then do chip reset */
 			bdev->chip_reset_signal |= (1 << 0);
 			BTMTK_INFO("%s ,chip_reset_signal = %02x", __func__, bdev->chip_reset_signal);
-			if (bdev->chip_reset_signal == 0x03) {
+			if ((!bdev->dualBT && bdev->chip_reset_signal == 0x03)
+				|| (bdev->dualBT && bdev->chip_reset_signal == 0x07)) {
 				bdev->chip_reset_signal = 0x00;
 				DUMP_TIME_STAMP("notify_chip_reset");
 				btmtk_reset_trigger(bdev);
 			}
+
 			goto intr_resub;
 		}
 
@@ -1768,6 +3308,10 @@ static int btmtk_usb_open(struct hci_dev *hdev)
 #endif
 
 	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_DISCONNECT) {
+		BTMTK_ERR("%s: state is disconnect, return", __func__);
+		return -1;
+	}
 	if (state != BTMTK_STATE_SUSPEND
 		&& state != BTMTK_STATE_RESUME
 		&& state != BTMTK_STATE_STANDBY) {
@@ -1858,6 +3402,12 @@ static int btmtk_usb_close(struct hci_dev *hdev)
 	unsigned char state = 0;
 
 	BTMTK_INFO("%s enter!", __func__);
+
+	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_DISCONNECT) {
+		BTMTK_ERR("%s: state is disconnect, return", __func__);
+		return -1;
+	}
 
 #if BTMTK_ISOC_TEST
 	if (bdev->bt_cfg.support_usb_sco_test) {
@@ -2708,6 +4258,7 @@ int btmtk_usb_toggle_rst_pin(struct btmtk_dev *bdev)
 #ifndef CFG_SUPPORT_CHIP_RESET_KO
 	struct device_node *node;
 	int rst_pin_num = 0;
+	int status = 0;
 #endif
 
 	if (!bdev) {
@@ -2783,6 +4334,54 @@ int btmtk_usb_toggle_rst_pin(struct btmtk_dev *bdev)
 		}
 	}
 #endif
+	node = of_find_compatible_node(NULL, NULL, "mediatek,mtk-wifi-reset");
+	if (node) {
+		status = of_get_named_gpio(node, "wifireset-gpios", 0);
+		if (status >= 0) {
+			rst_pin_num = status;
+			status = 0;
+		} else if (of_property_read_u32(node, "wifireset-gpios", &rst_pin_num) == 0) {
+			status = 0;
+		} else {
+			status = -1;
+			BTMTK_ERR("%s: failed to obtain wifi control gpio", __func__);
+		}
+
+		if (status == 0) {
+			BTMTK_INFO("%s: Found wifireset-gpios: %d\n", __func__, rst_pin_num);
+
+			status = gpio_request(rst_pin_num, "wifireset-gpios");
+			if (status < 0) {
+				BTMTK_ERR("%s: gpio_request failed(%d)", __func__, status);
+				return -1;
+			}
+
+			status = gpio_direction_output(rst_pin_num, 0);
+			if (status < 0) {
+				BTMTK_ERR("%s: gpio_direction_output %d failed", __func__, 0);
+				gpio_free(rst_pin_num);
+				return -1;
+			} else {
+				BTMTK_INFO("%s: gpio_direction_output(%d,%d)", __func__, rst_pin_num, 0);
+			}
+
+			msleep(RESET_PIN_SET_LOW_TIME);
+			status = gpio_direction_output(rst_pin_num, 1);
+			if (status < 0) {
+				BTMTK_ERR("%s: gpio_direction_output %d failed", __func__, 1);
+				gpio_free(rst_pin_num);
+				return -1;
+			} else {
+				BTMTK_INFO("%s: gpio_direction_output(%d,%d)", __func__, rst_pin_num, 1);
+			}
+
+			BTMTK_INFO("%s: set gpio done", __func__);
+			gpio_free(rst_pin_num);
+			goto exit;
+		}
+	} else {
+		BTMTK_ERR("%s: Not found node mediatek,mtk-wifi-reset", __func__);
+	}
 #endif
 	/* use linux kernel common api */
 	do {
@@ -2817,6 +4416,10 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	int ret = 0;
 	int state = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	struct device_node *node;
+	int status;
+	uint32_t gpio_num = 0;
+	int val = 0;
 
 	btmtk_usb_handle_mutex_lock(bdev);
 
@@ -2847,10 +4450,70 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 
 	btusb_stop_traffic((struct btmtk_usb_dev *)bdev->cif_dev);
 
-	if (bmain_info->hif_hook_chip.bt_subsys_reset) {
-		ret = bmain_info->hif_hook_chip.bt_subsys_reset(bdev);
-		btmtk_usb_handle_mutex_unlock(bdev);
-		return ret;
+	if (bdev->bt_cfg.support_dts_subsys_rst) {
+		/* For reset */
+		btmtk_cif_write_uhw_register(bdev, EP_RST_OPT, EP_RST_IN_OUT_OPT);
+
+		/* read interrupt EP15 CR */
+		btmtk_cif_read_uhw_register(bdev, BT_WDT_STATUS, &val);
+
+		node = of_find_compatible_node(NULL, NULL, CHIP_RESET_DTS_NODE_NAME);
+		if (node) {
+			status = of_get_named_gpio(node, CHIP_RESET_GPIO_PROPERTY_NAME, 0);
+			if (status >= 0) {
+				gpio_num = status;
+				status = 0;
+			} else if (of_property_read_u32(node, CHIP_RESET_GPIO_PROPERTY_NAME, &gpio_num) == 0) {
+				status = 0;
+			} else {
+				status = -1;
+				BTMTK_ERR("%s: failed to get gpio number", __func__);
+			}
+		} else {
+			status = -1;
+			BTMTK_ERR("%s: failed to find DTS node", __func__);
+		}
+
+		if (status != 0) {
+			return -1;
+		} else {
+			BTMTK_INFO("%s: gpio num for subsys reset is %d", __func__, gpio_num);
+		}
+
+		status = gpio_request(gpio_num, CHIP_RESET_GPIO_PROPERTY_NAME);
+		if (status < 0) {
+			BTMTK_ERR("%s: gpio_request failed(%d)", __func__, status);
+			return -1;
+		}
+		status = gpio_direction_output(gpio_num, 0);
+		if (status < 0) {
+			BTMTK_ERR("%s: gpio_direction_output %d failed", __func__, 0);
+			gpio_free(gpio_num);
+			return -1;
+		} else {
+			BTMTK_INFO("%s: gpio_direction_output(%d,%d)",
+				   __func__, gpio_num, 0);
+		}
+
+		msleep(100);
+		status = gpio_direction_output(gpio_num, 1);
+		if (status < 0) {
+			BTMTK_ERR("%s: gpio_direction_output %d failed", __func__, 1);
+			gpio_free(gpio_num);
+			return -1;
+		} else {
+			BTMTK_INFO("%s: gpio_direction_output(%d,%d)",
+				   __func__, gpio_num, 1);
+		}
+
+		BTMTK_INFO("%s: set gpio done", __func__);
+		gpio_free(gpio_num);
+	} else {
+		if (bmain_info->hif_hook_chip.bt_subsys_reset) {
+			ret = bmain_info->hif_hook_chip.bt_subsys_reset(bdev);
+			btmtk_usb_handle_mutex_unlock(bdev);
+			return ret;
+		}
 	}
 
 	BTMTK_ERR("%s: subsys reset no register", __func__);
@@ -2901,6 +4564,8 @@ static int btmtk_usb_enter_standby(void)
 	int val = 0;
 
 	BTMTK_INFO("%s: enter", __func__);
+	btmtk_handle_mutex_lock(bdev);
+
 	for (i = 0; i < intf_num; i++) {
 		/* Find valid dev for already probe interface. */
 		if (pp_bdev[i]->hdev != NULL) {
@@ -2919,6 +4584,7 @@ static int btmtk_usb_enter_standby(void)
 			if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
 				/* Error */
 				BTMTK_WARN("%s parameter is NULL", __func__);
+				btmtk_handle_mutex_unlock(bdev);
 				return -ENODEV;
 			}
 
@@ -2964,7 +4630,47 @@ static int btmtk_usb_enter_standby(void)
 	}
 
 	BTMTK_INFO("%s: end", __func__);
+	btmtk_handle_mutex_unlock(bdev);
 	return ret;
+}
+
+static int btusb_set_pinmux(struct btmtk_dev *bdev)
+{
+	u32 value = 0;
+	int err = 0;
+
+	BTMTK_INFO("%s", __func__);
+	err = btmtk_cif_read_uhw_register(bdev, BT_PINMUX_CTRL_REG, &value);
+	if (err)
+		return -1;
+
+	value |= BT_SUBSYS_RST_PINMUX;
+	err = btmtk_cif_write_uhw_register(bdev, BT_PINMUX_CTRL_REG, value);
+	if (err)
+		return -1;
+
+	err = btmtk_cif_read_uhw_register(bdev, BT_PINMUX_CTRL_REG, &value);
+	if (err)
+		return -1;
+
+	BTMTK_INFO("%s: BT_PINMUX_CTRL_REG = 0x%x", __func__, value);
+
+	err = btmtk_cif_read_uhw_register(bdev, BT_SUBSYS_RST_REG, &value);
+	if (err)
+		return -1;
+
+	value |= BT_SUBSYS_RST_ENABLE;
+	err = btmtk_cif_write_uhw_register(bdev, BT_SUBSYS_RST_REG, value);
+	if (err)
+		return -1;
+
+	err = btmtk_cif_read_uhw_register(bdev, BT_SUBSYS_RST_REG, &value);
+	if (err)
+		return -1;
+
+	BTMTK_INFO("%s: BT_SUBSYS_RST_REG = 0x%x", __func__, value);
+
+	return 0;
 }
 
 static int btusb_probe(struct usb_interface *intf,
@@ -3102,6 +4808,13 @@ static int btusb_probe(struct usb_interface *intf,
 
 	/* For reset */
 	btmtk_cif_write_uhw_register(bdev, EP_RST_OPT, 0x00010001);
+
+	if (bdev->bt_cfg.support_dts_subsys_rst) {
+		err = btusb_set_pinmux(bdev);
+		if (err < 0) {
+			BTMTK_ERR("Set pinmux fail!");
+		}
+	}
 
 	/* Interface numbers are hardcoded in the specification */
 	if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
@@ -3414,6 +5127,7 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 	BTMTK_INFO("%s: MTK BT Driver Version : %s", __func__, VERSION);
 
 	DUMP_TIME_STAMP("probe_start");
+	btmtk_handle_mutex_lock(bdev);
 
 #ifdef CFG_SUPPORT_CHIP_RESET_KO
 	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_PROBE_START);
@@ -3427,13 +5141,16 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 
 	/* interface numbers are hardcoded in the spec */
 	if (ifnum_base != BT0_MCU_INTERFACE_NUM &&
-		ifnum_base != BT1_MCU_INTERFACE_NUM)
+		ifnum_base != BT1_MCU_INTERFACE_NUM) {
+		btmtk_handle_mutex_unlock(bdev);
 		return -ENODEV;
+	}
 
 	/* Retrieve priv data and set to interface structure */
 	bdev = btmtk_get_dev();
 	if (!bdev) {
 		BTMTK_WARN("%s: bdev is NULL!", __func__);
+		btmtk_handle_mutex_unlock(bdev);
 		return -ENODEV;
 	}
 	usb_set_intfdata(intf, bdev);
@@ -3444,6 +5161,7 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
 		/* Error */
 		BTMTK_WARN("%s intf[%d] priv setting is NULL", __func__, ifnum_base);
+		btmtk_handle_mutex_unlock(bdev);
 		return -ENODEV;
 	}
 
@@ -3466,6 +5184,7 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 #endif
 
 	DUMP_TIME_STAMP("probe_end");
+	btmtk_handle_mutex_unlock(bdev);
 	return ret;
 }
 
@@ -3514,6 +5233,8 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 		return;
 	}
 
+	btmtk_handle_mutex_lock(bdev);
+
 	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
@@ -3536,6 +5257,7 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 
 	/* Set End/Error state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	btmtk_handle_mutex_unlock(bdev);
 	btmtk_usb_handle_mutex_unlock(bdev);
 }
 
@@ -3550,9 +5272,15 @@ static int btmtk_cif_suspend(struct usb_interface *intf, pm_message_t message)
 	int state = BTMTK_STATE_UNKNOWN;
 
 	BTMTK_INFO("%s, enter", __func__);
+	btmtk_handle_mutex_lock(bdev);
 	BTMTK_CIF_GET_DEV_PRIV(bdev, intf, ifnum_base);
 
 	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_DISCONNECT) {
+		BTMTK_ERR("%s: state is disconnect, return", __func__);
+		btmtk_handle_mutex_unlock(bdev);
+		return -1;
+	}
 	/* Retrieve current HIF event state */
 	if (state == BTMTK_STATE_FW_DUMP) {
 		BTMTK_WARN("%s: FW dumping ongoing, don't dos suspend flow!!!", __func__);
@@ -3564,6 +5292,7 @@ static int btmtk_cif_suspend(struct usb_interface *intf, pm_message_t message)
 		if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
 			/* Error */
 			BTMTK_WARN("%s intf[%d] priv setting is NULL", __func__, ifnum_base);
+			btmtk_handle_mutex_unlock(bdev);
 			return -ENODEV;
 		}
 
@@ -3584,6 +5313,7 @@ static int btmtk_cif_suspend(struct usb_interface *intf, pm_message_t message)
 		BTMTK_INFO("%s, interface num is for isoc interface, do't do suspend!", __func__);
 
 	BTMTK_INFO("%s, end. ret = %d", __func__, ret);
+	btmtk_handle_mutex_unlock(bdev);
 	return ret;
 }
 
@@ -3594,9 +5324,17 @@ static int btmtk_cif_resume(struct usb_interface *intf)
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
+	int state = 0;
 
 	BTMTK_INFO("%s, enter", __func__);
+	btmtk_handle_mutex_lock(bdev);
 	BTMTK_CIF_GET_DEV_PRIV(bdev, intf, ifnum_base);
+	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_DISCONNECT) {
+		BTMTK_ERR("%s: state is disconnect, return", __func__);
+		btmtk_handle_mutex_unlock(bdev);
+		return -1;
+	}
 
 	if (BTMTK_IS_BT_0_INTF(ifnum_base) || BTMTK_IS_BT_1_INTF(ifnum_base)) {
 		/* Retrieve current HIF event state */
@@ -3604,6 +5342,7 @@ static int btmtk_cif_resume(struct usb_interface *intf)
 		if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
 			/* Error */
 			BTMTK_WARN("%s intf[%d] priv setting is NULL", __func__, ifnum_base);
+			btmtk_handle_mutex_unlock(bdev);
 			return -ENODEV;
 		}
 
@@ -3624,6 +5363,7 @@ static int btmtk_cif_resume(struct usb_interface *intf)
 		BTMTK_INFO("%s, interface num is for isoc interface, do't do resume!", __func__);
 
 	BTMTK_INFO("%s, end. ret = %d", __func__, ret);
+	btmtk_handle_mutex_unlock(bdev);
 	return ret;
 }
 #endif	/* CONFIG_PM */
@@ -3691,6 +5431,8 @@ int btmtk_cif_register(void)
 	hook.enter_standby = btmtk_usb_enter_standby;
 	hook.write_uhw_register = btmtk_cif_write_uhw_register;
 	hook.read_uhw_register = btmtk_cif_read_uhw_register;
+	hook.handle_mutex_lock = btmtk_handle_mutex_lock;
+	hook.handle_mutex_unlock = btmtk_handle_mutex_unlock;
 	btmtk_reg_hif_hook(&hook);
 
 	retval = usb_register(&btusb_driver);
@@ -3867,6 +5609,9 @@ static int btmtk_usb_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 	__le16 reg_high;
 	__le16 reg_low;
 
+	if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT || bdev->io_buf == NULL)
+		return -ENODEV;
+
 	reg_high = ((reg >> 16) & 0xffff);
 	reg_low = (reg & 0xffff);
 
@@ -3882,13 +5627,16 @@ static int btmtk_usb_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 	if (ret < 0) {
 		*val = 0xffffffff;
 		BTMTK_ERR("%s: error(%d), reg=%x, value=%x", __func__, ret, reg, *val);
-		btmtk_reset_trigger(bdev);
+		btmtk_handle_mutex_unlock(bdev);
+		if (btmtk_get_chip_state(bdev) != BTMTK_STATE_FW_DUMP)
+			btmtk_reset_trigger(bdev);
 		return ret;
 	}
 
 	memmove(val, bdev->io_buf, sizeof(u32));
 	*val = le32_to_cpu(*val);
 
+	btmtk_handle_mutex_unlock(bdev);
 	return 0;
 }
 
@@ -3899,6 +5647,14 @@ static int btmtk_usb_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 	__le16 reg_high;
 	__le16 reg_low;
 	u8 buf[4];
+	int state = 0;
+
+	btmtk_handle_mutex_lock(bdev);
+	if (state == BTMTK_STATE_DISCONNECT) {
+		BTMTK_ERR("%s: state is disconnect, return", __func__);
+		btmtk_handle_mutex_unlock(bdev);
+		return -1;
+	}
 
 	reg_high = ((reg >> 16) & 0xffff);
 	reg_low = (reg & 0xffff);
@@ -3922,9 +5678,11 @@ static int btmtk_usb_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 	if (ret < 0) {
 		val = 0xffffffff;
 		BTMTK_ERR("%s: error(%d), reg=%x, value=%x", __func__, ret, reg, val);
+		btmtk_handle_mutex_unlock(bdev);
 		return ret;
 	}
 
+	btmtk_handle_mutex_unlock(bdev);
 	return 0;
 }
 

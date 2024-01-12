@@ -35,7 +35,10 @@ static int btmtk_chip_reg_init(struct btmtk_dev *bdev)
 		return ret;
 	}
 
-	bdev->dualBT = 0;
+	if (is_mt7925(bdev->chip_id))
+		bdev->dualBT = 1;
+	else
+		bdev->dualBT = 0;
 
 	/* Bin filename format : "BT_RAM_CODE_MT%04x_%x_%x_hdr.bin"
 	 *	$$$$ : chip id
@@ -158,8 +161,8 @@ static int btmtk_subsys_reset(struct btmtk_dev *bdev)
 	bmain_info->hif_hook.read_uhw_register(bdev, UDMA_INT_STA_BT1, &val);
 	msleep(100);
 
-	if (bdev->dualBT)
-		mcu_init_done |= MCU_BT1_INIT_DONE;
+	//if (bdev->dualBT)
+	//	mcu_init_done |= MCU_BT1_INIT_DONE;
 	do {
 		/* polling re-init CR */
 		bmain_info->hif_hook.read_uhw_register(bdev, BT_MISC, &val);

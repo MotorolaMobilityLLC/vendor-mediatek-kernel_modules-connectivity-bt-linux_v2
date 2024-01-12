@@ -617,6 +617,7 @@ struct btmtk_dev {
 #endif
 
 	struct btmtk_stp_info stp_info;
+	int dump_cnt;
 };
 
 #if (USE_DEVICE_NODE == 1)
@@ -688,6 +689,8 @@ struct hif_hook_ptr {
 	cif_chip_reset_notify_ptr	chip_reset_notify;
 	cif_mutex_lock_ptr		cif_mutex_lock;
 	cif_mutex_unlock_ptr		cif_mutex_unlock;
+	cif_mutex_lock_ptr		handle_mutex_lock;
+	cif_mutex_unlock_ptr		handle_mutex_unlock;
 	cif_flush_ptr				flush;
 	cif_log_init_ptr			log_init;
 	cif_log_register_cb_ptr		log_register_cb;
@@ -960,6 +963,8 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 		int counter, u8 *searchcontent, enum fw_cfg_index_len index_length);
 int btmtk_send_assert_cmd(struct btmtk_dev *bdev);
 void btmtk_free_fw_cfg_struct(struct fw_cfg_struct *fw_cfg, int count);
+void btmtk_handle_mutex_lock(struct btmtk_dev *bdev);
+void btmtk_handle_mutex_unlock(struct btmtk_dev *bdev);
 struct btmtk_dev **btmtk_get_pp_bdev(void);
 void btmtk_load_debug_sop_register(char *debug_sop_name, struct device *dev, struct btmtk_dev *bdev);
 void btmtk_clean_debug_reg_file(struct btmtk_dev *bdev);

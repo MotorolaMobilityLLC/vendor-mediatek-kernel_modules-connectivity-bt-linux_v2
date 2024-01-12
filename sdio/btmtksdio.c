@@ -9,6 +9,7 @@
 #else
 #include <uapi/linux/sched/types.h>
 #endif
+#include <asm/barrier.h>
 
 #include "btmtk_sdio.h"
 
@@ -571,6 +572,7 @@ static int btmtk_sdio_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 
 	memcpy(val, bdev->io_buf + MCU_ADDRESS_OFFSET_EVT - HCI_TYPE_SIZE, sizeof(u32));
 	*val = le32_to_cpu(*val);
+	smp_wmb();
 
 	BTMTK_INFO("%s: reg=%x, value=0x%08x", __func__, reg, *val);
 
@@ -773,15 +775,7 @@ static int btmtk_sdio_close(struct hci_dev *hdev)
 
 static void btmtk_sdio_open_done(struct btmtk_dev *bdev)
 {
-	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
-
 	BTMTK_INFO("%s enter!", __func__);
-#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
-	/* We don't need to enable buffer mode during bring-up stage. */
-	BTMTK_INFO("SKIP buffer mode");
-#else
-	(void)btmtk_buffer_mode_send(cif_dev->bdev);
-#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 }
 
 static int btmtk_sdio_writesb(u32 offset, u8 *val, int len, struct sdio_func *func)
@@ -1092,6 +1086,7 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 				notify_alt_evt.content[6] = (crValue & 0x000000FF);
 				memcpy(evt_skb->data, &notify_alt_evt.content[1], notify_alt_evt.len - 1);
 				evt_skb->len = notify_alt_evt.len - 1;
+				smp_wmb();
 				hci_recv_frame(bdev->hdev, evt_skb);
 				kfree_skb(skb);
 				skb = NULL;
@@ -1122,6 +1117,7 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 				notify_alt_evt.content[6] = (crValue & 0x000000FF);
 				memcpy(evt_skb->data, &notify_alt_evt.content[1], notify_alt_evt.len - 1);
 				evt_skb->len = notify_alt_evt.len - 1;
+				smp_wmb();
 				hci_recv_frame(bdev->hdev, evt_skb);
 				kfree_skb(skb);
 				skb = NULL;
@@ -1242,6 +1238,7 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 		memset(cif_dev->transfer_buf, 0, URB_MAX_BUFFER_SIZE);
 		hci_pkt_len += 5;
 		memcpy(cif_dev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE, bdev->io_buf, hci_pkt_len);
+		smp_wmb();
 		BTMTK_DBG_RAW(cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
 	}
 #if 0
@@ -1275,6 +1272,7 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 		memset(cif_dev->transfer_buf, 0, URB_MAX_BUFFER_SIZE);
 		hci_pkt_len += 5;
 		memcpy(cif_dev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE, bdev->io_buf, hci_pkt_len);
+		smp_wmb();
 		BTMTK_DBG_RAW(cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
 		break;
 	}
@@ -1324,24 +1322,14 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 					attr_len = *(p + 1);
 					attr_type = *(p + 2);
 					BTMTK_INFO("attr_len = 0x%x, attr_type = 0x%x", attr_len, attr_type);
-					switch (attr_type) {
-					case WOBX_TRIGGER_INFO_ADDR_TYPE:
-						break;
-					case WOBX_TRIGGER_INFO_ADV_DATA_TYPE:
-						break;
-					case WOBX_TRIGGER_INFO_TRACE_LOG_TYPE:
-						break;
-					case WOBX_TRIGGER_INFO_SCAN_LOG_TYPE:
-						break;
-					case WOBX_TRIGGER_INFO_TRIGGER_CNT_TYPE:
+					if (WOBX_TRIGGER_INFO_TRIGGER_CNT_TYPE == attr_type) {
 						BTMTK_INFO("wakeup times(via BT) = %02X%02X%02X%02X",
-							*(p + 6), *(p + 5), *(p + 4), *(p + 3));
+						*(p + 6), *(p + 5), *(p + 4), *(p + 3));
 						break;
-					default:
-						BTMTK_ERR("%s: unexpected attribute type(0x%x)", __func__, attr_type);
-						return 1;
+					} else {
+						p += 1 + attr_len;	// 1: len
+						continue;
 					}
-					p += 1 + attr_len;	// 1: len
 				}
 			}
 
@@ -1349,6 +1337,7 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			/* Such as chip_id, fw_version, etc. */
 			bdev->io_buf[0] = bt_cb(skb)->pkt_type;
 			memcpy(&bdev->io_buf[1], skb->data, skb->len);
+			smp_wmb();
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 			BTMTK_DBG("%s, compare success", __func__);
 		} else {
@@ -1410,6 +1399,7 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 	do {
 		/* check if event_compare_success */
 		if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
+			smp_rmb();
 			ret = 0;
 			break;
 		}
@@ -2037,8 +2027,6 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 		BTMTK_ERR("btmtk_main_woble_initialize failed, do chip reset!!!");
 		goto exit;
 	}
-
-	btmtk_buffer_mode_initialize(bdev);
 
 #if CFG_SUPPORT_BLUEZ
 	err = btmtk_send_init_cmds(bdev);

@@ -1,4 +1,7 @@
 #export KERNEL_DIR := /lib/modules/$(shell uname -r)/build
+ifeq ($(KERNEL_MIXED_BUILD_SUPPORT),true)
+    include $(KERNEL_MIXED_BUILD_PATH)/Kbuild.common
+endif
 
 ###############################################################################
 # apollo system build
@@ -14,30 +17,28 @@ KERNEL_DIR=$(KERNEL_OBJ_ROOT)/$(KERNEL_VER)/$(KERNEL_CONFIG)_modules
 KERNEL_SRC=$(KERNEL_ROOT)/$(KERNEL_VER)
 endif
 CURRENT_DIR=$(PWD)/../../../linux_mts/ko_modules/bt_driver_linux_v2
-#KERNEL_DIR=/proj/mtk94020/Capy_buzzard_0429/out/mediatek_linux/output/mediatek/mt5895_cn/rel/obj/kernel/linux_core/kernel/4.9/mt5895_android_smp_mod_defconfig_modules
-#KERNEL_SRC=/proj/mtk94020/Capy_buzzard_0429/kernel/zodiac/4.9
+KERNEL_DIR=/proj/mtk20054/apollo-prod-2102_new/out/mtk_linux/mt5897_us_linux/KERNEL_OBJ/
+KERNEL_SRC=/proj/mtk20054/apollo-prod-2102_new/kernel/merak/5.4
 #CURRENT_DIR=$(PWD)
 
 
 #################### Configurations ####################
 # Compile Options for bt driver configuration.
 CONFIG_SUPPORT_BT_DL_WIFI_PATCH=y
-CONFIG_SUPPORT_BT_DL_ZB_PATCH=y
+CONFIG_SUPPORT_BT_DL_ZB_PATCH=n
 CONFIG_SUPPORT_BLUEZ=n
 CONFIG_SUPPORT_DVT=n
 CONFIG_SUPPORT_HW_DVT=n
 CONFIG_SUPPORT_MULTI_DEV_NODE=n
-CONFIG_GKI_SUPPORT=y
+CONFIG_GKI_SUPPORT=n
+CONFIG_SUPPORT_WAKEUP_SER=n
 
-ifeq ($(CONFIG_GKI_SUPPORT), y)
-ccflags-y += -DCFG_CHIP_RESET_KO_SUPPORT
-ccflags-y += -I$(src)/../../wlan_mt7961_reset.ko_intermediates/LINKED/reset/include/
-ccflags-y += -I$(src)/../wlan/mtk/gen4m_mt7961/reset/include/
+ifeq ($(CONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT), y)
+    ccflags-y += -DCONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT
+endif
 
-RESET_DIR = $(shell pwd)/../../KERNEL_MODULES/wlan_mt7961_reset.ko_intermediates/LINKED/Module.symvers
-$(warning bt driver unify1111 RESET_DIR=$(RESET_DIR))
-$(info 'RESET_DIR=' $(RESET_DIR))
-KBUILD_EXTRA_SYMBOLS += $(RESET_DIR)
+ifeq ($(CONFIG_DISABLE_SYMBOL_GET_SET), y)
+    ccflags-y += -DCONFIG_DISABLE_SYMBOL_GET_SET
 endif
 
 ifneq ($(TARGET_BUILD_VARIANT), user)
@@ -70,8 +71,10 @@ else
     ccflags-y += -DCFG_SUPPORT_HW_DVT=0
 endif
 
-ifeq ($(SUPPORT_WAKEUP_IRQ), yes)
-    ccflags-y += -DCFG_SUPPORT_WAKEUP_IRQ
+ifeq ($(CONFIG_SUPPORT_WAKEUP_SER), y)
+    ccflags-y += -DCFG_SUPPORT_WAKEUP_IRQ=1
+else
+    ccflags-y += -DCFG_SUPPORT_WAKEUP_IRQ=0
 endif
 
 ifeq ($(CONFIG_SUPPORT_DVT), y)
@@ -94,7 +97,7 @@ MTK_CHIP_IF := usb
 
 ifeq ($(MTK_CHIP_IF), sdio)
     MOD_NAME = btmtk_sdio_unify
-    CFILES := sdio/btmtksdio.c btmtk_woble.c btmtk_buffer_mode.c btmtk_chip_reset.c
+    CFILES := sdio/btmtksdio.c btmtk_woble.c btmtk_chip_reset.c
     ccflags-y += -DCHIP_IF_SDIO
     ccflags-y += -DSDIO_DEBUG=0
     ccflags-y += -I$(src)/include/sdio
@@ -120,7 +123,7 @@ else
     ccflags-y += -I$(src)/include/btif
 endif
 
-CFILES += btmtk_main.c btmtk_fw_log.c
+CFILES += btmtk_main.c btmtk_fw_log.c btmtk_buffer_mode.c
 
 ccflags-y += -I$(src)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth
 
@@ -135,7 +138,7 @@ ifneq ($(TARGET_BUILD_VARIANT), user)
 ccflags-y += -DBTMTK_DEBUG_SOP
 endif
 
-#VPATH = /opt/toolchains/gcc-linaro-aarch64-linux-gnu-4.9-2014.09_linux
+VPATH = /proj/mtk20054/casws/apollo-prod-2102_new/merged/tools/mtk_toolchain/gcc-arm-linux-gnu-5.5.0-ubuntu
 #UART_MOD_NAME = btmtk_uart
 #UART_CFILES := \
 #	btmtk_uart_main.c

@@ -14,7 +14,7 @@
 
 /*
  * BT Logger Tool will turn on/off Firmware Picus log, and set 3 log levels (Low, SQC and Debug)
- * For extention capability, driver does not check the value range.
+ * For extension capability, driver does not check the value range.
  *
  * Combine log state and log level to below settings:
  * - 0x00: OFF
@@ -192,7 +192,7 @@ static void btmtk_proc_create_new_entry(void)
 		BTMTK_ERR("Unable to creat dir");
 		return;
 	}
-	proc_show_entry =  proc_create("bt_fw_version", 0640, bmain_info->proc_dir, &BT_proc_fops);
+	proc_show_entry =  proc_create("bt_fw_version", 0600, bmain_info->proc_dir, &BT_proc_fops);
 	if (proc_show_entry == NULL) {
 		BTMTK_ERR("Unable to creat bt_fw_version node");
 		remove_proc_entry("stpbt", NULL);
@@ -206,7 +206,7 @@ static void btmtk_proc_create_new_entry(void)
 	}
 #endif
 
-	proc_show_chip_reset_count_entry = proc_create(PROC_BT_CHIP_RESET_COUNT, 0640,
+	proc_show_chip_reset_count_entry = proc_create(PROC_BT_CHIP_RESET_COUNT, 0600,
 			bmain_info->proc_dir, &BT_proc_chip_reset_count_fops);
 	if (proc_show_chip_reset_count_entry == NULL) {
 		BTMTK_ERR("Unable to creat %s node", PROC_BT_CHIP_RESET_COUNT);
@@ -748,7 +748,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		}
 	}
 
-	skb = alloc_skb(count + BT_SKB_RESERVE, GFP_KERNEL);
+	skb = alloc_skb(count + BT_SKB_RESERVE, GFP_ATOMIC);
 	if (!skb) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		ret = -ENOMEM;
@@ -782,7 +782,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 				index = index + FWLOG_ATTR_TL_SIZE + vlen;
 				break;
 			default:
-				BTMTK_WARN("%s: Invalid opcode", __func__);
+				BTMTK_WARN("%s: Invalid opcode(0x%x)", __func__, o_fwlog_buf[index]);
 				ret = -1;
 				goto free_skb;
 			}
@@ -792,8 +792,9 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		skb->len = len;
 #if defined(DRV_RETURN_SPECIFIC_HCE_ONLY) && (DRV_RETURN_SPECIFIC_HCE_ONLY == 1) && (USE_DEVICE_NODE == 0)
 		// 0xFC26 is get link & profile information command.
+		// 0xFCF5 is get iso perf link info command.
 		if (*(uint16_t *)(o_fwlog_buf + 1) != 0xFC26) {
-			skb_opcode = alloc_skb(len + FWLOG_PRSV_LEN, GFP_KERNEL);
+			skb_opcode = alloc_skb(len + FWLOG_PRSV_LEN, GFP_ATOMIC);
 			if (!skb_opcode) {
 				BTMTK_ERR("%s allocate skb failed!!", __func__);
 				ret = -ENOMEM;
@@ -1005,7 +1006,7 @@ static int btmtk_skb_enq_fwlog(struct btmtk_dev *bdev, void *src, u32 len, u8 ty
 	int retry = 10, index = FWLOG_TL_SIZE;
 
 	do {
-		skb_tmp = alloc_skb(len + FWLOG_PRSV_LEN, GFP_KERNEL);
+		skb_tmp = alloc_skb(len + FWLOG_PRSV_LEN, GFP_ATOMIC);
 		if (skb_tmp != NULL)
 			break;
 		else if (retry <= 0) {
@@ -1221,13 +1222,35 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 #ifdef CHIP_IF_USB
 			/* USB hif: recv both 0xff and fw dump end, then do chip reset */
-			bdev->chip_reset_signal |= (1 << 1);
-			BTMTK_INFO("%s ,chip_reset_signal = %02x", __func__, bdev->chip_reset_signal);
-			if (bdev->chip_reset_signal == 0x03) {
-				bdev->chip_reset_signal = 0x00;
-				DUMP_TIME_STAMP("notify_chip_reset");
-				btmtk_reset_trigger(bdev);
+			if (bdev->dualBT) {
+				/* If it is dual BT,
+				 * the condition for FW dump end is that both BT0 and BT1 are completed.
+				 */
+				if (bdev->chip_reset_signal & (1 << 1)) {
+					bdev->chip_reset_signal |= (1 << 2);
+					BTMTK_INFO("%s, BT1 FW dump end, chip_reset_signal = %02x",
+							__func__, bdev->chip_reset_signal);
+
+					if (bdev->chip_reset_signal == 0x07) {
+						bdev->chip_reset_signal = 0x00;
+						DUMP_TIME_STAMP("notify_chip_reset");
+						btmtk_reset_trigger(bdev);
+					}
+				} else {
+					bdev->chip_reset_signal |= (1 << 1);
+					BTMTK_INFO("%s, BT0 FW dump end, chip_reset_signal = %02x",
+							__func__, bdev->chip_reset_signal);
+				}
+			} else {
+				bdev->chip_reset_signal |= (1 << 1);
+				BTMTK_INFO("%s ,chip_reset_signal = %02x", __func__, bdev->chip_reset_signal);
+				if (bdev->chip_reset_signal == 0x03) {
+					bdev->chip_reset_signal = 0x00;
+					DUMP_TIME_STAMP("notify_chip_reset");
+					btmtk_reset_trigger(bdev);
+				}
 			}
+
 #endif
 		}
 
