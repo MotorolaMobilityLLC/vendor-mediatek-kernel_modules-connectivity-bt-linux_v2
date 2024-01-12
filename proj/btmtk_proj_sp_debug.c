@@ -769,6 +769,7 @@ struct connv3_cr_cb btmtk_connv3_cr_cb = {
 
 void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 {
+#if CFG_SUPPORT_RHW_DBG_SOP
 	struct btmtk_uart_dev *cif_dev = NULL;
 	int state = 0;
 
@@ -814,6 +815,14 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 	}
 
 	BTMTK_INFO("%s: end", __func__);
+#else
+	/* use RHW_READ to do drv own for assert cmd */
+	uint32_t value = 0;
+	RHW_READ(0x80010000, &value);
+
+	/* not support rhw dump, avoid conflict with fw TX*/
+	BTMTK_INFO("%s: not support", __func__);
+#endif
 }
 
 

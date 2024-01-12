@@ -926,7 +926,7 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-	int state = BTMTK_STATE_INIT;
+	int state = BTMTK_STATE_INIT, ret = 0;
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 
 	if (bdev == NULL) {
@@ -985,9 +985,15 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 	/* incase of fw dump happened during rhw debug sop
 	 * then would trigger hif debug sop
 	 */
-	state = btmtk_get_chip_state(bdev);
-	if (cif_dev->rhw_fail_cnt > BT_RHW_MAX_ERR_COUNT && state != BTMTK_STATE_FW_DUMP) {
-		BTMTK_WARN("%s: rhw[%d] can't trigger assert", __func__, cif_dev->rhw_fail_cnt);
+
+	/* rhw already do driver own
+	 * not through tx_thread for block before set is_whole_chip_reset
+	 */
+	BTMTK_WARN("%s: trigger assert", __func__);
+	ret = btmtk_send_assert_cmd(bdev);
+
+	if (ret < 0) {
+		BTMTK_WARN("%s: trigger assert failed, ret[%d]", __func__, ret);
 		/* hif dump */
 		if (bmain_info->hif_hook.dump_hif_debug_sop)
 			bmain_info->hif_hook.dump_hif_debug_sop(bdev);
@@ -1002,12 +1008,6 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 		}
 		return;
 	}
-
-	/* rhw already do driver own
-	 * not through tx_thread for block before set is_whole_chip_reset
-	 */
-	BTMTK_WARN("%s: trigger assert", __func__);
-	btmtk_send_assert_cmd(bdev);
 
 }
 
