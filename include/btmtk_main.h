@@ -228,6 +228,8 @@
 #define MAC2STR(a) ((unsigned char *)a)[0], ((unsigned char *)a)[1], ((unsigned char *)a)[5]
 #endif
 
+#define DFD_EMI_DUMP_SIZE 0x9000
+
 enum {
 	RES_1 = 0,
 	RES_DOT_5,
@@ -642,6 +644,12 @@ struct btmtk_dev {
 
 	/* DFD reset_type */
 	unsigned int reset_type;
+	void __iomem *dfd_value_addr_remap_base;
+	bool is_dfd_done;
+	u64	dfd_value_addr;
+	u32	dfd_value_size;
+	char temp_buf[DFD_EMI_DUMP_SIZE];
+	u8 dfd_pstd[DFD_EMI_DUMP_SIZE];
 #endif
 	/* completion */
 	struct completion	dump_comp;
