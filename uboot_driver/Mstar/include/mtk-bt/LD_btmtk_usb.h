@@ -109,6 +109,10 @@
 #define BT_DOWNLOAD	1
 #define WIFI_DOWNLOAD	2
 
+#define DOWNLOAD_BY_INDEX	0
+#define DOWNLOAD_BY_TYPE	1
+#define BT_BIN_TYP_NUM	6
+
 /**
  * 0: patch download is not complete/BT get patch semaphore fail (WiFi get semaphore success)
  * 1: patch download is complete
@@ -138,6 +142,24 @@
 #define BT_UNIFY_WOBLE_TYPE "UNIFY_WOBLE_TYPE"
 #define BT_LD_DL_WIFI_ENABLE "LD_DL_WIFI_ENABLE"
 #define BT_WMT_CMD "WMT_CMD"
+#define CHIP_TYPE_MASK  0xff00
+#define CHIP_ID_MASK    0xffff
+#define CHIP_ID_MASK1   0xffff0000
+#define CHIP_ID_MASK2   0xffffffff
+#define FW_VERSION_MASK 0xff
+#define CHIP_TYPE_79XX  0x7900
+#define CHIP_TYPE_76XX  0x7600
+#define CHIP_ID_7668    0x7668
+#define CHIP_ID_7663    0x7663
+#define CHIP_ID_7961    0x7961
+#define CHIP_ID_7902    0x7902
+#define CHIP_ID_6639    0x6639
+#define CHIP_ID_7630    0x76300000
+#define CHIP_ID_7650    0x76500000
+#define CHIP_ID_7632    0x76320000
+#define CHIP_ID_7632T   0x76320100
+#define CHIP_ID_7662    0x76620000
+#define CHIP_ID_7662T   0x76620100
 
 #define WMT_CMD_COUNT 255
 
@@ -186,6 +208,13 @@
 #define PATCH_DOWNLOAD_PHASE3_RETRY 20
 
 #define PM_SOURCE_DISABLE               (0xFF)
+
+#define SECTION_NUM_MAX (0xFF)
+#define SECTION_NUM_MIN 1
+
+#define BT_LD_ERROR_NO_FILE 1
+#define BT_LD_ERROR_INVALID 2
+#define BT_LD_ERROR_NO_MEM 3
 
 enum {
 	BTMTK_EP_TYPE_OUT_CMD = 0,	/*EP type out for hci cmd and wmt cmd */
@@ -245,6 +274,7 @@ struct LD_btmtk_usb_data {
 	unsigned char *rom_patch_bin_file_name;
 	u32 chip_id;
 	unsigned int	flavor;
+	unsigned int	proj;
 	unsigned int	fw_version;
 	u8 need_load_fw;
 	u8 need_load_rom_patch;
@@ -269,6 +299,7 @@ struct LD_btmtk_usb_data {
 	struct fw_cfg_struct		woble_setting_radio_off_comp_event;
 
 	struct bt_cfg_struct bt_cfg;
+	struct _Section_Map	*sectionMap_table;
 };
 
 struct _PATCH_HEADER {
@@ -297,7 +328,10 @@ struct _Section_Map {
 			u32 u4DLSize;
 			u32 u4SecKeyIdx;
 			u32 u4AlignLen;
-			u32 reserved[9];
+			u32 u4SecType;
+			u32 u4DLModeCrcType;
+			u32 u4Crc;
+			u32 reserved[6];
 		}bin_info_spec;
 	};
 };

@@ -53,17 +53,21 @@
  *****************************************************************************/
 #include <command.h>
 #include <common.h>
-#include <ShareType.h>
-#include <CusConfig.h>
-#include <MsVfs.h>
 #include <MsDebug.h>
 #include <usb.h>
-#include <MsSystem.h>
 #include <stdio.h>
-#include <mtk-bt/LD_usbbt.h>
-#include <mtk-bt/LD_btmtk_usb.h>
+#include <LD_usbbt.h>
+#include <LD_btmtk_usb.h>
+#include <utility.h>
 
 #define MAX_ROOT_PORTS 8
+#include <string.h>
+#include <errno.h>
+
+#include <stdlib.h>
+#include <fs.h>
+#include <dm.h>
+#include <dm/uclass-internal.h>
 
 usb_vid_pid array_mtk_vid_pid[] = {
 	{0x0E8D, 0x7668, "MTK7668"},	// 7668
@@ -72,6 +76,7 @@ usb_vid_pid array_mtk_vid_pid[] = {
 	{0x0E8D, 0x7663, "MTK7663"},	//7663
 	{0x0E8D, 0x7961, "MTK7961"},	//7961
 	{0x0E8D, 0x7902, "MTK7902"},	//7902
+	{0x0E8D, 0x6639, "MTK6639"},	//6639
 };
 
 int max_mtk_wifi_id = (sizeof(array_mtk_vid_pid) / sizeof(array_mtk_vid_pid[0]));
@@ -108,46 +113,91 @@ VOID *os_kzalloc(size_t size, unsigned int flags)
 
 int LD_load_code(unsigned char **image, char *partition, char *file, mtkbt_dev_t *dev, u32 *code_len)
 {
-	if (vfs_mount(partition) != 0) {
-		usb_debug("vfs_mount %s fail\n", partition);
+	int ret = 0;
+	loff_t actread_size = 0;
+	char device_name[8] = {0};
+	unsigned int device = 0;
+	char storage_info[8] = {0};
+	u32 alloc_len = 0;
+
+	usb_debug("partition: %s\n", partition);
+	usb_debug("file pathname: %s\n", file);
+
+	ret = sys_get_boot_device(device_name, sizeof(device_name));
+	if(ret < 0) {
+		usb_debug("Error: Get booting device name failure, Unknown storage device.\n");
 		return -1;
 	}
 
-	*code_len = vfs_getsize(file);
-	if (*code_len == 0) {
-		usb_debug("Get file size fail\n");
+	ret = sys_get_storage_info(device, partition, storage_info);
+	if(ret < 0) {
+		usb_debug("Error: sys_get_storage_info failure\n");
 		return -1;
 	}
 
+	if (fs_set_blk_dev(device_name, storage_info, FS_TYPE_EXT)) {
+		usb_debug("Error: partition select failure\n");
+		return -1;
+	}
+
+	ret = fs_size(file, (loff_t *)code_len);
+	if (ret < 0) {
+		usb_debug("Get file(%s) size fail\n", file);
+		return -1;
+	}
+	usb_debug("file_size: %d\n", *code_len);
+
+	alloc_len = (*code_len / 4096 + 1) * 4096;
 	// malloc buffer to store bt patch file data
-	*image = malloc(*code_len);
+	*image = malloc(alloc_len);
 	if (*image == NULL) {
 		usb_debug("malloc fail\n");
 		*code_len = 0;
 		return -1;
 	}
 
-	if (vfs_read(*image, file, 0, *code_len) != 0) {
-		usb_debug("vfs_read %s fail\n", file);
-		free(*image);
-		*image = NULL;
-		*code_len = 0;
+	ret = sys_get_storage_info(device, partition, storage_info);
+	if(ret < 0) {
+		usb_debug("Error: sys_get_storage_info failure\n");
 		return -1;
 	}
 
+	if (fs_set_blk_dev(device_name, storage_info, FS_TYPE_EXT)) {
+		usb_debug("Error: partition select failure!\n");
+		goto err;
+	}
+
+	ret = fs_read(file, (unsigned long)*image, 0, 0, &actread_size);
+	if(ret < 0) {
+		usb_debug("fs_read %s fail\n", file);
+		usb_debug("%s: fs_read fail errno(%d)\n", __func__, errno);
+		goto err;
+	}
+	usb_debug("fs_read ok, file_size:%d, actread_size:%lld\n", *code_len, actread_size);
+
+	if (actread_size > *code_len || actread_size < 0) {
+		usb_debug("actread_size(%lld) is error, fs_read fail\n", actread_size);
+		goto err;
+	}
+
 	UBOOT_DEBUG("Load file(%s:%s) OK\n", partition, file);
-	UBOOT_DUMP((unsigned int)*image, 0x200);
+	UBOOT_DUMP((unsigned long)*image, 0x200);
 	return 0;
+
+err:
+	free(*image);
+	*image = NULL;
+	*code_len = 0;
+	return -1;
 }
 
 void LD_load_code_from_bin(unsigned char **image, char *bin_name, char *path, mtkbt_dev_t *dev, u32 *code_len)
 {
 	#define ENV_BT_FW_PATH	   "BTFWBinPath"
-	#define PARTION_NUM        6
 
 	char mtk_patch_bin_patch[128] = "\0";
 	char *bt_env;
-	char *partition[PARTION_NUM] = {"cusdata", "tvconfig", "vendor", "userdata", "system", "APP"};
+	char *partition[] = {"bootdata", "tvconfig", "vendor", "userdata", "system", "APP"};
 	int i = 0;
 
 	/** implement by mstar/MTK
@@ -160,19 +210,16 @@ void LD_load_code_from_bin(unsigned char **image, char *bin_name, char *path, mt
 		(void)snprintf(mtk_patch_bin_patch, sizeof(mtk_patch_bin_patch), "%s/%s", path, bin_name);
 		printf("File: %s\n", mtk_patch_bin_patch);
 	} else {
-#if (ENABLE_MODULE_ANDROID_BOOT == 1)
 		(void)snprintf(mtk_patch_bin_patch, sizeof(mtk_patch_bin_patch), "%s/%s", "/firmware", bin_name);
-#else
-		(void)snprintf(mtk_patch_bin_patch, sizeof(mtk_patch_bin_patch), "%s/%s", "/krl/wifi/ralink/firmware", bin_name);
-#endif
 		printf("mtk_patch_bin_patch: %s\n", mtk_patch_bin_patch);
 	}
 
-	bt_env = getenv(ENV_BT_FW_PATH);
+	bt_env = env_get(ENV_BT_FW_PATH);
 	if (bt_env == NULL) {
 		/* get PATH failed */
 		printf("bt_env is NULL\n");
-		for (i = 0; i < PARTION_NUM; i++) {
+		printf("sizeof(partition) / sizeof(char *) = %lu\n", sizeof(partition) / sizeof(char *));
+		for (i = 0; i < sizeof(partition) / sizeof(char *); i++) {
 			if (LD_load_code(image, partition[i], mtk_patch_bin_patch, dev, code_len) == 0)
 				return;
 		}
@@ -182,6 +229,7 @@ void LD_load_code_from_bin(unsigned char **image, char *bin_name, char *path, mt
 	}
 
 	return;
+
 }
 
 static int usb_bt_bulk_msg(
@@ -194,29 +242,23 @@ static int usb_bt_bulk_msg(
 )
 {
 	int ret =0 ;
-	if(dev == NULL || dev->udev == NULL || dev->bulk_tx_ep ==  NULL)
-	{
+	if(dev == NULL || dev->udev == NULL || dev->bulk_tx_ep ==  NULL) {
 		usb_debug("bulk out error 00\n");
 		return -1;
 	}
 
-	if(epType == MTKBT_BULK_TX_EP)
-	{
+	if(epType == MTKBT_BULK_TX_EP) {
 //		usb_debug_raw(data, size, "%s: usb_bulk_msg:", __func__);
 		ret = usb_bulk_msg(dev->udev,usb_sndbulkpipe(dev->udev,dev->bulk_tx_ep->bEndpointAddress),data,size,realsize,2000);
-		if(ret)
-		{
+		if(ret) {
 			usb_debug("bulk out error 01, ret = %d\n", ret);
 			return -1;
 		}
 
-		if(*realsize == size)
-		{
+		if(*realsize == size) {
 			//usb_debug("bulk out success 01,size =0x%x\n",size);
 			return 0;
-		}
-		else
-		{
+		} else {
 			usb_debug("bulk out fail 02,size =0x%x,realsize =0x%x\n",size,*realsize);
 		}
 	}
@@ -236,24 +278,19 @@ static int usb_bt_control_msg(
 )
 {
 	int ret = -1;
-	if(epType == MTKBT_CTRL_TX_EP)
-	{
+
+	if(epType == MTKBT_CTRL_TX_EP) {
 //		usb_debug_raw(data, data_length, "%s: usb_control_msg:", __func__);
 		ret = usb_control_msg(dev->udev, usb_sndctrlpipe(dev->udev, 0), request,
 				requesttype, value, index, data, data_length,timeout);
-	}
-	else if (epType == MTKBT_CTRL_RX_EP)
-	{
+	} else if (epType == MTKBT_CTRL_RX_EP) {
 		ret = usb_control_msg(dev->udev, usb_rcvctrlpipe(dev->udev, 0), request,
 				requesttype, value, index, data, data_length,timeout);
-	}
-	else
-	{
+	} else {
 		usb_debug("control message wrong Type =0x%x\n",epType);
 	}
 
-	if (ret < 0)
-	{
+	if (ret < 0) {
 		usb_debug("Err1(%d)\n", ret);
 		return ret;
 	}
@@ -273,13 +310,12 @@ static int usb_bt_interrupt_msg(
 
 	usb_debug("epType = 0x%x\n",epType);
 
-	if(epType == MTKBT_INTR_EP)
-	{
-		ret = usb_submit_int_msg(dev->udev,usb_rcvintpipe(dev->udev,dev->intr_ep->bEndpointAddress),data,size,realsize,timeout);
+	if(epType == MTKBT_INTR_EP) {
+		//ret = usb_submit_int_msg(dev->udev,usb_rcvintpipe(dev->udev,dev->intr_ep->bEndpointAddress),data,size,realsize,timeout);
+		ret = usb_submit_int_msg(dev->udev,usb_rcvintpipe(dev->udev,dev->intr_ep->bEndpointAddress),data,size,timeout);
 	}
 
-	if(ret < 0 )
-	{
+	if(ret < 0 ) {
 		usb_debug("Err1(%d)\n", ret);
 		return ret;
 	}
@@ -298,8 +334,7 @@ static void Ldbtusb_diconnect (btusbdev_t *dev)
 {
 	LD_btmtk_usb_disconnect(g_DrvData);
 
-	if(g_DrvData)
-	{
+	if(g_DrvData) {
 		os_kfree(g_DrvData);
 	}
 	g_DrvData = NULL;
@@ -307,13 +342,10 @@ static void Ldbtusb_diconnect (btusbdev_t *dev)
 
 static int Ldbtusb_SetWoble(btusbdev_t *dev)
 {
-	if(!g_DrvData)
-	{
+	if(!g_DrvData) {
 		usb_debug("usb set woble fail ,because no drv data\n");
 		return -1;
-	}
-	else
-	{
+	} else {
 		LD_btmtk_usb_SetWoble(g_DrvData);
 		usb_debug("usb set woble end\n");
 	}
@@ -326,51 +358,41 @@ int Ldbtusb_connect (btusbdev_t *dev, int flag)
 {
 	int ret = 0;
 
+	usb_debug("%s begin\n", __func__);
 	// For Mstar
 	struct usb_endpoint_descriptor *ep_desc;
 	struct usb_interface *iface;
 	int i;
 	iface = &dev->config.if_desc[0];
 
-	if(g_DrvData == NULL)
-	{
+	if(g_DrvData == NULL) {
 		g_DrvData = os_kmalloc(sizeof(mtkbt_dev_t),MTK_GFP_ATOMIC);
 
-		if(!g_DrvData)
-		{
+		if (!g_DrvData) {
 			usb_debug("Not enough memory for mtkbt virtual usb device.\n");
 			return -1;
-		}
-		else
-		{
+		} else {
 			os_memset(g_DrvData,0,sizeof(mtkbt_dev_t));
 			g_DrvData->udev = dev;
 			g_DrvData->connect = Ldbtusb_connect;
 			g_DrvData->disconnect = Ldbtusb_diconnect;
 			g_DrvData->SetWoble = Ldbtusb_SetWoble;
 		}
-	}
-	else
-	{
+	} else {
 			return -1;
 	}
 
 	// For Mstar
-	for (i = 0; i < iface->desc.bNumEndpoints; i++)
-	{
+	for (i = 0; i < iface->desc.bNumEndpoints; i++) {
 		ep_desc = &iface->ep_desc[i];
 		usb_debug("dev->endpoints[%d].bmAttributes = 0x%x\n", i, ep_desc->bmAttributes);
 		usb_debug("dev->endpoints[%d].bEndpointAddress = 0x%x\n", i, ep_desc->bEndpointAddress);
 
-		if ((ep_desc->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) == USB_ENDPOINT_XFER_BULK)
-		{
-			if (ep_desc->bEndpointAddress & USB_DIR_IN)
-			{
+		if ((ep_desc->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) == USB_ENDPOINT_XFER_BULK) {
+			if (ep_desc->bEndpointAddress & USB_DIR_IN) {
 				usb_debug("set endpoints[%d] to bulk_rx_ep\n", i);
 				g_DrvData->bulk_rx_ep = ep_desc;
-			}
-			else
-			{
+			} else {
 				if (ep_desc->bEndpointAddress != 0x1) {
 					usb_debug("set endpoints[%d] to bulk_tx_ep\n", i);
 					g_DrvData->bulk_tx_ep = ep_desc;
@@ -381,15 +403,13 @@ int Ldbtusb_connect (btusbdev_t *dev, int flag)
 
 		/* is it an interrupt endpoint? */
 		if (((ep_desc->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) == USB_ENDPOINT_XFER_INT)
-			&& ep_desc->bEndpointAddress != 0x8f)
-		{
+			&& ep_desc->bEndpointAddress != 0x8f) {
 			usb_debug("set endpoints[%d] to intr_ep\n", i);
 			g_DrvData->intr_ep = ep_desc;
 			continue;
 		}
 	}
-	if (!g_DrvData->intr_ep || !g_DrvData->bulk_tx_ep || !g_DrvData->bulk_rx_ep)
-	{
+	if (!g_DrvData->intr_ep || !g_DrvData->bulk_tx_ep || !g_DrvData->bulk_rx_ep) {
 		os_kfree(g_DrvData);
 		g_DrvData = NULL;
 		usb_debug("btmtk_usb_probe end Error 3\n");
@@ -403,20 +423,17 @@ int Ldbtusb_connect (btusbdev_t *dev, int flag)
 	/* btmtk init */
 	ret = LD_btmtk_usb_probe(g_DrvData, flag);
 
-	if (ret != 0)
-	{
+	if (ret != 0) {
 		usb_debug("usb probe fail\n");
-		if(g_DrvData)
-		{
+		if(g_DrvData) {
 		   os_kfree(g_DrvData);
 		}
 		g_DrvData = NULL;
 		return -1;
-	}
-	else
-	{
+	} else {
 		usb_debug("usbbt probe success\n");
 	}
+	usb_debug("%s end\n", __func__);
 	return ret;
 }
 
@@ -425,6 +442,7 @@ u8 LDbtusb_getWoBTW(void)
 	return LD_btmtk_usb_getWoBTW();
 }
 
+#ifndef CONFIG_DM_USB
 static int checkUsbDevicePort(struct usb_device *udev, usb_vid_pid *pmtk_dongle, u8 port)
 {
 	struct usb_device *pdev = NULL;
@@ -434,7 +452,7 @@ static int checkUsbDevicePort(struct usb_device *udev, usb_vid_pid *pmtk_dongle,
 	usb_stop(port);
 	if (usb_post_init(port) == 0)
 #else
-	if (usb_init(port) == 0)
+	if (usb_init() == 0)
 #endif
 	{
 		for (i = 0; i < usb_get_dev_num(); i++) {
@@ -454,29 +472,119 @@ static int checkUsbDevicePort(struct usb_device *udev, usb_vid_pid *pmtk_dongle,
 	}
 	return -1;
 }
+#endif
 
+#ifdef CONFIG_DM_USB
+typedef int (*usb_dev_func_t)(struct usb_device *dstudev, struct usb_device *udev, usb_vid_pid *pmtk_dongle);
+static int usb_show_info(struct usb_device *dstudev, struct usb_device *udev, usb_vid_pid *pmtk_dongle)
+{
+	int ret = 0;
+	int dongleCount = 0;
+	struct udevice *child;
+
+	usb_debug("%s begin\n", __func__);
+
+	for (dongleCount = 0; dongleCount < max_mtk_wifi_id; dongleCount++) {
+		if ((udev->descriptor.idVendor == pmtk_dongle[dongleCount].vid)
+			&& (udev->descriptor.idProduct == pmtk_dongle[dongleCount].pid)) {
+			usb_debug("%s OK, usb device be found!\n", __func__);
+			memcpy(dstudev, udev, sizeof(struct usb_device));
+			chipid = pmtk_dongle[dongleCount].pid;
+			return 0;
+		}
+	}
+
+	for (device_find_first_child(udev->dev, &child);
+		child;
+		device_find_next_child(&child)) {
+		if (device_active(child) &&
+			(device_get_uclass_id(child) != UCLASS_USB_EMUL) &&
+			(device_get_uclass_id(child) != UCLASS_BLK)) {
+			udev = dev_get_parent_priv(child);
+			ret = usb_show_info(dstudev, udev, pmtk_dongle);
+			if (ret == -1)
+				continue;
+			else if (ret == 0)
+				return 0;
+		}
+	}
+
+	usb_debug("%s end\n", __func__);
+
+	return -1;
+}
+
+static int usb_for_each_root_dev(struct usb_device *dstudev, usb_dev_func_t func, usb_vid_pid *pmtk_dongle)
+{
+	struct udevice *bus;
+	int ret = 0;
+
+	usb_debug("%s begin\n", __func__);
+
+	if(usb_init() != 0)
+		return -1;
+
+	for (uclass_find_first_device(UCLASS_USB, &bus);
+		bus;
+		uclass_find_next_device(&bus)) {
+		struct usb_device *udev;
+		struct udevice *dev;
+
+		if (!device_active(bus))
+			continue;
+
+		device_find_first_child(bus, &dev);
+		if (dev && device_active(dev)) {
+			udev = dev_get_parent_priv(dev);
+			ret = func(dstudev, udev, pmtk_dongle);
+			if (ret == 0)
+				break;
+		}
+	}
+
+	usb_debug("%s end\n", __func__);
+
+	return ret;
+}
+#endif
 static int findUsbDevice(struct usb_device* udev)
 {
 	int ret = -1;
+
+	usb_debug("%s begin\n", __func__);
+
+#ifdef CONFIG_DM_USB
+	if(udev == NULL) {
+		UBOOT_ERROR("udev can not be NULL\n");
+		return -1;
+	}
+
+	ret = usb_for_each_root_dev(udev, usb_show_info,  pmtk_wifi);
+	if (ret == -1) {
+		UBOOT_ERROR("Not find usb device\n");
+		return -1;
+	}
+	usb_debug("usb device has been finded\n");
+	usb_debug("udev->descriptor.idVendor = %d\n", udev->descriptor.idVendor);
+	usb_debug("udev->descriptor.idProduct = %d\n", udev->descriptor.idProduct);
+	return 0;
+#else
 	u8 idx = 0;
 	char portNumStr[10] = "\0";
 	char* pBTUsbPort = NULL;
 	UBOOT_TRACE("IN\n");
-	if(udev == NULL)
-	{
+	if (udev == NULL) {
 		UBOOT_ERROR("udev can not be NULL\n");
 		return -1;
 	}
 	#define BT_USB_PORT "bt_usb_port"
-	pBTUsbPort = getenv(BT_USB_PORT);
-	if(pBTUsbPort != NULL)
-	{
+	pBTUsbPort = env_get(BT_USB_PORT);
+	if (pBTUsbPort != NULL) {
 		// search mtk bt usb port
-		idx = atoi(pBTUsbPort);
+		idx = simple_strtol(pBTUsbPort, NULL, 10);
 		usb_debug("find mtk bt usb device from usb prot[%d]\n", idx);
 		ret = checkUsbDevicePort(udev, pmtk_wifi, idx);
-		if(ret == 0)
-		{
+		if (ret == 0) {
 			return 0;
 		}
 	}
@@ -493,26 +601,25 @@ static int findUsbDevice(struct usb_device* udev)
 	#else
 	const char u8UsbPortCount = 1;
 	#endif
-	for(idx = 0; idx < u8UsbPortCount; idx++)
-	{
+	for (idx = 0; idx < u8UsbPortCount; idx++) {
 		ret = checkUsbDevicePort(udev, pmtk_wifi, idx);
-		if(ret == 0)
-		{
+		if (ret == 0) {
 			// set bt_usb_port to store mt bt usb device port
 			(void)snprintf(portNumStr, sizeof(portNumStr), "%d", idx);
-			setenv(BT_USB_PORT, portNumStr);
-			saveenv();
+			env_set(BT_USB_PORT, portNumStr);
+			env_save();
 			return 0;
 		}
 	}
-	if(pBTUsbPort != NULL)
-	{
+	if (pBTUsbPort != NULL) {
 		// env BT_USB_PORT is involid, so delete it
-		setenv(BT_USB_PORT, NULL);
-		saveenv();
+		env_set(BT_USB_PORT, NULL);
+		env_save();
 	}
 	UBOOT_ERROR("Not find usb device\n");
 	return -1;
+#endif
+	usb_debug("%s end\n", __func__);
 }
 
 int do_setMtkBT(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
@@ -549,20 +656,20 @@ int do_setMtkBT(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 
 	usb_debug("ready to do usb_stop\n");
 
-	pBTUsbPort = getenv(BT_USB_PORT);
+	pBTUsbPort = env_get(BT_USB_PORT);
 	if(pBTUsbPort != NULL)
 	{
 		// search mtk bt usb port
-		usbPort = atoi(pBTUsbPort);
+		usbPort = simple_strtol(pBTUsbPort, NULL, 10);
 		if (usbPort < 0 || usbPort >= MAX_ROOT_PORTS) {
 			UBOOT_ERROR("usbPort(%d) is not in correct scope\n", usbPort);
 			return -1;
 		}
-		usb_debug("stop usb port: %d\n",usbPort);
-		if(usb_stop(usbPort) != 0){
+		usb_debug("stop usb port: %d\n", usbPort);
+		if(usb_stop() != 0){
 			usb_debug("usb_stop fail\n");
 		}
-	}else{
+	} else {
 		usb_debug("no BT_USB_PORT\n");
 	}
 

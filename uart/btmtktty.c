@@ -1063,7 +1063,7 @@ static int btmtk_cif_suspend(void)
 	struct btmtk_uart_dev *cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	struct btmtk_woble *bt_woble = &cif_dev->bt_woble;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	unsigned char fstate = BTMTK_FOPS_STATE_UNKNOWN;
 
 	BTMTK_INFO("%s", __func__);
 

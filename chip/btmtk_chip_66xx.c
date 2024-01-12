@@ -16,7 +16,7 @@
 
 static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 {
-	int err = -1;
+	int err = 0;
 
 	BTMTK_INFO("%s: enter", __func__);
 

@@ -1038,25 +1038,25 @@ static const struct h4_recv_pkt mtk_recv_pkts[] = {
 };
 
 #if ENABLESTP
-static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb)
+static inline struct sk_buff *btmtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
-	struct mtk_stp_hdr *shdr;
+	struct btmtk_stp_hdr *stp_hdr;
 	int dlen, err = 0, type = 0;
 	u8 stp_crc[STP_CRC_LEN] = {0x00, 0x00};
 
-	if (unlikely(skb_headroom(skb) < sizeof(*shdr)) ||
+	if (unlikely(skb_headroom(skb) < sizeof(*stp_hdr)) ||
 		(skb_tailroom(skb) < MTK_STP_TLR_SIZE)) {
 		BTMTK_DBG("%s, add pskb_expand_head, headroom = %d, tailroom = %d",
 				__func__, skb_headroom(skb), skb_tailroom(skb));
 
-		err = pskb_expand_head(skb, sizeof(*shdr), MTK_STP_TLR_SIZE,
+		err = pskb_expand_head(skb, sizeof(*stp_hdr), MTK_STP_TLR_SIZE,
 					   GFP_ATOMIC);
 	}
 	dlen = skb->len;
-	shdr = (void *) skb_push(skb, sizeof(*shdr));
-	shdr->prefix = 0x80;
-	shdr->dlen = cpu_to_be16((dlen & 0x0fff) | (type << 12));
-	shdr->cs = 0;
+	stp_hdr = (void *) skb_push(skb, sizeof(*stp_hdr));
+	stp_hdr->prefix = 0x80;
+	stp_hdr->dlen = cpu_to_be16((dlen & 0x0fff) | (type << 12));
+	stp_hdr->cs = 0;
 /*	Add the STP trailer
  *	kernel version > 4.20
  *	skb_put_zero(skb, MTK_STP_TLR_SIZE);
@@ -1067,42 +1067,41 @@ static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff
 	return skb;
 }
 
-static const unsigned char *
-mtk_stp_split(struct btmtk_dev *bdev, const unsigned char *data, int count,
-	      int *sz_h4)
+static const unsigned char *btmtk_split_stp(struct btmtk_dev *bdev,
+		const unsigned char *data, int count, int *size)
 {
-	struct mtk_stp_hdr *shdr;
+	struct btmtk_stp_hdr *stp_hdr;
 
 	/* The cursor is reset when all the data of STP is consumed out */
-	if (!bdev->stp_dlen && bdev->stp_cursor >= 6) {
-		bdev->stp_cursor = 0;
-		BTMTK_ERR("reset cursor = %d\n", bdev->stp_cursor);
+	if (!bdev->stp_info.dlen && bdev->stp_info.cursor >= STP_MAX_HDR_LEN) {
+		bdev->stp_info.cursor = 0;
+		BTMTK_ERR("reset cursor = %d\n", bdev->stp_info.cursor);
 	}
 
 	/* Filling pad until all STP info is obtained */
-	while (bdev->stp_cursor < 6 && count > 0) {
-		bdev->stp_pad[bdev->stp_cursor] = *data;
-		pr_err("fill stp format (%02x, %d, %d)\n",
-		   bdev->stp_pad[bdev->stp_cursor], bdev->stp_cursor, count);
-		bdev->stp_cursor++;
+	while (bdev->stp_info.cursor < STP_MAX_HDR_LEN && count > 0) {
+		bdev->stp_info.data[bdev->stp_info.cursor] = *data;
+		BTMTK_ERR("fill stp format (%02x, %d, %d)\n",
+		   bdev->stp_info.data[bdev->stp_info.cursor], bdev->stp_info.cursor, count);
+		bdev->stp_info.cursor++;
 		data++;
 		count--;
 	}
 
 	/* Retrieve STP info and have a sanity check */
-	if (!bdev->stp_dlen && bdev->stp_cursor >= 6) {
-		shdr = (struct mtk_stp_hdr *)&bdev->stp_pad[2];
-		bdev->stp_dlen = be16_to_cpu(shdr->dlen) & 0x0fff;
-		pr_err("stp format (%02x, %02x)",
-			   shdr->prefix, bdev->stp_dlen);
+	if (!bdev->stp_info.dlen && bdev->stp_info.cursor >= STP_MAX_HDR_LEN) {
+		stp_hdr = (struct btmtk_stp_hdr *)&bdev->stp_info.data[STP_HDR_OFFSET];
+		bdev->stp_info.dlen = be16_to_cpu(stp_hdr->dlen) & 0x0fff;
+		BTMTK_DBG("stp format (%02x, %02x)",
+			   stp_hdr->prefix, bdev->stp_info.dlen);
 
 		/* Resync STP when unexpected data is being read */
-		if (shdr->prefix != 0x80 || bdev->stp_dlen > 2048) {
+		if (stp_hdr->prefix != STP_HDR_PREFIX || bdev->stp_info.dlen > STP_MAX_PKT_LEN) {
 			BTMTK_ERR("stp format unexpect (%02x, %02x)",
-				   shdr->prefix, bdev->stp_dlen);
-			BTMTK_ERR("reset cursor = %d\n", bdev->stp_cursor);
-			bdev->stp_cursor = 2;
-			bdev->stp_dlen = 0;
+				   stp_hdr->prefix, bdev->stp_info.dlen);
+			BTMTK_ERR("reset cursor = %d\n", bdev->stp_info.cursor);
+			bdev->stp_info.cursor = STP_HDR_OFFSET;
+			bdev->stp_info.dlen = 0;
 		}
 	}
 
@@ -1111,10 +1110,10 @@ mtk_stp_split(struct btmtk_dev *bdev, const unsigned char *data, int count,
 		return NULL;
 
 	/* Tranlate to how much the size of data H4 can handle so far */
-	*sz_h4 = min_t(int, count, bdev->stp_dlen);
+	*size = min_t(int, count, bdev->stp_info.dlen);
 
 	/* Update the remaining size of STP packet */
-	bdev->stp_dlen -= *sz_h4;
+	bdev->stp_info.dlen -= *size;
 
 	/* Data points to STP payload which can be handled by H4 */
 	return data;
@@ -1164,7 +1163,7 @@ int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count)
 		 *  H:4 engine can handle currently.
 		 */
 #if ENABLESTP
-		p_h4 = mtk_stp_split(bdev, p_left, sz_left, &sz_h4);
+		p_h4 = btmtk_split_stp(bdev, p_left, sz_left, &sz_h4);
 		if (!p_h4)
 			break;
 
@@ -1389,7 +1388,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	skb->len = cmd_len;
 
 #if ENABLESTP
-	skb = mtk_add_stp(bdev, skb);
+	skb = btmtk_add_stp(bdev, skb);
 #endif
 	/* wmt cmd and download fw patch using wmt cmd with USB interface, need use
 	 * usb_control_msg to recv wmt event;
@@ -1776,14 +1775,14 @@ exit:
 	return ret;
 }
 
-void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev)
+int btmtk_send_hw_err_to_host(struct btmtk_dev *bdev)
 {
 	struct sk_buff *skb = NULL;
 	struct data_struct hwerr_event = {0};
 
 	BTMTK_ERR("%s reset_stack_flag = %d!!", __func__, main_info.reset_stack_flag);
 
-	btmtk_get_cmd_or_event(bdev, HWERR_EVT, &hwerr_event);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, HWERR_EVT, hwerr_event);
 
 	if (main_info.reset_stack_flag) {
 		skb = alloc_skb(hwerr_event.len + BT_SKB_RESERVE, GFP_KERNEL);
@@ -1812,6 +1811,7 @@ void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev)
 #endif
 		}
 	}
+	return 0;
 }
 
 static int btmtk_parsing_fw_rom_patch(struct btmtk_dev *bdev,
@@ -2413,7 +2413,6 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag)
 
 	if (main_info.bk_rs_flag && main_info.hif_hook_chip.backup_send && bdev->cali_backup.num == 0) {
 		ret = main_info.hif_hook_chip.backup_send(bdev);
-		ret = 0; /* for debug */
 	}
 	bdev->power_state = BTMTK_DONGLE_STATE_POWER_OFF;
 	BTMTK_INFO("%s end", __func__);
@@ -2658,7 +2657,7 @@ int btmtk_reset_power_on(struct btmtk_dev *bdev)
 #if (STPBTFWLOG_ENABLE == 1)
 int btmtk_picus_enable(struct btmtk_dev *bdev, int via_uart)
 {
-	int ret = -1;	/* if successful, 0 */
+	int ret = 0;	/* if successful, 0 */
 	struct data_struct cmd = {0}, event = {0};
 
 	BTMTK_INFO("%s", __func__);
@@ -3278,7 +3277,7 @@ static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s enter", __func__);
 
-	btmtk_get_cmd_or_event(bdev, VENDOR_EVT, &event);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, VENDOR_EVT, event);
 
 	for (index = 0; index < VENDOR_CMD_COUNT; index++) {
 		if (bdev->bt_cfg.vendor_cmd[index].content &&
@@ -3312,7 +3311,7 @@ static int btmtk_send_phase1_wmt_cfg(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s enter", __func__);
 
-	btmtk_get_cmd_or_event(bdev, PHASE1_WMT_EVT, &event);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, PHASE1_WMT_EVT, event);
 
 	for (index = 0; index < PHASE1_WMT_CMD_COUNT; index++) {
 		if (bdev->bt_cfg.phase1_wmt_cmd[index].content &&
@@ -3453,7 +3452,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s: enter", __func__);
 
-	btmtk_get_cmd_or_event(bdev, FD5B_ASSERT_CMD, &cmd);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, FD5B_ASSERT_CMD, cmd);
 
 	skb = alloc_skb(cmd.len + BT_SKB_RESERVE, GFP_ATOMIC);
 	if (!skb) {
@@ -4272,7 +4271,7 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	}
 	memcpy(skb_tmp, &hci_skb_pkt_type(skb), 1);
 #if ENABLESTP
-	skb = mtk_add_stp(bdev, skb);
+	skb = btmtk_add_stp(bdev, skb);
 #endif
 
 	if (main_info.hif_hook_chip.bt_tx_frame_handler) {
@@ -4447,7 +4446,7 @@ static void btmtk_rx_work(struct work_struct *work)
 
 void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 {
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	unsigned char fstate = BTMTK_FOPS_STATE_UNKNOWN;
 
 	if (!bdev)
 		return;

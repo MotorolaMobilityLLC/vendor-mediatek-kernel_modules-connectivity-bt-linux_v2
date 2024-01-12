@@ -32,7 +32,7 @@
 
 #define HCI_HEADER_LEN	4
 
-struct mtk_stp_hdr {
+struct btmtk_stp_hdr {
 	u8	prefix;
 	__be16	dlen;
 	u8	cs;

@@ -759,7 +759,6 @@ static int btusb_recv_isoc(struct btmtk_dev *bdev, void *buffer, int count)
 			if (skb_tailroom(skb) < hci_skb_expect(skb)) {
 				kfree_skb(skb);
 				skb = NULL;
-
 				err = -EILSEQ;
 				break;
 			}
@@ -2162,7 +2161,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	struct sk_buff *evt_skb;
 	u16 crBaseAddr = 0, crRegOffset = 0;
 	unsigned char *skb_tmp = NULL;
-	struct data_struct wmt_trigger_assert, notify_alt_evt;
+	struct data_struct wmt_trigger_assert = {0}, notify_alt_evt = {0};
 
 	BTMTK_DBG("%s enter", __func__);
 
@@ -2173,8 +2172,8 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 
 	ifnum_base = cif_dev->intf->cur_altsetting->desc.bInterfaceNumber;
 
-	btmtk_get_cmd_or_event(bdev, WMT_ASSERT_CMD, &wmt_trigger_assert);
-	btmtk_get_cmd_or_event(bdev, NOTIFY_ALT_EVT, &notify_alt_evt);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, WMT_ASSERT_CMD, wmt_trigger_assert);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, NOTIFY_ALT_EVT, notify_alt_evt);
 
 	skb_pull(skb, 1);
 	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send_frame, type = %d", __func__,
@@ -2525,8 +2524,8 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		}
 	}
 
-	btmtk_get_cmd_or_event(bdev, LD_PATCH_CMD_USB, &cmd);
-	btmtk_get_cmd_or_event(bdev, LD_PATCH_EVT, &event);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, LD_PATCH_CMD_USB, cmd);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, LD_PATCH_EVT, event);
 	if (is_mt6639(bdev->chip_id)) {
 		event.content[4] = 0x01; /* the byte will be modified to 0x54 when download wifi */
 		cmd.content[4] = 0x01;
@@ -3531,7 +3530,7 @@ static int btmtk_cif_suspend(struct usb_interface *intf, pm_message_t message)
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
-	int state = BTMTK_STATE_INIT;
+	int state = BTMTK_STATE_UNKNOWN;
 
 	BTMTK_INFO("%s, enter", __func__);
 	BTMTK_CIF_GET_DEV_PRIV(bdev, intf, ifnum_base);
@@ -4194,13 +4193,13 @@ void btmtk_usb_chip_reset_notify(struct btmtk_dev *bdev)
 
 int btmtk_usb_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
-	struct data_struct read_address_event;
+	struct data_struct read_address_event = {0};
 
 	BTMTK_DBG("%s enter", __func__);
 
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		skb->len >= event_need_compare_len) {
-		btmtk_get_cmd_or_event(bdev, READ_ADDRESS_EVT, &read_address_event);
+		BTMTK_GET_CMD_OR_EVENT_DATA(bdev, READ_ADDRESS_EVT, read_address_event);
 
 		if (memcmp(skb->data, &read_address_event.content[1], read_address_event.len - 1) == 0
 			&& (skb->len == (read_address_event.len - 1 + BD_ADDRESS_SIZE))) {

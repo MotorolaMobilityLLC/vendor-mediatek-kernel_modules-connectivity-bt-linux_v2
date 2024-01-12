@@ -170,6 +170,15 @@ struct __USBBT_DEVICE__
 	u32 chipid;
 };//mtkbt_dev_t;
 
+#define USB_UHCI_VEND_ID    0x8086
+#define USB_UHCI_DEV_ID     0x7112
+struct _usb_vid_pid_
+{
+	unsigned short vid;
+	unsigned short pid;
+	char name[10];
+};
+typedef struct _usb_vid_pid_ usb_vid_pid;
 #define BT_INST(dev) (dev)
 
 u8 LDbtusb_getWoBTW(void);

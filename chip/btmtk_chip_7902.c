@@ -16,7 +16,7 @@
 
 static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 {
-	int err = -1;
+	int err = 0;
 #if CFG_SUPPORT_BT_DL_ZB_PATCH
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	unsigned int zb_enbale = 0;
