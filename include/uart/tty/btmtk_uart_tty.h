@@ -220,6 +220,9 @@ struct btmtk_uart_dev {
 	/* identify bt sleep flow hw mech */
 	int		sleep_flow_hw_mech_en;
 
+	/* uarthub request state for set/clear */
+	atomic_t		hub_tx_req_state;
+	atomic_t		hub_rx_req_state;
 #endif
 };
 

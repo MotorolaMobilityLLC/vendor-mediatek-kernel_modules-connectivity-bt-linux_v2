@@ -239,6 +239,90 @@ void btmtk_uarthub_err_cb(unsigned int err_type)
 	return;
 }
 
+int btmtk_uarthub_request_setting(enum UARTHUB_request_state req_type)
+{
+	int ret = 0;
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	if (!g_sbdev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	BTMTK_INFO("%s tx[%d]rx[%d], new state[%d]", __func__,
+			atomic_read(&cif_dev->hub_tx_req_state), atomic_read(&cif_dev->hub_rx_req_state), req_type);
+
+	switch (req_type) {
+	case UARTHUB_clear_tx_request:
+		ret = atomic_cmpxchg(&cif_dev->hub_tx_req_state, UARTHUB_set_tx_request, UARTHUB_clear_tx_request);
+		if (ret == UARTHUB_set_tx_request) {
+			ret = mtk8250_uart_hub_dev0_clear_tx_request();
+			BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_tx_request, ret[%d]", __func__, ret);
+			if (ret) {
+				BTMTK_ERR("%s mtk8250_uart_hub_dev0_clear_tx_request fail ret[%d]", __func__, ret);
+				atomic_set(&cif_dev->hub_tx_req_state, UARTHUB_set_tx_request);
+				return -1;
+			}
+		} else
+			BTMTK_WARN("%s mtk8250_uart_hub_dev0_clear_tx_request already do, skip", __func__);
+		break;
+	case UARTHUB_set_tx_request:
+		ret = atomic_cmpxchg(&cif_dev->hub_tx_req_state, UARTHUB_clear_tx_request, UARTHUB_set_tx_request);
+		if (ret == UARTHUB_clear_tx_request) {
+			ret = mtk8250_uart_hub_dev0_set_tx_request(cif_dev->tty);
+			BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_tx_request, ret[%d]", __func__, ret);
+			if (ret) {
+				BTMTK_ERR("%s mtk8250_uart_hub_dev0_set_tx_request fail ret[%d]", __func__, ret);
+				atomic_set(&cif_dev->hub_tx_req_state, UARTHUB_clear_tx_request);
+				return -1;
+			}
+		} else
+			BTMTK_WARN("%s mtk8250_uart_hub_dev0_set_tx_request already do, skip", __func__);
+		break;
+	case UARTHUB_clear_rx_request:
+		ret = atomic_cmpxchg(&cif_dev->hub_rx_req_state, UARTHUB_set_rx_request, UARTHUB_clear_rx_request);
+		if (ret == UARTHUB_set_rx_request) {
+			ret = mtk8250_uart_hub_dev0_clear_rx_request(cif_dev->tty);
+			BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_rx_request, ret[%d]", __func__, ret);
+			if (ret) {
+				BTMTK_ERR("%s mtk8250_uart_hub_dev0_clear_rx_request fail ret[%d]", __func__, ret);
+				atomic_set(&cif_dev->hub_rx_req_state, UARTHUB_set_rx_request);
+				return -1;
+			}
+		} else
+			BTMTK_WARN("%s mtk8250_uart_hub_dev0_clear_rx_request already do, skip", __func__);
+
+		break;
+	case UARTHUB_set_rx_request:
+		ret = atomic_cmpxchg(&cif_dev->hub_rx_req_state, UARTHUB_clear_rx_request, UARTHUB_set_rx_request);
+		if (ret == UARTHUB_clear_rx_request) {
+			ret = mtk8250_uart_hub_dev0_set_rx_request();
+			BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_rx_request, ret[%d]", __func__, ret);
+			if (ret) {
+				BTMTK_ERR("%s mtk8250_uart_hub_dev0_set_rx_request fail ret[%d]", __func__, ret);
+				atomic_set(&cif_dev->hub_rx_req_state, UARTHUB_clear_rx_request);
+				return -1;
+			}
+		} else
+			BTMTK_WARN("%s mtk8250_uart_hub_dev0_set_rx_request already do, skip", __func__);
+
+		break;
+
+	default:
+		BTMTK_ERR("%s: Invalid req_type [%d]", __func__, req_type);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+
 int btmtk_wakeup_uarthub(void) {
 	int ready_retry = 50, ret = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
@@ -255,12 +339,8 @@ int btmtk_wakeup_uarthub(void) {
 	}
 
 	/* Set TX,RX request */
-	ret = mtk8250_uart_hub_dev0_set_tx_request(cif_dev->tty);
-	BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_tx_request, ret[%d]", __func__, ret);
-	if (ret) {
-		BTMTK_ERR("%s mtk8250_uart_hub_dev0_set_tx_request fail ret[%d]", __func__, ret);
+	if (btmtk_uarthub_request_setting(UARTHUB_set_tx_request))
 		return -1;
-	}
 
 	/* Polling UARTHUB is ready state */
 	while (mtk8250_uart_hub_is_ready() <= 0 && --ready_retry) {
@@ -304,16 +384,8 @@ void btmtk_release_uarthub(bool force)
 
 	/* force is for only bt off flow */
 	if (force) {
-		ret = mtk8250_uart_hub_dev0_clear_tx_request();
-		BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_tx_request ret[%d]", __func__, ret);
-	}
-
-	/* Clr TX,RX request, let uarthub can sleep */
-	if (cif_dev->sleep_en || force) {
-		ret =  mtk8250_uart_hub_dev0_clear_rx_request(cif_dev->tty);
-		BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_rx_request ret[%d]", __func__, ret);
-		if (ret)
-			BTMTK_ERR("%s mtk8250_uart_hub_dev0_clear_rx_request fail ret[%d]", __func__, ret);
+		btmtk_uarthub_request_setting(UARTHUB_clear_tx_request);
+		btmtk_uarthub_request_setting(UARTHUB_clear_rx_request);
 	}
 
 	return;
@@ -463,10 +535,13 @@ int btmtk_pre_power_on_handler(void)
 		ret = mtk8250_uart_hub_enable_bypass_mode(0);
 		BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
 
-		ret = mtk8250_uart_hub_dev0_set_rx_request();
-		BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_rx_request ret[%d]", __func__, ret);
-		ret = btmtk_wakeup_uarthub();
+		/* reset req_state to clear, for set request later */
+		atomic_set(&cif_dev->hub_tx_req_state, UARTHUB_clear_tx_request);
+		atomic_set(&cif_dev->hub_rx_req_state, UARTHUB_clear_rx_request);
 
+		/* wakeup uarthub and set request */
+		btmtk_uarthub_request_setting(UARTHUB_set_rx_request);
+		ret = btmtk_wakeup_uarthub();
 		if(ret < 0)
 			return ret;
 

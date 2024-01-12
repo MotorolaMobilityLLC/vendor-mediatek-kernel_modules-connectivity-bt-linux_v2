@@ -47,22 +47,32 @@ enum UARTHUB_irq_err_type {
 	UARTHUB_irq_err_type_count,
 };
 
+/* avoid double set/clear request */
+enum UARTHUB_request_state {
+	UARTHUB_clear_tx_request = 0,
+	UARTHUB_set_tx_request,
+	UARTHUB_clear_rx_request,
+	UARTHUB_set_rx_request,
+};
+
 typedef void (*UARTHUB_IRQ_CB) (unsigned int err_type);
 extern int mtk8250_uart_hub_reset_flow_ctrl(void);
 extern int mtk8250_uart_hub_enable_bypass_mode(int bypass);
 extern int mtk8250_uart_hub_is_ready(void);
-//extern int mtk8250_uart_hub_set_request(struct tty_struct *tty);
-extern int mtk8250_uart_hub_clear_request(void);
 extern int mtk8250_uart_hub_fifo_ctrl(int ctrl);
 extern int mtk8250_uart_hub_dump_with_tag(const char *tag);
 extern int mtk8250_uart_hub_reset(void);
 extern int mtk8250_uart_hub_register_cb(UARTHUB_IRQ_CB irq_callback);
 extern int mtk8250_uart_hub_assert_bit_ctrl(int ctrl);
 
+//extern int mtk8250_uart_hub_set_request(struct tty_struct *tty);
+//extern int mtk8250_uart_hub_clear_request(void);
 extern int mtk8250_uart_hub_dev0_set_tx_request(struct tty_struct *tty);
 extern int mtk8250_uart_hub_dev0_set_rx_request(void);
 extern int mtk8250_uart_hub_dev0_clear_tx_request(void);
 extern int mtk8250_uart_hub_dev0_clear_rx_request(struct tty_struct *tty);
+int btmtk_uarthub_request_setting(enum UARTHUB_request_state req_type);
+
 extern int mtk8250_uart_hub_get_host_wakeup_status(void);
 extern int mtk8250_uart_hub_get_bt_sleep_flow_hw_mech_en(void);
 extern int mtk8250_uart_hub_set_bt_sleep_flow_hw_mech_en(int enable);
