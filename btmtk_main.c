@@ -3436,7 +3436,6 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
 		kfree_skb(skb);
-		skb = NULL;
 		btmtk_reset_trigger(bdev);
 	} else {
 		btmtk_reset_timer_update(bdev);
