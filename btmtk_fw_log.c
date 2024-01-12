@@ -935,6 +935,17 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 #ifdef CFG_CHIP_RESET_KO_SUPPORT
 			rstNotifyWholeChipRstStatus(RST_MODULE_BT, RST_MODULE_STATE_DUMP_END, NULL);
 #endif
+
+#ifdef CHIP_IF_USB
+			/* USB hif: recv both 0xff and fw dump end, then do chip reset */
+			bdev->chip_reset_signal |= (1 << 1);
+			BTMTK_INFO("%s ,chip_reset_signal = %02x", __func__, bdev->chip_reset_signal);
+			if (bdev->chip_reset_signal == 0x03) {
+				bdev->chip_reset_signal = 0x00;
+				DUMP_TIME_STAMP("notify_chip_reset");
+				btmtk_reset_trigger(bdev);
+			}
+#endif
 		}
 
 		if (skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_ASSERT_QUEUE_COUNT) {

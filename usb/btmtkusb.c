@@ -343,8 +343,15 @@ static void btusb_intr_complete(struct urb *urb)
 			 * Receive a bytes 0xFF from controller, it's WDT interrupt to driver.
 			 * WDT interrupt is a mechanism to do L0.5 reset.
 			 */
-			DUMP_TIME_STAMP("notify_chip_reset");
-			btmtk_reset_trigger(bdev);
+
+			/* USB hif: recv both 0xff and fw dump end, then do chip reset */
+			bdev->chip_reset_signal |= (1 << 0);
+			BTMTK_INFO("%s ,chip_reset_signal = %02x", __func__, bdev->chip_reset_signal);
+			if (bdev->chip_reset_signal == 0x03) {
+				bdev->chip_reset_signal = 0x00;
+				DUMP_TIME_STAMP("notify_chip_reset");
+				btmtk_reset_trigger(bdev);
+			}
 			goto intr_resub;
 		}
 
