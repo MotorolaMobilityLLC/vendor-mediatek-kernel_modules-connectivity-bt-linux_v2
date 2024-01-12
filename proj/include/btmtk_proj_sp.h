@@ -81,6 +81,10 @@ void mtk8250_uart_start_record(struct tty_struct *tty);
 void mtk8250_uart_end_record(struct tty_struct *tty);
 #endif
 
+#if CFG_MTK_BT_DFD_DUMP_SUPPORT
+void btmtk_coredump_post_start(void);
+#endif
+
 #define HCI_EVT_COMPLETE_EVT		0x0E
 #define HCI_EVT_STATUS_EVT			0x0F
 #define HCI_EVT_CC_STATUS_SUCCESS	0x00

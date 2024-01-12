@@ -1026,7 +1026,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	new_termios = tty->termios;
 
 	btmtk_pwrctrl_pre_on(bdev);
-	if (!cif_dev->is_pre_cal) {
+	if (!cif_dev->is_pre_cal && bdev->reset_type != CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
 		ret = connv3_pwr_on(CONNV3_DRV_TYPE_BT);
 		if(ret) {
 			BTMTK_ERR("%s: ConnInfra power on failed, ret[%d]", __func__, ret);
@@ -1092,6 +1092,13 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 #endif
 	/* Flush any pending characters in the driver and discipline. */
 	tty_ldisc_flush(tty);
+
+	/* If DFD, return */
+	if (bdev->reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
+		BTMTK_INFO("%s: DFD", __func__);
+		bdev->reset_type = 0;
+		return 0;
+	}
 
 	/* query cmd, make sure can communicate with fw */
 	do {

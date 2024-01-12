@@ -320,6 +320,23 @@ void btmtk_release_uarthub(bool force)
 
 #endif
 
+#if CFG_MTK_BT_DFD_DUMP_SUPPORT
+void btmtk_coredump_post_start(void)
+{
+	/* dump DFD post data */
+	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x09, 0x01, 0x18, 0x05, 0x00, 0x07, 0x00, 0x00, 0x04, 0x00 };
+	//u8 evt[] = { 0x04, 0xE4, 0x09, 0x02, 0x18, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00};
+	int ret = 0;
+	BTMTK_INFO("%s", __func__);
+
+	ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd), NULL, 0, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+	if (ret < 0)
+		BTMTK_ERR("%s: failed, ret[%d]", __func__, ret);
+
+	return;
+}
+#endif
+
 void btmtk_sp_coredump_start(void)
 {
 
@@ -611,8 +628,13 @@ int btmtk_sp_close(void)
 	return 0;
 }
 
-
-static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
+/*
+	reset_type:
+	0: As is Falcon, PMIC will power down.
+	1: PMIC fault_b, combo chip is power down, coredump is invalid, can do force coredump.
+	2: CONN_RST or PMIC_IRQB, combo chip is still on, need to do DFD dump.
+*/
+static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason, unsigned int reset_type)
 {
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
@@ -633,25 +655,35 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 	bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 
 	/* Ask FW to do coredump */
-	BTMTK_ERR("%s: state[%d], reason[%s]", __func__, g_bt_state, reason);
+	BTMTK_ERR("%s: state[%d], reason[%s], reset_type[%d]", __func__, g_bt_state, reason, reset_type);
 	if (fstate == BTMTK_FOPS_STATE_CLOSED) {
 		BTMTK_WARN("%s: BT fops is closed, no need to trigger whole chip reset", __func__);
 		return 0;
-	} else if (drv == CONNV3_DRV_TYPE_CONNV3 && strncmp(reason, "PMIC Fault", strlen("PMIC Fault")) == 0) {
+	}
+
+	if (g_sbdev->assert_reason[0] == '\0') {
+		unsigned int len = strlen(reason) + 1;
+
+		len = (len >= ASSERT_REASON_SIZE) ? ASSERT_REASON_SIZE : len;
+		strncpy(g_sbdev->assert_reason, reason, len);
+		reason[len] = '\0';
+		BTMTK_ERR("%s: [assert_reason] %s", __func__, g_sbdev->assert_reason);
+	}
+
+	if (drv == CONNV3_DRV_TYPE_CONNV3 && (strncmp(reason, "PMIC Fault", strlen("PMIC Fault")) == 0 && reset_type == CONNV3_CHIP_RST_TYPE_PMIC_FAULT_B)) {
 		BTMTK_WARN("%s: PMIC Fault, no need to wait coredump", __func__);
 		goto exit;
-	} else {
-		if (g_sbdev->assert_reason[0] == '\0') {
-			unsigned int len = strlen(reason) + 1;
-
-			len = (len >= ASSERT_REASON_SIZE) ? ASSERT_REASON_SIZE : len;
-			strncpy(g_sbdev->assert_reason, reason, len);
-			reason[len] = '\0';
-			BTMTK_ERR("%s: [assert_reason] %s", __func__, g_sbdev->assert_reason);
-		}
-		atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DOING);
-		bmain_info->hif_hook.trigger_assert(g_sbdev);
+	} else if (reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
+		/* DFD
+		1. Debug SOP
+		2. Coredump, don't call coredump end
+		*/
+		g_sbdev->reset_type = reset_type;
+		BTMTK_INFO("%s: reset type = %d", __func__, g_sbdev->reset_type);
 	}
+
+	atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DOING);
+	bmain_info->hif_hook.trigger_assert(g_sbdev);
 
 exit:
 	g_sbdev->is_whole_chip_reset = TRUE;
@@ -678,6 +710,43 @@ static int btmtk_post_chip_rst_handler(void)
 	return 0;
 }
 
+#if CFG_MTK_BT_DFD_DUMP_SUPPORT
+/*
+	1. bt_rst = 1 (TBD)
+	2. partial patch download option, if rom code support dump
+	3. dump DFD post data through coredump API
+              I. Get data from FW by command/event
+              II. Connv3_coredump_send(handler, tag=“DFDP”, content, length)
+	4. end coredump
+        *** type: how connv3 control PMIC ***
+              * 0: do nothing, keep present state
+              * 1: PMIC off
+*/
+static int btmtk_post_chip_rst_on_handler(unsigned int type)
+{
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	int ret = 0;
+	BTMTK_INFO("%s: type[%d]", __func__, type);
+
+	if (g_sbdev->reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
+		// config pre_pwr_on related (GPIO, baudrate, uarthub, tx_thread)
+		ret = bmain_info->hif_hook.pre_open(g_sbdev);
+		if (ret != 0)
+			BTMTK_ERR("%s: btmtk_sp_pre_open failed", __func__);
+
+		// dump DFD post data
+		btmtk_coredump_post_start();
+
+		// end coredump
+		btmtk_sp_coredump_end();
+
+		BTMTK_INFO("%s: complete dump_comp , coredump_end", __func__);
+		complete_all(&g_sbdev->dump_comp);
+	}
+
+	return 0;
+}
+#endif
 
 int btmtk_pre_cal_pre_on_cb(void)
 {
@@ -834,6 +903,9 @@ int btmtk_hif_dump_end(enum connv3_drv_type from_drv, void *priv_data){
 
 struct connv3_whole_chip_rst_cb btmtk_whole_chip_rst_cb = {
 	.pre_whole_chip_rst = btmtk_pre_chip_rst_handler,
+#if CFG_MTK_BT_DFD_DUMP_SUPPORT
+	.post_reset_on = btmtk_post_chip_rst_on_handler,
+#endif
 	.post_whole_chip_rst = btmtk_post_chip_rst_handler,
 };
 
