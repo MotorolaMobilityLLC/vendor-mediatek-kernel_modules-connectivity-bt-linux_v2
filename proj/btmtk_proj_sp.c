@@ -554,8 +554,26 @@ static int btmtk_power_on_notify_handler(void)
 
 static int btmtk_chip_power_down_notify_handler(unsigned int notify)
 {
+	struct btmtk_uart_dev *cif_dev = NULL;
+
         /* Execute when wifi and bt both power down */
         BTMTK_INFO("%s", __func__);
+
+	if (!g_sbdev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_DISCONNECT) {
+		BTMTK_WARN("%s: uart disconnected", __func__);
+		return -1;
+	}
 
 	btmtk_dump_gpio_state();
 
