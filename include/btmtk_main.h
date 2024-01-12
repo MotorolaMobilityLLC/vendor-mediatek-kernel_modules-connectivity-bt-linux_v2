@@ -676,6 +676,12 @@ struct btmtk_main_info {
 	u8 wmt_over_hci_header[WMT_OVER_HCI_HEADER_SIZE];
 	u8 read_iso_packet_size_cmd[READ_ISO_PACKET_CMD_SIZE];
 
+#if CFG_SUPPORT_BMR_RX_CLK
+	u64 bmr_sysclk;
+	int bmr_irq;
+	int bmr_irq_cnt;
+	u32 bmr_irq_flag;
+#endif
 	/* record firmware version */
 	struct proc_dir_entry *proc_dir;
 	char fw_version_str[FW_VERSION_BUF_SIZE];
@@ -685,9 +691,11 @@ struct btmtk_main_info {
 
 static inline int is_mt6639(u32 chip_id)
 {
+#ifdef SUPPORT_MT6639
 	chip_id &= 0xFFFF;
 	if (chip_id == 0x6639)
 		return 1;
+#endif
 	return 0;
 }
 

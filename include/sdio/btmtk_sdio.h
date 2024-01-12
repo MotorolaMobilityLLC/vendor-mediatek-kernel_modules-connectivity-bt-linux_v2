@@ -14,13 +14,13 @@
 #ifndef _BTMTK_SDIO_H_
 #define _BTMTK_SDIO_H_
 /* It's for reset procedure */
-#include <linux/mmc/sdio_ids.h>
 #include <linux/module.h>
 
 #include <linux/of_gpio.h>
 #include <linux/mmc/host.h>
 #include <linux/mmc/card.h>
 #include <linux/mmc/sdio.h>
+#include <linux/mmc/sdio_ids.h>
 #include <linux/mmc/sdio_func.h>
 
 #include "btmtk_define.h"
