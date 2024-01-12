@@ -475,9 +475,9 @@ int btmtk_load_chip_data_item(struct bt_cmds_s *raw_cmds,
 	return ret;
 }
 
-void btmtk_load_raw_data(char *data_bin_name, struct btmtk_dev *bdev)
+int btmtk_load_raw_data(char *data_bin_name, struct btmtk_dev *bdev)
 {
-	int err;
+	int err = 0;
 	u32 code_len = 0;
 	int i;
 	//struct bt_raw_data_struct *raw_data_content = bdev->bt_raw_data;
@@ -504,6 +504,8 @@ LOAD_END:
 
 	if (err)
 		BTMTK_ERR("%s: error return %d", __func__, err);
+
+	return err;
 }
 
 void btmtk_get_cmd_or_event(struct btmtk_dev *bdev,
@@ -868,8 +870,12 @@ int btmtk_cif_chip_register(struct btmtk_dev *bdev)
 	case 0x7925:
 		(void)snprintf(bdev->chip_data_file_name, MAX_BIN_FILE_NAME_LEN, "bt_mt%x_data.bin",
 				bdev->chip_id & 0xffff);
-		btmtk_load_raw_data(bdev->chip_data_file_name, bdev);
-		btmtk_cif_chip_6639_register();
+		ret = btmtk_load_raw_data(bdev->chip_data_file_name, bdev);
+		if (ret) {
+			BTMTK_ERR("%s: load raw data from %s failed", __func__, bdev->chip_data_file_name);
+			goto register_end;
+		}
+
 		break;
 	case 0x6631:
 	case 0x6635:
@@ -877,9 +883,11 @@ int btmtk_cif_chip_register(struct btmtk_dev *bdev)
 		break;
 	default:
 		BTMTK_ERR("Unknown Mediatek device(%04X)\n", bdev->chip_id);
+		ret = -1;
 		break;
 	}
 
+register_end:
 	return ret;
 }
 

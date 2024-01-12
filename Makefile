@@ -158,7 +158,7 @@ endif
 
 CFILES += btmtk_main.c btmtk_fw_log.c btmtk_buffer_mode.c
 
-CFILES += chip/btmtk_chip_7902.c chip/btmtk_chip_common.c chip/btmtk_chip_7961.c chip/btmtk_chip_7922.c chip/btmtk_chip_66xx.c chip/btmtk_chip_6639.c
+CFILES += chip/btmtk_chip_7902.c chip/btmtk_chip_common.c chip/btmtk_chip_7961.c chip/btmtk_chip_7922.c chip/btmtk_chip_66xx.c chip/btmtk_chip_connac3.c
 ccflags-y += -I$(src)/include/chip
 ccflags-y += -I$(src)/include/ -I$(src)/
 ccflags-y += -I$(src)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth -I$(src)/proj/include/
