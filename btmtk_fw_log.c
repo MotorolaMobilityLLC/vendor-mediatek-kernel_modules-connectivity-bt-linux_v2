@@ -1,4 +1,8 @@
-/* Define for proce node */
+/* SPDX-License-Identifier: BSD-2-Clause */
+/*
+ * Copyright (c) 2021 MediaTek Inc.
+ */
+
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 
