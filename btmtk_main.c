@@ -371,6 +371,7 @@ static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	bdev->bt_cfg.support_usb_sco_test = 0;
 #endif
 	bdev->bt_cfg.support_audio_setting = 0;
+	bdev->bt_cfg.debug_sop_mode = 0;
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_filter, 1);
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_enable, 1);
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.phase1_wmt_cmd, PHASE1_WMT_CMD_COUNT);
@@ -3338,6 +3339,7 @@ static void btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 	} else {
 		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_DEBUG_SOP_MODE);
 	}
+
 	BTMTK_INFO("%s: bt_cfg_content->debug_sop_mode = %d", __func__,
 			bt_cfg_content->debug_sop_mode);
 
@@ -4527,9 +4529,12 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	int ret = 0;
 	int state = 0;
 	unsigned char fstate = 0;
+	u8 fw_coredump_flag = 0;
+#if (USE_DEVICE_NODE == 1)
 	/* parsing commands */
 	u8 fw_coredump_cmd[FW_COREDUMP_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
-	u8 fw_coredump_flag = 0;
+#endif
+
 	struct btmtk_dev *bdev = NULL;
 	unsigned char *skb_tmp = NULL;
 
@@ -4598,6 +4603,8 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			BTMTK_ERR("%s btmtk_set_audio_setting failed!!", __func__);
 			goto exit;
 		}
+
+#if (USE_DEVICE_NODE == 1)
 		if (hci_skb_pkt_type(skb) == HCI_COMMAND_PKT) {
 			if (skb->len == FW_COREDUMP_CMD_LEN &&
 				!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
@@ -4618,6 +4625,8 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				}
 			}
 		}
+#endif
+
 	}
 
 	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d ", __func__, skb->len);
@@ -4778,8 +4787,13 @@ static void btmtk_rx_work(struct work_struct *work)
 		}
 
 		fstate = btmtk_fops_get_state(bdev);
+
+#if (USE_DEVICE_NODE == 1)
 		/* is_whole_chip_reset need to send hw err event after bt close */
 		if (fstate != BTMTK_FOPS_STATE_OPENED && !bdev->is_whole_chip_reset) {
+#else
+		if (fstate != BTMTK_FOPS_STATE_OPENED) {
+#endif
 			/* BT close case, drop by driver, don't send to stack */
 			BTMTK_WARN("%s Drop by driver, fops(%d) state is not opened", __func__, fstate);
 			kfree_skb(skb);
@@ -4896,11 +4910,13 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 	INIT_WORK(&bdev->pwr_on_uds_work, btmtk_pwr_on_uds_work);
 #endif
 	skb_queue_head_init(&bdev->rx_q);
-	if(bdev->workqueue == NULL) {
+	if (bdev->workqueue == NULL) {
 		bdev->workqueue = alloc_workqueue("BTMTK_RX_WQ", WQ_HIGHPRI | WQ_UNBOUND |
 							WQ_MEM_RECLAIM, 1);
-	} else
+	} else {
 		BTMTK_INFO("%s: bdev->workqueue exist", __func__);
+	}
+
 	if (!bdev->workqueue) {
 		BTMTK_ERR("%s, bdev->workqueue is NULL!", __func__);
 		err = -ENOMEM;
