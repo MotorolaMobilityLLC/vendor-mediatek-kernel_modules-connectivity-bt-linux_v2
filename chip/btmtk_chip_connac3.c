@@ -6,7 +6,7 @@
 #include "btmtk_chip_connac3.h"
 #include "btmtk_chip_common.h"
 
-static int btmtk_chip_reg_init(struct btmtk_dev *bdev)
+static int btmtk_get_fw_info(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
@@ -192,11 +192,10 @@ int btmtk_cif_chip_commonv3_register(void)
 
 	BTMTK_INFO("%s", __func__);
 
-	bmain_info->hif_hook_chip.cap_init = btmtk_chip_reg_init;
+	bmain_info->hif_hook_chip.get_fw_info = btmtk_get_fw_info;
 	bmain_info->hif_hook_chip.load_patch = btmtk_load_fw_patch;
 	bmain_info->hif_hook_chip.bt_set_pinmux = NULL;
 	bmain_info->hif_hook_chip.bt_subsys_reset = btmtk_subsys_reset;
 
 	return retval;
 }
-

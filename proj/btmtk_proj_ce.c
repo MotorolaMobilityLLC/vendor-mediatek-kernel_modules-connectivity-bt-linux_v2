@@ -10,22 +10,22 @@ static struct regulator *supply_pmic_en = NULL;
 
 static inline int btmtk_pinctrl_exec(const char *name) {
 	struct pinctrl_state *pinctrl;
-	int ret = -1;
+	int ret = 0;
 	BTMTK_INFO("%s start %s", __func__, name);
 	if (IS_ERR(pinctrl_ptr)) {
-		BTMTK_ERR("[ERR] %s: fail to get bt pinctrl", __func__);
-		return -1;
+		BTMTK_INFO("%s: fail to get bt pinctrl", __func__);
+		return 0;
 	}
 	pinctrl = pinctrl_lookup_state(pinctrl_ptr, name);
 	if (!IS_ERR(pinctrl)) {
 		ret = pinctrl_select_state(pinctrl_ptr, pinctrl);
 		if (ret) {
 			BTMTK_ERR("%s: pinctrl %s fail [%d]", __func__, name, ret);
-			return ret;
+			return 0;
 		}
 	} else {
-		BTMTK_ERR("%s: pinctrl %s lookup fail", __func__, name);
-		return -1;
+		BTMTK_INFO("%s: pinctrl %s is not exist", __func__, name);
+		return 0;
 	}
 	BTMTK_INFO("%s end %s", __func__, name);
 	return 0;
@@ -36,15 +36,9 @@ int btmtk_pre_power_on_handler(struct btmtk_uart_dev *cif_dev) {
 
 	BTMTK_INFO("%s start", __func__);
 
-	if (pinctrl_ptr == NULL || supply_pmic_en == NULL) {
-		BTMTK_ERR("%s: pinctrl or regulator is invalid", __func__);
-		return -1;
-	}
-
 	ret = btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
 	if (ret < 0) {
-		BTMTK_ERR("%s: pinctrl %s fail", __func__, PRE_ON_PINCTRL_NAME);
-		return ret;
+		BTMTK_INFO("%s: pinctrl %s fail", __func__, PRE_ON_PINCTRL_NAME);
 	}
 
 	/* reopen tty */
@@ -58,30 +52,42 @@ int btmtk_pre_power_on_handler(struct btmtk_uart_dev *cif_dev) {
 
 	ret = btmtk_pinctrl_exec(POWER_ON_TX_PINCTRL_NAME);
 	if (ret < 0) {
-		BTMTK_ERR("%s: pinctrl %s fail", __func__, POWER_ON_TX_PINCTRL_NAME);
-		return ret;
+		BTMTK_INFO("%s: pinctrl %s fail", __func__, POWER_ON_TX_PINCTRL_NAME);
 	}
 	msleep(100);
 
 	ret = btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
 	if (ret < 0) {
-		BTMTK_ERR("%s: pinctrl %s fail", __func__, RST_ON_PINCTRL_NAME);
-		return ret;
+		BTMTK_INFO("%s: pinctrl %s fail", __func__, RST_ON_PINCTRL_NAME);
 	}
 	msleep(100);
 
-	/* TODO If PMIC is disabled, need use regulator instead */
-	ret = regulator_enable(supply_pmic_en);
+	ret = btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 	if (ret < 0) {
-		BTMTK_ERR("%s: regulator enable %s fail", __func__, BT_PMIC_EN_REGULATOR);
-		return ret;
+		BTMTK_INFO("%s: pinctrl %s fail", __func__, RST_ON_PINCTRL_NAME);
 	}
-	msleep(500);
+	msleep(100);
+
+	ret = btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
+	if (ret < 0) {
+		BTMTK_INFO("%s: pinctrl %s fail", __func__, RST_ON_PINCTRL_NAME);
+	}
+	msleep(100);
+
+	if (supply_pmic_en) {
+		ret = regulator_enable(supply_pmic_en);
+		if (ret < 0) {
+			BTMTK_ERR("%s: regulator enable %s fail", __func__, BT_PMIC_EN_REGULATOR);
+			return ret;
+		}
+		msleep(500);
+	} else {
+		BTMTK_INFO("%s: pmic_en is NULL", __func__);
+	}
 
 	ret = btmtk_pinctrl_exec(POWER_ON_RX_PINCTRL_NAME);
 	if (ret < 0) {
-		BTMTK_ERR("%s: pinctrl %s fail", __func__, POWER_ON_RX_PINCTRL_NAME);
-		return ret;
+		BTMTK_INFO("%s: pinctrl %s fail", __func__, POWER_ON_RX_PINCTRL_NAME);
 	}
 
 	return 0;
@@ -92,29 +98,25 @@ int btmtk_set_gpio_default(void) {
 
 	BTMTK_INFO("%s start", __func__);
 
-	if (pinctrl_ptr == NULL || supply_pmic_en == NULL) {
-		BTMTK_ERR("%s: pinctrl or regulator is invalid", __func__);
-		return -1;
-	}
-
-	/* TODO If PMIC should disable, need use regulator instead */
-	ret = regulator_disable(supply_pmic_en);
-	if (ret < 0) {
-		BTMTK_ERR("%s: regulator disable %s fail", __func__, BT_PMIC_EN_REGULATOR);
-		return ret;
+	if (supply_pmic_en) {
+		ret = regulator_disable(supply_pmic_en);
+		if (ret < 0) {
+			BTMTK_ERR("%s: regulator disable %s fail", __func__, BT_PMIC_EN_REGULATOR);
+			return ret;
+		}
+	} else {
+		BTMTK_INFO("%s: pmic_en is NULL", __func__);
 	}
 
 	ret = btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 	if (ret < 0) {
-		BTMTK_ERR("%s: pinctrl %s fail", __func__, RST_OFF_PINCTRL_NAME);
-		return ret;
+		BTMTK_INFO("%s: pinctrl %s fail", __func__, RST_OFF_PINCTRL_NAME);
 	}
 	msleep(10);
 
 	ret = btmtk_pinctrl_exec(INIT_STATE_PINCTRL_NAME);
 	if (ret < 0) {
-		BTMTK_ERR("%s: pinctrl %s fail", __func__, INIT_STATE_PINCTRL_NAME);
-		return ret;
+		BTMTK_INFO("%s: pinctrl %s fail", __func__, INIT_STATE_PINCTRL_NAME);
 	}
 	return 0;
 }
@@ -128,7 +130,7 @@ int btmtk_ce_gpio_init(struct btmtk_uart_dev *cif_dev) {
 	BTMTK_INFO("%s start", __func__);
 
 	if (cif_dev == NULL) {
-		BTMTK_ERR("[ERR] %s: cif_dev is NULL", __func__);
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
 		return -1;
 	}
 
@@ -136,37 +138,48 @@ int btmtk_ce_gpio_init(struct btmtk_uart_dev *cif_dev) {
 		BTMTK_INFO("%s init pinctrl", __func__);
 		cif_dev->tty->dev->of_node = of_find_compatible_node(NULL, NULL, "mediatek,bt");
 		if (!cif_dev->tty->dev->of_node) {
-			BTMTK_ERR("[ERR] %s: mediatek,bt of_node not found", __func__);
-			return -1;
-		}
-		pinctrl_ptr = devm_pinctrl_get(cif_dev->tty->dev);
-		if (IS_ERR(pinctrl_ptr)) {
-			BTMTK_ERR("[ERR] %s: fail to get bt pinctrl", __func__);
-			return -1;
+			BTMTK_INFO("%s: mediatek,bt of_node not found", __func__);
+		} else {
+			pinctrl_ptr = devm_pinctrl_get(cif_dev->tty->dev);
+			if (IS_ERR(pinctrl_ptr)) {
+				BTMTK_INFO("%s: fail to get bt pinctrl", __func__);
+			}
 		}
 	}
-#if 0
-	struct regulator_bulk_data *supplies;
-	supplies = devm_kcalloc(NULL, 1,
-				      sizeof(*supplies),
-				      GFP_KERNEL);
-	if (!supplies)
-		return -ENOMEM;
 
-	supplies->supply_pmic_en = BT_PMIC_EN_REGULATOR;
-
-	ret = devm_regulator_bulk_get(NULL, 1, supplies);
-	if (ret)
-		return ret;
-#endif
 	if (supply_pmic_en == NULL) {
 		BTMTK_INFO("%s init regulator", __func__);
 		supply_pmic_en = regulator_get(cif_dev->tty->dev, BT_PMIC_EN_REGULATOR);
 		if (!supply_pmic_en) {
-			BTMTK_ERR("[ERR] %s: fail to get bt pmic_en regulator", __func__);
-			return -1;
+			BTMTK_INFO("%s: fail to get bt pmic_en regulator", __func__);
 		}
 	}
 	return 0;
 }
 
+int btmtk_ce_init(void) {
+	BTMTK_INFO("%s start", __func__);
+	btmtk_init_node();
+	return 0;
+}
+
+
+int btmtk_ce_subsys_reset(struct btmtk_dev *bdev) {
+	int ret = 0;
+
+	BTMTK_INFO("%s start", __func__);
+
+	ret = btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
+	if (ret < 0) {
+		BTMTK_INFO("%s: pinctrl %s fail", __func__, RST_OFF_PINCTRL_NAME);
+	}
+	msleep(100);
+
+	ret = btmtk_pinctrl_exec(RST_ON_PINCTRL_NAME);
+	if (ret < 0) {
+		BTMTK_INFO("%s: pinctrl %s fail", __func__, RST_ON_PINCTRL_NAME);
+	}
+	msleep(100);
+
+	return ret;
+}

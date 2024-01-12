@@ -59,7 +59,8 @@
 #define UL_MSG_LVL_INFO      2
 #define UL_MSG_LVL_ERR       1
 #define UL_MSG_LVL_NONE      0
-
+/* Debug log level */
+#define UL_MSG_LVL_DEFAULT           UL_MSG_LVL_INFO
 
 #ifdef __ANDROID__
 /* print log to main log */
@@ -70,11 +71,6 @@
 #define LOG_TAG               "btmtk_uart_launcher"
 #include <log/log.h>
 #include <android/log.h>
-
-
-/* Debug log level */
-#define UL_MSG_LVL_DEFAULT           UL_MSG_LVL_INFO
-
 #else /* __ANDROID__ */
 #define ALOGI	printf
 #endif

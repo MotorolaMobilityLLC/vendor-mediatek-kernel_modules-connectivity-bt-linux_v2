@@ -2584,13 +2584,6 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 	}
 
 	usb_mark_last_busy(cif_dev->udev);
-	/* The URB complete handler is still called with urb->actual_length = 0
-	 * when the event is not available, so we should keep re-submitting
-	 * URB until WMT event returns, Also, It's necessary to wait some time
-	 * between the two consecutive control URBs to relax the target device
-	 * to generate the event. Otherwise, the WMT event cannot return from
-	 * the device successfully.
-	 */
 	udelay(100);
 
 	if (!test_bit(BTUSB_WMT_RUNNING, &bdev->flags)) {

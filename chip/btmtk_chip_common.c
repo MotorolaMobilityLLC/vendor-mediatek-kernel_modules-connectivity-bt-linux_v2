@@ -675,7 +675,7 @@ int btmtk_cif_check_power_status_common(struct btmtk_dev *bdev, const uint8_t *c
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (memcmp(cmd, bmain_info->wmt_over_hci_header, WMT_OVER_HCI_HEADER_SIZE) &&
-			pkt_type != BTMTK_TX_ACL_FROM_DRV &&
+			pkt_type == BTMTK_TX_PKT_FROM_HOST &&
 			bdev->power_state != BTMTK_DONGLE_STATE_POWER_ON) {
 		BTMTK_WARN("%s: chip power isn't on, ignore this command, state is %d",
 				__func__, bdev->power_state);
@@ -765,7 +765,7 @@ exit:
 	return ret;
 }
 
-static int btmtk_cap_init_common(struct btmtk_dev *bdev)
+static int btmtk_get_fw_info_common(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
@@ -831,7 +831,7 @@ int btmtk_cif_chip_common_register(void)
 	BTMTK_INFO("%s", __func__);
 
 	memset(&hook_chip, 0, sizeof(hook_chip));
-	hook_chip.cap_init = btmtk_cap_init_common;
+	hook_chip.get_fw_info = btmtk_get_fw_info_common;
 	hook_chip.load_patch = btmtk_load_rom_patch_common;
 	hook_chip.err_handler = btmtk_recv_error_handler_common;
 	hook_chip.rx_handler = btmtk_cif_rx_packet_handler_common;
@@ -913,5 +913,3 @@ int btmtk_cif_chip_deregister(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: Done", __func__);
 	return 0;
 }
-
-

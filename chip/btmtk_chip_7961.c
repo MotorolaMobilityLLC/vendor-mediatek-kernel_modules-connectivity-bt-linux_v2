@@ -6,7 +6,7 @@
 #include "btmtk_chip_7961.h"
 #include "btmtk_chip_common.h"
 
-static int btmtk_chip_reg_init_7961(struct btmtk_dev *bdev)
+static int btmtk_get_fw_info_7961(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
@@ -230,10 +230,9 @@ int btmtk_cif_chip_7961_register(void)
 	BTMTK_INFO("%s", __func__);
 
 	bmain_info->hif_hook_chip.bt_set_pinmux = btmtk_set_audio_pin_mux_7961;
-	bmain_info->hif_hook_chip.cap_init = btmtk_chip_reg_init_7961;
+	bmain_info->hif_hook_chip.get_fw_info = btmtk_get_fw_info_7961;
 	bmain_info->hif_hook_chip.patched = 1;
 	bmain_info->hif_hook_chip.bt_subsys_reset = btmtk_subsys_reset;
 
 	return retval;
 }
-

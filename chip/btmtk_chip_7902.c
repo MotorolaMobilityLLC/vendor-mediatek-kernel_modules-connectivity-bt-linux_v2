@@ -47,7 +47,7 @@ static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 	return 0;
 }
 
-static int btmtk_chip_reg_init(struct btmtk_dev *bdev)
+static int btmtk_get_fw_info(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
@@ -184,7 +184,7 @@ int btmtk_cif_chip_7902_register(void)
 	BTMTK_INFO("%s", __func__);
 
 	bmain_info->hif_hook_chip.load_patch = btmtk_load_fw_patch;
-	bmain_info->hif_hook_chip.cap_init = btmtk_chip_reg_init;
+	bmain_info->hif_hook_chip.get_fw_info = btmtk_get_fw_info;
 #ifdef CHIP_IF_SDIO
 	//bmain_info->hif_hook_chip.bt_conn_infra_pc = btmtk_sdio_read_conn_infra_pc_7902;
 #endif
@@ -194,4 +194,3 @@ int btmtk_cif_chip_7902_register(void)
 
 	return retval;
 }
-
