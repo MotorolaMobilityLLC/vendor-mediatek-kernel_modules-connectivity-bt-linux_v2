@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2022022401"
+#define VERSION "7.0.2022022801"
 #define SUBVER ":turnkey"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -375,8 +375,7 @@ struct debug_reg_struct {
 void btmtk_getUTCtime(struct bt_utc_struct *utc);
 #define DUMP_TIME_STAMP(__str) \
 	do { \
-		bt_utc_struct utc; \
-		u32 usec; \
+		struct bt_utc_struct utc; \
 		btmtk_getUTCtime(&utc); \
 		BTMTK_INFO("%s:%d, %s - DUMP_TIME_STAMP UTC: %d-%02d-%02d %02d:%02d:%02d.%06u", \
 			__func__, __LINE__, __str, \

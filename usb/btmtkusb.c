@@ -227,6 +227,7 @@ static int btusb_recv_isoc(struct btmtk_dev *bdev, void *buffer, int count)
 		if (!skb_tmp) {
 			BTMTK_ERR("%s, skb_put failed. Len = %d!", __func__, len);
 			kfree_skb(skb);
+			spin_unlock(&bdev->rxlock);
 			return -ENOMEM;
 		}
 		memcpy(skb_tmp, buffer, len);
