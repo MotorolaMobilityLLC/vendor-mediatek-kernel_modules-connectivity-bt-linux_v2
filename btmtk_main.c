@@ -2357,7 +2357,9 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag)
 					"BT_RAM_CODE_MT6639_1_1_hdr.bin");
 					//"BT_RAM_CODE_MT6639_1_1_nonenc_hdr.bin");
 #endif
-
+		else if (is_mt7925(bdev->chip_id))
+			(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+					"BT_RAM_CODE_MT7925_1_1_hdr.bin");
 	} else
 		BTMTK_ERR("%s: unknow patch_flag", __func__);
 

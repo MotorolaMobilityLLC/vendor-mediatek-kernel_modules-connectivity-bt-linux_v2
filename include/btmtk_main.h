@@ -771,6 +771,14 @@ struct btmtk_main_info {
 	int bk_rs_flag;
 };
 
+static inline int is_mt7925(u32 chip_id)
+{
+	chip_id &= 0xFFFF;
+	if (chip_id == 0x7925)
+		return 1;
+	return 0;
+}
+
 static inline int is_mt6639(u32 chip_id)
 {
 	chip_id &= 0xFFFF;
