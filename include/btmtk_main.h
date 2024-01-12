@@ -632,6 +632,8 @@ typedef void (*cif_waker_notify_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_enter_standby_ptr)(void);
 typedef int (*cif_set_para_ptr)(struct btmtk_dev *bdev, int val);
 typedef void (*cif_trigger_assert_ptr)(struct btmtk_dev *bdev);
+typedef int (*cif_write_uhw_register)(struct btmtk_dev *bdev, u32 reg, u32 val);
+typedef int (*cif_read_uhw_register)(struct btmtk_dev *bdev, u32 reg, u32 *val);
 
 struct hif_hook_ptr {
 #if (USE_DEVICE_NODE == 1)
@@ -667,6 +669,8 @@ struct hif_hook_ptr {
 	cif_set_para_ptr		set_para;
 	cif_trigger_assert_ptr		trigger_assert;
 	void				*coredump_handler;
+	cif_write_uhw_register		write_uhw_register;
+	cif_read_uhw_register		read_uhw_register;
 };
 
 /* for calibration */
@@ -689,6 +693,7 @@ typedef int (*cif_bt_close_handler)(struct btmtk_dev *bdev);
 typedef int (*cif_bt_set_audio_pinmux)(struct btmtk_dev *bdev);
 typedef int (*cif_bt_dl_delay_time)(struct btmtk_dev *bdev);
 typedef int (*cif_bt_cap_init)(struct btmtk_dev *bdev);
+typedef int (*cif_bt_subsys_reset)(struct btmtk_dev *bdev);
 
 #ifdef CHIP_IF_SDIO
 typedef int (*cif_bt_read_infra_pc)(void *func, u32 *val);
@@ -707,6 +712,7 @@ struct hif_hook_chip_ptr {
 	cif_bt_close_handler			bt_close_handler;
 	cif_bt_set_audio_pinmux			bt_set_pinmux;
 	cif_bt_cap_init					cap_init;
+	cif_bt_subsys_reset 			bt_subsys_reset;
 
 /* for calibration */
 	cif_bt_cal_restore_ptr				restore;
