@@ -674,6 +674,7 @@ struct btmtk_dev {
 
 #if (USE_DEVICE_NODE == 1)
 typedef void (*cif_chrdev_fw_log_state_ptr)(uint8_t state);
+typedef int (*cif_set_xonv_ptr)(struct btmtk_dev *bdev, u8 *connxo, int nvsz);
 #endif
 
 typedef int (*cif_bt_init_ptr)(void);
@@ -722,6 +723,7 @@ struct hif_hook_ptr {
 #if (USE_DEVICE_NODE == 1)
 	cif_chrdev_fw_log_state_ptr fw_log_state;
 	cif_met_log_handler_ptr 	met_log_handler;
+	cif_set_xonv_ptr		set_xonv;
 #endif
 	cif_bt_init_ptr			init;
 	cif_bt_exit_ptr			exit;
