@@ -106,8 +106,15 @@ struct btmtk_stp_hdr {
 #endif
 
 #define BTMTK_MAX_SEND_RETRY 10000
+#if (USE_DEVICE_NODE == 1)
+#define BTMTK_MAX_WAIT_RETRY 200
+#define BTMTK_MAX_WAKEUP_RETRY 4
+#else
 #define BTMTK_MAX_WAIT_RETRY 30000
 #define BTMTK_MAX_WAKEUP_RETRY 2
+#endif
+#define BTMTK_MAX_RECV_ERR_CNT 3
+#define BTMTK_MAX_WAIT_UART_RESUME_CNT 1500
 
 #define BT_UART_DEFAULT_BAUD 115200
 
@@ -116,6 +123,11 @@ struct btmtk_stp_hdr {
 
 /* Delay time after write data to io_buf */
 #define IO_BUF_DELAY_TIME 50
+
+/* Time bound for flush tty: 100ms */
+#define TIMT_BOUND_OF_CHARS_WAIT 10
+#define TIME_BOUND_OF_TTY_FLUSH	100
+#define TIME_BOUND_OF_FW_PKG_DL 2000
 
 typedef int (*pdwnc_func) (u8 fgReset);
 typedef int (*reset_func_ptr2) (unsigned int gpio, int init_value);
@@ -177,6 +189,7 @@ struct btmtk_uart_dev {
 	u32			hub_en;
 	u32			sleep_en;
 	u32			flush_en;
+	u8			hub_bypass_only;
 	u32			assert_state;
 
 	/* For uarthub setting */
@@ -193,19 +206,23 @@ struct btmtk_uart_dev {
 	atomic_t		need_drv_own;
 	atomic_t		fw_wake;
 
-	/* trigger assert */
 	atomic_t		need_assert;
-	bool			is_rhw_fail;
+
+	u32			rhw_fail_cnt;
 
 	/* sempaphore to compare event */
 	struct semaphore	evt_comp_sem;
+	/* sempaphore to tty flush & write operation */
+	struct semaphore	tty_flush_sem;
 
 #if (USE_DEVICE_NODE == 1)
 	/* dynamic tx power control */
 	struct btmtk_dypwr_st dy_pwr;
 
 	/* pre-cal flag */
-	bool			is_pre_cal;
+	bool 		is_pre_cal;
+
+	bool		is_pre_on_done;
 #endif
 };
 
@@ -230,12 +247,14 @@ struct btmtk_uart_dev {
 #define HCIUARTLOADPATCH _IOW('U', 204, int)
 #define HCIUARTSETWAKEUP _IOW('U', 205, int)
 #define HCIUARTINIT _IOW('U', 206, int)
+#define HCIUARTDEINIT _IOW('U', 207, int)
 
 /**
  * parameter settings
  */
 #define BTMTK_HUB_EN		(1 << 0)
 #define BTMTK_SLEEP_EN		(1 << 1)
+#define BTMTK_UARTHUB_BYPASS_ONLY	(1 << 2)
 
 
 //int btmtk_cif_send_calibration(struct hci_dev *hdev);

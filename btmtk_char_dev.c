@@ -72,11 +72,8 @@ static uint8_t o_buf[BT_BUFFER_SIZE]; /* Output buffer for write */
 static uint8_t ioc_buf[IOCTL_BT_HOST_INTTRX_SIZE];
 
 extern struct btmtk_dev *g_sbdev;
-#if 0 // Simfex
-extern struct btmtk_btif_dev g_btif_dev;
 extern void bthost_debug_init(void);
 extern void bthost_debug_save(uint32_t id, uint32_t value, char *desc);
-#endif
 static struct semaphore wr_mtx, rd_mtx;
 static struct wakeup_source *bt_wakelock;
 /* Wait queue for poll and read */
@@ -106,7 +103,7 @@ extern void main_driver_exit(void);
 
 static int32_t ftrace_print(const uint8_t *str, ...)
 {
-#ifdef CONFIG_TRACING
+#if defined (BT_CONFIG_TRACING) && defined (CONFIG_TRACING)
 	va_list args;
 	uint8_t temp_string[FTRACE_STR_LOG_SIZE];
 
@@ -377,7 +374,7 @@ static ssize_t BT_read(struct file *filp, char __user *buf, size_t count, loff_t
 	do {
 		retval = btmtk_receive_data(g_sbdev->hdev, i_buf, count);
 		if (retval < 0) {
-			BTMTK_ERR("bt_core_receive_data failed, retval %d", retval);
+			BTMTK_ERR("bt_core_receive_data failed, retval %zd", retval);
 			goto OUT;
 		} else if (retval == 0) { /* Got nothing, wait for RX queue's signal */
 			/*
@@ -450,7 +447,7 @@ static long BT_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long
 {
 	int32_t retval = 0;
 
-	BTMTK_INFO("%s: cmd[0x%08x]", __func__, cmd);
+	BTMTK_DBG("%s: cmd[0x%08x]", __func__, cmd);
 	memset(ioc_buf, 0x00, sizeof(ioc_buf));
 	switch (cmd) {
 	case COMBO_IOCTL_BT_HOST_DEBUG:
@@ -464,9 +461,7 @@ static long BT_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long
 			uint32_t *pint32 = (uint32_t *)&ioc_buf[0];
 
 			BTMTK_INFO("%s: id[%x], value[0x%08x], desc[%s]", __func__, pint32[0], pint32[1], &ioc_buf[8]);
-#if 0
 			bthost_debug_save(pint32[0], pint32[1], (char *)&ioc_buf[8]);
-#endif
 		}
 		break;
 	case COMBO_IOCTL_BT_INTTRX:
@@ -505,6 +500,7 @@ static long BT_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long a
 static int BT_open(struct inode *inode, struct file *file)
 {
 	int32_t ret;
+	u8 retry = 0;
 
 	/* Turn on BT */
 	if (g_sbdev == NULL) {
@@ -517,18 +513,27 @@ static int BT_open(struct inode *inode, struct file *file)
 		return -1;
 	}
 
-	if (g_sbdev->hdev->open == NULL) {
-		BTMTK_ERR("g_sbdev->hdev->open == NULL");
-		return -1;
-	}
-
-	/* incase of rc with pwr_on_uds_work */
-	flush_work(&g_sbdev->pwr_on_uds_work);
-
 	__pm_stay_awake(bt_wakelock);
 	BTMTK_INFO("major %d minor %d (pid %d)", imajor(inode), iminor(inode), current->pid);
 
-	ret = g_sbdev->hdev->open(g_sbdev->hdev);
+	/* BT on in reboot conflict with pre-cal flow */
+	do {
+		ret = -EAGAIN;
+		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_DISCONNECT) {
+			BTMTK_WARN("%s: uart disconnected", __func__);
+			__pm_relax(bt_wakelock);
+			return -1;
+		}
+		/* wait pre-cal done */
+		if (g_sbdev->is_pre_cal_done)
+			ret = bt_open(g_sbdev->hdev);
+		if (ret) {
+			BTMTK_WARN_LIMITTED("%s: retry[%d] ret[%d] is_pre_cal_done[%d]"
+							, __func__, ret, retry, g_sbdev->is_pre_cal_done);
+			msleep(20);
+		}
+	} while ((ret == -EIO || ret == -EAGAIN) && retry++ < BT_OPEN_MAX_RETRY);
+
 	if (ret) {
 		BTMTK_ERR("BT turn on fail!");
 		__pm_relax(bt_wakelock);
@@ -540,9 +545,9 @@ static int BT_open(struct inode *inode, struct file *file)
 	bt_ftrace_flag = 1;
 	hw_err_retry = 0;
 	__pm_relax(bt_wakelock);
-#if 0 // Simfex
+
 	bthost_debug_init();
-#endif
+
 	BTMTK_INFO("BT turn on OK!");
 	return 0;
 }
@@ -568,20 +573,13 @@ static int BT_close(struct inode *inode, struct file *file)
 		return -1;
 	}
 
-	if (g_sbdev->hdev->close == NULL) {
-		BTMTK_ERR("%s: g_sbdev->hdev->close == NULL", __func__);
-		g_sbdev->fops_state = BTMTK_FOPS_STATE_CLOSED;
-		return -1;
-	}
 	__pm_stay_awake(bt_wakelock);
 	BTMTK_INFO("%s: major %d minor %d (pid %d)", __func__, imajor(inode), iminor(inode), current->pid);
 
-	ret = g_sbdev->hdev->close(g_sbdev->hdev);
+	ret = bt_close(g_sbdev->hdev);
 	__pm_relax(bt_wakelock);
 
-#if 0 // Simfex
 	bthost_debug_init();
-#endif
 
 	if (ret) {
 		BTMTK_ERR("BT turn off fail!");
@@ -616,11 +614,6 @@ int BT_init(void)
 
 	/* Initialize wake lock for I/O operation */
 	bt_wakelock = wakeup_source_register(NULL, "bt_drv_io");
-
-#if 0
-	g_btif_dev.state_change_cb[0] = fw_log_bt_state_cb;
-	g_btif_dev.state_change_cb[1] = bt_state_cb;
-#endif
 
 	/* Allocate char device */
 	alloc_err = register_chrdev_region(dev, BT_devs, BT_DRIVER_NAME);
@@ -677,11 +670,6 @@ void BT_exit(void)
 
 	cdev_del(&BT_cdev);
 	unregister_chrdev_region(dev, BT_devs);
-
-#if 0 // Simfex
-	g_btif_dev.state_change_cb[0] = NULL;
-	g_btif_dev.state_change_cb[1] = NULL;
-#endif
 
 	/* Destroy wake lock */
 	wakeup_source_unregister(bt_wakelock);

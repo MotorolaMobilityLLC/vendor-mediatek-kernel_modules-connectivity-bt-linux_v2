@@ -98,7 +98,7 @@ static const struct btmtk_cif_state g_cif_state[] = {
 	/* HIF_EVENT_STANDBY */
 	{BTMTK_STATE_STANDBY, BTMTK_STATE_STANDBY, BTMTK_STATE_ERR},
 	/* HIF_EVENT_SUBSYS_RESET */
-	{BTMTK_STATE_SUBSYS_RESET, BTMTK_STATE_WORKING, BTMTK_STATE_ERR},
+	{BTMTK_STATE_SUBSYS_RESET, BTMTK_STATE_SUBSYS_RESET, BTMTK_STATE_ERR},
 	/* HIF_EVENT_WHOLE_CHIP_RESET */
 	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_CLOSED, BTMTK_STATE_ERR},
 	/* HIF_EVENT_FW_DUMP */
@@ -157,12 +157,22 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc)
 	do_gettimeofday(&tv);
 	rtc_time_to_tm(tv.tv_sec, &utc->tm);
 	utc->usec = tv.tv_usec;
+	utc->sec = tv.tv_sec;
 #else
 	struct timespec64 ts;
+	unsigned long long kerneltime;
+
 
 	ktime_get_real_ts64(&ts);
 	rtc_time64_to_tm(ts.tv_sec, &utc->tm);
 	utc->usec = ts.tv_nsec/1000;
+	utc->sec = ts.tv_sec;
+
+	/* kernel time */
+	/* ktime_get_ts64 is not accurate */
+	kerneltime = sched_clock();
+	utc->ksec = kerneltime/1000000000;
+	utc->knsec = do_div(kerneltime, 1000000000)/1000;
 #endif
 	utc->tm.tm_year += 1900;
 	utc->tm.tm_mon += 1;
@@ -170,16 +180,26 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc)
 
 int32_t btmtk_intcmd_set_fw_log(uint8_t flag)
 {
+#if (USE_DEVICE_NODE == 1)
+	u8 fw_log_cmd[8] = { 0x01, 0x5D, 0xFC, 0x04, 0x00, 0x00, 0x02, 0x03 };
+	u8 evt[] = {0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00};
+#else
 	u8 fw_log_cmd[8] = { 0x01, 0x5D, 0xFC, 0x04, 0x02, 0x00, 0x02, 0x03 };
+#endif
 	int ret;
 
-	BTMTK_INFO("%s send flag[0x%02X]", __func__, flag);
+	BTMTK_INFO("%s log level[0x%02X]", __func__, flag);
 	fw_log_cmd[7] = flag;
 	ret = btmtk_main_send_cmd(g_sbdev,
+#if (USE_DEVICE_NODE == 1)
+			fw_log_cmd, sizeof(fw_log_cmd), evt, sizeof(evt),
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+#else
 			fw_log_cmd, 8, NULL, 0,
 			0, 0, BTMTK_TX_CMD_FROM_DRV);
+#endif
 	if (ret < 0)
-		BTMTK_ERR("%s faill to send flag[0x%02X]", __func__, flag);
+		BTMTK_ERR("%s faill to send log level[0x%02X]", __func__, flag);
 
 	return ret;
 }
@@ -192,10 +212,10 @@ void btmtk_get_UTC_time_str(char *ts_str)
 
 	memset(ts_str, 0, HCI_SNOOP_TS_STR_LEN);
 	(void)snprintf(ts_str, HCI_SNOOP_TS_STR_LEN,
-			"%04d%02d%02d-%02d%02d%02d.%06u",
+			"%04d%02d%02d-%02d%02d%02d.%06u/Kernel:%6lu.%06lu",
 			utc.tm.tm_year, utc.tm.tm_mon, utc.tm.tm_mday,
-			utc.tm.tm_hour, utc.tm.tm_min, utc.tm.tm_sec, utc.usec);
-
+			utc.tm.tm_hour+8, utc.tm.tm_min, utc.tm.tm_sec, utc.usec,
+			utc.ksec, utc.knsec);
 }
 
 /*get 1 byte only*/
@@ -323,7 +343,7 @@ void btmtk_free_setting_file(struct btmtk_dev *bdev)
 
 static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 {
-	BTMTK_INFO("%s begin", __func__);
+	BTMTK_DBG("%s begin", __func__);
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return;
@@ -351,7 +371,7 @@ static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.vendor_cmd, VENDOR_CMD_COUNT);
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.audio_cmd, 1);
 
-	BTMTK_INFO("%s end", __func__);
+	BTMTK_DBG("%s end", __func__);
 }
 
 static void btmtk_init_memory(struct btmtk_dev *bdev)
@@ -392,7 +412,7 @@ bool btmtk_assert_wake_lock_check(void)
 
 u8 btmtk_get_chip_state(struct btmtk_dev *bdev)
 {
-	u8 state = 0;
+	u8 state = BTMTK_STATE_INIT;
 
 	CHIP_STATE_MUTEX_LOCK();
 	if (bdev)
@@ -426,7 +446,7 @@ void btmtk_set_chip_state(struct btmtk_dev *bdev, u8 new_state)
 
 u8 btmtk_fops_get_state(struct btmtk_dev *bdev)
 {
-	u8 state = 0;
+	u8 state = BTMTK_FOPS_STATE_INIT;
 
 	FOPS_MUTEX_LOCK();
 	if (bdev)
@@ -765,6 +785,7 @@ void btmtk_hci_snoop_print_to_log(void)
 {
 	u8 counter, index, snoop_index;
 	char *snoop_str[HCI_SNOOP_TYPE_MAX] = {
+#if (USE_DEVICE_NODE == 0)
 		"Command from stack",
 		"Command to FW",
 		"Event to stack",
@@ -780,10 +801,30 @@ void btmtk_hci_snoop_print_to_log(void)
 		"TX ISO from stack",
 		"TX ISO to FW",
 		"RX ISO to stack",
-		"RX ISO From FW"};
+		"RX ISO From FW"
+#else
+		"Tx_CMD_from_Stack",
+		"Tx_from_Drv",		/* for sp uart */
+		"Rx_EVT_to_Stack",
+		"Rx_from_TTY",		/* for sp uart */
+		"ADV_EVT_to_Stack",
+		"ADV_EVT_from_FW",
+		"NOCP_EVT_to_Stack",
+		"NOCP_EVT_from_FW",
+		"Tx_ACL_from_Stack",
+		"Tx_ACL_to_FW",
+		"Rx_ACL_to_Stack",
+		"Rx_ACL_from_FW",
+		"Tx_ISO_from_Stack",
+		"Tx_to_TTY",		/* for sp uart */
+		"Rx_ISO_to_Stack",
+		"Rx_ISO_from_FW"
+#endif
+		};
+
 
 	for (snoop_index = 0; snoop_index < HCI_SNOOP_TYPE_MAX; snoop_index++) {
-		BTMTK_INFO("HCI %s Dump: Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data",
+		BTMTK_INFO("*** Dump %s *** (Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data)",
 			snoop_str[snoop_index]);
 		if (main_info.snoop[snoop_index].index >= (HCI_SNOOP_ENTRY_NUM - 1))
 			index = 0;
@@ -793,7 +834,8 @@ void btmtk_hci_snoop_print_to_log(void)
 			if (main_info.snoop[snoop_index].len[index] > 0)
 				BTMTK_INFO_RAW(main_info.snoop[snoop_index].buf[index],
 					main_info.snoop[snoop_index].len[index],
-					"time(%s)-act_len(%d)-len(%d):", main_info.snoop[snoop_index].timestamp[index],
+					"[%s] time(%s)-act_len(%d)-len(%d):", snoop_str[snoop_index],
+					main_info.snoop[snoop_index].timestamp[index],
 					main_info.snoop[snoop_index].actual_len[index],
 					main_info.snoop[snoop_index].len[index]);
 			index++;
@@ -906,6 +948,10 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 		BTMTK_ERR("%s, bdev is invalid", __func__);
 		return ERR_PTR(-EINVAL);
 	}
+	/* Check for error from previous call */
+	if (IS_ERR(skb))
+		skb = NULL;
+	/* BTMTK_DBG("%s, buffer[0]=0x%02X, count[%d], pkts_count[%d]", __func__, *buffer, count, pkts_count); */
 
 	while (size) {
 		int index, length;
@@ -913,7 +959,7 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 		if (!skb) {
 			/* ignore first byte as 0xFF (FW wakeup) & 0x00 (noise from uart) */
 			while (size > 1 && (*buf == 0xFF || *buf == 0x00)) {
-				BTMTK_DBG("%s, receive 0x%02X in pkt head, pkt_len[%d]", __func__, buf[0], size);
+				BTMTK_INFO("%s, receive 0x%02X in pkt head, pkt_len[%d]", __func__, buf[0], size);
 				buf++;
 				size--;
 			}
@@ -922,7 +968,7 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 				if (buf[0] == (&pkts[index])->type) {
 					skb = bt_skb_alloc(
 						(&pkts[index])->maxlen,
-						   GFP_ATOMIC);
+						   GFP_KERNEL);
 					if (!skb) {
 						BTMTK_ERR("%s alloc failed!",
 							__func__);
@@ -937,6 +983,11 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 
 			/* Check for invalid packet type */
 			if (!skb) {
+				if (*buf == 0xFF || *buf == 0x00) {
+					BTMTK_INFO("%s: skip 0x%02X pkt", __func__, *buf);
+					return NULL;
+				}
+
 				BTMTK_ERR("%s,skb is invalid, buffer[0] = 0x%02X!", __func__,
 					buf[0]);
 				if (main_info.hif_hook_chip.err_handler)
@@ -955,6 +1006,7 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 		if (!skb_tmp) {
 			BTMTK_ERR("%s, skb_put failed. Len = %d!", __func__, length);
 			kfree_skb(skb);
+			skb = NULL;
 			return ERR_PTR(-ENOMEM);
 		}
 		memcpy(skb_tmp, buf, length);
@@ -975,6 +1027,7 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 				main_info.hif_hook_chip.err_handler(hdev,
 						buf, size, buffer_dbg, size_dbg);
 			kfree_skb(skb);
+			skb = NULL;
 			return ERR_PTR(-EILSEQ);
 		}
 
@@ -993,11 +1046,12 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 				if (skb_tailroom(skb) < dlen) {
 					BTMTK_ERR("%s, maxlen[%d] skb_tailroom[%d] is not enough, dlen:%d!",
 						__func__, (&pkts[index])->maxlen, skb_tailroom(skb), dlen);
-					BTMTK_INFO_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
+					BTMTK_INFO_RAW(skb->data, skb->len, "%s, drop pkt len = [%d]:", __func__, skb->len);
 					if (main_info.hif_hook_chip.err_handler)
 						main_info.hif_hook_chip.err_handler(hdev,
 								buf, size, buffer_dbg, size_dbg);
 					kfree_skb(skb);
+					skb = NULL;
 					return ERR_PTR(-EMSGSIZE);
 				}
 				break;
@@ -1015,20 +1069,24 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 				if (skb_tailroom(skb) < dlen) {
 					BTMTK_ERR("%s, maxlen[%d] skb_tailroom[%d] is not enough, dlen:%d!",
 						__func__, (&pkts[index])->maxlen, skb_tailroom(skb), dlen);
+					BTMTK_INFO_RAW(skb->data, skb->len, "%s, drop pkt len[%d]:", __func__, skb->len);
 					if (main_info.hif_hook_chip.err_handler)
 						main_info.hif_hook_chip.err_handler(hdev,
 								buf, size, buffer_dbg, size_dbg);
 					kfree_skb(skb);
+					skb = NULL;
 					return ERR_PTR(-EMSGSIZE);
 				}
 				break;
 			default:
 				/* Unsupported variable length */
 				BTMTK_ERR("%s, Unsupported variable length!", __func__);
+				BTMTK_INFO_RAW(skb->data, skb->len, "%s, drop pkt len[%d]:", __func__, skb->len);
 				if (main_info.hif_hook_chip.err_handler)
 					main_info.hif_hook_chip.err_handler(hdev,
 							buf, size, buffer_dbg, size_dbg);
 				kfree_skb(skb);
+				skb = NULL;
 				return ERR_PTR(-EILSEQ);
 			}
 
@@ -1167,10 +1225,12 @@ int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count)
 		return -EINVAL;
 	}
 
+#if (USE_DEVICE_NODE == 0)
 	if (btmtk_data_length_check((u8 *)&data[1], count, (u8)data[0])) {
 		BTMTK_INFO("%s: length check fail,return", __func__);
 		return -1;
 	}
+#endif
 
 	while (sz_left > 0) {
 		/*  The serial data received from MT7622 BT controller is
@@ -1318,6 +1378,7 @@ int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb)
 	if (bdev == NULL || bdev->workqueue == NULL) {
 		BTMTK_ERR("%s, bdev or workqueue is invalid!", __func__);
 		kfree_skb(skb);
+		skb = NULL;
 		return -EINVAL;
 	}
 
@@ -1331,7 +1392,7 @@ int btmtk_recv_event(struct hci_dev *hdev, struct sk_buff *skb)
 	 * }
 	 */
 
-	BTMTK_DBG_RAW(skb->data, skb->len, "%s, recv evt(hci_recv_frame)", __func__);
+	//BTMTK_DBG_RAW(skb->data, skb->len, "%s, recv evt(hci_recv_frame)", __func__);
 
 	skb_queue_tail(&bdev->rx_q, skb);
 	queue_work(bdev->workqueue, &bdev->rx_work);
@@ -1363,6 +1424,7 @@ int btmtk_recv_iso(struct hci_dev *hdev, struct sk_buff *skb)
 	if (bdev == NULL || bdev->workqueue == NULL) {
 		BTMTK_ERR("%s, bdev or workqueue is invalid!", __func__);
 		kfree_skb(skb);
+		skb = NULL;
 		return -EINVAL;
 	}
 
@@ -1403,11 +1465,18 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 {
 	struct sk_buff *skb = NULL;
 	int ret = 0;
-	int state = 0;
+	int state = BTMTK_STATE_INIT;
+	u8 drv_own_retry = 10;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s, bdev is NULL", __func__);
+		ret = -EINVAL;
+		goto exit;
+	}
 
 	if (bdev == NULL || bdev->hdev == NULL ||
 		cmd == NULL || cmd_len <= 0) {
-		BTMTK_ERR("%s, invalid parameters!", __func__);
+		BTMTK_ERR("%s, invalid parameters! cmd_len[%d]", __func__, cmd_len);
 		ret = -EINVAL;
 		goto exit;
 	}
@@ -1425,7 +1494,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		goto exit;
 	}
 
-	skb = alloc_skb(cmd_len + BT_SKB_RESERVE, GFP_ATOMIC);
+	skb = alloc_skb(cmd_len + BT_SKB_RESERVE, GFP_KERNEL);
 	if (skb == NULL) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		ret = -ENOMEM;
@@ -1445,10 +1514,12 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	 * other HIF don't use this method to recv wmt event
 	 */
 
+	do {
 	ret = main_info.hif_hook.send_and_recv(bdev,
 			skb,
 			event, event_len,
 			delay, retry, pkt_type);
+	} while (ret == -EAGAIN && drv_own_retry--);
 
 	if (ret < 0) {
 		BTMTK_ERR("%s send_and_recv failed!!", __func__);
@@ -1456,8 +1527,10 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		 * but wait related event failed, in this case, we don't need to free skb here,
 		 * otherwise, it will be double free.
 		 */
-		if (ret != -ERRNUM && skb)
+		if (ret != -ERRNUM && skb) {
 			kfree_skb(skb);
+			skb = NULL;
+		}
 	}
 
 exit:
@@ -1470,13 +1543,15 @@ int btmtk_load_code_from_bin(u8 **image, char *bin_name, struct device *dev,
 {
 	const struct firmware *fw_entry = NULL;
 	int err = 0;
+	unsigned long start_time = 0, time_diff = 0;
 
 	if (!bin_name) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
 		return -1;
 	}
-	BTMTK_INFO("%s: load %s", __func__, bin_name);
+	BTMTK_DBG("%s: load %s", __func__, bin_name);
 
+	start_time = jiffies;
 	do {
 		err = request_firmware(&fw_entry, bin_name, dev);
 		if (err >= 0) {
@@ -1492,12 +1567,18 @@ int btmtk_load_code_from_bin(u8 **image, char *bin_name, struct device *dev,
 		msleep(100);
 	} while (retry-- > 0);
 
+#if (USE_DEVICE_NODE == 0)
 	if (fw_entry->size > FW_PATCH_SIZE_MAX) {
 		BTMTK_ERR("%s: fw_entry->size = %ld is too large!!!", __func__, fw_entry->size);
 		*code_len = 0;
 		release_firmware(fw_entry);
 		return -1;
 	}
+#endif
+
+	time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
+	if (time_diff > TIME_BOUND_OF_REQ_FW)
+		BTMTK_WARN("%s: request_firmware takes %lu ms", __func__, time_diff);
 
 	*image = vmalloc(ALIGN_4(fw_entry->size));
 	if (*image == NULL) {
@@ -1600,22 +1681,23 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwb
 
 	globalDesrc = (struct _Global_Descr *)(fwbuf + FW_ROM_PATCH_HEADER_SIZE);
 
-	BTMTK_INFO("=============== Patch Info ==============");
+	BTMTK_DBG("[btmtk] =============== Patch Info ==============");
 
+	/* if not found version still need to do memset */
+	memset(main_info.fw_version_str, 0, FW_VERSION_BUF_SIZE);
 	if (fw_version) {
-		memset(main_info.fw_version_str, 0, FW_VERSION_BUF_SIZE);
 		fw_version_len = MIN(((u32)(fwbuf + fwbuf_len - fw_version)), FW_VERSION_BUF_SIZE);
 		memcpy(main_info.fw_version_str, fw_version, fw_version_len);
-		BTMTK_INFO("fw_version = %s", main_info.fw_version_str);
+		BTMTK_INFO("[btmtk] fw_version = %s", main_info.fw_version_str);
 	}
 
 	if (patchHdr) {
-		BTMTK_INFO("Built Time = %s", patchHdr->ucDateTime);
-		BTMTK_INFO("Hw Ver = 0x%04x", patchHdr->u2HwVer);
-		BTMTK_INFO("Sw Ver = 0x%04x", patchHdr->u2SwVer);
-		BTMTK_INFO("Magic Number = 0x%08x", patchHdr->u4MagicNum);
+		BTMTK_DBG("[btmtk] Built Time = %s", patchHdr->ucDateTime);
+		BTMTK_DBG("[btmtk] Hw Ver = 0x%04x", patchHdr->u2HwVer);
+		BTMTK_DBG("[btmtk] Sw Ver = 0x%04x", patchHdr->u2SwVer);
+		BTMTK_DBG("[btmtk] Magic Number = 0x%08x", patchHdr->u4MagicNum);
 
-		BTMTK_INFO("Platform = %c%c%c%c",
+		BTMTK_DBG("[btmtk] Platform = %c%c%c%c",
 				patchHdr->ucPlatform[0],
 				patchHdr->ucPlatform[1],
 				patchHdr->ucPlatform[2],
@@ -1624,11 +1706,11 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwb
 		BTMTK_WARN("%s, patchHdr is NULL!", __func__);
 
 	if (globalDesrc) {
-		BTMTK_INFO("Patch Ver = 0x%08x", globalDesrc->u4PatchVer);
-		BTMTK_INFO("Section num = 0x%08x", globalDesrc->u4SectionNum);
+		BTMTK_DBG("[btmtk] Patch Ver = 0x%08x", globalDesrc->u4PatchVer);
+		BTMTK_DBG("[btmtk] Section num = 0x%08x", globalDesrc->u4SectionNum);
 	} else
 		BTMTK_WARN("%s, globalDesrc is NULL!", __func__);
-	BTMTK_INFO("=========================================");
+	BTMTK_DBG("[btmtk] =========================================");
 }
 
 static void btmtk_print_wifi_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
@@ -1720,7 +1802,7 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 		} else
 			memcpy(&cmd[PATCH_HEADER_SIZE], (u8 *)(sectionMap->u4SecSpec), SEC_MAP_NEED_SEND_SIZE);
 
-		BTMTK_INFO_RAW(cmd, cmd_len, "%s: CMD: len[%d]", __func__, cmd_len);
+		BTMTK_DBG_RAW(cmd, cmd_len, "%s: CMD: len[%d]", __func__, cmd_len);
 
 		ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
 				event, event_len, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
@@ -1787,6 +1869,7 @@ static int btmtk_load_fw_patch_using_wmt_cmd(struct btmtk_dev *bdev,
 
 			/* prepare WMT header */
 			image[5] = 0x01;
+			image[6] = 0x01;
 			image[7] = (sent_len + 1) & 0xFF;
 			image[8] = ((sent_len + 1) >> 8) & 0xFF;
 
@@ -1905,7 +1988,7 @@ static int btmtk_parsing_fw_rom_patch(struct btmtk_dev *bdev,
 	}
 
 	bdev->sectionMap_table = kmalloc_array(section_num,
-			sizeof(struct _Section_Map), GFP_ATOMIC);
+			sizeof(struct _Section_Map), GFP_KERNEL);
 	if (!bdev->sectionMap_table) {
 		BTMTK_ERR("%s: alloc memory fail (bdev->sectionMap_table)", __func__);
 		ret = -1;
@@ -1972,7 +2055,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 	 * flag 0 for bin_index u8
 	 * flag 1 for bin_type u32
 	 */
-	BTMTK_INFO("%s enter : mode %d expected bin_info = 0x%08x", __func__, mode, binInfo);
+	BTMTK_DBG("%s enter : mode %d expected bin_info = 0x%08x", __func__, mode, binInfo);
 
 	if (fwbuf == NULL) {
 		BTMTK_WARN("%s, fwbuf is NULL!", __func__);
@@ -1995,12 +2078,12 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 		temp_type = le2cpu32(sectionMap->bin_info_spec.u4SecType);
 		if (mode == DOWNLOAD_BY_TYPE) {
 			if (temp_type == binInfo) {
-				BTMTK_INFO("%s, download by bin type", __func__);
+				BTMTK_DBG("%s, download by bin type", __func__);
 				break;
 			}
 		} else {
 			if (temp_index == (binInfo & 0xFF)) {
-				BTMTK_INFO("%s, download by bin index", __func__);
+				BTMTK_DBG("%s, download by bin index", __func__);
 				break;
 			}
 		}
@@ -2012,7 +2095,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 		goto exit;
 	}
 
-	pos = kmalloc(UPLOAD_PATCH_UNIT, GFP_ATOMIC);
+	pos = kmalloc(UPLOAD_PATCH_UNIT, GFP_KERNEL);
 	if (!pos) {
 		BTMTK_ERR("%s: alloc memory failed", __func__);
 		ret = -1;
@@ -2035,15 +2118,15 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 		dma_flag = PATCH_DOWNLOAD_USING_WMT;
 	}
 
-	BTMTK_INFO("%s: section_count = %d, section bin_type = 0x%08x, bin_index = %d",
-			__func__, loop_count, temp_type, temp_index);
+	BTMTK_INFO("%s:bin_type[0x%08x] mode[%d] bin_info[0x%08x] section_index[%d] bin_index[%d]",
+			__func__, temp_type, mode, binInfo, loop_count, temp_index);
 
 	if (dl_size > 0) {
 		retry = 20;
 		do {
 			patch_status = btmtk_send_wmt_download_cmd(bdev, pos, 0,
 					event, LD_PATCH_EVT_LEN - 1, sectionMap, 0, dma_flag, BT_DOWNLOAD);
-			BTMTK_INFO("%s: patch_status %d", __func__, patch_status);
+			BTMTK_DBG("%s: patch_status %d", __func__, patch_status);
 
 			if (patch_status > PATCH_READY || patch_status == PATCH_ERR) {
 				BTMTK_ERR("%s: patch_status error", __func__);
@@ -2053,6 +2136,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 				BTMTK_INFO("%s: no need to load rom patch section%d", __func__, loop_count);
 				goto err;
 			} else if (patch_status == PATCH_IS_DOWNLOAD_BY_OTHER) {
+				BTMTK_INFO("%s: PATCH_IS_DOWNLOAD_BY_OTHER", __func__);
 				msleep(100);
 				retry--;
 			} else if (patch_status == PATCH_NEED_DOWNLOAD) {
@@ -2067,7 +2151,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 		}
 
 		if (dma_flag == PATCH_DOWNLOAD_USING_DMA && main_info.hif_hook.dl_dma) {
-			BTMTK_INFO("%s: btmtk_load_fw_patch_using_dma!", __func__);
+			BTMTK_DBG("%s: btmtk_load_fw_patch_using_dma!", __func__);
 			/* using DMA to download fw patch*/
 			ret = main_info.hif_hook.dl_dma(bdev,
 				pos, fwbuf,
@@ -2304,7 +2388,7 @@ int btmtk_dynamic_load_rom_patch(struct btmtk_dev *bdev, u32 binInfo)
 #if (USE_DEVICE_NODE == 0)
 							"BT_RAM_CODE_MT6639_2_1_hdr.bin");
 #else
-							"BT_RAM_CODE_MT6639_1_1_hdr.bin");
+							"BT_RAM_CODE_MT6639_%s_1_hdr.bin", bdev->flavor_bin);
 							//"BT_RAM_CODE_MT6639_1_1_nonenc_hdr.bin");
 #endif
 	else if (is_mt7925(bdev->chip_id))
@@ -2349,8 +2433,6 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int patch_flag)
 			0x00000090, 0x00010000};
 	//u32 wf_bin_type[] = {0x00000100};
 
-	BTMTK_INFO("%s, patch_flag = %d!", __func__, patch_flag);
-
 	if (!bdev) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
 		return -EINVAL;
@@ -2383,13 +2465,13 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int patch_flag)
 					"ZB_RAM_CODE_MT%04x_1_%x_hdr.bin",
 					bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
 	} else if (patch_flag == BT_DOWNLOAD) {
-		BTMTK_INFO("%s: BT_DOWNLOAD %u", __func__, bdev->chip_id);
+		BTMTK_DBG("%s: BT_DOWNLOAD %u", __func__, bdev->chip_id);
 		if (is_mt6639(bdev->chip_id) || is_mt66xx(bdev->chip_id))
 			(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 #if (USE_DEVICE_NODE == 0)
 					"BT_RAM_CODE_MT6639_2_1_hdr.bin");
 #else
-					"BT_RAM_CODE_MT6639_1_1_hdr.bin");
+					"BT_RAM_CODE_MT6639_%s_1_hdr.bin", bdev->flavor_bin);
 					//"BT_RAM_CODE_MT6639_1_1_nonenc_hdr.bin");
 #endif
 		else if (is_mt7925(bdev->chip_id))
@@ -2398,8 +2480,8 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int patch_flag)
 	} else
 		BTMTK_ERR("%s: unknow patch_flag", __func__);
 
-	BTMTK_INFO("%s: rom patch file name is %s, bt_cfg_file_name is %s", __func__,
-			bdev->rom_patch_bin_file_name, bdev->bt_cfg_file_name);
+	BTMTK_INFO("%s: rom patch[%s], bt_cfg_file_name[%s] patch_flag[%d]", __func__,
+			bdev->rom_patch_bin_file_name, bdev->bt_cfg_file_name, patch_flag);
 
 	btmtk_load_code_from_bin(&rom_patch, bdev->rom_patch_bin_file_name, NULL,
 							&rom_patch_len, 10);
@@ -2529,11 +2611,16 @@ struct btmtk_dev *btmtk_get_dev(void)
 		 * Identified chip_id from cap_init.
 		 */
 		if (g_bdev[i]->hdev == NULL) {
+#if (USE_DEVICE_NODE == 1)
+			/* only use g_bdev[0] in SP project */
+			i = 0;
+			g_bdev[i]->dongle_index = i;
+#else
 			if (i == 0)
 				g_bdev[i]->dongle_index = i;
 			else
 				g_bdev[i]->dongle_index = g_bdev[i - 1]->dongle_index + 1;
-
+#endif
 			/* reset pin initial value need to be -1, used to judge after
 			 * disconnected before probe, can't do chip reset
 			 */
@@ -2570,6 +2657,7 @@ void btmtk_release_dev(struct btmtk_dev *bdev)
 				 * disconnected before probe, can't do chip reset
 				 */
 				bdev->bt_cfg.dongle_reset_gpio_pin = -1;
+				tmp_bdev = NULL;
 				break;
 			}
 		}
@@ -2582,7 +2670,7 @@ struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev)
 	struct btmtk_dev *bdev = NULL;
 	size_t len = sizeof(*bdev);
 
-	BTMTK_INFO("%s", __func__);
+	BTMTK_DBG("%s", __func__);
 
 	if (dev != NULL)
 		bdev = devm_kzalloc(dev, len, GFP_KERNEL);
@@ -2591,9 +2679,9 @@ struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev)
 
 	if (!bdev)
 		return NULL;
-
+#if (USE_DEVICE_NODE == 0)
 	memset(bdev, 0, sizeof(struct btmtk_dev));
-
+#endif
 	btmtk_set_chip_state(bdev, BTMTK_STATE_INIT);
 
 	return bdev;
@@ -3272,8 +3360,12 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 
 #if (USE_DEVICE_NODE == 1)
 	bdev->chip_id = 0x6635;
+
 	ret = btmtk_cif_chip_register(bdev);
-	if (ret < 0) {
+	if (ret == -ENOENT) {
+		BTMTK_ERR("btmtk_cif_chip_register failed: no such file");
+		goto exit;
+	} else	if (ret < 0) {
 		BTMTK_ERR("btmtk_cif_chip_register failed");
 		ret = -EIO;
 		goto exit;
@@ -3488,7 +3580,7 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 		return ret;
 	}
 
-	BTMTK_INFO("%s", __func__);
+	BTMTK_DBG("%s", __func__);
 
 	if (bdev->bt_cfg.support_auto_picus == true &&
 		(bdev->bt_cfg.support_picus_to_host == true || atomic_read(&bmain_info->fwlog_ref_cnt) != 0)) {
@@ -3500,6 +3592,11 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 #endif
 		btmtk_update_bt_status(0);
 	}
+
+#if (USE_DEVICE_NODE == 1)
+	if (bmain_info->find_my_phone_mode)
+		btmtk_find_my_phone_cmd();
+#endif
 
 	ret = btmtk_send_wmt_power_off_cmd(bdev);
 	if (bdev->power_state != BTMTK_DONGLE_STATE_POWER_OFF) {
@@ -3516,6 +3613,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	int ret = 0;
 	int state;
 	struct sk_buff *skb = NULL;
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	struct data_struct cmd = {0};
 
 	if (!bdev) {
@@ -3524,19 +3622,24 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 		goto exit;
 	}
 
+	fstate = btmtk_fops_get_state(bdev);
 	state = btmtk_get_chip_state(bdev);
+	/* use fop to judge bt off, not use chip state because chip state keep closed until wmt power on cmd success */
 	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SUSPEND ||
-		state == BTMTK_STATE_SEND_ASSERT || state == BTMTK_STATE_CLOSED) {
-		BTMTK_WARN("%s: FW dumping already or in suspend state don't send assert, state = %d!!!",
-			__func__, state);
+		state == BTMTK_STATE_SEND_ASSERT || fstate == BTMTK_FOPS_STATE_CLOSED) {
+		BTMTK_WARN("%s: chip_state(%d) fop_state(%d) don't send assert",
+			__func__, state, fstate);
 		return ret;
 	}
 
-	BTMTK_INFO("%s: enter", __func__);
-
+	BTMTK_INFO("%s: send assert cmd", __func__);
+#if (USE_DEVICE_NODE == 0)
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, FD5B_ASSERT_CMD, cmd);
+#else
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, RHW_ASSERT_CMD, cmd);
+#endif
 
-	skb = alloc_skb(cmd.len + BT_SKB_RESERVE, GFP_ATOMIC);
+	skb = alloc_skb(cmd.len + BT_SKB_RESERVE, GFP_KERNEL);
 	if (!skb) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		goto exit;
@@ -3554,6 +3657,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
 		kfree_skb(skb);
+		skb = NULL;
 		btmtk_reset_trigger(bdev);
 	} else {
 		btmtk_reset_timer_update(bdev);
@@ -4005,11 +4109,15 @@ static int bt_flush(struct hci_dev *hdev)
 		return 0;
 }
 
+#if (USE_DEVICE_NODE == 0)
 static int bt_close(struct hci_dev *hdev)
+#else
+int bt_close(struct hci_dev *hdev)
+#endif
 {
 	int ret = -1;
-	int state = 0;
-	unsigned char fstate = 0;
+	int state = BTMTK_STATE_INIT;
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	struct btmtk_dev *bdev = NULL;
 
 	if (!hdev) {
@@ -4021,6 +4129,13 @@ static int bt_close(struct hci_dev *hdev)
 	if (!bdev) {
 		BTMTK_ERR("%s: bdev is invalid!", __func__);
 		return ret;
+	}
+
+	if(bdev->is_whole_chip_reset) {
+		BTMTK_WARN("%s: is_whole_chip_reset, fstate(%d)", __func__, fstate);
+		if (main_info.hif_hook.cif_mutex_lock)
+			main_info.hif_hook.cif_mutex_lock(bdev);
+		goto unlock;
 	}
 
 	fstate = btmtk_fops_get_state(bdev);
@@ -4035,12 +4150,6 @@ static int bt_close(struct hci_dev *hdev)
 #if (USE_DEVICE_NODE == 1)
 	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
 			|| state == BTMTK_STATE_SUBSYS_RESET) {
-		BTMTK_WARN("%s: wait dump_comp , can't close yet state[%d]", __func__, state);
-		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
-			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
-			connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump not complete");
-			btmtk_sp_coredump_end();
-		}
 		if (main_info.hif_hook.cif_mutex_lock)
 			main_info.hif_hook.cif_mutex_lock(bdev);
 		goto unlock;
@@ -4054,6 +4163,7 @@ static int bt_close(struct hci_dev *hdev)
 		 * It must return with this,
 		 * otherwise the below cif_mutex_lock will cause deadlock
 		 */
+
 		BTMTK_WARN("%s: not in working state and standby state(%d).", __func__, state);
 		goto exit;
 	}
@@ -4094,18 +4204,16 @@ static int bt_close(struct hci_dev *hdev)
 	flush_work(&bdev->rx_work);
 	flush_work(&bdev->dynamic_fwdl_work);
 
-	/* Drop queues */
-	skb_queue_purge(&bdev->rx_q);
-	if (!IS_ERR_OR_NULL(bdev->rx_skb))
-		kfree_skb(bdev->rx_skb);
-	bdev->rx_skb = NULL;
-
 unlock:
-	main_info.hif_hook.close(hdev);
+	fstate = btmtk_fops_get_state(bdev);
+	if (fstate == BTMTK_FOPS_STATE_CLOSED)
+		BTMTK_WARN("%s: fops is already close", __func__);
+	else
+		main_info.hif_hook.close(hdev);
+
 	if (main_info.hif_hook.cif_mutex_unlock)
 		main_info.hif_hook.cif_mutex_unlock(bdev);
 exit:
-	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
 #if (USE_DEVICE_NODE == 1)
 	/* avoid reset start at new bt on */
 	btmtk_reset_timer_del(bdev);
@@ -4115,20 +4223,31 @@ exit:
 		btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
 
 #endif
+	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
 
 err:
 	main_info.reset_stack_flag = HW_ERR_NONE;
 	bdev->get_hci_reset = 0;
 
-	BTMTK_INFO("%s: state[%d], reset_stack_flag[%d]", __func__, state, main_info.reset_stack_flag);
+	/* clean rx queues */
+	skb_queue_purge(&bdev->rx_q);
+	if (!IS_ERR_OR_NULL(bdev->rx_skb))
+		kfree_skb(bdev->rx_skb);
+	bdev->rx_skb = NULL;
+
+	BTMTK_INFO("%s end state[%d], reset_stack_flag[%d]", __func__, state, main_info.reset_stack_flag);
 	return 0;
 }
 
+#if (USE_DEVICE_NODE == 0)
+static int bt_open(struct hci_dev *hdev)
+#else
 int bt_open(struct hci_dev *hdev)
+#endif
 {
-	int ret = 0;
-	int state = 0;
-	unsigned char fstate = 0;
+	int ret = -1;
+	int state = BTMTK_STATE_INIT;
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	struct btmtk_dev *bdev = NULL;
 	void (*rlm_get_alpha2)(char *);
 	const char *wifi_func_name = "rlm_get_alpha2";
@@ -4160,11 +4279,34 @@ int bt_open(struct hci_dev *hdev)
 		return -EAGAIN;
 	}
 
+	/* mutex with bt close and disconnect */
+	if (main_info.hif_hook.cif_mutex_lock)
+		main_info.hif_hook.cif_mutex_lock(bdev);
+
+	fstate = btmtk_fops_get_state(bdev);
+	if (fstate == BTMTK_FOPS_STATE_OPENED) {
+		BTMTK_WARN("%s: fops opened!", __func__);
+		ret = -EIO;
+		goto unlock;
+	}
+
+	if ((fstate == BTMTK_FOPS_STATE_CLOSING) ||
+		(fstate == BTMTK_FOPS_STATE_OPENING)) {
+		BTMTK_WARN("%s: fops open/close is on-going !", __func__);
+		ret = -EAGAIN;
+		goto unlock;
+	}
+
 	state = btmtk_get_chip_state(bdev);
 	if (state == BTMTK_STATE_INIT || state == BTMTK_STATE_DISCONNECT
+#if (USE_DEVICE_NODE == 0)
 		|| state == BTMTK_STATE_PROBE) {
+#else
+	) {
+#endif
 		BTMTK_WARN("%s: chip_state[%d] is init or disconnect!", __func__, state);
-		return -EAGAIN;
+		ret = -EAGAIN;
+		goto unlock;
 	}
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENING);
@@ -4184,7 +4326,7 @@ int bt_open(struct hci_dev *hdev)
 		goto failed;
 	}
 
-	BTMTK_INFO("%s state[%d], fstate[%d]", __func__, state, fstate);
+	BTMTK_DBG("%s state[%d], fstate[%d]", __func__, state, fstate);
 
 	ret = main_info.hif_hook.open(hdev);
 	if (ret < 0) {
@@ -4192,6 +4334,7 @@ int bt_open(struct hci_dev *hdev)
 		goto failed;
 	}
 
+#if (USE_DEVICE_NODE == 0)
 	if (main_info.hif_hook_chip.bt_open_handler) {
 		ret = main_info.hif_hook_chip.bt_open_handler(bdev);
 		if (ret < 0) {
@@ -4199,6 +4342,7 @@ int bt_open(struct hci_dev *hdev)
 			goto failed;
 		}
 	}
+#endif
 
 #if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
 	/* Don't send init cmd for DVT
@@ -4231,6 +4375,7 @@ int bt_open(struct hci_dev *hdev)
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENED);
 	main_info.reset_stack_flag = HW_ERR_NONE;
+	bdev->on_fail_count = 0;
 
 	if (bdev->bt_cfg.support_bt_single_sku) {
 		rlm_get_alpha2 = (void *)btmtk_kallsyms_lookup_name(wifi_func_name);
@@ -4253,33 +4398,38 @@ int bt_open(struct hci_dev *hdev)
 	}
 
 	DUMP_TIME_STAMP("open_end");
-	return 0;
+	ret = 0;
+	goto unlock;
 
 failed:
 #if (USE_DEVICE_NODE == 1)
-
-	state = btmtk_get_chip_state(bdev);
-
-	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
-			|| state == BTMTK_STATE_SUBSYS_RESET) {
-		BTMTK_WARN("%s: wait dump_comp, can't close yet state[%d]", __func__, state);
-		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
-			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
-			connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump fail");
-			btmtk_sp_coredump_end();
-
-		}
+	if (ret != CONNV3_ERR_RST_ONGOING)
+		main_info.hif_hook.close(hdev);
+	else {
+		BTMTK_WARN("%s: whole chip reset going, not do close when bt on fail", __func__);
+		ret = -EAGAIN;
 	}
-
-	main_info.hif_hook.close(hdev);
 	state = btmtk_get_chip_state(bdev);
 	/* if state is disconnect means uart_launcher is disconnected, not set to close state */
 	if (state != BTMTK_STATE_DISCONNECT)
 		btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
 
+	if (++bdev->on_fail_count > BTMTK_MAX_SUBSYS_RESET_COUNT && main_info.hif_hook.whole_reset) {
+		memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
+		strncpy(bdev->assert_reason, "[BT_DRV assert] on fail more than 3 times",
+							 strlen("[BT_DRV assert] on fail more than 3 times") + 1);
+		BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+		bdev->on_fail_count = 0;
+		main_info.hif_hook.whole_reset(bdev);
+	}
 #endif
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
+	main_info.reset_stack_flag = HW_ERR_NONE;
+
+unlock:
+	if (main_info.hif_hook.cif_mutex_unlock)
+		main_info.hif_hook.cif_mutex_unlock(bdev);
 
 	return ret;
 }
@@ -4299,11 +4449,17 @@ static int bt_setup(struct hci_dev *hdev)
 	return 0;
 }
 
+#if (USE_DEVICE_NODE == 0)
 static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
+#else
+int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
+#endif
 {
 	int ret = 0;
 	int state = 0;
 	unsigned char fstate = 0;
+	/* parsing commands */
+	u8 fw_coredump_cmd[FW_COREDUMP_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
 	u8 fw_coredump_flag = 0;
 	struct btmtk_dev *bdev = NULL;
 	unsigned char *skb_tmp = NULL;
@@ -4373,9 +4529,29 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			BTMTK_ERR("%s btmtk_set_audio_setting failed!!", __func__);
 			goto exit;
 		}
+		if (hci_skb_pkt_type(skb) == HCI_COMMAND_PKT) {
+			if (skb->len == FW_COREDUMP_CMD_LEN &&
+				!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
+				BTMTK_WARN("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
+				fw_coredump_flag = 1;
+				btmtk_reset_timer_update(bdev);
+				btmtk_hci_snoop_print_to_log();
+				if (bdev->assert_reason[0] == '\0') {
+					memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
+					strncpy(bdev->assert_reason, "[BT_DRV assert] host trigger",
+							strlen("[BT_DRV assert] host trigger") + 1);
+					BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+				}
+
+				if(main_info.hif_hook.trigger_assert) {
+					main_info.hif_hook.trigger_assert(g_sbdev);
+					goto exit;
+				}
+			}
+		}
 	}
 
-	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d ", __func__, skb->len);
+	//BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d ", __func__, skb->len);
 	ret = main_info.hif_hook.send_cmd(bdev, skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST);
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
@@ -4455,7 +4631,7 @@ static void btmtk_rx_work(struct work_struct *work)
 	int err = 0;
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, rx_work);
 	struct sk_buff *skb;
-	unsigned char fstate = 0;
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 
 	while ((skb = skb_dequeue(&bdev->rx_q))) {
 		if (main_info.hif_hook_chip.dispatch_fwlog) {
@@ -4489,9 +4665,10 @@ static void btmtk_rx_work(struct work_struct *work)
 				 * rx_work thread, so here we create a new thread for dynamic fwdl.
 				 */
 				schedule_work(&bdev->dynamic_fwdl_work);
-				BTMTK_DBG_RAW(skb->data, skb->len, "%s: Get dynamic DL EVENT- ", __func__);
+				BTMTK_INFO_RAW(skb->data, skb->len, "%s: Get dynamic DL EVENT- ", __func__);
 				/* Drop by driver, don't send to stack */
 				kfree_skb(skb);
+				skb = NULL;
 				continue;
 			}
 
@@ -4499,6 +4676,7 @@ static void btmtk_rx_work(struct work_struct *work)
 				BTMTK_DBG("%s Drop by driver, don't send to stack", __func__);
 				/* Drop by driver, don't send to stack */
 				kfree_skb(skb);
+				skb = NULL;
 				continue;
 			}
 		} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
@@ -4531,9 +4709,12 @@ static void btmtk_rx_work(struct work_struct *work)
 		}
 
 		fstate = btmtk_fops_get_state(bdev);
-		if (fstate != BTMTK_FOPS_STATE_OPENED) {
+		/* is_whole_chip_reset need to send hw err event after bt close */
+		if (fstate != BTMTK_FOPS_STATE_OPENED && !bdev->is_whole_chip_reset) {
 			/* BT close case, drop by driver, don't send to stack */
+			BTMTK_WARN("%s Drop by driver, fops(%d) state is not opened", __func__, fstate);
 			kfree_skb(skb);
+			skb = NULL;
 			continue;
 		}
 
@@ -4547,14 +4728,14 @@ static void btmtk_rx_work(struct work_struct *work)
 		if (err < 0) {
 			if (err != -ENXIO)
 				BTMTK_ERR("%s btmtk_rx_work failed, err = %d", __func__, err);
-			return;
+			continue;
 		}
 	}
 }
 
 void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 {
-	unsigned char fstate = BTMTK_FOPS_STATE_UNKNOWN;
+	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 
 	if (!bdev)
 		return;
@@ -4567,6 +4748,7 @@ void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 		/* Drop queues */
 		skb_queue_purge(&bdev->rx_q);
 	}
+#if (USE_DEVICE_NODE == 0)
 	if (bdev->workqueue) {
 		destroy_workqueue(bdev->workqueue);
 		bdev->workqueue = NULL;
@@ -4576,6 +4758,7 @@ void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 		hci_free_dev(bdev->hdev);
 		bdev->hdev = NULL;
 	}
+#endif
 
 	fstate = btmtk_fops_get_state(bdev);
 	if (fstate == BTMTK_FOPS_STATE_OPENED || fstate == BTMTK_FOPS_STATE_CLOSING) {
@@ -4598,6 +4781,17 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 		err = -EINVAL;
 		goto end;
 	}
+
+#if (USE_DEVICE_NODE == 1)
+	/*
+	 * delay free to here instead of unitialize for phone in case
+	 * of uart_launcher crash or force terminate, and driver function
+	 * is still running in
+	 * hdev pointer
+	 */
+	if (bdev->hdev)
+		hci_free_dev(bdev->hdev);
+#endif
 
 	BTMTK_INFO("%s", __func__);
 	/* Add hci device */
@@ -4633,8 +4827,11 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 	INIT_WORK(&bdev->pwr_on_uds_work, btmtk_pwr_on_uds_work);
 #endif
 	skb_queue_head_init(&bdev->rx_q);
-	bdev->workqueue = alloc_workqueue("BTMTK_RX_WQ", WQ_HIGHPRI | WQ_UNBOUND |
-					  WQ_MEM_RECLAIM, 1);
+	if(bdev->workqueue == NULL) {
+		bdev->workqueue = alloc_workqueue("BTMTK_RX_WQ", WQ_HIGHPRI | WQ_UNBOUND |
+							WQ_MEM_RECLAIM, 1);
+	} else
+		BTMTK_INFO("%s: bdev->workqueue exist", __func__);
 	if (!bdev->workqueue) {
 		BTMTK_ERR("%s, bdev->workqueue is NULL!", __func__);
 		err = -ENOMEM;
@@ -4642,8 +4839,9 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 	}
 
 	bdev->get_hci_reset = 0;
+	bdev->on_fail_count = 0;
 
-	BTMTK_INFO("%s done", __func__);
+	BTMTK_DBG("%s done", __func__);
 	return 0;
 
 err0:
@@ -4755,7 +4953,7 @@ static int btmtk_main_allocate_memory(struct btmtk_dev *bdev)
 			goto err0;
 		}
 	}
-	BTMTK_INFO("%s Done", __func__);
+	BTMTK_DBG("%s Done", __func__);
 	return 0;
 
 err0:
@@ -4792,9 +4990,10 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 {
 	int err = 0;
 
+#if (USE_DEVICE_NODE == 0)
 	btmtk_init_node();
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_INIT);
-
+#endif
 	btmtk_reset_timer_add(bdev);
 
 	err = btmtk_main_allocate_memory(bdev);
@@ -4858,6 +5057,7 @@ end:
 
 void btmtk_main_cif_uninitialize(struct btmtk_dev *bdev, int hci_bus)
 {
+	BTMTK_DBG("%s start", __func__);
 	btmtk_init_memory(bdev);
 	btmtk_free_setting_file(bdev);
 	btmtk_free_hci_device(bdev, hci_bus);
@@ -5007,7 +5207,7 @@ static int main_init(void)
 {
 	int i = 0;
 
-	BTMTK_INFO("%s", __func__);
+	BTMTK_DBG("%s", __func__);
 
 	/* Check if user changes default minimum supported intf count */
 	if (btmtk_intf_num < BT_MCU_MINIMUM_INTERFACE_NUM) {
@@ -5015,9 +5215,9 @@ static int main_init(void)
 		BTMTK_WARN("%s minimum interface is %d", __func__, btmtk_intf_num);
 	}
 
-	BTMTK_INFO("%s supported intf count <%d>", __func__, btmtk_intf_num);
+	BTMTK_DBG("%s supported intf count <%d>", __func__, btmtk_intf_num);
 
-	BTMTK_INFO("%s: Register reboot_notifier callback success.", __func__);
+	BTMTK_DBG("%s: Register reboot_notifier callback success.", __func__);
 #if (USE_DEVICE_NODE == 0)
 	/* Is it necessary? bt_close will be called by reboot. */
 	register_reboot_notifier(&btmtk_reboot_notifier);
@@ -5118,7 +5318,11 @@ int __init main_driver_init(void)
 	if (main_info.hif_hook.init)
 		ret = main_info.hif_hook.init();
 
-	BTMTK_INFO("%s: Done", __func__);
+#if (USE_DEVICE_NODE == 1)
+	btmtk_init_node();
+#endif
+
+	BTMTK_DBG("%s: Done", __func__);
 	return ret;
 }
 

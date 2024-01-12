@@ -150,8 +150,10 @@ s32 rx_skb_enqueue(struct sk_buff *skb)
 		g_rx_event_cb();
 
 end:
-	if (skb)
+	if (skb) {
 		kfree_skb(skb);
+		skb = NULL;
+	}
 	return ret;
 }
 
@@ -254,7 +256,7 @@ int32_t btmtk_send_data(struct hci_dev *hdev, u8 *buf, u32 count)
 	}
 
 	if (count <= 0 || buf == NULL) {
-		BTMTK_ERR("%s: error input length (%d) or buffer (%p)", count, buf);
+		BTMTK_ERR("%s: error input length (%d) or buffer (%p)", __func__, count, buf);
 		return -1;
 	}
 
@@ -270,7 +272,7 @@ int32_t btmtk_send_data(struct hci_dev *hdev, u8 *buf, u32 count)
 	memcpy(skb->data, buf + 1, count - 1);
 	skb->len = count - 1;
 
-	if (hdev->send(hdev, skb) < 0 && skb != NULL) {
+	if (skb != NULL && bt_send_frame(hdev, skb) < 0) {
 		BTMTK_ERR_LIMITTED("%s send fail, free skb", __func__);
 		kfree_skb(skb);
 		skb = NULL;
