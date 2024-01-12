@@ -73,6 +73,7 @@ static const struct proc_ops BT_proc_chip_reset_count_fops = {
 	.proc_release = single_release,
 };
 #endif
+
 __weak int32_t btmtk_intcmd_wmt_utc_sync(void)
 {
 	BTMTK_ERR("weak function %s not implement", __func__);
