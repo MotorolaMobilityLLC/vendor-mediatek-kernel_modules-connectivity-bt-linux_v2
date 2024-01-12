@@ -87,7 +87,7 @@ MODULE_DEVICE_TABLE(usb, btusb_table);
 
 #define DEVICE_VENDOR_REQUEST_IN	0xc0
 #define DEVICE_CLASS_REQUEST_OUT	0x20
-#define USB_CTRL_IO_TIMO		100
+#define USB_CTRL_IO_TIMO		1000
 
 #define BTMTK_IS_BT_0_INTF(ifnum_base) \
 	(ifnum_base == BT0_MCU_INTERFACE_NUM)
