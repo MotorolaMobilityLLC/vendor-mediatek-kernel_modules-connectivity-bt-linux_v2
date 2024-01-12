@@ -18,6 +18,7 @@
 #include "connv3.h"
 //#include "btmtk_uart_tty.h"
 
+#define QUERY_FW_SCHEDULE_INTERVAL	(60 * 60 * 1000)	// 1 HR interval
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 /* uarthub API */
@@ -179,7 +180,7 @@ void btmtk_pwrctrl_register_evt(void);
 int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb);
 int btmtk_set_tx_power(struct btmtk_dev *bdev, int8_t req_val, BT_RX_EVT_HANDLER_CB cb);
 
-
+void btmtk_query_fw_schedule_info(struct btmtk_dev *bdev);
 int btmtk_read_pmic_state(struct btmtk_dev *bdev);
 
 int btmtk_set_pcm_pin_mux(void);
