@@ -19,7 +19,7 @@
 #if (USE_DEVICE_NODE == 1)
 #include "btmtk_queue.h"
 #include "connv3.h"
-//#include "btmtk_proj_sp.h"
+#include "btmtk_proj_sp.h"
 #endif
 
 int btmtk_cif_chip_66xx_register(void);

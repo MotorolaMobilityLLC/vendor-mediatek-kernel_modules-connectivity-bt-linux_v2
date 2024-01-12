@@ -42,8 +42,6 @@ static int btmtk_cif_rx_packet_handler(struct btmtk_dev *bdev, struct sk_buff *s
 static void btmtk_recv_error_handler(struct hci_dev *hdev,
 		const u8 *buf, u32 len, const u8 *dbg_buf, u32 dbg_len)
 {
-	if (*buf == 0xFF || *buf == 0x00)
-		BTMTK_INFO("%s: skip 0x%02X pkt", __func__, *buf);
 	btmtk_set_sleep(hdev, FALSE);
 }
 

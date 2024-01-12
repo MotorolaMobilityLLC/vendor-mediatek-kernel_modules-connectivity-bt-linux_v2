@@ -49,7 +49,6 @@ char picus_disable_cmd[PICUS_DISABLE_CMD_LEN] = {0x01, 0x5D, 0xFC, 0x04, 0x00, 0
 char picus_disable_evt[PICUS_DISABLE_EVT_HDR_LEN] = {0x04, 0x0E, 0x08, 0x01, 0x5D, 0xFC, 0x00, 0x00, 0x00};
 
 char fd5b_assert_cmd[FD5B_ASSERT_CMD_LEN] = {0x01, 0x5B, 0xFD, 0x00};
-char rhw_assert_cmd[RHW_ASSERT_CMD_LEN] = {0x40, 0x00, 0x00, 0x08, 0x00, 0x18, 0x89, 0x02, 0x81, 0x10, 0x00, 0x00, 0x00};
 char wmt_assert_cmd[WMT_ASSERT_CMD_LEN] = {0x01, 0x6F, 0xFC, 0x05, 0x01, 0x02, 0x01, 0x00, 0x08};
 
 char txpower_cmd[TXPOWER_CMD_LEN] = {0x01, 0x2C, 0xFC, 0x0C,
@@ -308,8 +307,7 @@ struct bt_cmds_s commands[] = {
 	{"SET_COMPENSATION_CMD", {{SET_COMPENSATION_CMD_LEN, set_compensation_cmd}, {0, NULL}}, DEFAULT},
 	{"SET_COMPENSATION_EVT", {{SET_COMPENSATION_EVT_LEN, set_compensation_evt}, {0, NULL}}, DEFAULT},
 	{"SET_COMPENSATION_CMD_6639", {{SET_COMPENSATION_CMD_LEN_6639, set_compensation_cmd_6639}, {0, NULL}}, DEFAULT},
-	{"SET_COMPENSATION_EVT_6639", {{SET_COMPENSATION_EVT_LEN_6639, set_compensation_evt_6639}, {0, NULL}}, DEFAULT},
-	{"RHW_ASSERT_CMD", {{RHW_ASSERT_CMD_LEN, rhw_assert_cmd}, {0, NULL}}, DEFAULT}
+	{"SET_COMPENSATION_EVT_6639", {{SET_COMPENSATION_EVT_LEN_6639, set_compensation_evt_6639}, {0, NULL}}, DEFAULT}
 };
 
 struct bt_cmds_s command_raw_data[4][BTMTK_CMD_NUM];
