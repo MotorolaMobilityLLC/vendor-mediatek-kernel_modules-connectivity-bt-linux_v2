@@ -37,7 +37,9 @@
 /**
  * Card-relate definition.
  */
+#ifndef SDIO_VENDOR_ID_MEDIATEK
 #define SDIO_VENDOR_ID_MEDIATEK 0x037A
+#endif
 
 #define HCI_HEADER_LEN	4
 
