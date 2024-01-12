@@ -28,12 +28,10 @@ static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 			BTMTK_INFO("%s: ZB_ENABLE is %d", __func__, zb_enbale);
 			if (err < 0) {
 				BTMTK_ERR("read ZB enbale failed");
-				err = 0;
 			} else if ((zb_enbale & (1 << 0)) == 0) {
 				err = btmtk_load_rom_patch_connac3(bdev, ZB_DOWNLOAD);
 				if (err < 0) {
 					BTMTK_WARN("%s: btmtk_load_rom_patch_79xx ZB patch failed!", __func__);
-					err = 0;
 				}
 			}
 		}
@@ -42,10 +40,11 @@ static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 	err = btmtk_load_rom_patch_connac3(bdev, WIFI_DOWNLOAD);
 	if (err < 0) {
 		BTMTK_WARN("%s: btmtk_load_rom_patch_connac3 wifi patch failed!", __func__);
-		err = 0;
 	}
 #endif
-	return err;
+
+	/* Do not care about the failure of ZB and wifi, directly return 0 */
+	return 0;
 }
 
 static int btmtk_chip_reg_init(struct btmtk_dev *bdev)
