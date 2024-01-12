@@ -2309,7 +2309,12 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 
 	fstate = btmtk_fops_get_state(bdev);
 	if (fstate == BTMTK_FOPS_STATE_CLOSED) {
-		BTMTK_INFO_RAW(data, count, "[SKIP] CLOSED %s: count[%d]", __func__, count);
+#if (KERNEL_VERSION(6, 6, 0) > LINUX_VERSION_CODE)
+		BTMTK_INFO_RAW(data, count, "[SKIP] %s: count[%d]", __func__, count);
+#else
+		BTMTK_INFO_RAW(data, count, "[SKIP] %s: count[%zu]", __func__, count);
+#endif
+
 #if (USE_DEVICE_NODE == 1)
 		/* check opcode, for dfd post dump evt, and only copy payload */
 		if (data[4] == 0x18) {
@@ -2369,15 +2374,25 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 						strlen("[BT_DRV assert] recv unknown data") + 1);
 				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 			}
+#if (KERNEL_VERSION(6, 6, 0) > LINUX_VERSION_CODE)
 			BTMTK_WARN("%s: trigger assert, recv_fail_cnt[%d] count[%d]",
 					__func__, ++recv_fail_cnt, count);
+#else
+			BTMTK_WARN("%s: trigger assert, recv_fail_cnt[%d] count[%zu]",
+					__func__, ++recv_fail_cnt, count);
+#endif
 			/* can not trigger assert in this thread, would block event of debug sop */
 			atomic_set(&cif_dev->need_assert, 1);
 			wake_up_interruptible(&tx_wait_q);
 		}
 		else if (recv_fail_cnt < BTMTK_MAX_RECV_ERR_CNT) {
+#if (KERNEL_VERSION(6, 6, 0) > LINUX_VERSION_CODE)
 			BTMTK_WARN("%s: recv error data, recv_fail_cnt[%d] count[%d]",
 					__func__, ++recv_fail_cnt, count);
+#else
+			BTMTK_WARN("%s: recv error data, recv_fail_cnt[%d] count[%zu]",
+					__func__, ++recv_fail_cnt, count);
+#endif
 #if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
 			mtk8250_uart_dump(cif_dev->tty);
 #endif
