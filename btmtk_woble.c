@@ -748,7 +748,7 @@ int btmtk_woble_suspend(struct btmtk_woble *bt_woble)
 			if (desc)
 				desc->irq_data.chip->irq_ack(&desc->irq_data);
 			else
-				BTMTK_INFO("%s:can't get desc\n", __func__);
+				BTMTK_INFO("%s:can't get desc", __func__);
 
 			BTMTK_INFO("%s, enable BT IRQ:%d", __func__, bt_woble->wobt_irq);
 			irq_set_irq_wake(bt_woble->wobt_irq, 1);

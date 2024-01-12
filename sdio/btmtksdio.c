@@ -1570,19 +1570,19 @@ failed:
 	return ret;
 }
 
-static int btmtk_sdio_register_dev(struct btmtk_sdio_dev *bdev)
+static int btmtk_sdio_register_dev(struct btmtk_sdio_dev *cif_dev)
 {
 	struct sdio_func *func;
 	u8	u8ReadCRValue = 0;
 	int ret = 0;
 
-	if (!bdev || !bdev->func) {
+	if (!cif_dev || !cif_dev->func) {
 		BTMTK_ERR("Error: card or function is NULL!");
 		ret = -EINVAL;
 		goto failed;
 	}
 
-	func = bdev->func;
+	func = cif_dev->func;
 
 	sdio_claim_host(func);
 	ret = sdio_enable_func(func);
@@ -1615,7 +1615,7 @@ static int btmtk_sdio_register_dev(struct btmtk_sdio_dev *bdev)
 	ret = sdio_set_block_size(func, SDIO_BLOCK_SIZE);
 	sdio_release_host(func);
 	if (ret) {
-		pr_err("cannot set SDIO block size");
+		BTMTK_ERR("cannot set SDIO block size");
 		ret = -EIO;
 		goto release_irq;
 	}
@@ -1630,7 +1630,7 @@ disable_func:
 	sdio_disable_func(func);
 
 failed:
-	pr_info("%s fail", __func__);
+	BTMTK_ERR("%s fail", __func__);
 	return ret;
 }
 

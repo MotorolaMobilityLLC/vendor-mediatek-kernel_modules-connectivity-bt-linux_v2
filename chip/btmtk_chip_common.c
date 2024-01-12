@@ -901,7 +901,7 @@ int btmtk_cif_chip_register(struct btmtk_dev *bdev)
 		btmtk_cif_chip_66xx_register();
 		break;
 	default:
-		BTMTK_ERR("Unknown Mediatek device(%04X)\n", bdev->chip_id);
+		BTMTK_ERR("Unknown Mediatek device(%04X)", bdev->chip_id);
 		ret = -1;
 		break;
 	}
