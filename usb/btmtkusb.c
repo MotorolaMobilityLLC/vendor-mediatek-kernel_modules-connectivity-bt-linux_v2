@@ -4095,7 +4095,9 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 			}
 			BTMTK_INFO("%s compare fail\n", __func__);
 			BTMTK_INFO_RAW(event, event_len, "%s: event_need_compare:", __func__);
-			BTMTK_INFO_RAW(bdev->io_buf, bdev->recv_evt_len, "%s: RCV:", __func__);
+			if (bdev->io_buf)
+				BTMTK_INFO_RAW(bdev->io_buf, bdev->recv_evt_len,
+					"%s: RCV:", __func__);
 			ret = -ERRNUM;
 		} else {
 			ret = 0;
