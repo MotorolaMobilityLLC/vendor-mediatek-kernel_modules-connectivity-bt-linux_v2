@@ -40,6 +40,9 @@
 
 #define PROC_ROOT_DIR "stpbt"
 #define PROC_BT_CHIP_RESET_COUNT "bt_chip_reset_count"
+#if (USE_DEVICE_NODE == 1)
+#define PROC_BT_UART_LAUNCHER_NOTIFY "bt_uart_launcher_notify"
+#endif
 
 struct btmtk_fops_fwlog {
 	dev_t g_devIDfwlog;

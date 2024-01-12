@@ -7,12 +7,16 @@
 #define _BTMTK_PROJ_SP_H_
 
 #if (USE_DEVICE_NODE == 1)
+
+#if defined(BTMTK_PLAT_ALPS) && BTMTK_PLAT_ALPS
 #include "conn_power_throttling.h"
+#endif
 
 /* connv3 API */
 #include "connv3_debug_utility.h"
 #include "connv3_mcu_log.h"
 #include "connv3.h"
+//#include "btmtk_uart_tty.h"
 
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
@@ -43,27 +47,38 @@ enum UARTHUB_irq_err_type {
 };
 
 typedef void (*UARTHUB_IRQ_CB) (unsigned int err_type);
-
+extern int mtk8250_uart_hub_reset_flow_ctrl(void);
 extern int mtk8250_uart_hub_enable_bypass_mode(int bypass);
 extern int mtk8250_uart_hub_is_ready(void);
-extern int mtk8250_uart_hub_set_request(void);
+//extern int mtk8250_uart_hub_set_request(struct tty_struct *tty);
 extern int mtk8250_uart_hub_clear_request(void);
 extern int mtk8250_uart_hub_fifo_ctrl(int ctrl);
 extern int mtk8250_uart_hub_dump_with_tag(const char *tag);
 extern int mtk8250_uart_hub_reset(void);
 extern int mtk8250_uart_hub_register_cb(UARTHUB_IRQ_CB irq_callback);
 extern int mtk8250_uart_hub_assert_bit_ctrl(int ctrl);
-extern int mtk8250_uart_dump(struct tty_struct *tty);
+
+extern int mtk8250_uart_hub_dev0_set_tx_request(struct tty_struct *tty);
+extern int mtk8250_uart_hub_dev0_set_rx_request(void);
+extern int mtk8250_uart_hub_dev0_clear_tx_request(void);
+extern int mtk8250_uart_hub_dev0_clear_rx_request(struct tty_struct *tty);
+extern int mtk8250_uart_hub_get_host_wakeup_status(void);
 int btmtk_wakeup_uarthub(void);
 void btmtk_release_uarthub(bool force);
+#endif
 
+#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
+extern int mtk8250_uart_dump(struct tty_struct *tty);
+void mtk8250_uart_start_record(struct tty_struct *tty);
+void mtk8250_uart_end_record(struct tty_struct *tty);
 #endif
 
 #define HCI_EVT_COMPLETE_EVT		0x0E
-#define HCI_EVT_STATUS_EVT		0x0F
+#define HCI_EVT_STATUS_EVT			0x0F
 #define HCI_EVT_CC_STATUS_SUCCESS	0x00
 #define HCI_CMD_DY_ADJ_PWR_QUERY	0x01
 #define HCI_CMD_DY_ADJ_PWR_SET		0x02
+#define BT_RHW_MAX_ERR_COUNT		(2)
 
 typedef int (*BT_RX_EVT_HANDLER_CB) (uint8_t *buf, int len);
 
@@ -77,7 +92,36 @@ struct btmtk_dypwr_st {
 	int8_t lp_bdy_dbm;
 	int8_t fw_sel_dbm;
 	BT_RX_EVT_HANDLER_CB cb;
+#if defined(BTMTK_PLAT_ALPS) && BTMTK_PLAT_ALPS
 	enum conn_pwr_low_battery_level lp_cur_lv;
+#else
+	int8_t lp_cur_lv;
+#endif
+};
+
+struct gpio_info {
+	u16	offset;
+	u8	bit;
+};
+
+struct bt_gpio {
+	u8			num;
+	u32			gpio_base;	/* for aux/dir/out */
+	u32			pu_pd_base;	/* for pu/pd */
+	u16			remap_len;
+	void __iomem		*gpio_remap_base;
+	void __iomem		*pu_pd_remap_base;
+	struct gpio_info	aux;
+	struct gpio_info	dir;
+	struct gpio_info	out;
+	struct gpio_info	pu;
+	struct gpio_info	pd;
+};
+
+struct platform_prop {
+	struct bt_gpio		tx_gpio;
+	struct bt_gpio		rx_gpio;
+	struct bt_gpio		rst_gpio;
 };
 
 void btmtk_async_trx_work(struct work_struct *work);
@@ -95,9 +139,12 @@ int btmtk_set_pcm_pin_mux(void);
 int btmtk_set_uart_rx_aux(void);
 
 int btmtk_set_gpio_default(void);
+int btmtk_set_gpio_default_for_close(void);
+
 int btmtk_pre_power_on_handler(void);
 
 int btmtk_sp_whole_chip_reset(struct btmtk_dev *bdev);
+int btmtk_sp_close(void);
 
 int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev);
 //int btmtk_connv3_sub_drv_init(struct platform_device *pdev);
@@ -106,8 +153,21 @@ int btmtk_connv3_sub_drv_deinit(void);
 
 void btmtk_sp_coredump_start(void);
 void btmtk_sp_coredump_end(void);
+void btmtk_platform_driver_init(void);
+void btmtk_platform_driver_deinit(void);
+
 
 /* Debug sop api */
 void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev);
+void btmtk_hif_sp_dump_debug_sop(struct btmtk_dev *bdev);
+void btmtk_hif_dump_work(struct work_struct *work);
+
+/* find my phone mode api */
+int btmtk_find_my_phone_cmd(void);
+
+void btmtk_dump_gpio_state(void);
+
+int btmtk_uart_launcher_deinit(void);
+
 #endif // (USE_DEVICE_NODE == 1)
 #endif

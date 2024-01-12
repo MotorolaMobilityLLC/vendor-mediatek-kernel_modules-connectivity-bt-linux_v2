@@ -8,4 +8,8 @@ cc_binary
         "-Werror",
         "-Wno-error=date-time",
     ],
+    shared_libs: [
+        "libbase",
+        "liblog",
+    ],
 }

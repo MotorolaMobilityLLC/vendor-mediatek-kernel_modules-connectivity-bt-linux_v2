@@ -1,3 +1,40 @@
+$(info [bt_drv] linux_v2/makefile start)
+# Support GKI mixed build
+ifeq ($(DEVICE_MODULES_PATH),)
+DEVICE_MODULES_PATH = $(DEVICE_MODULES_PATH)
+CONFIG_SUPPORT_DEVICE_NODE=n
+CONFIG_SUPPORT_UARTDBG=n
+else
+CONFIG_SUPPORT_DEVICE_NODE=y
+CONFIG_SUPPORT_UARTDBG=y
+LINUXINCLUDE := $(DEVCIE_MODULES_INCLUDE) $(LINUXINCLUDE)
+endif
+
+CONN_ALPS_OUT_PATH := $(wildcard $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/))
+CONNECTIVITY_OUT_PATH := $(strip $(if $(CONN_ALPS_OUT_PATH), $(CONN_ALPS_OUT_PATH), $(CONN_EAP_OUT_PATH)))
+
+$(info Connectivity out path = $(CONNECTIVITY_OUT_PATH))
+
+LOG_TAG := [BT_Drv][linux_v2]
+ifneq ($(CONNECTIVITY_OUT_PATH),)
+    MTK_PROJ_TYPE := sp
+    ifneq ($(wildcard $(KERNEL_SRC)/$(DEVICE_MODULES_REL_DIR)/Makefile.include),)
+        include $(KERNEL_SRC)/$(DEVICE_MODULES_REL_DIR)/Makefile.include
+        extra_symbols := $(abspath $(OUT_DIR)/../vendor/mediatek/kernel_modules/connectivity/common/Module.symvers)
+        extra_symbols += $(abspath $(OUT_DIR)/../vendor/mediatek/kernel_modules/connectivity/connfem/Module.symvers)
+        extra_symbols += $(abspath $(OUT_DIR)/../vendor/mediatek/kernel_modules/connectivity/conninfra/Module.symvers)
+        M_OPTION := $(M)
+    else
+        extra_symbols := $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/common/Module.symvers)
+        extra_symbols += $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/connfem/Module.symvers)
+        extra_symbols += $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/conninfra/Module.symvers)
+        M_OPTION := $(PWD)
+    endif
+else
+    MTK_PROJ_TYPE := ce
+    M_OPTION := $(PWD)
+endif
+
 ifeq ($(LINUX_SRC), )
 	export KERNEL_SRC := /lib/modules/$(shell uname -r)/build
 else
@@ -11,15 +48,20 @@ CONFIG_SUPPORT_BLUEZ=n
 CONFIG_SUPPORT_DVT=n
 CONFIG_SUPPORT_HW_DVT=n
 CONFIG_SUPPORT_MULTI_DEV_NODE=n
-CONFIG_GKI_SUPPORT=n
+BT_CONFIG_TRACING=n
+CFG_SUPPORT_HOSTWAKE=n
 CONFIG_SUPPORT_WAKEUP_SER=n
-
 ifeq ($(CONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT), y)
     ccflags-y += -DCONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT
 endif
-
 ifeq ($(CONFIG_DISABLE_SYMBOL_GET_SET), y)
     ccflags-y += -DCONFIG_DISABLE_SYMBOL_GET_SET
+endif
+
+KO_CODE_PATH := $(if $(filter /%,$(src)),,$(srctree)/)$(src)
+
+ifndef TOP
+    TOP := $(srctree)/..
 endif
 
 ifneq ($(TARGET_BUILD_VARIANT), user)
@@ -52,11 +94,16 @@ else
     ccflags-y += -DCFG_SUPPORT_HW_DVT=0
 endif
 
+ifeq ($(SUPPORT_WAKEUP_IRQ), yes)
+    ccflags-y += -DCFG_SUPPORT_WAKEUP_IRQ
+endif
+
 ifeq ($(CONFIG_SUPPORT_WAKEUP_SER), y)
     ccflags-y += -DCFG_SUPPORT_WAKEUP_IRQ=1
 else
     ccflags-y += -DCFG_SUPPORT_WAKEUP_IRQ=0
 endif
+
 
 ifeq ($(CONFIG_SUPPORT_DVT), y)
     ccflags-y += -DCFG_SUPPORT_DVT=1
@@ -82,61 +129,69 @@ else
     ccflags-y += -DCFG_SUPPORT_MULTI_DEV_NODE=0
 endif
 
-ccflags-y += -DDEBUG_DUMP_TIME
-ccflags-y += -DBTMTK_ISOC_TEST=0
-
-ifeq ($(CONFIG_GKI_SUPPORT), y)
-    ccflags-y += -DCFG_SUPPORT_CHIP_RESET_KO
-    ccflags-y += -I$(src)/../../mtreset_connac3.ko_intermediates/LINKED/reset/include/
-    ccflags-y += -I$(src)/../wlan_driver/gen4m_connac3/reset/include/
-
-    RESET_DIR = $(shell pwd)/../../KERNEL_MODULES/mtreset_connac3.ko_intermediates/LINKED/Module.symvers
+ifeq ($(CONFIG_ARCH_MEDIATEK),y)
+    ccflags-y += -D BTMTK_PLAT_ALPS=1
+else
+    ccflags-y += -D BTMTK_PLAT_ALPS=0
 endif
 
+ifeq ($(CFG_SUPPORT_HOSTWAKE), y)
+    ccflags-y += -DCFG_SUPPORT_HOSTWAKE=1
+else
+    ccflags-y += -DCFG_SUPPORT_HOSTWAKE=0
+endif
+
+ccflags-y += -DDEBUG_DUMP_TIME
+ccflags-y += -DBTMTK_ISOC_TEST=0
 ifeq ($(CONFIG_SUPPORT_BMR_RX_CLK), y)
     ccflags-y += -DCFG_SUPPORT_BMR_RX_CLK=1
     ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/
 else
     ccflags-y += -DCFG_SUPPORT_BMR_RX_CLK=0
 endif
-
 #################### Configurations ####################
 # For chip interface, driver supports "usb", "sdio", "uart_tty", "uart_serdev" and "btif"
 MTK_CHIP_IF := usb
+ifeq ($(MTK_PROJ_TYPE), sp)
+    MTK_CHIP_IF := uart_tty
+    ccflags-y += -DANDROID_OS
+else
+    ccflags-y += -DLINUX_OS
+endif
 
 ifeq ($(MTK_CHIP_IF), sdio)
     MOD_NAME = btmtk_sdio_unify
     CFILES := sdio/btmtksdio.c btmtk_woble.c btmtk_chip_reset.c
     ccflags-y += -DCHIP_IF_SDIO
     ccflags-y += -DSDIO_DEBUG=0
-    ccflags-y += -I$(src)/include/sdio
+    ccflags-y += -I$(KO_CODE_PATH)/include/sdio
 else ifeq ($(MTK_CHIP_IF), usb)
     MOD_NAME = btmtk_usb_unify
     CFILES := usb/btmtkusb.c btmtk_woble.c btmtk_chip_reset.c
     ccflags-y += -DCHIP_IF_USB
-    ccflags-y += -I$(src)/include/usb
+    ccflags-y += -I$(KO_CODE_PATH)/include/usb
 else ifeq ($(MTK_CHIP_IF), uart_tty)
     MOD_NAME = btmtk_uart_unify
-    CONFIG_SUPPORT_DEVICE_NODE = n
     CFILES := uart/btmtktty.c btmtk_woble.c btmtk_chip_reset.c
+    ifeq ($(MTK_PROJ_TYPE), ce)
+        CFILES += proj/btmtk_proj_ce.c
+    else
+        CFILES += proj/btmtk_proj_sp.c proj/btmtk_proj_sp_debug.c btmtk_queue.c btmtk_char_dev.c
+        ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/connectivity/power_throttling
+        ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2/
+    endif
     ccflags-y += -DCHIP_IF_UART_TTY
-    ccflags-y += -I$(src)/include/uart/tty
+    ccflags-y += -I$(KO_CODE_PATH)/include/uart/tty
 else ifeq ($(MTK_CHIP_IF), uart_serdev)
     MOD_NAME = btmtk_uart_unify
     ccflags-y += -DCHIP_IF_UART_SERDEV
     CFILES := uart/btmtkserdev.c
-    ccflags-y += -I$(src)/include/uart/serdev
+    ccflags-y += -I$(KO_CODE_PATH)/include/uart/serdev
 else
     MOD_NAME = btmtk_btif_unify
     CFILES := btif/btmtk_btif.c
     ccflags-y += -DCHIP_IF_BTIF
-    ccflags-y += -I$(src)/include/btif
-endif
-
-MTK_PROJ_TYPE := ce
-
-ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
-CFILES += btmtk_queue.c btmtk_char_dev.c
+    ccflags-y += -I$(KO_CODE_PATH)/include/btif
 endif
 
 ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
@@ -147,29 +202,23 @@ ccflags-y += -DUSE_DEVICE_NODE=0
 ccflags-y += -DSLEEP_ENABLE=0
 endif
 
-$(info [BT_Drv] MTK_PROJ_TYPE = $(MTK_PROJ_TYPE) src = $(src))
-#ifeq ($(MTK_PROJ_TYPE), sp)
-ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
-    CFILES += proj/btmtk_proj_sp.c proj/btmtk_proj_sp_debug.c
-    ccflags-y += -DANDROID_OS
-    ccflags-y += -I$(srctree)/drivers/misc/mediatek/connectivity/power_throttling
-#else ifeq ($(MTK_PROJ_TYPE), ce)
-else ifeq ($(MTK_CHIP_IF), uart_tty)
-    CFILES += proj/btmtk_proj_ce.c
-    ccflags-y += -DLINUX_OS
-    ccflags-y += -DCHIP_IF_UART_TTY
+ifeq ($(BT_CONFIG_TRACING),y)
+    ccflags-y += -DBT_CONFIG_TRACING
+endif
+
+ifeq ($(CONFIG_SUPPORT_UARTDBG), y)
+ccflags-y += -DCONFIG_SUPPORT_UARTDBG=1
 else
-    ccflags-y += -DLINUX_OS
+ccflags-y += -DCONFIG_SUPPORT_UARTDBG=0
 endif
 
 CFILES += btmtk_main.c btmtk_fw_log.c btmtk_buffer_mode.c
-
 CFILES += chip/btmtk_chip_7902.c chip/btmtk_chip_common.c chip/btmtk_chip_7961.c chip/btmtk_chip_7922.c chip/btmtk_chip_66xx.c chip/btmtk_chip_connac3.c chip/btmtk_chip_6639.c
-ccflags-y += -I$(src)/include/chip
-ccflags-y += -I$(src)/include/ -I$(src)/
-ccflags-y += -I$(src)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth -I$(src)/proj/include/
 
-ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
+ccflags-y += -I$(src)/include/ -I$(src)/
+ccflags-y += -I$(src)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth -I$(src)/proj/include/ -I$(KO_CODE_PATH)/proj/include/ -I$(KO_CODE_PATH)/include/chip -I$(KO_CODE_PATH)/include/
+
+ifeq ($(MTK_PROJ_TYPE), sp)
   $(info [BT_Drv] TOP = $(TOP))
   $(info [BT_Drv] KBUILD_EXTRA_SYMBOLS = $(KBUILD_EXTRA_SYMBOLS))
   #KBUILD_EXTRA_SYMBOLS := /mfs/mtkslt1121/mtk24223/CAS_REAL/alps-dev-s0_bsp-connac3-1210--2022_03_08_12_00/merged/out_krn/target/product/mgk_64_k510/obj/ETC/conninfra.ko_intermediates/LINKED/Module.symvers
@@ -203,10 +252,17 @@ endif
 # Common
 ###############################################################################
 #obj-m := $(UART_MOD_NAME).o
+all: PRIVATE_LOG_TAG := $(LOG_TAG)
+all: EXTRA_SYMBOLS += $(extra_symbols)
 all:
-	make -C $(KERNEL_SRC) M=$(PWD) modules
+	$(MAKE) -C $(KERNEL_SRC) M=$(M_OPTION) modules $(KBUILD_OPTIONS) LOG_TAG=$(PRIVATE_LOG_TAG) KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)"
+
+modules_install:
+	$(MAKE) M=$(M_OPTION) -C $(KERNEL_SRC) modules_install
+
 clean:
-	make -C $(KERNEL_SRC) M=$(PWD) clean
+	$(MAKE) -C $(KERNEL_SRC) M=$(M_OPTION) clean
+
 # Check coding style
 # export IGNORE_CODING_STYLE_RULES := NEW_TYPEDEFS,LEADING_SPACE,CODE_INDENT,SUSPECT_CODE_INDENT
 ccs:
@@ -234,15 +290,4 @@ ccs:
 	./util/checkpatch.pl -f btmtk_chip_reset.c
 	./util/checkpatch.pl -f btmtk_queue.c
 	./util/checkpatch.pl -f btmtk_char_dev.c
-	./util/checkpatch.pl -f btmtk_chip_common.c
-	./util/checkpatch.pl -f ./include/chip/btmtk_chip_common.h
-	./util/checkpatch.pl -f ./chip/btmtk_chip_66xx.c
-	./util/checkpatch.pl -f ./include/chip/btmtk_chip_66xx.h
-	./util/checkpatch.pl -f ./chip/btmtk_chip_6639.c
-	./util/checkpatch.pl -f ./include/chip/btmtk_chip_6639.h
-	./util/checkpatch.pl -f ./chip/btmtk_chip_7902.c
-	./util/checkpatch.pl -f ./include/chip/btmtk_chip_7902.h
-	./util/checkpatch.pl -f ./chip/btmtk_chip_7922.c
-	./util/checkpatch.pl -f ./include/chip/btmtk_chip_7922.h
-	./util/checkpatch.pl -f ./chip/btmtk_chip_7961.c
-	./util/checkpatch.pl -f ./include/chip/btmtk_chip_7961.h
+$(info [bt_drv] linux_v2/makefile end)
