@@ -639,8 +639,12 @@ struct btmtk_dev {
 	/* UDS work for only wifi on*/
 	struct work_struct  pwr_on_uds_work;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+	struct gpio_desc *gpio_cs;
+#else
 	/* fw wakeup host irq */
 	int	wakeup_irq;
+#endif
 
 	/* DFD reset_type */
 	unsigned int reset_type;

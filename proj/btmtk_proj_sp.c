@@ -1223,7 +1223,11 @@ static irqreturn_t btmtk_host_wake_isr(int irq, void *dev)
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	int host_wake;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+	host_wake = gpiod_get_value(bdev->gpio_cs);
+#else
 	host_wake = gpio_get_value(bdev->wakeup_irq);
+#endif
 	irq_set_irq_type(irq, host_wake ? IRQF_TRIGGER_FALLING: IRQF_TRIGGER_RISING);
 	BTMTK_DBG("%s: %d", __func__, host_wake);
 
@@ -1238,6 +1242,21 @@ int btmtk_register_wakeup_irq(struct btmtk_dev *bdev, struct tty_struct *tty) {
 	int ret;
 	int irq;
 
+	if (!tty->dev->of_node) {
+		BTMTK_ERR("[ERR] %s: mediatek,bt of_node not found", __func__);
+		return -1;
+	}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+	bdev->gpio_cs = gpiod_get_index(tty->dev, NULL, 0, GPIOD_IN);
+	ret = PTR_ERR_OR_ZERO(bdev->gpio_cs);
+	if (ret) {
+		BTMTK_ERR("[ERR] %s: uanble to get bt host wake gpio", __func__);
+		return -1;
+	}
+
+	irq = gpiod_to_irq(bdev->gpio_cs);
+#else
 	bdev->wakeup_irq = of_get_gpio(tty->dev->of_node, 0);
 	if (!gpio_is_valid(bdev->wakeup_irq)) {
 		BTMTK_ERR("[ERR] %s: uanble to get bt host wake gpio", __func__);
@@ -1257,6 +1276,8 @@ int btmtk_register_wakeup_irq(struct btmtk_dev *bdev, struct tty_struct *tty) {
 	}
 
 	irq = gpio_to_irq(bdev->wakeup_irq);
+#endif
+
 	ret = request_irq(irq, btmtk_host_wake_isr, IRQF_TRIGGER_RISING,
 					"bt_hostwake", (void *)bdev);
 
@@ -1275,7 +1296,11 @@ int btmtk_register_wakeup_irq(struct btmtk_dev *bdev, struct tty_struct *tty) {
 	return 0;
 
 exit:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+	gpiod_put(bdev->gpio_cs);
+#else
 	gpio_free(bdev->wakeup_irq);
+#endif
 	return -1;
 
 }
