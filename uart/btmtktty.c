@@ -2408,11 +2408,6 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
-	if(cif_dev == NULL) {
-		BTMTK_ERR("%s: cif_dev is NULL", __func__);
-		return;
-	}
-
 	/* record data from tty */
 	btmtk_hci_snoop_save(HCI_SNOOP_TYPE_EVT_HIF, data, count);
 #if (KERNEL_VERSION(6, 6, 0) > LINUX_VERSION_CODE)
@@ -2564,15 +2559,16 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		goto unlock;
 	}
 
-
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	if (cif_dev->hub_en && !cif_dev->sleep_flow_hw_mech_en) {
-		btmtk_uarthub_request_setting(UARTHUB_clear_tx_request);
-		/* record host wakeup info to fw, b[4] = AP, b[5] = MD, b[6] = ADSP */
-		cmd[9] = cmd[9] | ((mtk8250_uart_hub_get_host_wakeup_status() & 0xf) << 4);
-	}
-#endif
 	if (cif_dev->sleep_en) {
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+		if (cif_dev->hub_en && !cif_dev->sleep_flow_hw_mech_en) {
+			ret = mtk8250_uart_hub_dev0_clear_tx_request();
+			BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_tx_request, ret[%d]", __func__, ret);
+			/* record host wakeup info to fw, b[4] = AP, b[5] = MD, b[6] = ADSP */
+			cmd[9] = cmd[9] | ((mtk8250_uart_hub_get_host_wakeup_status() & 0xf) << 4);
+		}
+#endif
+
 		/* two different event for fw allow sleep or not */
 		ret = btmtk_main_send_cmd(bdev, cmd, FWOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN - 3,
 				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
@@ -2655,7 +2651,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	BTMTK_INFO("%s: cif_dev->hub_en = %d, cif_dev->sleep_en = %d", __func__, cif_dev->hub_en, cif_dev->sleep_en);
-	if (cif_dev->hub_en) {
+	if (cif_dev->hub_en && cif_dev->sleep_en) {
 		do {
 			ret = btmtk_wakeup_uarthub();
 			if (ret < 0)
@@ -2674,7 +2670,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 	retry = BTMTK_MAX_WAKEUP_RETRY;
 	/* if fw already coredump, no need to send drv own cmd */
-	if (btmtk_get_chip_state(bdev) != BTMTK_STATE_FW_DUMP) {
+	if (cif_dev->sleep_en && btmtk_get_chip_state(bdev) != BTMTK_STATE_FW_DUMP) {
 		/* if fw already wake, no need to send 0xFF and wait 6ms before clr fw own */
 		if (atomic_read(&cif_dev->fw_wake)) {
 			/* wait a while for avoid rx pkt error */
@@ -2682,8 +2678,27 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		} else {
 			u8 wakeup_cmd[] = { 0xFF };
 			 if (bdev->is_eap) {
-				if (cif_dev->sleep_en)
+				if (!cif_dev->sleep_flow_hw_mech_en) {
 					ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
+				} else {
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+					/* new wakeup flow */
+					/* 3. Set DEVx_HOST_AWAKE = 1 */
+					/* 4. Tx 0xFF, if DEVx_BT_AWAKE = 0 */
+					/* 4~8 Polling CMM_BT_AWAKE = 1 or DEVx_BT_AWAKE = 1 */
+					ret = mtk8250_uart_hub_set_host_awake_sta(0);
+					BTMTK_INFO("%s: Set DEVx_HOST_AWAKE = 1, ret = %d ", __func__, ret);
+
+					if (mtk8250_uart_hub_get_bt_awake_sta()== 0) {
+						ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
+					}
+
+					do {
+						/* If CMM_BT_AWAKE = 1 or DEVx_BT_AWAKE = 1 leave while */
+						BTMTK_INFO("%s: CMM_BT_AWAKE = %d, DEVx_BT_AWAKE = %d", __func__, mtk8250_uart_hub_get_cmm_bt_awake_sta(), mtk8250_uart_hub_get_bt_awake_sta());
+					} while (mtk8250_uart_hub_get_cmm_bt_awake_sta() == 0 && mtk8250_uart_hub_get_bt_awake_sta() == 0);
+#endif
+				}
 			} else {
 				if (cif_dev->sleep_flow_hw_mech_en) {
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
@@ -2704,7 +2719,6 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 					} while (mtk8250_uart_hub_get_cmm_bt_awake_sta() == 0 && mtk8250_uart_hub_get_bt_awake_sta() == 0);
 #endif
 				} else {
-					if (cif_dev->sleep_en) {
 						int i = 0;
 						for (i = 0; i < 3; i++) {
 							/* no need to wait event */
@@ -2713,7 +2727,6 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 							/* wait a while for fw wakeup */
 							usleep_range(6000, 6100);
 						}
-					}
 				}
 
 			}
@@ -2734,8 +2747,10 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	/* no mattter success or not, all need to set rx request */
-	if (cif_dev->hub_en && btmtk_uarthub_request_setting(UARTHUB_set_rx_request))
-		return -1;
+	if (cif_dev->hub_en) {
+		mtk8250_uart_hub_dev0_set_rx_request();
+		BTMTK_DBG("%s mtk8250_uart_hub_dev0_set_rx_request", __func__);
+	}
 #endif
 
 	if (ret < 0) {
