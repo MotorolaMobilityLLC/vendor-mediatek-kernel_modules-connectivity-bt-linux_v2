@@ -2855,6 +2855,34 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	return -1;
 }
 
+static int btmtk_usb_send_shutdown_cmd(struct btmtk_dev *bdev){
+	struct btmtk_usb_dev *cif_dev = NULL;
+	int ret = 0;
+
+	if (bdev == NULL)
+		return -1;
+
+	BTMTK_INFO("%s: enter", __func__);
+
+	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
+	if (cif_dev->udev == NULL) {
+		BTMTK_ERR("%s: cif_dev is invalid", __func__);
+		ret = -1;
+		goto exit;
+	}
+
+	ret = usb_control_msg(cif_dev->udev, usb_sndctrlpipe(cif_dev->udev, 0),
+			0x55, 0x40, 0x07, 0x00, NULL, 0, USB_CTRL_IO_TIMO);
+
+	if (ret < 0) {
+		BTMTK_ERR("%s: command send failed(%d)", __func__, ret);
+		goto exit;
+	}
+exit:
+	BTMTK_INFO("%s: end", __func__);
+	return ret;
+}
+
 static int btmtk_usb_enter_standby(void)
 {
 	int ret = 0;
@@ -2867,6 +2895,7 @@ static int btmtk_usb_enter_standby(void)
 	struct btmtk_woble *bt_woble = NULL;
 	int intf_num = btmtk_get_interface_num();
 	struct btmtk_dev **pp_bdev = btmtk_get_pp_bdev();
+	int val = 0;
 
 	BTMTK_INFO("%s: enter", __func__);
 	for (i = 0; i < intf_num; i++) {
@@ -2898,6 +2927,25 @@ static int btmtk_usb_enter_standby(void)
 
 			/* Do HIF events */
 			ret = btmtk_woble_suspend(bt_woble);
+
+			/* If usb2.0(USB_SPEED_HIGH) not need write cr */
+			if(cif_dev->udev->speed > USB_SPEED_HIGH && ret == 0){
+				if (is_mt6639(bdev->chip_id)) {
+					ret = btmtk_usb_read_register(bdev, BT_RADIO_OFF_DONE, &val);
+					if(ret < 0)
+						BTMTK_INFO("%s: read radio off  CR fail", __func__);
+					else {
+						BTMTK_INFO("%s: read radio off CR : 0x%08x", __func__, val);
+						val |= (1 << 15);
+						BTMTK_INFO("%s: write 1 to radio off CR : 0x%08x", __func__, val);
+						ret = btmtk_usb_write_register(bdev, BT_RADIO_OFF_DONE, val);
+						if(ret < 0){
+							BTMTK_INFO("%s: write radio off  CR fail", __func__);
+						} else
+							btmtk_usb_send_shutdown_cmd(bdev);
+					}
+				}
+			}
 
 			/* Set End/Error state */
 			if (ret == 0)
