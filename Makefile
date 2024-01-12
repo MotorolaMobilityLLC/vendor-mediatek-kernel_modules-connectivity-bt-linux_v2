@@ -2,6 +2,7 @@ export KERNEL_SRC := /lib/modules/$(shell uname -r)/build
 #################### Configurations ####################
 # Compile Options for bt driver configuration.
 CONFIG_SUPPORT_BT_DL_WIFI_PATCH=y
+CONFIG_SUPPORT_BT_DL_ZB_PATCH=y
 CONFIG_SUPPORT_BLUEZ=n
 CONFIG_SUPPORT_DVT=n
 CONFIG_SUPPORT_HW_DVT=n
@@ -11,6 +12,12 @@ ifeq ($(CONFIG_SUPPORT_BT_DL_WIFI_PATCH), y)
     ccflags-y += -DCFG_SUPPORT_BT_DL_WIFI_PATCH=1
 else
     ccflags-y += -DCFG_SUPPORT_BT_DL_WIFI_PATCH=0
+endif
+
+ifeq ($(CONFIG_SUPPORT_BT_DL_ZB_PATCH), y)
+    ccflags-y += -DCFG_SUPPORT_BT_DL_ZB_PATCH=1
+else
+    ccflags-y += -DCFG_SUPPORT_BT_DL_ZB_PATCH=0
 endif
 
 ifeq ($(CONFIG_SUPPORT_BLUEZ), y)

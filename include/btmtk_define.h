@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2021122701"
+#define VERSION "7.0.2022010701"
 #define SUBVER ":turnkey"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -211,7 +211,7 @@ extern uint8_t btmtk_log_lvl;
 /* TODO, If usb use 901 patch unit size, download patch will timeout
  * because the timeout has been set to 1s
  */
-#define UPLOAD_PATCH_UNIT	2048
+#define UPLOAD_PATCH_UNIT	1988
 #define PATCH_INFO_SIZE		30
 /*#endif*/
 #define PATCH_PHASE1		1
@@ -308,8 +308,9 @@ struct bt_cfg_struct {
 	struct fw_cfg_struct audio_pinmux_mode;	/* support on set audio pinmux mode command customization */
 };
 
-#define WIFI_DOWNLOAD	TRUE
-#define BT_DOWNLOAD	FALSE
+#define BT_DOWNLOAD	1
+#define WIFI_DOWNLOAD	2
+#define ZB_DOWNLOAD	3
 
 #define SWAP32(x) \
 	((u32) (\
