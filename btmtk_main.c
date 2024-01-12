@@ -724,6 +724,7 @@ static void btmtk_fops_set_state(struct btmtk_dev *bdev, u8 new_state)
 #if (CFG_GKI_SUPPORT == 0)
 void *btmtk_kallsyms_lookup_name(const char *name)
 {
+#if (USE_DEVICE_NODE == 0)
 	void *addr = __symbol_get(name);
 
 	if (addr) {
@@ -736,6 +737,9 @@ void *btmtk_kallsyms_lookup_name(const char *name)
 		__symbol_put(name);
 	}
 	return addr;
+#else
+	return NULL;
+#endif
 }
 #endif
 
