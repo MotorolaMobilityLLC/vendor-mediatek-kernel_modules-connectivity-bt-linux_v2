@@ -296,7 +296,7 @@ struct bt_cmds_s commands[] = {
 	{"SET_RADIO_CMD_6639", {{SET_RADIO_CMD_LEN_6639, set_radio_cmd_6639}, {0, NULL}}, DEFAULT},
 	{"SET_RADIO_EVT_6639", {{SET_RADIO_EVT_LEN_6639, set_radio_evt_6639}, {0, NULL}}, DEFAULT},
 	{"SET_BT_LOSS_CMD", {{SET_BT_LOSS_CMD_LEN, set_bt_loss_cmd}, {0, NULL}}, DEFAULT},
-	{"SET_BT_LOSSEVT", {{SET_BT_LOSS_EVT_LEN, set_bt_loss_evt}, {0, NULL}}, DEFAULT},
+	{"SET_BT_LOSS_EVT", {{SET_BT_LOSS_EVT_LEN, set_bt_loss_evt}, {0, NULL}}, DEFAULT},
 	{"SET_COMPENSATION_CMD", {{SET_COMPENSATION_CMD_LEN, set_compensation_cmd}, {0, NULL}}, DEFAULT},
 	{"SET_COMPENSATION_EVT", {{SET_COMPENSATION_EVT_LEN, set_compensation_evt}, {0, NULL}}, DEFAULT},
 	{"SET_COMPENSATION_CMD_6639", {{SET_COMPENSATION_CMD_LEN_6639, set_compensation_cmd_6639}, {0, NULL}}, DEFAULT},

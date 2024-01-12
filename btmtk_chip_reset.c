@@ -33,6 +33,9 @@ static void btmtk_reset_timer(unsigned long arg)
 
 	BTMTK_INFO("%s: chip_reset not trigger in %d seconds, trigger it directly",
 		__func__, CHIP_RESET_TIMEOUT);
+#ifdef CHIP_IF_USB
+	bdev->chip_reset_signal = 0x00;
+#endif
 	schedule_work(&bdev->reset_waker);
 }
 #else
@@ -42,6 +45,9 @@ static void btmtk_reset_timer(struct timer_list *timer)
 
 	BTMTK_INFO("%s: chip_reset not trigger in %d seconds, trigger it directly",
 		__func__, CHIP_RESET_TIMEOUT);
+#ifdef CHIP_IF_USB
+	bdev->chip_reset_signal = 0x00;
+#endif
 	schedule_work(&bdev->reset_waker);
 }
 #endif

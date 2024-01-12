@@ -1192,7 +1192,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			if (!btmtk_reset_timer_check(bdev))
 				btmtk_reset_timer_update(bdev);
 
-			BTMTK_INFO("dumplog_queue_first1, skb_queue_len = %d",
+			BTMTK_INFO("dumplog_queue_first, skb_queue_len = %d",
 					skb_queue_len(&g_fwlog->dumplog_queue_first));
 
 			if (skb_queue_len(&g_fwlog->dumplog_queue_first) == 0) {
@@ -1204,7 +1204,11 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				skb_queue_purge(&g_fwlog->dumplog_queue_latest);
 				dumplog_queue = &g_fwlog->dumplog_queue_latest;
 			}
+		}
+
+		if ((bdev->chip_reset_signal & 0x8) == 0) {
 			btmtk_dump_timestamp_add(dumplog_queue);
+			bdev->chip_reset_signal |= 0x08;
 		}
 
 		dump_data_counter++;
@@ -1236,6 +1240,9 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			DUMP_TIME_STAMP("FW_dump_end");
 			if (bmain_info->hif_hook.waker_notify)
 				bmain_info->hif_hook.waker_notify(bdev);
+
+			/* Clear 4th bit when received coredump end  */
+			bdev->chip_reset_signal &= ~0x08;
 
 #ifdef CHIP_IF_USB
 			/* USB hif: recv both 0xff and fw dump end, then do chip reset */
