@@ -661,6 +661,32 @@ static int btmtk_uart_send_query_uart_cmd(struct hci_dev *hdev)
 	return ret;
 }
 
+static int btmtk_uart_read_chip_id_cmd(struct hci_dev *hdev)
+{
+	u8 cmd[] = {0x01, 0x6F, 0xFC, 0x05, 0x01, 0x04, 0x01, 0x00, 0x09};
+	u8 event[] = {0x04, 0xE4, 0x0A, 0x02, 0x04, 0x06, 0x00, 0x00, 0x09, 0x39, 0x66, 0x00, 0x00};
+	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	int ret = -1;
+
+	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), event, sizeof(event), DELAY_TIMES,
+#if (USE_DEVICE_NODE == 0)
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+#else
+			RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+#endif
+	if (ret < 0) {
+		BTMTK_ERR("%s btmtk_uart_read_chip_id_cmd failed, set bdev->chip_id to 0x6653", __func__);
+		/* temp set to 0x6653 wheh get chip id failed, this command may failed on FPGA */
+		bdev->chip_id = 0x6653;
+		return ret;
+	}
+
+	bdev->chip_id = (bdev->io_buf[9] == 0x39) ? 0x6635 : 0x6653;
+	BTMTK_INFO("%s: bdev->chip_id = %04x", __func__, bdev->chip_id);
+	BTMTK_INFO("%s done", __func__);
+	return ret;
+}
+
 int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 {
 	u8 cmd[] = { 0x01, 0x6f, 0xfc, 0x01, 0xFF };
@@ -684,12 +710,13 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 		return 0;
 	}
 	if (is_mt6639(bdev->chip_id) || is_mt66xx(bdev->chip_id)) {
-		if (cif_dev->fw_dl_ready)
-			ret = btmtk_main_send_cmd(bdev, cmd+4, 1, event2, WAKEUP_EVT_LEN + 1,
-					0, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
-		else
-			ret = btmtk_main_send_cmd(bdev, cmd+4, 1, event, WAKEUP_EVT_LEN,
+		BTMTK_INFO("%s: chip_id = 0x%x", __func__, bdev->chip_id);
+		if (!cif_dev->fw_dl_ready && bdev->chip_id == 0x6635)
+			ret = btmtk_main_send_cmd(bdev, cmd + 4, 1, event, WAKEUP_EVT_LEN,
 					0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+		else
+			ret = btmtk_main_send_cmd(bdev, cmd + 4, 1, event2, WAKEUP_EVT_LEN + 1,
+					0, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
 	} else
 		ret = btmtk_main_send_cmd(bdev, cmd, WAKEUP_CMD_LEN, event, WAKEUP_EVT_LEN,
 				0, 0, BTMTK_TX_CMD_FROM_DRV);
@@ -1036,6 +1063,10 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 			goto exit;
 	}
 
+	/* read chip id */
+	ret = btmtk_uart_read_chip_id_cmd(bdev->hdev);
+	BTMTK_INFO("%s btmtk_uart_read_chip_id_cmd, ret[%d], chip_id = %04x", __func__, ret, bdev->chip_id);
+
 	/* set chip baud and flowcontrol to config setting */
 	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
 	if (ret < 0)
@@ -1245,7 +1276,8 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 		BTMTK_INFO("%s mtk8250_uart_hub_assert_bit_ctrl(0)", __func__);
 	}
 #endif
-	btmtk_read_pmic_state(bdev);
+	/* temp comment for skyhawk fpga */
+	// btmtk_read_pmic_state(bdev);
 #endif
 
 #if (SLEEP_ENABLE == 1)
