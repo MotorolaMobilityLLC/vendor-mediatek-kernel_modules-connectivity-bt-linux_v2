@@ -1669,7 +1669,7 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 
 	/* prepare WMT header */
 	cmd[4] = 0x01;
-	if (is_mt6639(bdev->chip_id) && patch_flag == WIFI_DOWNLOAD) {
+	if ((is_mt6639(bdev->chip_id) || is_mt7925(bdev->chip_id)) && patch_flag == WIFI_DOWNLOAD) {
 		cmd[5] = 0x54; /* opcode */
 		event[4] = 0x54; /* should be same as cmd*/
 	} else {
@@ -1775,7 +1775,7 @@ static int btmtk_load_fw_patch_using_wmt_cmd(struct btmtk_dev *bdev,
 				retry = PATCH_DOWNLOAD_PHASE3_RETRY;
 			}
 
-			if (is_mt6639(bdev->chip_id) && patch_flag == WIFI_DOWNLOAD) {
+			if ((is_mt6639(bdev->chip_id) || is_mt7925(bdev->chip_id)) && patch_flag == WIFI_DOWNLOAD) {
 				image[6] = 0x54; /* opcode */
 				event[4] = 0x54; /* should be same as cmd*/
 			} else {
@@ -3289,6 +3289,12 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 				(bdev->proj & 0xff) + 1, (bdev->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
 	}
 
+	if (is_mt7925(bdev->chip_id)) {
+		(void)snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s%x_%x_%x.%s",
+				BT_CFG_NAME_PREFIX, bdev->chip_id & 0xffff,
+				(bdev->proj & 0xff) + 1, (bdev->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
+	}
+
 	BTMTK_INFO("%s: rom patch file name is %s, bt_cfg_file_name is %s", __func__,
 		bdev->rom_patch_bin_file_name, bdev->bt_cfg_file_name);
 
@@ -3298,7 +3304,7 @@ exit:
 	return ret;
 }
 
-static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
+__attribute__((unused)) static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	u16 index = 0;
@@ -3414,11 +3420,14 @@ int btmtk_send_init_cmds(struct btmtk_dev *bdev)
 #endif
 	}
 
+#if CFG_SUPPORT_BLUEZ
+#else
 	ret = btmtk_send_vendor_cfg(bdev);
 	if (ret < 0) {
 		BTMTK_ERR("btmtk_send_vendor_cfg failed");
 		goto exit;
 	}
+#endif
 
 exit:
 	return ret;
