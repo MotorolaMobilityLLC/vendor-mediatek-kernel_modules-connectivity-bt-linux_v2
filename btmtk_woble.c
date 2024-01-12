@@ -741,10 +741,13 @@ int btmtk_woble_suspend(struct btmtk_woble *bt_woble)
 	struct btmtk_dev *bdev = bt_woble->bdev;
 
 	BTMTK_INFO("%s: enter", __func__);
-
+	if(bdev == NULL || !is_support_unify_woble(bdev)) {
+		BTMTK_WARN("%s: bdev is NULL or not support woble", __func__);
+		goto exit;
+	}
 	fstate = btmtk_fops_get_state(bdev);
 
-	if (!is_support_unify_woble(bdev) && (fstate != BTMTK_FOPS_STATE_OPENED)) {
+	if (fstate != BTMTK_FOPS_STATE_OPENED) {
 		BTMTK_WARN("%s: when not support woble, in bt off state, do nothing!", __func__);
 		goto exit;
 	}
