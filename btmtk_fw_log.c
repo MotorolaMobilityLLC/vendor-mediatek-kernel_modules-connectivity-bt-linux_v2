@@ -12,7 +12,7 @@
 
 /*
  * BT Logger Tool will turn on/off Firmware Picus log, and set 3 log levels (Low, SQC and Debug)
- * For extention capability, driver does not check the value range.
+ * For extension capability, driver does not check the value range.
  *
  * Combine log state and log level to below settings:
  * - 0x00: OFF
