@@ -2672,33 +2672,14 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	/* if fw already coredump, no need to send drv own cmd */
 	if (cif_dev->sleep_en && btmtk_get_chip_state(bdev) != BTMTK_STATE_FW_DUMP) {
 		/* if fw already wake, no need to send 0xFF and wait 6ms before clr fw own */
-		if (atomic_read(&cif_dev->fw_wake)) {
+		if (atomic_read(&cif_dev->fw_wake) && !cif_dev->sleep_flow_hw_mech_en) {
 			/* wait a while for avoid rx pkt error */
 			usleep_range(4000, 4100);
 		} else {
 			u8 wakeup_cmd[] = { 0xFF };
 			 if (bdev->is_eap) {
-				if (!cif_dev->sleep_flow_hw_mech_en) {
+				if (!cif_dev->sleep_flow_hw_mech_en)
 					ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
-				} else {
-#if IS_ENABLED(CONFIG_MTK_UARTHUB)
-					/* new wakeup flow */
-					/* 3. Set DEVx_HOST_AWAKE = 1 */
-					/* 4. Tx 0xFF, if DEVx_BT_AWAKE = 0 */
-					/* 4~8 Polling CMM_BT_AWAKE = 1 or DEVx_BT_AWAKE = 1 */
-					ret = mtk8250_uart_hub_set_host_awake_sta(0);
-					BTMTK_INFO("%s: Set DEVx_HOST_AWAKE = 1, ret = %d ", __func__, ret);
-
-					if (mtk8250_uart_hub_get_bt_awake_sta()== 0) {
-						ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
-					}
-
-					do {
-						/* If CMM_BT_AWAKE = 1 or DEVx_BT_AWAKE = 1 leave while */
-						BTMTK_INFO("%s: CMM_BT_AWAKE = %d, DEVx_BT_AWAKE = %d", __func__, mtk8250_uart_hub_get_cmm_bt_awake_sta(), mtk8250_uart_hub_get_bt_awake_sta());
-					} while (mtk8250_uart_hub_get_cmm_bt_awake_sta() == 0 && mtk8250_uart_hub_get_bt_awake_sta() == 0);
-#endif
-				}
 			} else {
 				if (cif_dev->sleep_flow_hw_mech_en) {
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
