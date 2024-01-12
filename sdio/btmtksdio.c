@@ -545,6 +545,7 @@ static int btmtk_sdio_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 
 	memcpy(val, bdev->io_buf + MCU_ADDRESS_OFFSET_EVT - HCI_TYPE_SIZE, sizeof(u32));
 	*val = le32_to_cpu(*val);
+	/* make sure memcpy done before we use the register */
 	smp_wmb();
 
 	BTMTK_INFO("%s: reg=%x, value=0x%08x", __func__, reg, *val);
@@ -1010,6 +1011,7 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 				notify_alt_evt[6] = (crValue & 0x000000FF);
 				memcpy(evt_skb->data, &notify_alt_evt[1], NOTIFY_ALT_EVT_LEN - 1);
 				evt_skb->len = NOTIFY_ALT_EVT_LEN - 1;
+				/* make sure memcpy done before send to hci layer */
 				smp_wmb();
 				hci_recv_frame(bdev->hdev, evt_skb);
 				kfree_skb(skb);
@@ -1041,6 +1043,7 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 				notify_alt_evt[6] = (crValue & 0x000000FF);
 				memcpy(evt_skb->data, &notify_alt_evt[1], NOTIFY_ALT_EVT_LEN - 1);
 				evt_skb->len = NOTIFY_ALT_EVT_LEN - 1;
+				/* make sure memcpy done before send to hci layer */
 				smp_wmb();
 				hci_recv_frame(bdev->hdev, evt_skb);
 				kfree_skb(skb);
@@ -1162,6 +1165,7 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 		memset(cif_dev->transfer_buf, 0, URB_MAX_BUFFER_SIZE);
 		hci_pkt_len += 5;
 		memcpy(cif_dev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE, bdev->io_buf, hci_pkt_len);
+		/* make sure memcpy done before send to hci layer */
 		smp_wmb();
 		BTMTK_DBG_RAW(cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
 	}
@@ -1196,6 +1200,7 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 		memset(cif_dev->transfer_buf, 0, URB_MAX_BUFFER_SIZE);
 		hci_pkt_len += 5;
 		memcpy(cif_dev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE, bdev->io_buf, hci_pkt_len);
+		/* make sure memcpy done before send to hci layer */
 		smp_wmb();
 		BTMTK_DBG_RAW(cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
 		break;
@@ -1269,6 +1274,7 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			/* Such as chip_id, fw_version, etc. */
 			bdev->io_buf[0] = bt_cb(skb)->pkt_type;
 			memcpy(&bdev->io_buf[1], skb->data, skb->len);
+			/* make sure memcpy done before we compare it */
 			smp_wmb();
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 			BTMTK_DBG("%s, compare success", __func__);
@@ -1331,6 +1337,7 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 	do {
 		/* check if event_compare_success */
 		if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
+			/* make sure memcpy done before we compare it */
 			smp_rmb();
 			ret = 0;
 			break;
@@ -2178,10 +2185,8 @@ static int btmtk_cif_suspend(struct device *dev)
 
 	pm_flags = MMC_PM_KEEP_POWER;
 	ret = sdio_set_host_pm_flags(func, pm_flags);
-	if (ret) {
+	if (ret)
 		BTMTK_ERR("%s, set flag 0x%x err %d", __func__, pm_flags, (int)ret);
-		ret = -ENOSYS;
-	}
 
 	/* Set End/Error state */
 	if (ret == 0)
