@@ -125,7 +125,7 @@ void btmtk_reset_waker(struct work_struct *work)
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
-	BTMTK_INFO("%s: Receive WDT interrupt subsys_reset_state[%d] chip_reset_flag[%d]", __func__, 
+	BTMTK_INFO("%s: Receive WDT interrupt subsys_reset_state[%d] chip_reset_flag[%d]", __func__,
 					atomic_read(&bmain_info->subsys_reset), bmain_info->chip_reset_flag);
 	/* read interrupt EP15 CR */
 

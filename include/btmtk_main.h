@@ -200,15 +200,6 @@
 #define MAC2STR(a) ((unsigned char *)a)[0], ((unsigned char *)a)[1], ((unsigned char *)a)[5]
 #endif
 
-#if CFG_SHOW_FULL_MACADDR
-#define MACSTR "%02X:%02X:%02X:%02X:%02X:%02X"
-#define MAC2STR(a) ((unsigned char *)a)[0], ((unsigned char *)a)[1], ((unsigned char *)a)[2],\
-				((unsigned char *)a)[3], ((unsigned char *)a)[4], ((unsigned char *)a)[5]
-#else
-#define MACSTR "%02X:%02X:**:**:**:%02X"
-#define MAC2STR(a) ((unsigned char *)a)[0], ((unsigned char *)a)[1], ((unsigned char *)a)[5]
-#endif
-
 enum {
 	RES_1 = 0,
 	RES_DOT_5,
@@ -712,7 +703,7 @@ struct hif_hook_chip_ptr {
 	cif_bt_close_handler			bt_close_handler;
 	cif_bt_set_audio_pinmux			bt_set_pinmux;
 	cif_bt_cap_init					cap_init;
-	cif_bt_subsys_reset 			bt_subsys_reset;
+	cif_bt_subsys_reset				bt_subsys_reset;
 
 /* for calibration */
 	cif_bt_cal_restore_ptr				restore;

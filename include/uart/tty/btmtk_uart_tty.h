@@ -202,7 +202,7 @@ struct btmtk_uart_dev {
 	struct btmtk_dypwr_st dy_pwr;
 
 	/* pre-cal flag */
-	bool 		is_pre_cal;
+	bool			is_pre_cal;
 #endif
 };
 

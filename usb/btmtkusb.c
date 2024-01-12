@@ -2822,7 +2822,7 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 
 	state = btmtk_get_chip_state(bdev);
 	if (state == BTMTK_STATE_DISCONNECT) {
-		BTMTK_INFO("%s:usb disconnect is doing, return",__func__);
+		BTMTK_INFO("%s:usb disconnect is doing, return", __func__);
 		btmtk_usb_handle_mutex_unlock(bdev);
 		return -1;
 	}
@@ -3426,7 +3426,7 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 
 	state = btmtk_get_chip_state(bdev);
 	if (state == BTMTK_STATE_DISCONNECT) {
-		BTMTK_INFO("%s:usb disconnect is doing, return",__func__);
+		BTMTK_INFO("%s:usb disconnect is doing, return", __func__);
 		btmtk_usb_handle_mutex_unlock(bdev);
 		return;
 	}

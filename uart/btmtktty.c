@@ -462,9 +462,9 @@ exit:
 	up(&cif_dev->evt_comp_sem);
 	/* control not trigger assert */
 	if (ret < 0 && pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT) {
-		if(bmain_info->hif_hook.trigger_assert) {
+		if (bmain_info->hif_hook.trigger_assert)
 			bmain_info->hif_hook.trigger_assert(bdev);
-		} else
+		else
 			btmtk_send_assert_cmd(bdev);
 	}
 
@@ -960,10 +960,12 @@ static int btmtk_uart_pre_open(struct btmtk_dev *bdev)
 	int ret = 0;
 #if (SLEEP_ENABLE == 1)
 	struct btmtk_uart_dev *cif_dev = NULL;
+
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return -1;
 	}
+
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	BTMTK_INFO("%s init to driver own state", __func__);
 	/* not start fw_own_timer until bt open done */
@@ -985,9 +987,8 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s start", __func__);
 
-	if (bdev == NULL) {
+	if (bdev == NULL)
 		BTMTK_ERR("%s: bdev is NULL", __func__);
-	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
@@ -1190,11 +1191,11 @@ static u32 btmtk_thread_wait_for_msg(struct btmtk_dev *bdev)
 {
 	u32 ret = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
+
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
-	if (!skb_queue_empty(&cif_dev->tx_queue)) {
+	if (!skb_queue_empty(&cif_dev->tx_queue))
 		ret |= BTMTK_THREAD_TX;
-	}
 
 #if (SLEEP_ENABLE == 1)
 	if (atomic_read(&cif_dev->need_drv_own)) {
@@ -1363,6 +1364,7 @@ static int btmtk_tx_thread_start(struct btmtk_dev *bdev)
 static int btmtk_tx_thread_exit(struct btmtk_uart_dev *cif_dev)
 {
 	int i = 0;
+
 	BTMTK_INFO("%s start", __func__);
 
 	if (cif_dev == NULL) {
@@ -1952,7 +1954,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	if (cif_dev->sleep_en && btmtk_get_chip_state(bdev) != BTMTK_STATE_FW_DUMP) {
 		do {
 			/* if fw already wake, no need to send 0xFF and wait 5ms before clr fw own */
-			if (!atomic_read(&cif_dev->fw_wake)){
+			if (!atomic_read(&cif_dev->fw_wake)) {
 				/* no need to wait event */
 				ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
 						DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT);
@@ -2382,7 +2384,7 @@ int btmtk_cif_register(void)
 	hook.cif_mutex_unlock = btmtk_uart_cif_mutex_unlock;
 	hook.dl_dma = btmtk_uart_load_fw_patch_using_dma;
 	hook.waker_notify = btmtk_uart_waker_notify;
-	hook.set_para= btmtk_uart_set_para;
+	hook.set_para = btmtk_uart_set_para;
 	btmtk_reg_hif_hook(&hook);
 
 	ret = uart_register();

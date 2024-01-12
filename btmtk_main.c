@@ -880,6 +880,7 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 
 	while (size) {
 		int index, length;
+
 		if (!skb) {
 			/* ignore first byte as 0xFF (FW wakeup) & 0x00 (noise from uart) */
 			while (size > 1 && (*buf == 0xFF || *buf == 0x00)) {
@@ -1908,6 +1909,7 @@ static int btmtk_parsing_fw_rom_patch(struct btmtk_dev *bdev,
 			bin_index = (le2cpu32(sectionMap->bin_info_spec.u4DLModeCrcType) >> 16) & 0xFF;
 			bin_type = sectionMap->bin_info_spec.u4SecType;
 		}
+
 		BTMTK_INFO("%s: loop_count = %d, section_offset = 0x%08x, download patch_len = 0x%08x, "
 				"dl mode = %d, section bin_type = 0x%08x, bin_index =%d\n",
 				__func__, loop_count, section_offset, dl_size, dma_flag, bin_type, bin_index);
@@ -2376,8 +2378,8 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag)
 		goto err;
 	}
 
-	if(btmtk_load_code_from_bin_check(rom_patch, rom_patch_len, patch_flag)) {
-		BTMTK_ERR("%s: rom patch length check fail, retyrn",__func__);
+	if (btmtk_load_code_from_bin_check(rom_patch, rom_patch_len, patch_flag)) {
+		BTMTK_ERR("%s: rom patch length check fail, retyrn", __func__);
 		ret = -1;
 		goto err;
 	}
@@ -2557,7 +2559,7 @@ struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev)
 	if (!bdev)
 		return NULL;
 
-	memset(bdev, 0 ,sizeof(struct btmtk_dev));
+	memset(bdev, 0, sizeof(struct btmtk_dev));
 
 	btmtk_set_chip_state(bdev, BTMTK_STATE_INIT);
 
@@ -4132,8 +4134,7 @@ int bt_open(struct hci_dev *hdev)
 		goto failed;
 	}
 
-	if(main_info.hif_hook_chip.bt_open_handler)
-	{
+	if (main_info.hif_hook_chip.bt_open_handler) {
 		ret = main_info.hif_hook_chip.bt_open_handler(bdev);
 		if (ret < 0) {
 			BTMTK_ERR("bt_open_handler fail");
@@ -4441,8 +4442,7 @@ static void btmtk_rx_work(struct work_struct *work)
 			}
 		} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
 			/* calibration backup */
-			if (skb->data[0] == 0xff && skb->data[1] <= 0x03)
-			{
+			if (skb->data[0] == 0xff && skb->data[1] <= 0x03) {
 				if (main_info.hif_hook_chip.backup_save) {
 					BTMTK_INFO_RAW(skb->data, skb->len, "%s: Get calibration DATA- ", __func__);
 					main_info.hif_hook_chip.backup_save(bdev, skb);
