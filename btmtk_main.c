@@ -2419,7 +2419,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 			/* using DMA to download fw patch*/
 			ret = main_info.hif_hook.dl_dma(bdev,
 				pos, fwbuf,
-				dl_size, section_offset, BT_DOWNLOAD);
+				dl_size, section_offset);
 			if (ret < 0) {
 				BTMTK_ERR("%s: btmtk_load_fw_patch_using_dma failed!", __func__);
 				goto err;
@@ -2556,7 +2556,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 				/* using DMA to download fw patch*/
 				ret = main_info.hif_hook.dl_dma(bdev,
 					pos, fwbuf,
-					dl_size, section_offset, patch_flag);
+					dl_size, section_offset);
 				if (ret < 0) {
 					BTMTK_ERR("%s: btmtk_load_fw_patch_using_dma failed!", __func__);
 					goto err;

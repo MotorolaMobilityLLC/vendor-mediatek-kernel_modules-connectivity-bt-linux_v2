@@ -1519,27 +1519,35 @@ static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev, bool do_flus
 }
 
 static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
-		u8 *fwbuf, int section_dl_size, int section_offset, int patch_flag)
+		u8 *fwbuf, int section_dl_size, int section_offset)
 {
 	int cur_len = 0;
-	int flush_retry = 0, max_pkt_cnt = 0;
+	u32 max_pkt_cnt = 0, zero_pkt_cnt = 0, current_cpu = 0;
 	int ret = -1;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	s32 sent_len;
 	u8 cmd[LD_PATCH_CMD_LEN] = {0x02, 0x6F, 0xFC, 0x05, 0x00, 0x01, 0x01, 0x01, 0x00, PATCH_PHASE3};
 	u8 event[LD_PATCH_EVT_LEN] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
-	unsigned long start_time = 0, time_diff = 0;
+	unsigned long end_time = 0, dump_time = 0, record_time = 0, log_time = 0;
 
 	if (bdev == NULL || image == NULL || fwbuf == NULL) {
 		BTMTK_ERR("%s: invalid parameters!", __func__);
-		ret = -1;
-		goto exit;
+		return -1;
 	}
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
 	BTMTK_DBG("%s: loading rom patch... start", __func__);
 
 	down(&cif_dev->tty_flush_sem);
-	start_time = jiffies;
+	log_time = jiffies;
+	record_time = jiffies;
+	end_time = jiffies + msecs_to_jiffies(TIME_BOUND_OF_FW_PKG_DL);
+	dump_time = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
 	while (1) {
 		sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT) ?
 				(UPLOAD_PATCH_UNIT) : (section_dl_size - cur_len);
@@ -1550,7 +1558,8 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		}
 
 		if (sent_len > 0) {
-			memcpy(image, fwbuf + section_offset + cur_len, sent_len);
+			// memcpy(image, fwbuf + section_offset + cur_len, sent_len);
+
 			/* get interface state without mutex */
 			if (bdev && bdev->interface_state != BTMTK_STATE_DISCONNECT) {
 				/* avoid uart_launcher get signal 9 close uart, and not notify driver */
@@ -1558,37 +1567,61 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 					BTMTK_WARN("%s: tty port count is 0", __func__);
 					goto exit;
 				}
-				ret = cif_dev->tty->ops->write(cif_dev->tty, image, sent_len);
+				log_time = jiffies_to_msecs(jiffies) - jiffies_to_msecs(log_time);
+				if (log_time > TIME_DUMP_OF_FW_PKG_DL)
+					BTMTK_WARN("%s: while(1) loop more than %d ms, [%lu] ms, cpu[%u]",
+							__func__, TIME_DUMP_OF_FW_PKG_DL, log_time,  current_thread_info()->cpu);
+				log_time = jiffies;
+				current_cpu =  current_thread_info()->cpu;
+				ret = cif_dev->tty->ops->write(cif_dev->tty, fwbuf + section_offset + cur_len, sent_len);
+				log_time = jiffies_to_msecs(jiffies) - jiffies_to_msecs(log_time);
+				if (log_time > TIME_DUMP_OF_FW_PKG_DL)
+					BTMTK_WARN("%s: tty write more than %d ms, [%lu] ms, tty_chars_in_buffer[%d], cur_len[%d], write_cnt[%d]",
+							__func__, TIME_DUMP_OF_FW_PKG_DL, log_time, tty_chars_in_buffer(cif_dev->tty), cur_len, ret);
+				if(current_cpu !=  current_thread_info()->cpu)
+					BTMTK_DBG("%s: cpu changed in tty write [%u]->[%u]", __func__, current_cpu,  current_thread_info()->cpu);
+				log_time = jiffies;
 			} else {
 				BTMTK_WARN("%s: tty is closing, skip download", __func__);
 				ret = -1;
 				goto exit;
 			}
 
-			time_diff = jiffies_to_msecs(jiffies) - jiffies_to_msecs(start_time);
-			if (ret == UPLOAD_PATCH_UNIT) {
-				max_pkt_cnt++;
-				/* reset start time for next packet */
-				start_time = jiffies;
-			} else if (ret == 0)
-				udelay(500);
-			else if (time_diff >= TIME_BOUND_OF_FW_PKG_DL) {
-				BTMTK_ERR("%s:, download single packet more than 2s [%lu]",
-					__func__, time_diff);
+			/* every 500ms dump uart state */
+			if (time_after(jiffies, dump_time)) {
+				BTMTK_WARN("%s: download 1 patch more than %d ms, tty_chars[%d], cur_len[%d], zero_pkt[%d], cpu[%u]",
+						__func__, WOBLE_EVENT_INTERVAL_TIMO, tty_chars_in_buffer(cif_dev->tty),
+						cur_len, zero_pkt_cnt, current_thread_info()->cpu);
 #if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
 				mtk8250_uart_dump(cif_dev->tty);
 #endif
+				BTMTK_INFO("%s: mtk8250_uart_dump end", __func__);
+				dump_time = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
+			}
+
+			if (time_after(jiffies, end_time)) {
+				BTMTK_ERR("%s: download 1 patch more than %d ms, tty_chars[%d], cur_len[%d], zero_pkt[%d], cpu[%u]",
+						__func__, TIME_BOUND_OF_FW_PKG_DL, tty_chars_in_buffer(cif_dev->tty),
+						cur_len, zero_pkt_cnt, current_thread_info()->cpu);
 				ret = -1;
 				goto exit;
-			} else
-				BTMTK_DBG("%s, sent_len[%d] tty_write[%d], flush_retry[%d] max_pkt_cnt[%d]",
-							__func__, sent_len, ret, flush_retry, max_pkt_cnt);
+			}
+
+			if (ret == UPLOAD_PATCH_UNIT)
+				max_pkt_cnt++;
+			else if (ret == 0)
+				zero_pkt_cnt++;
+			else
+				BTMTK_DBG("%s, sent_len[%d] tty_write[%d] max_pkt_cnt[%d]",
+						__func__, sent_len, ret, max_pkt_cnt);
 			cur_len += ret;
 		} else
 			break;
 	}
 	up(&cif_dev->tty_flush_sem);
-	BTMTK_INFO("%s: patch done max_pkt_cnt[%d], send wmt dl phase3 cmd ", __func__, max_pkt_cnt);
+	record_time = jiffies_to_msecs(jiffies) - jiffies_to_msecs(record_time);
+	BTMTK_INFO("%s: patch done, cost %lu ms, max_pkt_cnt[%d], zero_pkt_cnt[%d], cur_len[%d], send dl phase3 cmd ",
+			__func__, record_time, max_pkt_cnt, zero_pkt_cnt, cur_len);
 
 	/* seperate phase 3 cmd with dma mode content */
 	usleep_range(1000, 1100);
@@ -1597,7 +1630,8 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			event, LD_PATCH_EVT_LEN,
 			PATCH_DOWNLOAD_PHASE3_DELAY_TIME,
 			PATCH_DOWNLOAD_PHASE3_RETRY,
-			BTMTK_TX_ACL_FROM_DRV, CMD_NO_NEED_FILTER);
+			BTMTK_TX_ACL_FROM_DRV,
+			CMD_NO_NEED_FILTER);
 	if (ret < 0) {
 		BTMTK_ERR("%s: send wmd dl cmd failed, terminate!", __func__);
 		return ret;
