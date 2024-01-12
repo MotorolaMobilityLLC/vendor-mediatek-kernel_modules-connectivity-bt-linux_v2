@@ -269,7 +269,6 @@ int main(int argc, char *argv[])
     int opt;
     int baudrate = 0;
     int chang_baud_rate = 0;
-    int retry = 0;
     int flow_control = UART_DISABLE_FC;
     char *tty_path = "/dev/ttyUSB0";
     struct UART_CONFIG sUartConfig;
@@ -324,49 +323,30 @@ int main(int argc, char *argv[])
                 BPRINT_I("\t\t 0:disable FC  1:MTK_SW_FC  2: SW_FC  3: HW_FC");
                 BPRINT_I("tty path:\t uart_launcher -p [path]");
                 BPRINT_I("kill process:\t uart_launcher -k");
-                goto exit;
+                goto done;
                 break;
         }
     }
 
     /* open ttyUSB */
     BPRINT_I("Running...");
-    /* node may not ready, retry 20 times */
-    while (1) {
-        gTtyFd = open(tty_path, O_RDWR | O_NOCTTY | O_NONBLOCK);
-        BPRINT_I("open done ttyfd %d", gTtyFd);
-        if (gTtyFd < 0) {
-            if (retry > 20) {
-                BPRINT_E("ttyfd %d, error", gTtyFd);
-                goto exit;
-            } else {
-                retry++;
-                (void)usleep(1000 * 1000);
-            }
-        } else
-            break;
+    gTtyFd = open(tty_path, O_RDWR | O_NOCTTY | O_NONBLOCK);
+    BPRINT_I("open done ttyfd %d", gTtyFd);
+    if (gTtyFd < 0) {
+        BPRINT_E("ttyfd %d, error", gTtyFd);
+        return 0;
     }
 
     /* flock the device node */
     if (fcntl(gTtyFd, F_SETLK, &fl) < 0) {
         BPRINT_E("lock device node failed, uart_launcher already running.");
-        goto exit;
+        exit(0);
     }
 
     ld = N_MTK;
-    /* to ensure driver register TIOCSETD, retry 20 times */
-    retry = 0;
-    while (1) {
-        if (ioctl(gTtyFd, TIOCSETD, &ld) < 0) {
-            if (retry > 20) {
-                BPRINT_E("set TIOCSETD N_MTK error");
-                goto exit;
-            } else {
-                retry++;
-                (void)usleep(1000 * 1000);
-            }
-        } else
-            break;
+    if (ioctl(gTtyFd, TIOCSETD, &ld) < 0) {
+        BPRINT_E("set TIOCSETD N_MTK error");
+        return 0;
     }
 
 restart:
@@ -435,7 +415,9 @@ restart:
         goto restart;
     }
 
-    /* before exit daemon, return baud to default */
+done:
+    /* unlock ttyFd */
+    unlock_flock(gTtyFd, &fl, F_UNLCK, SEEK_SET);
     if (chang_baud_rate | flow_control) {
         sUartConfig.iBaudrate = CUST_BAUDRATE_DFT;
         sUartConfig.fc = UART_DISABLE_FC;
@@ -455,12 +437,8 @@ restart:
         }
     }
 
-exit:
-    /* unlock ttyFd */
-    if (gTtyFd > 0) {
-        unlock_flock(gTtyFd, &fl, F_UNLCK, SEEK_SET);
+    if (gTtyFd > 0)
         close(gTtyFd);
-    }
     BPRINT_I("uart_launcher stop");
     return 0;
 }

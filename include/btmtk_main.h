@@ -20,6 +20,8 @@
 #define DEFAULT_DEBUG_SOP_NAME "usb_debug"
 #elif defined(CHIP_IF_SDIO)
 #define DEFAULT_DEBUG_SOP_NAME "sdio_debug"
+#elif defined(CHIP_IF_UART_TTY)
+#define DEFAULT_DEBUG_SOP_NAME "uart_debug"
 #endif
 
 //static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb);
@@ -161,8 +163,9 @@
 #define ERR_PWR		-9999
 
 #define WAIT_POWERKEY_TIMEOUT 5000
+#define WAIT_FW_DUMP_TIMEOUT 15000
+#define WAIT_DRV_OWN_TIMEOUT 3000
 
-#define SEPARATOR_LEN 2
 #define STP_CRC_LEN 2
 #define TEMP_LEN 260
 #define SEARCH_LEN 32
@@ -170,115 +173,33 @@
 
 #define DUAL_BT_FLAG (0x1 << 5)
 
-/* CMD&Event sent by driver */
-#define READ_EFUSE_CMD_LEN 18
-#define READ_EFUSE_EVT_HDR_LEN 9
-#define READ_EFUSE_CMD_BLOCK_OFFSET 10
-
-#define CHECK_LD_PATCH_CMD_LEN 9
-#define CHECK_LD_PATCH_EVT_HDR_LEN 7
-#define CHECK_LD_PATCH_EVT_RESULT_OFFSET 6	/* need confirm later */
-
-#define HWERR_EVT_LEN 4
-
-#define LD_PATCH_EVT_LEN 8
-
-#define HCI_RESET_CMD_LEN 4
-#define HCI_RESET_EVT_LEN 7
-
-#define WMT_RESET_CMD_LEN 9
-#define WMT_RESET_EVT_LEN 8
-
-#define WMT_POWER_ON_CMD_LEN 10
-#define WMT_POWER_ON_EVT_HDR_LEN 7
-#define WMT_POWER_ON_EVT_RESULT_OFFSET 7
-
-#define WMT_POWER_OFF_CMD_LEN 10
-#define WMT_POWER_OFF_EVT_HDR_LEN 7
-#define WMT_POWER_OFF_EVT_RESULT_OFFSET 7
-
-#define PICUS_ENABLE_CMD_LEN 8
-#define PICUS_ENABLE_EVT_HDR_LEN 9
-
-#define PICUS_DISABLE_CMD_LEN 8
-#define PICUS_DISABLE_EVT_HDR_LEN 9
-
-#define RES_APCF_CMD_LEN 9
-#define RES_APCF_EVT_LEN 5
-
-#define READ_ADDRESS_CMD_LEN 4
-#define READ_ADDRESS_EVT_HDR_LEN 7
-
-#define WOBLE_ENABLE_DEFAULT_CMD_LEN 40
-#define WOBLE_ENABLE_DEFAULT_EVT_LEN 5
-
-#define WOBLE_DISABLE_DEFAULT_CMD_LEN 9
-#define WOBLE_DISABLE_DEFAULT_EVT_LEN 5
-
-#define RADIO_OFF_CMD_LEN 9
-#define RADIO_OFF_EVT_LEN 5
-
-#define RADIO_ON_CMD_LEN 9
-#define RADIO_ON_EVT_LEN 5
-
-#define APCF_FILTER_CMD_LEN 14
-#define APCF_FILTER_EVT_HDR_LEN 8
-
-#define APCF_CMD_LEN 43
-#define APCF_EVT_HDR_LEN 7
-
-#define APCF_DELETE_CMD_LEN 7
-#define APCF_DELETE_EVT_HDR_LEN 8
-
-#define APCF_RESUME_EVT_HDR_LEN 7
-
-#define CHECK_WOBX_DEBUG_CMD_LEN 8
-#define CHECK_WOBX_DEBUG_EVT_HDR_LEN 2
-
-#define SET_STP_CMD_LEN 13
-#define SET_STP_EVT_LEN 9
-
-#define SET_STP1_CMD_LEN 16
-#define SET_STP1_EVT_LEN 19
-
-#define SET_SLEEP_CMD_LEN 11
-#define SET_SLEEP_EVT_LEN 7
-
-#define EVT_HDR_LEN 2
-
-#define ASSERT_CMD_LEN 9
-
-#define TXPOWER_CMD_LEN 16
-#define TXPOWER_EVT_LEN 7
-
-#define FW_COREDUMP_CMD_LEN 4
-#define HCI_RESET_CMD_LEN 4
-#define READ_ISO_PACKET_SIZE_CMD_HDR_LEN 4
-
-#define AUDIO_SETTING_CMD_LEN 8
-#define AUDIO_SETTING_EVT_LEN 7
-
-#define READ_PINMUX_CMD_LEN 8
-#define READ_PINMUX_EVT_CMP_LEN 6
-#define READ_PINMUX_EVT_REAL_LEN 11
-
-#define WRITE_PINMUX_CMD_LEN 12
-#define WRITE_PINMUX_EVT_LEN 7
-
-#define PINMUX_REG_NUM 2
-
-#define WRITE_PINMUX_CMD_LEN_7902 7
-#define WRITE_PINMUX_EVT_LEN_7902 7
-
-#define PINMUX_REG_NUM_7902 4
-
 #define FW_VERSION_BUF_SIZE 256
 #define FW_VERSION_KEY_WORDS "t-neptune"
 
+#define FW_PATCH_SIZE_MAX (2*1024*1024)
+
+#define WMT_POWER_ON_EVT_RESULT_OFFSET 7
+#define READ_EFUSE_CMD_BLOCK_OFFSET 10
+#define READ_PINMUX_EVT_REAL_LEN 11
+#define READ_ISO_PACKET_SIZE_CMD_HDR_LEN 4
+
+#define PINMUX_REG_NUM 2
+
 #if BUILD_QA_DBG
 #define CFG_SHOW_FULL_MACADDR 1
+#define CFG_ENABLE_DEBUG_WRITE 1
 #else
 #define CFG_SHOW_FULL_MACADDR 0
+#define CFG_ENABLE_DEBUG_WRITE 0
+#endif
+
+#if CFG_SHOW_FULL_MACADDR
+#define MACSTR "%02X:%02X:%02X:%02X:%02X:%02X"
+#define MAC2STR(a) ((unsigned char *)a)[0], ((unsigned char *)a)[1], ((unsigned char *)a)[2],\
+				((unsigned char *)a)[3], ((unsigned char *)a)[4], ((unsigned char *)a)[5]
+#else
+#define MACSTR "%02X:%02X:**:**:**:%02X"
+#define MAC2STR(a) ((unsigned char *)a)[0], ((unsigned char *)a)[1], ((unsigned char *)a)[5]
 #endif
 
 #if CFG_SHOW_FULL_MACADDR
@@ -326,6 +247,7 @@ enum TX_TYPE {
 	BTMTK_TX_CMD_FROM_DRV = 0,	/* send hci cmd and wmt cmd by driver */
 	BTMTK_TX_ACL_FROM_DRV,	/* send acl pkt with load rompatch by driver */
 	BTMTK_TX_PKT_FROM_HOST,	/* send pkt from host, include acl and hci */
+	BTMTK_TX_PKT_SEND_DIRECT,/* send tx not through tx_thread */
 };
 
 enum bt_state {
@@ -369,7 +291,7 @@ enum {
 
 /* Please keep sync with btmtk_set_state function */
 enum {
-	BTMTK_STATE_UNKNOWN = 0,
+	/* BTMTK_STATE_UNKNOWN = 0, */
 	BTMTK_STATE_INIT = 1,
 	BTMTK_STATE_DISCONNECT,
 	BTMTK_STATE_PROBE,
@@ -380,13 +302,15 @@ enum {
 	BTMTK_STATE_STANDBY,
 	BTMTK_STATE_SUBSYS_RESET,
 	BTMTK_STATE_SEND_ASSERT,
+	BTMTK_STATE_CLOSED,
+	BTMTK_STATE_ERR,
 
 	BTMTK_STATE_MSG_NUM
 };
 
 /* Please keep sync with btmtk_fops_set_state function */
 enum {
-	BTMTK_FOPS_STATE_UNKNOWN = 0,
+	/* BTMTK_FOPS_STATE_UNKNOWN = 0, */
 	BTMTK_FOPS_STATE_INIT = 1,
 	BTMTK_FOPS_STATE_OPENING,	/* during opening */
 	BTMTK_FOPS_STATE_OPENED,	/* open in fops_open */
@@ -437,6 +361,12 @@ struct dump_debug_cr {
 	u32 addr_r;
 };
 
+#define CAL_DATA_PACKET_NUM 10
+struct cali_data_s {
+	struct fw_cfg_struct cal_data[CAL_DATA_PACKET_NUM];
+	u32 num;
+};
+
 struct h4_recv_pkt {
 	u8  type;	/* Packet type */
 	u8  hlen;	/* Header length */
@@ -482,12 +412,24 @@ struct _Section_Map {
 };
 #pragma pack()
 
+#if (USE_DEVICE_NODE == 1)
+#define BT_HCI_MAX_FRAME_SIZE	4096
+
 #define H4_RECV_ACL \
 	.type = HCI_ACLDATA_PKT, \
 	.hlen = HCI_ACL_HDR_SIZE, \
 	.loff = 2, \
 	.lsize = 2, \
-	.maxlen = HCI_MAX_FRAME_SIZE \
+	.maxlen = BT_HCI_MAX_FRAME_SIZE
+
+#else // (USE_DEVICE_NODE == 0)
+#define H4_RECV_ACL \
+	.type = HCI_ACLDATA_PKT, \
+	.hlen = HCI_ACL_HDR_SIZE, \
+	.loff = 2, \
+	.lsize = 2, \
+	.maxlen = HCI_MAX_FRAME_SIZE
+#endif
 
 #define H4_RECV_SCO \
 	.type = HCI_SCODATA_PKT, \
@@ -520,7 +462,7 @@ struct btmtk_dev {
 	unsigned long	flags;
 	void *intf_dev;
 	void *cif_dev;
-	struct btmtk_buffer_mode_struct *buffer_mode;
+	void *buffer_mode;
 
 	struct work_struct	work;
 	struct work_struct	waker;
@@ -561,6 +503,7 @@ struct btmtk_dev {
 	unsigned int	chip_id;
 	unsigned int	flavor;
 	unsigned int	dualBT;
+	unsigned int	proj;
 	unsigned int	fw_version;
 	unsigned char	dongle_index;
 	unsigned char	power_state;
@@ -586,15 +529,37 @@ struct btmtk_dev {
 	struct debug_reg_struct debug_sop_reg_dump;
 	unsigned char		debug_sop_file_name[MAX_BIN_FILE_NAME_LEN];
 
+	struct _Section_Map	*sectionMap_table;
+
+	/* raw data cmd & event */
+	unsigned char		chip_data_file_name[MAX_BIN_FILE_NAME_LEN];
+	void *bt_raw_data;
+
+	/* dynamic fw download */
+	struct work_struct  dynamic_fwdl_work;
+	unsigned int		fw_bin_info;
+
+	struct cali_data_s cali_backup;
+
+	/* completion */
+	struct completion	dump_comp;
+	struct completion	drv_own_comp;
+
 #ifdef CHIP_IF_USB
 	unsigned char	chip_reset_signal;
 #endif
 
 };
 
+#if (USE_DEVICE_NODE == 1)
+typedef void (*cif_chrdev_fw_log_state_ptr)(uint8_t state);
+#endif
+
 typedef int (*cif_bt_init_ptr)(void);
 typedef void (*cif_bt_exit_ptr)(void);
+typedef int (*cif_pre_open_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_open_ptr)(struct hci_dev *hdev);
+typedef void (*cif_open_done_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_close_ptr)(struct hci_dev *hdev);
 typedef int (*cif_reg_read_ptr)(struct btmtk_dev *bdev, u32 reg, u32 *val);
 typedef int (*cif_reg_write_ptr)(struct btmtk_dev *bdev, u32 reg, u32 val);
@@ -611,12 +576,12 @@ typedef void (*cif_chip_reset_notify_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_mutex_lock_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_mutex_unlock_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_flush_ptr)(struct btmtk_dev *bdev);
-typedef void (*cif_log_init_ptr)(void);
+typedef void (*cif_log_init_ptr)(void (*log_event_cb)(void));
 typedef void (*cif_log_register_cb_ptr)(void (*func)(void));
 typedef ssize_t (*cif_log_read_to_user_ptr)(char __user *buf, size_t count);
 typedef unsigned int (*cif_log_get_buf_size_ptr)(void);
 typedef void (*cif_log_deinit_ptr)(void);
-typedef void (*cif_open_done_ptr)(struct btmtk_dev *bdev);
+typedef int (*cif_log_handler_ptr)(u8 *buf, u32 size);
 typedef int (*cif_dl_dma_ptr)(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset);
 typedef void (*cif_dump_debug_sop_ptr)(struct btmtk_dev *bdev);
@@ -624,9 +589,14 @@ typedef void (*cif_waker_notify_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_enter_standby_ptr)(void);
 
 struct hif_hook_ptr {
+#if (USE_DEVICE_NODE == 1)
+	cif_chrdev_fw_log_state_ptr fw_log_state;
+#endif
 	cif_bt_init_ptr			init;
 	cif_bt_exit_ptr			exit;
+	cif_pre_open_ptr		pre_open;
 	cif_open_ptr			open;
+	cif_open_done_ptr		open_done;
 	cif_close_ptr			close;
 	cif_reg_read_ptr		reg_read;
 	cif_reg_write_ptr		reg_write;
@@ -644,11 +614,68 @@ struct hif_hook_ptr {
 	cif_log_read_to_user_ptr	log_read_to_user;
 	cif_log_get_buf_size_ptr	log_get_buf_size;
 	cif_log_deinit_ptr			log_deinit;
-	cif_open_done_ptr		open_done;
+	cif_log_handler_ptr			log_handler;
 	cif_dl_dma_ptr			dl_dma;
 	cif_dump_debug_sop_ptr		dump_debug_sop;
 	cif_waker_notify_ptr		waker_notify;
 	cif_enter_standby_ptr		enter_standby;
+	void				*coredump_handler;
+};
+
+/* for calibration */
+typedef int (*cif_bt_cal_restore_ptr)(struct btmtk_dev *bdev);
+typedef int (*cif_bt_cal_backup_send_ptr)(struct btmtk_dev *bdev);
+typedef int (*cif_bt_cal_backup_save_ptr)(struct btmtk_dev *bdev, struct sk_buff *skb);
+typedef void (*cif_bt_cal_backup_free_ptr)(struct btmtk_dev *bdev);
+/* ******* */
+
+typedef int (*cif_bt_load_rom_patch)(struct btmtk_dev *bdev);
+typedef void (*cif_bt_recv_error_handler)(struct hci_dev *hdev, const u8 *buf, u32 len, const u8 *dbg_buf, u32 dbg_len);
+typedef int (*cif_bt_rx_packet_handler)(struct btmtk_dev *bdev,  struct sk_buff *skb);
+typedef int (*cif_bt_dispatch_fwlog)(struct btmtk_dev *bdev, struct sk_buff *skb);
+typedef int (*cif_bt_setup_handler)(struct hci_dev *hdev);
+typedef int (*cif_bt_flush_handler)(struct hci_dev *hdev);
+typedef int (*cif_bt_tx_frame_handler)(struct btmtk_dev *bdev,  struct sk_buff *skb,  u8 *fw_dump);
+typedef int (*cif_bt_check_power_status)(struct btmtk_dev *bdev, const uint8_t *cmd, int pkt_type);
+typedef int (*cif_bt_open_handler)(struct btmtk_dev *bdev);
+typedef int (*cif_bt_close_handler)(struct btmtk_dev *bdev);
+typedef int (*cif_bt_set_audio_pinmux)(struct btmtk_dev *bdev);
+typedef int (*cif_bt_dl_delay_time)(struct btmtk_dev *bdev);
+typedef int (*cif_bt_cap_init)(struct btmtk_dev *bdev);
+
+#ifdef CHIP_IF_SDIO
+typedef int (*cif_bt_read_infra_pc)(void *func, u32 *val);
+#endif
+
+struct hif_hook_chip_ptr {
+	cif_bt_load_rom_patch			load_patch;
+	cif_bt_recv_error_handler		err_handler;
+	cif_bt_rx_packet_handler		rx_handler;
+	cif_bt_dispatch_fwlog			dispatch_fwlog;
+	cif_bt_setup_handler			bt_setup_handler;
+	cif_bt_flush_handler			bt_flush_handler;
+	cif_bt_tx_frame_handler			bt_tx_frame_handler;
+	cif_bt_check_power_status		bt_check_power_status;
+	cif_bt_open_handler				bt_open_handler;
+	cif_bt_close_handler			bt_close_handler;
+	cif_bt_set_audio_pinmux			bt_set_pinmux;
+	cif_bt_cap_init					cap_init;
+
+/* for calibration */
+	cif_bt_cal_restore_ptr				restore;
+	cif_bt_cal_backup_send_ptr			backup_send;
+	cif_bt_cal_backup_save_ptr			backup_save;
+	cif_bt_cal_backup_free_ptr			backup_free;
+/* ******* */
+
+	int dl_delay_time;
+	u8 support_woble;
+	bool patched;
+
+#ifdef CHIP_IF_SDIO
+	cif_bt_read_infra_pc			bt_conn_infra_pc;
+#endif
+
 };
 
 struct hci_snoop {
@@ -674,6 +701,7 @@ struct btmtk_main_info {
 #if WAKEUP_BT_IRQ
 	struct wakeup_source *irq_ws;
 #endif
+	struct hif_hook_chip_ptr hif_hook_chip;
 	struct hif_hook_ptr hif_hook;
 	struct bt_power_setting PWS;
 	/* save Hci Snoop for debug*/
@@ -682,26 +710,19 @@ struct btmtk_main_info {
 	u8 wmt_over_hci_header[WMT_OVER_HCI_HEADER_SIZE];
 	u8 read_iso_packet_size_cmd[READ_ISO_PACKET_CMD_SIZE];
 
-#if CFG_SUPPORT_BMR_RX_CLK
-	u64 bmr_sysclk;
-	int bmr_irq;
-	int bmr_irq_cnt;
-	u32 bmr_irq_flag;
-#endif
 	/* record firmware version */
 	struct proc_dir_entry *proc_dir;
 	char fw_version_str[FW_VERSION_BUF_SIZE];
 
 	atomic_t fwlog_ref_cnt;
+	int bk_rs_flag;
 };
 
 static inline int is_mt6639(u32 chip_id)
 {
-#ifdef SUPPORT_MT6639
 	chip_id &= 0xFFFF;
 	if (chip_id == 0x6639)
 		return 1;
-#endif
 	return 0;
 }
 
@@ -809,6 +830,7 @@ void btmtk_main_cif_uninitialize(struct btmtk_dev *bdev, int hci_bus);
 int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus);
 int btmtk_load_code_from_bin(u8 **image, char *bin_name,
 					 struct device *dev, u32 *code_len, u8 retry);
+int btmtk_data_length_check(u8 *data, u16 length, u8 type);
 int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		const int cmd_len, const uint8_t *event, const int event_len, int delay,
 		int retry, int pkt_type);
@@ -821,10 +843,28 @@ void btmtk_free_fw_cfg_struct(struct fw_cfg_struct *fw_cfg, int count);
 struct btmtk_dev **btmtk_get_pp_bdev(void);
 void btmtk_load_debug_sop_register(char *debug_sop_name, struct device *dev, struct btmtk_dev *bdev);
 void btmtk_clean_debug_reg_file(struct btmtk_dev *bdev);
+int btmtk_dynamic_load_rom_patch(struct btmtk_dev *bdev, u32 binInfo);
+void btmtk_reg_hif_chip_hook(struct hif_hook_chip_ptr *hook);
 
+int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag);
+int btmtk_picus_enable(struct btmtk_dev *bdev, int via_uart);
+int btmtk_picus_disable(struct btmtk_dev *bdev);
+int btmtk_set_audio_setting(struct btmtk_dev *bdev);
 
 int32_t btmtk_set_sleep(struct hci_dev *hdev, u_int8_t need_wait);
 int32_t bgfsys_bt_patch_dl(void);
 int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value);
 void btmtk_set_country_code_from_wifi(char *code);
+#if (USE_DEVICE_NODE == 1)
+int rx_skb_enqueue(struct sk_buff *skb);
+int btmtk_chardev_init(void);
+void btmtk_connsys_log_init(void (*log_event_cb)(void));
+void btmtk_connsys_log_deinit(void);
+int btmtk_connsys_log_handler(u8 *buf, u32 size);
+ssize_t btmtk_connsys_log_read_to_user(char __user *buf, size_t count);
+unsigned int btmtk_connsys_log_get_buf_size(void);
+int32_t btmtk_intcmd_set_fw_log(uint8_t flag);
+int btmtk_send_connfem_cmd(struct btmtk_dev *bdev);
+#endif
+
 #endif /* __BTMTK_MAIN_H__ */

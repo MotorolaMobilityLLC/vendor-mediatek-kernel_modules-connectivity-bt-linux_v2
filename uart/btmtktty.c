@@ -155,7 +155,9 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 		} else if (memcmp(skb->data, &read_address_event[1], READ_ADDRESS_EVT_HDR_LEN - 1) == 0
 			&& (skb->len == (READ_ADDRESS_EVT_HDR_LEN - HCI_TYPE_SIZE + BD_ADDRESS_SIZE))) {
 			memcpy(bdev->bdaddr, &skb->data[READ_ADDRESS_EVT_PAYLOAD_OFFSET - 1], BD_ADDRESS_SIZE);
-			BTMTK_INFO("%s: GET BDADDR = "MACSTR, __func__, MAC2STR(bdev->bdaddr));
+			BTMTK_INFO("%s: GET BDADDR = %02X:%02X:%02X:%02X:%02X:%02X", __func__,
+				bdev->bdaddr[0], bdev->bdaddr[1], bdev->bdaddr[2],
+				bdev->bdaddr[3], bdev->bdaddr[4], bdev->bdaddr[5]);
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 		} else if (memcmp(skb->data, event_need_compare,
 					event_need_compare_len) == 0) {
@@ -241,8 +243,6 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	if (ret == -1) {
 		BTMTK_ERR("%s wait event timeout!!", __func__);
 		bdev->recv_evt_len = 0;
-		ret = -ERRNUM;
-		goto fw_assert;
 	}
 
 	event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
@@ -835,13 +835,6 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 			BTMTK_ERR("%s: Set HCIUARTLOADPATCH command failed (%d)", __func__, err);
 			btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 		}
-
-		err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
-		if (err < 0)
-			BTMTK_ERR("btmtk_woble_initialize failed!");
-		else
-			BTMTK_ERR("btmtk_woble_initialize");
-
 		break;
 	case HCIUARTINIT:
 		BTMTK_INFO("%s: <!!> Set HCIUARTINIT <!!>", __func__);
@@ -984,7 +977,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 static int btmtk_cif_probe(struct tty_struct *tty)
 {
-	int ret = 0;
+	int ret = -1;
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
@@ -1168,7 +1161,6 @@ static int btmtk_pm_notification(struct notifier_block *this, unsigned long even
 {
 	int retry = 40;
 	int ret = NOTIFY_DONE;
-
 	BTMTK_DBG("event = %ld", event);
 
 	/* if get into suspend flow while doing audio pinmux setting

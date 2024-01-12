@@ -14,6 +14,7 @@
 #define __BTMTK_WOBLE_H__
 #include "btmtk_define.h"
 #include "btmtk_main.h"
+#include "btmtk_chip_common.h"
 
 /* Define for WoBLE */
 #define WOBLE_SETTING_COUNT 10
@@ -61,6 +62,7 @@ int btmtk_woble_resume(struct btmtk_woble *bt_woble);
 int btmtk_woble_initialize(struct btmtk_dev *bdev, struct btmtk_woble *bt_woble);
 void btmtk_woble_uninitialize(struct btmtk_woble *bt_woble);
 void btmtk_woble_wake_unlock(struct btmtk_dev *bdev);
+void btmtk_woble_wake_lock(struct btmtk_dev *bdev);
 #if WAKEUP_BT_IRQ
 void btmtk_sdio_irq_wake_lock_timeout(struct btmtk_dev *bdev);
 #endif

@@ -15,6 +15,7 @@
 #define __BTMTK_BUFFER_MODE_H__
 
 #include "btmtk_main.h"
+#include "btmtk_chip_common.h"
 
 #define BUFFER_MODE_SWITCH_FILE	"wifi.cfg"
 #define BUFFER_MODE_SWITCH_FIELD	"EfuseBufferModeCal"
@@ -23,27 +24,17 @@
 #define BIN_FILE_MODE			1
 #define AUTO_MODE			2
 
-#define SET_ADDRESS_CMD_LEN 10
-#define SET_ADDRESS_EVT_LEN 7
 #define SET_ADDRESS_CMD_PAYLOAD_OFFSET 4
 
-#define SET_RADIO_CMD_LEN 12
-#define SET_RADIO_EVT_LEN 7
-#define SET_RADIO_CMD_EDR_DEF_OFFSET 4
-#define SET_RADIO_CMD_BLE_OFFSET 8
-#define SET_RADIO_CMD_EDR_MAX_OFFSET 9
-#define SET_RADIO_CMD_EDR_MODE_OFFSET 11
+#define SET_EDR_DEF_OFFSET 4
+#define SET_BLE_OFFSET 8
+#define SET_EDR_MAX_OFFSET 9
+#define SET_EDR_MODE_OFFSET 11
 
-#define SET_GRP_CMD_LEN 13
-#define SET_GRP_EVT_LEN 7
 #define SET_GRP_CMD_PAYLOAD_OFFSET 8
 
-#define SET_PWR_OFFSET_CMD_LEN 14
-#define SET_PWR_OFFSET_EVT_LEN 7
 #define SET_PWR_OFFSET_CMD_PAYLOAD_OFFSET 8
 
-#define SET_COMPENSATION_CMD_LEN 20
-#define SET_COMPENSATION_EVT_LEN 7
 #define SET_COMPENSATION_CMD_PAYLOAD_OFFSET 4
 #define BUFFER_MODE_COMPENSATION_LENGTH	16
 #define BT0_COMPENSATION_OFFSET		0x376
@@ -67,6 +58,24 @@
 #define BT0_CAL_ANT1_OFFSET		0x9A6
 #define BT1_CAL_ANT0_OFFSET		0x989
 #define BT1_CAL_ANT1_OFFSET		0x9C3
+
+/* For 6639 (Falcon) */
+#define BT_MAC_OFFSET_6639		0x681
+
+#define BUFFER_MODE_RADIO_LENGTH_6639	21
+#define BT_RADIO_OFFSET_6639	0xC2E
+#define SET_RADIO_OFFSET_6639	5
+
+#define BT_POWER_COMPENSATION_LV9_OFFSET_6639	0x770
+#define BT_POWER_COMPENSATION_LV8_OFFSET_6639	0x790
+#define BT_POWER_COMPENSATION_LV7_OFFSET_6639	0xCF0
+#define SET_COMPENSATION_CMD_PAYLOAD_LV9_OFFSET_6639 5
+#define SET_COMPENSATION_CMD_PAYLOAD_LV8_OFFSET_6639 21
+#define SET_COMPENSATION_CMD_PAYLOAD_LV7_OFFSET_6639 37
+
+#define BUFFER_MODE_BT_LOSS_LENGTH	1
+#define BT_LOSS_OFFSET_6639		0x6A5
+#define SET_BT_LOSS_CMD_PAYLOAD_OFFSET		7
 
 struct btmtk_buffer_mode_radio_struct {
 	u8 radio_0;	/* bit 0-5:edr_init_pwr, 6-7:edr_pwr_mode */
@@ -94,9 +103,14 @@ struct btmtk_buffer_mode_struct {
 	u8 bt1_ant0_pwr_offset[BUFFER_MODE_CAL_LENGTH];
 	u8 bt1_ant1_pwr_offset[BUFFER_MODE_CAL_LENGTH];
 	u8 bt0_ant0_compensation[BUFFER_MODE_COMPENSATION_LENGTH];
+	u8 bt_radio_6639[BUFFER_MODE_RADIO_LENGTH_6639];
+	u8 bt_compensation_lv9_6639[BUFFER_MODE_COMPENSATION_LENGTH];
+	u8 bt_compensation_lv8_6639[BUFFER_MODE_COMPENSATION_LENGTH];
+	u8 bt_compensation_lv7_6639[BUFFER_MODE_COMPENSATION_LENGTH];
+	u8 bt_loss;
 };
 
-int btmtk_buffer_mode_send(struct btmtk_buffer_mode_struct *buffer_mode);
-void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev, struct btmtk_buffer_mode_struct **buffer_mode);
+int btmtk_buffer_mode_send(struct btmtk_dev *bdev);
+void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev);
 #endif /* __BTMTK_BUFFER_MODE_H__ */
 

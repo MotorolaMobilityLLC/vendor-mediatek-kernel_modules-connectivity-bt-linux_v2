@@ -27,7 +27,6 @@
 #else
 #include <uapi/linux/sched/types.h>
 #endif
-#include <asm/barrier.h>
 
 #include "btmtk_sdio.h"
 
@@ -57,7 +56,7 @@ do {							\
 	btmtk_sdio_read_bt_mcu_pc(&__value);		\
 	BTMTK_INFO("%s, BT mcu pc: 0x%08X", __func__, __value);	\
 	btmtk_sdio_read_conn_infra_pc(&__value);	\
-	BTMTK_INFO("%s, power status: 0x%08X", __func__, __value);	\
+	BTMTK_INFO("%s, conn infra pc: 0x%08X", __func__, __value);	\
 } while (0)
 
 static struct btmtk_sdio_dev g_sdio_dev;
@@ -545,8 +544,6 @@ static int btmtk_sdio_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 
 	memcpy(val, bdev->io_buf + MCU_ADDRESS_OFFSET_EVT - HCI_TYPE_SIZE, sizeof(u32));
 	*val = le32_to_cpu(*val);
-	/* make sure memcpy done before we use the register */
-	smp_wmb();
 
 	BTMTK_INFO("%s: reg=%x, value=0x%08x", __func__, reg, *val);
 
@@ -682,10 +679,10 @@ int btmtk_sdio_read_conn_infra_pc(u32 *val)
 EXPORT_SYMBOL(btmtk_sdio_read_conn_infra_pc);
 
 typedef bool (*wifi_driver_own)(uint8_t enable);
-static wifi_driver_own wifi_driver_own_ptr = NULL;
+static wifi_driver_own wifi_driver_own_ptr;
 static void btmtk_sdio_set_wifi_driver_own(uint8_t enable)
 {
-#ifdef CFG_CHIP_RESET_KO_SUPPORT
+#ifdef CFG_SUPPORT_CHIP_RESET_KO
 	struct WIFI_NOTIFY_DESC *wifi_notify_desc = NULL;
 
 	wifi_notify_desc = get_wifi_notify_callback();
@@ -749,7 +746,15 @@ static int btmtk_sdio_close(struct hci_dev *hdev)
 
 static void btmtk_sdio_open_done(struct btmtk_dev *bdev)
 {
+	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
+
 	BTMTK_INFO("%s enter!", __func__);
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
+	/* We don't need to enable buffer mode during bring-up stage. */
+	BTMTK_INFO("SKIP buffer mode");
+#else
+	(void)btmtk_buffer_mode_send(cif_dev->bdev);
+#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 }
 
 static int btmtk_sdio_writesb(u32 offset, u8 *val, int len, struct sdio_func *func)
@@ -1019,8 +1024,6 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 				notify_alt_evt[6] = (crValue & 0x000000FF);
 				memcpy(evt_skb->data, &notify_alt_evt[1], NOTIFY_ALT_EVT_LEN - 1);
 				evt_skb->len = NOTIFY_ALT_EVT_LEN - 1;
-				/* make sure memcpy done before send to hci layer */
-				smp_wmb();
 				hci_recv_frame(bdev->hdev, evt_skb);
 				kfree_skb(skb);
 				skb = NULL;
@@ -1051,8 +1054,6 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 				notify_alt_evt[6] = (crValue & 0x000000FF);
 				memcpy(evt_skb->data, &notify_alt_evt[1], NOTIFY_ALT_EVT_LEN - 1);
 				evt_skb->len = NOTIFY_ALT_EVT_LEN - 1;
-				/* make sure memcpy done before send to hci layer */
-				smp_wmb();
 				hci_recv_frame(bdev->hdev, evt_skb);
 				kfree_skb(skb);
 				skb = NULL;
@@ -1173,8 +1174,6 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 		memset(cif_dev->transfer_buf, 0, URB_MAX_BUFFER_SIZE);
 		hci_pkt_len += 5;
 		memcpy(cif_dev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE, bdev->io_buf, hci_pkt_len);
-		/* make sure memcpy done before send to hci layer */
-		smp_wmb();
 		BTMTK_DBG_RAW(cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
 	}
 #if 0
@@ -1208,8 +1207,6 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 		memset(cif_dev->transfer_buf, 0, URB_MAX_BUFFER_SIZE);
 		hci_pkt_len += 5;
 		memcpy(cif_dev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE, bdev->io_buf, hci_pkt_len);
-		/* make sure memcpy done before send to hci layer */
-		smp_wmb();
 		BTMTK_DBG_RAW(cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
 		break;
 	}
@@ -1257,14 +1254,24 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 					attr_len = *(p + 1);
 					attr_type = *(p + 2);
 					BTMTK_INFO("attr_len = 0x%x, attr_type = 0x%x", attr_len, attr_type);
-					if (WOBX_TRIGGER_INFO_TRIGGER_CNT_TYPE == attr_type) {
+					switch (attr_type) {
+					case WOBX_TRIGGER_INFO_ADDR_TYPE:
+						break;
+					case WOBX_TRIGGER_INFO_ADV_DATA_TYPE:
+						break;
+					case WOBX_TRIGGER_INFO_TRACE_LOG_TYPE:
+						break;
+					case WOBX_TRIGGER_INFO_SCAN_LOG_TYPE:
+						break;
+					case WOBX_TRIGGER_INFO_TRIGGER_CNT_TYPE:
 						BTMTK_INFO("wakeup times(via BT) = %02X%02X%02X%02X",
 							*(p + 6), *(p + 5), *(p + 4), *(p + 3));
 						break;
-					} else {
-						p += 1 + attr_len;	// 1: len
-						continue;
+					default:
+						BTMTK_ERR("%s: unexpected attribute type(0x%x)", __func__, attr_type);
+						return 1;
 					}
+					p += 1 + attr_len;	// 1: len
 				}
 			}
 
@@ -1272,8 +1279,6 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			/* Such as chip_id, fw_version, etc. */
 			bdev->io_buf[0] = bt_cb(skb)->pkt_type;
 			memcpy(&bdev->io_buf[1], skb->data, skb->len);
-			/* make sure memcpy done before we compare it */
-			smp_wmb();
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 			BTMTK_DBG("%s, compare success", __func__);
 		} else {
@@ -1335,8 +1340,6 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 	do {
 		/* check if event_compare_success */
 		if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
-			/* make sure memcpy done before we compare it */
-			smp_rmb();
 			ret = 0;
 			break;
 		}
@@ -1975,6 +1978,8 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 		goto exit;
 	}
 
+	btmtk_buffer_mode_initialize(bdev);
+
 #if CFG_SUPPORT_BLUEZ
 	err = btmtk_send_init_cmds(bdev);
 	if (err < 0) {
@@ -2051,9 +2056,8 @@ static int btmtk_cif_probe(struct sdio_func *func,
 			func->num);
 	DUMP_TIME_STAMP("probe_start");
 
-#ifdef CFG_CHIP_RESET_KO_SUPPORT
-	/* notify reset ko module BT probe start */
-	rstNotifyWholeChipRstStatus(RST_MODULE_BT, RST_MODULE_STATE_PROBE_START, NULL);
+#ifdef CFG_SUPPORT_CHIP_RESET_KO
+	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_PROBE_START);
 #endif
 
 	/* sdio interface numbers  */
@@ -2095,9 +2099,8 @@ static int btmtk_cif_probe(struct sdio_func *func,
 	else
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 
-#ifdef CFG_CHIP_RESET_KO_SUPPORT
-	/* notify reset ko module BT probe done */
-	rstNotifyWholeChipRstStatus(RST_MODULE_BT, RST_MODULE_STATE_PROBE_DONE, NULL);
+#ifdef CFG_SUPPORT_CHIP_RESET_KO
+	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_PROBE_SUCCESS);
 #endif
 
 	DUMP_TIME_STAMP("probe_end");
@@ -2128,6 +2131,10 @@ static void btmtk_cif_disconnect(struct sdio_func *func)
 	/* Do HIF events */
 	btmtk_sdio_disconnect(func);
 
+#ifdef CFG_SUPPORT_CHIP_RESET_KO
+	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_REMOVE);
+#endif
+
 	/* Set End/Error state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
 }
@@ -2144,6 +2151,7 @@ static int btmtk_cif_suspend(struct device *dev)
 	struct btmtk_sdio_dev *cif_dev = NULL;
 	struct btmtk_woble *bt_woble = NULL;
 	mmc_pm_flag_t pm_flags;
+	struct irq_desc *desc;
 
 	BTMTK_INFO("%s, enter", __func__);
 
@@ -2185,6 +2193,25 @@ static int btmtk_cif_suspend(struct device *dev)
 		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
 #endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
+	if (bdev->bt_cfg.support_woble_by_eint) {
+		if (bt_woble->wobt_irq != 0 && atomic_read(&(bt_woble->irq_enable_count)) == 0) {
+			/* clear irq data before enable woble irq to avoid DUT wake up
+			 *  automatically by edge trigger, sync from Jira CONN-50629
+			 */
+			desc = irq_to_desc(bt_woble->wobt_irq);
+			if (desc)
+				desc->irq_data.chip->irq_ack(&desc->irq_data);
+			else
+				BTMTK_INFO("%s:can't get desc\n", __func__);
+
+			BTMTK_INFO("%s, enable BT IRQ:%d", __func__, bt_woble->wobt_irq);
+			irq_set_irq_wake(bt_woble->wobt_irq, 1);
+			enable_irq(bt_woble->wobt_irq);
+			atomic_inc(&(bt_woble->irq_enable_count));
+		} else
+			BTMTK_INFO("%s, irq_enable count:%d", __func__, atomic_read(&(bt_woble->irq_enable_count)));
+	}
+
 	pm_flags = sdio_get_host_pm_caps(func);
 	if (!(pm_flags & MMC_PM_KEEP_POWER)) {
 		BTMTK_ERR("%s, %s cannot remain alive while suspended(0x%x)", __func__,
@@ -2193,8 +2220,10 @@ static int btmtk_cif_suspend(struct device *dev)
 
 	pm_flags = MMC_PM_KEEP_POWER;
 	ret = sdio_set_host_pm_flags(func, pm_flags);
-	if (ret)
+	if (ret) {
 		BTMTK_ERR("%s, set flag 0x%x err %d", __func__, pm_flags, (int)ret);
+		ret = -ENOSYS;
+	}
 
 	/* Set End/Error state */
 	if (ret == 0)
@@ -2488,10 +2517,6 @@ int btmtk_sdio_whole_reset(struct btmtk_dev *bdev)
 	cif_dev->patched = 0;
 	btmtk_sdio_set_wifi_driver_own(0);
 
-#ifdef CFG_CHIP_RESET_KO_SUPPORT
-	rstNotifyWholeChipRstStatus(RST_MODULE_BT, RST_MODULE_STATE_PRERESET, cif_dev->func);
-	ret = 0;
-#else
 	BTMTK_INFO("%s, mmc_remove_host", __func__);
 	mmc_remove_host(host);
 
@@ -2502,7 +2527,6 @@ int btmtk_sdio_whole_reset(struct btmtk_dev *bdev)
 	 */
 	BTMTK_INFO("%s, mmc_add_host", __func__);
 	ret = mmc_add_host(host);
-#endif
 
 	BTMTK_INFO("%s, mmc_add_host return %d", __func__, ret);
 	return ret;
