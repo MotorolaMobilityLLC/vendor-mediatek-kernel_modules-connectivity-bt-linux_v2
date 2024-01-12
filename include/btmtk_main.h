@@ -805,6 +805,7 @@ struct btmtk_main_info {
 	struct wakeup_source *assert_ws;
 	struct wakeup_source *woble_ws;
 	struct wakeup_source *eint_ws;
+	struct wakeup_source *chip_reset_ws;
 #if WAKEUP_BT_IRQ
 	struct wakeup_source *irq_ws;
 #endif

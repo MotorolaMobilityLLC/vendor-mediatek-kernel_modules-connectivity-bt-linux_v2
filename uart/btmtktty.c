@@ -611,6 +611,7 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 		cmd[fc_offset] = BT_NONE_FC;
 	}
 
+#if (USE_DEVICE_NODE == 1)
 	/* uarthub setting
 	 * ex: thes last byte means hub enable, rhw disable, crc disable
 	 * DX-4: need to tell connsys using new/old sleep flow
@@ -619,6 +620,7 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 		BTMTK_INFO("%s sleep_flow_hw_mech_en: %d, old sleep flow", __func__, cif_dev->sleep_flow_hw_mech_en);
 		cif_dev->fw_hub_mode = 3;
 	}
+#endif
 
 	cmd[hub_crc_rhw_offset] = (cif_dev->fw_hub_mode << 4 | !cif_dev->rhw_en << 1 | !cif_dev->crc_en << 0);
 

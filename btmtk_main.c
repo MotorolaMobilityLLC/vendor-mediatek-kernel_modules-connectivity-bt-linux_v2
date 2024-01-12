@@ -738,6 +738,7 @@ static void btmtk_main_info_initialize(void)
 	main_info.assert_ws = wakeup_source_register(NULL, "btmtk_assert_wakelock");
 	main_info.woble_ws = wakeup_source_register(NULL, "btmtk_woble_wakelock");
 	main_info.eint_ws = wakeup_source_register(NULL, "btevent_eint");
+	main_info.chip_reset_ws = wakeup_source_register(NULL, "btmtk_chip_reset_ws");
 #if WAKEUP_BT_IRQ
 	main_info.irq_ws = wakeup_source_register(NULL, "btevent_irq");
 #endif
@@ -746,6 +747,7 @@ static void btmtk_main_info_initialize(void)
 	main_info.assert_ws = wakeup_source_register("btmtk_assert_wakelock");
 	main_info.woble_ws = wakeup_source_register("btmtk_woble_wakelock");
 	main_info.eint_ws = wakeup_source_register("btevent_eint");
+	main_info.chip_reset_ws = wakeup_source_register("btmtk_chip_reset_ws");
 #if WAKEUP_BT_IRQ
 	main_info.irq_ws = wakeup_source_register("btevent_irq");
 #endif
@@ -753,6 +755,7 @@ static void btmtk_main_info_initialize(void)
 	main_info.assert_ws = wakeup_source_register(NULL, "btmtk_assert_wakelock");
 	main_info.woble_ws = wakeup_source_register(NULL, "btmtk_woble_wakelock");
 	main_info.eint_ws = wakeup_source_register(NULL, "btevent_eint");
+	main_info.chip_reset_ws = wakeup_source_register(NULL, "btmtk_chip_reset_ws");
 #if WAKEUP_BT_IRQ
 	main_info.irq_ws = wakeup_source_register(NULL, "btevent_irq");
 #endif
@@ -5592,6 +5595,7 @@ static int main_exit(void)
 	wakeup_source_unregister(main_info.assert_ws);
 	wakeup_source_unregister(main_info.woble_ws);
 	wakeup_source_unregister(main_info.eint_ws);
+	wakeup_source_unregister(main_info.chip_reset_ws);
 #if WAKEUP_BT_IRQ
 	wakeup_source_unregister(main_info.irq_ws);
 #endif

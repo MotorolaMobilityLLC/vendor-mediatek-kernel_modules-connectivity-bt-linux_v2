@@ -4601,19 +4601,21 @@ static int btmtk_usb_enter_standby(void)
 			/* If usb2.0(USB_SPEED_HIGH) not need write cr */
 			if(cif_dev->udev->speed > USB_SPEED_HIGH && ret == 0){
 				if (is_mt6639(bdev->chip_id)) {
-					ret = btmtk_usb_read_register(bdev, BT_RADIO_OFF_DONE, &val);
+					btmtk_handle_mutex_unlock(bdev);
+					ret = btmtk_usb_read_register(bdev, BT_RADIO_OFF_DONE_6639, &val);
 					if(ret < 0)
 						BTMTK_INFO("%s: read radio off  CR fail", __func__);
 					else {
 						BTMTK_INFO("%s: read radio off CR : 0x%08x", __func__, val);
 						val |= (1 << 15);
 						BTMTK_INFO("%s: write 1 to radio off CR : 0x%08x", __func__, val);
-						ret = btmtk_usb_write_register(bdev, BT_RADIO_OFF_DONE, val);
+						ret = btmtk_usb_write_register(bdev, BT_RADIO_OFF_DONE_6639, val);
 						if(ret < 0){
 							BTMTK_INFO("%s: write radio off  CR fail", __func__);
 						} else
 							btmtk_usb_send_shutdown_cmd(bdev);
 					}
+					btmtk_handle_mutex_lock(bdev);
 				}
 			}
 

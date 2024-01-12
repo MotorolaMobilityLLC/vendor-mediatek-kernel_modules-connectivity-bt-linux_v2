@@ -290,7 +290,7 @@ static int btmtk_uart_probe(struct serdev_device *serdev)
 
 	err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
 	if (err < 0) {
-		BTMTK_ERR("btmtk_main_woble_initialize failed!");
+		BTMTK_ERR("btmtk_main_woble_initialize failed, do chip reset!!!");
 		goto free_setting;
 	}
 
@@ -303,6 +303,7 @@ static int btmtk_uart_probe(struct serdev_device *serdev)
 	goto end;
 
 free_setting:
+	btmtk_woble_uninitialize(&cif_dev->bt_woble);
 	btmtk_free_setting_file(bdev);
 deinit:
 	btmtk_main_cif_uninitialize(bdev, HCI_USB);
@@ -451,17 +452,6 @@ static int btmtk_cif_suspend(struct device *dev)
 		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
 #endif
 
-	if (bdev->bt_cfg.support_woble_by_eint) {
-		if (bt_woble->wobt_irq != 0 && atomic_read(&(bt_woble->irq_enable_count)) == 0) {
-			BTMTK_INFO("enable BT IRQ:%d", bt_woble->wobt_irq);
-			irq_set_irq_wake(bt_woble->wobt_irq, 1);
-			enable_irq(bt_woble->wobt_irq);
-			atomic_inc(&(bt_woble->irq_enable_count));
-		} else {
-			BTMTK_INFO("irq_enable count:%d", atomic_read(&(bt_woble->irq_enable_count)));
-		}
-	}
-
 	/* Set End/Error state */
 	if (ret == 0)
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
@@ -493,7 +483,6 @@ static int btmtk_cif_resume(struct device *dev)
 		return 0;
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
-	bt_woble = &cif_dev->bt_woble;
 
 	bdev->suspend_count--;
 	if (bdev->suspend_count) {
@@ -501,17 +490,8 @@ static int btmtk_cif_resume(struct device *dev)
 		return 0;
 	}
 
-	if (bdev->bt_cfg.support_woble_by_eint) {
-		if (bt_woble->wobt_irq != 0 && atomic_read(&(bt_woble->irq_enable_count)) == 1) {
-			BTMTK_INFO("disable BT IRQ:%d", bt_woble->wobt_irq);
-			atomic_dec(&(bt_woble->irq_enable_count));
-			disable_irq_nosync(bt_woble->wobt_irq);
-		} else {
-			BTMTK_INFO("irq_enable count:%d", atomic_read(&(bt_woble->irq_enable_count)));
-		}
-	}
-
 	cif_state = &bdev->cif_state[HIF_EVENT_RESUME];
+	bt_woble = &cif_dev->bt_woble;
 
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);

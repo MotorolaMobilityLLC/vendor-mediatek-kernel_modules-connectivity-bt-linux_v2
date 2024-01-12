@@ -126,6 +126,20 @@ static int btmtk_subsys_reset(struct btmtk_dev *bdev)
 	bmain_info->hif_hook.write_uhw_register(bdev, UDMA_INT_STA_BT1, 0x000000FF);
 	bmain_info->hif_hook.read_uhw_register(bdev, UDMA_INT_STA_BT1, &val);
 
+
+	bmain_info->hif_hook.read_uhw_register(bdev, BT_BACKDOOR_RET_7902, &val);
+	BTMTK_INFO("%s: read 1 BT_BACKDOOR_RET_7902 CR : 0x%08x", __func__, val);
+	val |= 0x30000;
+	BTMTK_INFO("%s: write 1 BT_BACKDOOR_RET_7902 CR : 0x%08x", __func__, val);
+	bmain_info->hif_hook.write_uhw_register(bdev, BT_BACKDOOR_RET_7902,val);
+
+	msleep(20);
+	bmain_info->hif_hook.read_uhw_register(bdev, BT_BACKDOOR_RET_7902, &val);
+	BTMTK_INFO("%s: read 2 BT_BACKDOOR_RET_7902 CR : 0x%08x", __func__, val);
+	val &= 0xFFFCFFFF;
+	BTMTK_INFO("%s: write 2 BT_BACKDOOR_RET_7902 CR : 0x%08x", __func__, val);
+	bmain_info->hif_hook.write_uhw_register(bdev, BT_BACKDOOR_RET_7902,val);
+
 	/* Write Reset CR to 0 */
 	bmain_info->hif_hook.read_uhw_register(bdev, BT_SUBSYS_RST, &val);
 	BTMTK_INFO("%s: read Reset CR : 0x%08x", __func__, val);
