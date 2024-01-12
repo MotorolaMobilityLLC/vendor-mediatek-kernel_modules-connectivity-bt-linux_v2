@@ -425,16 +425,12 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 	if (skb == NULL && skb_queue_len(&g_fwlog->dumplog_queue_first)) {
 		skb = skb_dequeue(&g_fwlog->dumplog_queue_first);
 	}
-	spin_unlock_irqrestore(&g_fwlog->fwlog_lock, flags);
 
-	spin_lock_irqsave(&g_fwlog->fwlog_lock, flags);
 	if (skb == NULL && skb_queue_len(&g_fwlog->dumplog_queue_latest)) {
 		skb = skb_dequeue(&g_fwlog->dumplog_queue_latest);
 	}
-	spin_unlock_irqrestore(&g_fwlog->fwlog_lock, flags);
 
 	/* picus read a queue, it may occur performace issue */
-	spin_lock_irqsave(&g_fwlog->fwlog_lock, flags);
 	if (skb == NULL && skb_queue_len(&g_fwlog->fwlog_queue)) {
 		skb = skb_dequeue(&g_fwlog->fwlog_queue);
 	}
