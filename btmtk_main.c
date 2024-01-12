@@ -4344,6 +4344,7 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 			DEFAULT_COUNTRY_TABLE_NAME);
 
 #ifdef BTMTK_DEBUG_SOP
+#ifdef DEFAULT_DEBUG_SOP_NAME
 	/* debug sop */
 	(void)snprintf(bdev->debug_sop_file_name, MAX_BIN_FILE_NAME_LEN,
 		"%s_%x.bin", DEFAULT_DEBUG_SOP_NAME, bdev->chip_id & 0xffff);
@@ -4351,6 +4352,7 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 		bdev->debug_sop_file_name);
 
 	btmtk_load_debug_sop_register(bdev->debug_sop_file_name, bdev->intf_dev, bdev);
+#endif
 #endif
 
 	return 0;
