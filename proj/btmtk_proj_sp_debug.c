@@ -6,11 +6,16 @@
 #include <btmtk_main.h>
 #include "connv3.h"
 #include "btmtk_uart_tty.h"
+#include "mt6653_bt_dbg_sop.h"
 
 #define BT_CR_DUMP_BUF_SIZE		(1024)
 #define DBG_TAG	"[btmtk_dbg_sop]"
 #define RHW_DBG_TAG	"[btmtk_dbg_sop_rhw]"
 #define HIF_DBG_TAG	"[btmtk_dbg_sop_hif]"
+/* unified debug sop format */
+#define UNIFIED_DBG_TAG	"[PSOP_1_1]"
+#define REG_DUMP_NUM_MAX		16
+#define REG_DUMP_ARRAY_SIZE		256
 
 #define CHECK_ERR_MSG(val) (((val) >> 16) == 0xdead)
 
@@ -264,6 +269,79 @@ int CONNV3_RHW_READ(uint32_t addr, uint32_t *val)
 	return ret;
 }
 
+static void rhw_dump_utility(const struct bt_dump_list *dump_list)
+{
+	uint32_t readCmdSize = dump_list->read_cmd_size;
+	const struct bt_dbg_command *pCmdList = NULL;
+	char dumpLineBuf[REG_DUMP_ARRAY_SIZE] = {0};
+	uint32_t line = 0, readCount = 0, readVal;
+	uint32_t offset = 0, totalLen = REG_DUMP_ARRAY_SIZE;
+	uint32_t i;
+
+	/* Print register value */
+	pCmdList = dump_list->cmd_list;
+	for (i = 0; i < dump_list->dump_size; i++) {
+		if (pCmdList[i].write) {
+			RHW_WRITE(pCmdList[i].w_addr, (pCmdList[i].value & pCmdList[i].mask));
+		}
+
+		if (pCmdList[i].read) {
+			if (readCount % REG_DUMP_NUM_MAX == 0) {
+				offset += snprintf(dumpLineBuf + offset, totalLen - offset, "[%s][%d]", dump_list->tag, line);
+				line++;
+			}
+
+			RHW_READ(pCmdList[i].r_addr, &readVal);
+			offset += snprintf(dumpLineBuf + offset, totalLen - offset, " %08X", readVal);
+			readCount++;
+
+			if ((readCount % REG_DUMP_NUM_MAX == 0) || (readCount >= readCmdSize)) {
+				BTMTK_INFO("%s\n", dumpLineBuf);
+				memset(dumpLineBuf, 0, REG_DUMP_ARRAY_SIZE);
+				offset = 0;
+			}
+		}
+	}
+}
+
+static void bt_hw_dbg_unify_rhw_dump_utility(const struct bt_dump_list *dump_list)
+{
+	/* Print header */
+	BTMTK_INFO("[%s][H] [%s][Count: %d]\n",
+		dump_list->tag, dump_list->description, dump_list->read_cmd_size);
+
+	/* Print list*/
+	rhw_dump_utility(dump_list);
+}
+
+void mt6653_rhw_dumpReg(void)
+{
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_b);
+
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_c);
+
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_d);
+
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_e);
+
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_f);
+
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_g);
+
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_h);
+
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_i);
+
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_j);
+
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_a);
+
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_a);
+
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_b);
+
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_c);
+}
 
 static inline void btmtk_dump_bg_mcu_core(void)
 {
@@ -713,20 +791,28 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 		return;
 	}
 
-	btmtk_dump_bg_mcu_core();
-	btmtk_dump_dsp_debug_flags();
-	btmtk_dump_mcusys_clk_gals_debug_flags();
-	btmtk_dump_mcu_pc_lr();
-	btmtk_dump_dsp_pc_lr();
-	btmtk_dump_peri_debug_flags();
-	btmtk_dump_bus_debug_flags();
-	btmtk_dump_dma_uart_debug_flags();
-	btmtk_dump_cryto_debug_flags();
-	btmtk_dump_dma_uart_cfg2();
-	btmtk_dump_dma_uart_cfg3();
-	btmtk_dump_dma_uart_cfg4();
-	btmtk_dump_bt_mcysys_vlp();
-	/* cannot call connv3_conninfra_bus_dump at here, connv3_cored may trigger assert */
+	if (bdev->chip_id == 0x6653) {
+		BTMTK_INFO("%s version = %s", UNIFIED_DBG_TAG, MT6653_BT_DEBUGSOP_DUMP_VERSION);
+		/* unified dump */
+		mt6653_rhw_dumpReg();
+
+	} else {
+		btmtk_dump_bg_mcu_core();
+		btmtk_dump_dsp_debug_flags();
+		btmtk_dump_mcusys_clk_gals_debug_flags();
+		btmtk_dump_mcu_pc_lr();
+		btmtk_dump_dsp_pc_lr();
+		btmtk_dump_peri_debug_flags();
+		btmtk_dump_bus_debug_flags();
+		btmtk_dump_dma_uart_debug_flags();
+		btmtk_dump_cryto_debug_flags();
+		btmtk_dump_dma_uart_cfg2();
+		btmtk_dump_dma_uart_cfg3();
+		btmtk_dump_dma_uart_cfg4();
+		btmtk_dump_bt_mcysys_vlp();
+		/* cannot call connv3_conninfra_bus_dump at here, connv3_cored may trigger assert */
+	}
+
 	BTMTK_INFO("%s: end", __func__);
 }
 
@@ -778,6 +864,80 @@ static inline int btmtk_connv3_readable_check(void){
 		return -1;
 	}
 	return 0;
+}
+
+static void hif_dump_utility(const struct bt_dump_list *dump_list)
+{
+	uint32_t readCmdSize = dump_list->read_cmd_size;
+	const struct bt_dbg_command *pCmdList = NULL;
+	char dumpLineBuf[REG_DUMP_ARRAY_SIZE] = {0};
+	uint32_t line = 0, readCount = 0, readVal;
+	uint32_t offset = 0, totalLen = REG_DUMP_ARRAY_SIZE;
+	uint32_t i;
+
+	/* Print register value */
+	pCmdList = dump_list->cmd_list;
+	for (i = 0; i < dump_list->dump_size; i++) {
+		if (pCmdList[i].write) {
+			HIF_WRITE(pCmdList[i].w_addr, (pCmdList[i].value & pCmdList[i].mask));
+		}
+
+		if (pCmdList[i].read) {
+			if (readCount % REG_DUMP_NUM_MAX == 0) {
+				offset += snprintf(dumpLineBuf + offset, totalLen - offset, "[%s][%d]", dump_list->tag, line);
+				line++;
+			}
+
+			HIF_READ(pCmdList[i].r_addr, &readVal);
+			offset += snprintf(dumpLineBuf + offset, totalLen - offset, " %08X", readVal);
+			readCount++;
+
+			if ((readCount % REG_DUMP_NUM_MAX == 0) || (readCount >= readCmdSize)) {
+				BTMTK_INFO("%s\n", dumpLineBuf);
+				memset(dumpLineBuf, 0, REG_DUMP_ARRAY_SIZE);
+				offset = 0;
+			}
+		}
+	}
+}
+
+static void bt_hw_dbg_unify_hif_dump_utility(const struct bt_dump_list *dump_list)
+{
+	/* Print header */
+	BTMTK_INFO("[%s][H] [%s][Count: %d]\n",
+		dump_list->tag, dump_list->description, dump_list->read_cmd_size);
+
+	/* Print list*/
+	hif_dump_utility(dump_list);
+}
+
+void mt6653_hif_dumpReg(void)
+{
+	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_b);
+
+	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_c);
+
+	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_d);
+
+	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_e);
+
+	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_f);
+
+	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_g);
+
+	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_h);
+
+	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_i);
+
+	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_j);
+
+	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_a);
+
+	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_a);
+
+	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_b);
+
+	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_c);
 }
 
 static inline void btmtk_hif_dump_bg_mcu_core(void)
@@ -2724,7 +2884,7 @@ void btmtk_hif_dump_work(struct work_struct *work)
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
 		return;
 	}
-	BTMTK_INFO("%s: start", __func__);
+	BTMTK_INFO("%s: start, bdev->chip_id: 0x%04x", __func__, bdev->chip_id);
 	/*
 	 * connv3_drv_type
 	 *
@@ -2745,17 +2905,16 @@ void btmtk_hif_dump_work(struct work_struct *work)
 	ret = connv3_hif_dbg_end(CONNV3_DRV_TYPE_WIFI, CONNV3_DRV_TYPE_BT);
 #endif
 
-        BTMTK_INFO("%s: bdev->chip_id: 0x%04x", __func__, bdev->chip_id);
-
 	ret = connv3_hif_dbg_start(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI);
 	if (ret) {
 		BTMTK_ERR("%s: connv3_hif_dbg_start fail, ret[%d]", __func__, ret);
 		goto exit;
 	}
+	BTMTK_INFO("%s version = %s", UNIFIED_DBG_TAG, MT6653_BT_DEBUGSOP_DUMP_VERSION);
 
 	switch (bdev->chip_id) {
-	case 6635:
-	case 6639:
+	case 0x6635:
+	case 0x6639:
 		/* HIF_MCU dump */
 		btmtk_hif_dump_bg_mcu_core();
 		btmtk_hif_dump_dsp_debug_flags();
@@ -2788,8 +2947,10 @@ void btmtk_hif_dump_work(struct work_struct *work)
 		btmtk_hif_dump_mcu_var_assert_log_buf();
 		ret = connv3_hif_dbg_end(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI);
 		break;
-	case 6653:
-		/* To-do: 6653 hif dump */
+	case 0x6653:
+		mt6653_hif_dumpReg();
+#if 0
+		/* HIF_MCU dump */
 		btmtk_hif_dump_bg_mcu_core_dx4();
 		btmtk_hif_dump_dsp_debug_flags_dx4();
 		btmtk_hif_dump_mcusys_clk_gals_debug_flags_dx4();
@@ -2824,6 +2985,7 @@ void btmtk_hif_dump_work(struct work_struct *work)
 
 		/* bt_top mcu dump */
 		btmtk_hif_dump_bt_top_mcu_dx4();
+#endif
 		ret = connv3_hif_dbg_end(CONNV3_DRV_TYPE_BT, CONNV3_DRV_TYPE_WIFI);
 		break;
 	default:
