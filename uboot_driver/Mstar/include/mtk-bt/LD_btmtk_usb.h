@@ -105,6 +105,10 @@
 #define BUZZARD_FLAVOR 0x70010020
 #define BUZZARD_FW_VERSION 0x80021004
 
+
+#define BT_DOWNLOAD	1
+#define WIFI_DOWNLOAD	2
+
 /**
  * 0: patch download is not complete/BT get patch semaphore fail (WiFi get semaphore success)
  * 1: patch download is complete
@@ -123,11 +127,16 @@
 #define WOBLE_SETTING_FILE_NAME_7668 "woble_setting_7668.bin"
 #define WOBLE_SETTING_FILE_NAME_7663 "woble_setting_7663.bin"
 #define WOBLE_SETTING_FILE_NAME "woble_setting.bin"
+#define WOBLE_CFG_NAME_PREFIX "woble_setting"
+#define WOBLE_CFG_NAME_SUFFIX "bin"
+
 #define BT_CFG_NAME "bt.cfg"
 #define BT_CFG_NAME_PREFIX "bt_mt"
+#define BT_CFG_NAME_PREFIX_76XX "bt_"
 #define BT_CFG_NAME_SUFFIX "cfg"
 #define BT_UNIFY_WOBLE "SUPPORT_UNIFY_WOBLE"
 #define BT_UNIFY_WOBLE_TYPE "UNIFY_WOBLE_TYPE"
+#define BT_LD_DL_WIFI_ENABLE "LD_DL_WIFI_ENABLE"
 #define BT_WMT_CMD "WMT_CMD"
 
 #define WMT_CMD_COUNT 255
@@ -203,6 +212,7 @@ struct fw_cfg_struct {
 struct bt_cfg_struct {
 	u8	support_unify_woble;	/* support unify woble or not */
 	u8	unify_woble_type;	/* 0: legacy. 1: waveform. 2: IR */
+	u8	support_wifi_dl;	/* 0: disable. 1: enable */
 	struct fw_cfg_struct wmt_cmd[WMT_CMD_COUNT];
 };
 
