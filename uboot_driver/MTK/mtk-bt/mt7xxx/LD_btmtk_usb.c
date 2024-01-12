@@ -1742,7 +1742,6 @@ int btmtk_main_send_cmd(struct LD_btmtk_usb_data *data, const uint8_t *cmd,
 		int retry, int endpoint)
 {
 	int ret = 0;
-	unsigned long comp_event_timo = 0, start_time = 0;
 
 	if (data == NULL || cmd == NULL) {
 		usb_debug("%s, invalid parameters!\n", __func__);
@@ -2512,7 +2511,7 @@ static void btmtk_usb_initialize_cfg_items(struct LD_btmtk_usb_data *data)
 
 	data->bt_cfg.support_unify_woble = 1;
 	data->bt_cfg.unify_woble_type = 0;
-	data->bt_cfg.unify_woble_type = 1;
+	data->bt_cfg.support_wifi_dl = 1;
 	btmtk_usb_free_fw_cfg_struct(data->bt_cfg.wmt_cmd, WMT_CMD_COUNT);
 }
 

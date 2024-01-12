@@ -984,7 +984,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 static int btmtk_cif_probe(struct tty_struct *tty)
 {
-	int ret = -1;
+	int ret = 0;
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
