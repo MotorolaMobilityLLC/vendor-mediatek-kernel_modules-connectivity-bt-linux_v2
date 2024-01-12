@@ -148,8 +148,11 @@ ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
     ccflags-y += -DANDROID_OS
     ccflags-y += -I$(srctree)/drivers/misc/mediatek/connectivity/power_throttling
 #else ifeq ($(MTK_PROJ_TYPE), ce)
-else
+else ifeq ($(MTK_CHIP_IF), uart_tty)
     CFILES += proj/btmtk_proj_ce.c
+    ccflags-y += -DLINUX_OS
+    ccflags-y += -DCHIP_IF_UART_TTY
+else
     ccflags-y += -DLINUX_OS
 endif
 
