@@ -4375,11 +4375,15 @@ int btmtk_data_length_check(u8 *data, u16 length, u8 type)
 			return -1;
 		}
 	} else if (type == HCI_SCODATA_PKT) {
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
+		/* The SCO loopback test need to ignore the pkt length check */
+#else
 		data_len = data[2] + MTK_HCI_SCO_HEAD_SIZE;
 		if (data_len != length) {
 			BTMTK_ERR("SCO length check fail, recv len = 0x%04x, data len = 0x%04x", length, data_len);
 			return -1;
 		}
+#endif
 	} else if (type == HCI_EVENT_PKT) {
 		data_len = data[1] + MTK_HCI_EVENT_HEAD_SIZE;
 		if (data_len != length) {

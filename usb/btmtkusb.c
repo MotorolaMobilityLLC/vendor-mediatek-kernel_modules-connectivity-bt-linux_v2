@@ -981,8 +981,8 @@ static int btusb_submit_intr_reset_urb(struct hci_dev *hdev, gfp_t mem_flags)
 	err = usb_submit_urb(urb, mem_flags);
 	if (err < 0) {
 		if (err != -EPERM && err != -ENODEV)
-			BTMTK_ERR("%s urb %p submission failed (%d)",
-				   hdev->name, urb, -err);
+			BTMTK_ERR("%s: %s urb %p submission failed (%d)",
+				   __func__, hdev->name, urb, -err);
 		usb_unanchor_urb(urb);
 	}
 
@@ -1136,8 +1136,8 @@ static int btusb_submit_wmt_urb(struct hci_dev *hdev, gfp_t mem_flags)
 	err = usb_submit_urb(urb, mem_flags);
 	if (err < 0) {
 		if (err != -EPERM && err != -ENODEV)
-			BTMTK_ERR("%s urb %p submission failed (%d)",
-					hdev->name, urb, -err);
+			BTMTK_ERR("%s: %s urb %p submission failed (%d)",
+					__func__, hdev->name, urb, -err);
 		kfree(dr);
 		usb_unanchor_urb(urb);
 	}
@@ -1193,8 +1193,8 @@ static int btusb_submit_intr_urb(struct hci_dev *hdev, gfp_t mem_flags)
 	err = usb_submit_urb(urb, mem_flags);
 	if (err < 0) {
 		if (err != -EPERM && err != -ENODEV)
-			BTMTK_ERR("%s urb %p submission failed (%d)",
-			       hdev->name, urb, -err);
+			BTMTK_ERR("%s: %s urb %p submission failed (%d)",
+			       __func__, hdev->name, urb, -err);
 		usb_unanchor_urb(urb);
 	}
 
@@ -1349,8 +1349,8 @@ static int btusb_submit_bulk_urb(struct hci_dev *hdev, gfp_t mem_flags)
 	err = usb_submit_urb(urb, mem_flags);
 	if (err < 0) {
 		if (err != -EPERM && err != -ENODEV)
-			BTMTK_ERR("%s urb %p submission failed (%d)",
-			       hdev->name, urb, -err);
+			BTMTK_ERR("%s: %s urb %p submission failed (%d)",
+			       __func__, hdev->name, urb, -err);
 		usb_unanchor_urb(urb);
 	}
 
@@ -1512,8 +1512,8 @@ static int btusb_submit_intr_ble_isoc_urb(struct hci_dev *hdev, gfp_t mem_flags)
 	err = usb_submit_urb(urb, mem_flags);
 	if (err < 0) {
 		if (err != -EPERM && err != -ENODEV)
-			BTMTK_ERR("%s urb %p submission failed (%d)",
-				   hdev->name, urb, -err);
+			BTMTK_ERR("%s: %s urb %p submission failed (%d)",
+				   __func__, hdev->name, urb, -err);
 		usb_unanchor_urb(urb);
 	}
 
@@ -1674,8 +1674,8 @@ static int btusb_submit_isoc_urb(struct hci_dev *hdev, gfp_t mem_flags)
 	err = usb_submit_urb(urb, mem_flags);
 	if (err < 0) {
 		if (err != -EPERM && err != -ENODEV)
-			BTMTK_ERR("%s urb %p submission failed (%d)",
-			       hdev->name, urb, -err);
+			BTMTK_ERR("%s: %s urb %p submission failed (%d)",
+			       __func__, hdev->name, urb, -err);
 		usb_unanchor_urb(urb);
 #if BTMTK_ISOC_TEST
 	} else if (bdev->bt_cfg.support_usb_sco_test) {
@@ -2112,6 +2112,8 @@ static int submit_tx_urb(struct hci_dev *hdev, struct urb *urb, int type)
 		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ACL_HIF,
 			urb->transfer_buffer, urb->transfer_buffer_length);
 		break;
+	case HCI_SCODATA_PKT:
+		break;
 	case HCI_ISO_PKT:
 		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ISO_HIF,
 			urb->transfer_buffer, urb->transfer_buffer_length);
@@ -2125,8 +2127,8 @@ static int submit_tx_urb(struct hci_dev *hdev, struct urb *urb, int type)
 	err = usb_submit_urb(urb, GFP_KERNEL);
 	if (err < 0) {
 		if (err != -EPERM && err != -ENODEV)
-			BTMTK_ERR("%s urb %p submission failed (%d)",
-			       hdev->name, urb, -err);
+			BTMTK_ERR("%s: %s urb %p submission failed (%d)",
+			       __func__, hdev->name, urb, -err);
 		kfree(urb->setup_packet);
 		usb_unanchor_urb(urb);
 	} else {
