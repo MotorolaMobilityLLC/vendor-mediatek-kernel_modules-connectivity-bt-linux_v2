@@ -97,7 +97,7 @@
 #define SEND_RETRY_ONE_TIMES_500MS 1
 
 #define TX_THREAD_RETRY	100
-#define BT_OPEN_MAX_RETRY	100
+#define BT_OPEN_MAX_RETRY	160
 
 /* Expected minimum supported interface */
 #define BT_MCU_MINIMUM_INTERFACE_NUM	4
