@@ -63,6 +63,8 @@
 #include <mtk-bt/LD_usbbt.h>
 #include <mtk-bt/LD_btmtk_usb.h>
 
+#define MAX_ROOT_PORTS 8
+
 usb_vid_pid array_mtk_vid_pid[] = {
 	{0x0E8D, 0x7668, "MTK7668"},	// 7668
 	{0x0E8D, 0x76A0, "MTK7662T"},	// 7662T
@@ -94,6 +96,10 @@ VOID *os_memset(VOID *s, int c, size_t n)
 VOID *os_kzalloc(size_t size, unsigned int flags)
 {
 	VOID *ptr = malloc(size);
+	if (ptr == NULL) {
+		usb_debug("malloc is fail, ptr is %p\n", ptr);
+		return ptr;
+	}
 
 	os_memset(ptr, 0, size);
 	return ptr;
@@ -116,12 +122,15 @@ int LD_load_code(unsigned char **image, char *partition, char *file, mtkbt_dev_t
 	*image = malloc(*code_len);
 	if (*image == NULL) {
 		usb_debug("malloc fail\n");
+		*code_len = 0;
 		return -1;
 	}
 
 	if (vfs_read(*image, file, 0, *code_len) != 0) {
 		usb_debug("vfs_read %s fail\n", file);
 		free(*image);
+		*image = NULL;
+		*code_len = 0;
 		return -1;
 	}
 
@@ -133,10 +142,11 @@ int LD_load_code(unsigned char **image, char *partition, char *file, mtkbt_dev_t
 void LD_load_code_from_bin(unsigned char **image, char *bin_name, char *path, mtkbt_dev_t *dev, u32 *code_len)
 {
 	#define ENV_BT_FW_PATH	   "BTFWBinPath"
+	#define PARTION_NUM        6
 
 	char mtk_patch_bin_patch[128] = "\0";
 	char *bt_env;
-	char *partition[5] = {"tvconfig", "vendor", "userdata", "system", "APP"};
+	char *partition[PARTION_NUM] = {"cusdata", "tvconfig", "vendor", "userdata", "system", "APP"};
 	int i = 0;
 
 	/** implement by mstar/MTK
@@ -161,7 +171,7 @@ void LD_load_code_from_bin(unsigned char **image, char *bin_name, char *path, mt
 	if (bt_env == NULL) {
 		/* get PATH failed */
 		printf("bt_env is NULL\n");
-		for (i = 0; i < 5; i++) {
+		for (i = 0; i < PARTION_NUM; i++) {
 			if (LD_load_code(image, partition[i], mtk_patch_bin_patch, dev, code_len) == 0)
 				return;
 		}
@@ -543,6 +553,10 @@ int do_setMtkBT(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 	{
 		// search mtk bt usb port
 		usbPort = atoi(pBTUsbPort);
+		if (usbPort < 0 || usbPort >= MAX_ROOT_PORTS) {
+			UBOOT_ERROR("usbPort(%d) is not in correct scope\n", usbPort);
+			return -1;
+		}
 		usb_debug("stop usb port: %d\n",usbPort);
 		if(usb_stop(usbPort) != 0){
 			usb_debug("usb_stop fail\n");
