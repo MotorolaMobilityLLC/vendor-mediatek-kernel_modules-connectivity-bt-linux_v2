@@ -4033,6 +4033,9 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, FD5B_ASSERT_CMD, cmd);
 #else
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, RHW_ASSERT_CMD, cmd);
+	if (bdev->chip_id == 0x6653) {
+		cmd.content[9] = 0x01;
+	}
 #endif
 
 	skb = alloc_skb(cmd.len + BT_SKB_RESERVE, GFP_ATOMIC);
