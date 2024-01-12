@@ -353,15 +353,57 @@ static int btmtk_set_Woble_APCF(struct btmtk_woble *bt_woble)
 	return 0;
 }
 
+static void btmtk_remove_APCF_Filter_Index(char *radio_off, int length,
+	struct btmtk_woble *bt_woble)
+{
+	u8 i = 0;
+	u8 j = 0;
+	unsigned char filter_index = 0;
+
+	if (bt_woble->woble_setting_apcf[0].length) {
+		for (i = 0; i < WOBLE_SETTING_COUNT; i++) {
+			if (bt_woble->woble_setting_apcf[i].content[4] == 0x06) {
+				filter_index = bt_woble->woble_setting_apcf[i].content[6];
+				break;
+			}
+		}
+	}
+	for (i = 6; i < length; i++) {
+		if (radio_off[i+1] == 0x40 &&
+			radio_off[i+2] == filter_index) {
+			radio_off[i] = 0x02;
+			for (j = i+3; j < length; j++)
+				radio_off[j] = radio_off[j+1];
+			break;
+		} else if (radio_off[i+1] == 0x40 &&
+			radio_off[i+3] == filter_index) {
+			radio_off[i] = 0x02;
+			for (j = i+2; j < length; j++)
+				radio_off[j] = radio_off[j+1];
+			break;
+		}
+		i += radio_off[i];
+		continue;
+	}
+	radio_off[3] = radio_off[3] - 1;
+}
+
+
 static int btmtk_set_Woble_Radio_Off(struct btmtk_woble *bt_woble)
 {
 	int ret = 0;
 	int length = 0;
+	unsigned char fstate = 0;
+	unsigned char state = 0;
 	char *radio_off = NULL;
 	struct btmtk_dev *bdev = bt_woble->bdev;
 
 	BTMTK_INFO("%s: woble_setting_radio_off.length %d", __func__,
 		bt_woble->woble_setting_radio_off.length);
+
+	fstate = btmtk_fops_get_state(bdev);
+	state = btmtk_get_chip_state(bdev);
+
 	if (bt_woble->woble_setting_radio_off.length) {
 		/* start to send radio off cmd from woble setting file */
 		length = bt_woble->woble_setting_radio_off.length +
@@ -382,6 +424,18 @@ static int btmtk_set_Woble_Radio_Off(struct btmtk_woble *bt_woble)
 				bt_woble->woble_setting_wakeup_type.content,
 				bt_woble->woble_setting_wakeup_type.length);
 			radio_off[3] += bt_woble->woble_setting_wakeup_type.length;
+		}
+
+		/* Don't send G20 apcf index when BT off with G20 to do suspend. Because when
+		* the power key is pressed at the first time, the platform will be woken up by the
+		* wake-up advertisment. G20 will send wake-up adv when rc disconnected, but
+		* AB1613 will not send wake-up adv. AB1613 APCF manu data type:0x06, G20 service
+		* data type:0x07
+		*/
+		if ((fstate == BTMTK_FOPS_STATE_CLOSED ||
+			fstate == BTMTK_FOPS_STATE_INIT) && state == BTMTK_STATE_SUSPEND) {
+			length = length - 1;
+			btmtk_remove_APCF_Filter_Index(radio_off, length, bt_woble);
 		}
 
 		BTMTK_INFO_RAW(radio_off, length, "Send radio off");
