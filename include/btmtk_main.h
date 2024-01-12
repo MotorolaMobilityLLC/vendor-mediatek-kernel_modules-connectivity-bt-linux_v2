@@ -892,7 +892,9 @@ unsigned char btmtk_fops_get_state(struct btmtk_dev *bdev);
 void btmtk_hci_snoop_save(unsigned int type, const u8 *buf, u32 len);
 void btmtk_hci_snoop_print(const u8 *buf, u32 len);
 void btmtk_hci_snoop_print_to_log(void);
+#if (CFG_GKI_SUPPORT == 0)
 void *btmtk_kallsyms_lookup_name(const char *name);
+#endif
 void btmtk_get_UTC_time_str(char *ts_str);
 void btmtk_reg_hif_hook(struct hif_hook_ptr *hook);
 int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus);

@@ -15,7 +15,9 @@
 
 static struct usb_driver btusb_driver;
 #ifndef CFG_SUPPORT_CHIP_RESET_KO
+#if (CFG_GKI_SUPPORT == 0)
 static struct btmtk_cif_chip_reset reset_func;
+#endif
 #endif
 static int intf_to_idx[BT_MCU_INTERFACE_NUM_MAX] = {0, -1, -1, 1};
 static struct btmtk_usb_dev g_usb_dev[BT_MCU_MINIMUM_INTERFACE_NUM][BT_MCU_NUM_MAX];
@@ -2717,6 +2719,7 @@ int btmtk_usb_toggle_rst_pin(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: begin", __func__);
 #ifndef CFG_SUPPORT_CHIP_RESET_KO
 	/* Initialize the interface specific function pointers */
+#if (CFG_GKI_SUPPORT == 0)
 	reset_func.pf_pdwndFunc = (pdwnc_func) btmtk_kallsyms_lookup_name("PDWNC_SetBTInResetState");
 	if (reset_func.pf_pdwndFunc)
 		BTMTK_INFO("%s: Found PDWNC_SetBTInResetState", __func__);
@@ -2776,6 +2779,7 @@ int btmtk_usb_toggle_rst_pin(struct btmtk_dev *bdev)
 			goto exit;
 		}
 	}
+#endif
 #endif
 	/* use linux kernel common api */
 	do {
@@ -3605,6 +3609,7 @@ int btmtk_cif_register(void)
 	BTMTK_INFO("%s", __func__);
 
 	/* register system power off callback function. */
+#if (CFG_GKI_SUPPORT == 0)
 	do {
 		typedef void (*func_ptr) (int (*f) (void));
 		char *func_name = "RegisterPdwncCallback";
@@ -3616,7 +3621,7 @@ int btmtk_cif_register(void)
 		} else
 			BTMTK_WARN("%s: No Exported Func Found [%s], just skip!", __func__, func_name);
 	} while (0);
-
+#endif
 	memset(&hook, 0, sizeof(struct hif_hook_ptr));
 	hook.open = btmtk_usb_open;
 	hook.close = btmtk_usb_close;
