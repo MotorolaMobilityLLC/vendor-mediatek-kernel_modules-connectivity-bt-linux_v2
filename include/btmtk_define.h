@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2022032801"
+#define VERSION "7.0.2022040101"
 #define SUBVER ":turnkey"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -360,6 +360,7 @@ struct debug_reg_struct {
 #define CHIP_ID	0x70010200
 #define FLAVOR	0x70010020
 
+#define ZB_ENABLE	0x7C00114C
 
 #ifndef DEBUG_LD_PATCH_TIME
 #define DEBUG_LD_PATCH_TIME 0

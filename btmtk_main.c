@@ -2138,6 +2138,9 @@ int btmtk_load_rom_patch_66xx(struct btmtk_dev *bdev)
 int btmtk_load_rom_patch(struct btmtk_dev *bdev)
 {
 	int err = -1;
+#if CFG_SUPPORT_BT_DL_ZB_PATCH
+	unsigned int zb_enbale = 0;
+#endif
 
 	if (!bdev || !bdev->hdev) {
 		BTMTK_ERR("%s: invalid parameters!", __func__);
@@ -2154,10 +2157,17 @@ int btmtk_load_rom_patch(struct btmtk_dev *bdev)
 
 #if CFG_SUPPORT_BT_DL_ZB_PATCH
 		if (is_mt7902(bdev->chip_id)) {
-			err = btmtk_load_rom_patch_79xx(bdev, ZB_DOWNLOAD);
+			err = main_info.hif_hook.reg_read(bdev, ZB_ENABLE, &zb_enbale);
+			BTMTK_INFO("%s: ZB_ENABLE is %d", __func__, zb_enbale);
 			if (err < 0) {
-				BTMTK_WARN("%s: btmtk_load_rom_patch_79xx ZB patch failed!", __func__);
+				BTMTK_ERR("read ZB enbale failed");
 				err = 0;
+			} else if ((zb_enbale & (1 << 0)) == 0) {
+				err = btmtk_load_rom_patch_79xx(bdev, ZB_DOWNLOAD);
+				if (err < 0) {
+					BTMTK_WARN("%s: btmtk_load_rom_patch_79xx ZB patch failed!", __func__);
+					err = 0;
+				}
 			}
 		}
 #endif
