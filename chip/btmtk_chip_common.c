@@ -876,6 +876,16 @@ int btmtk_cif_chip_register(struct btmtk_dev *bdev)
 		btmtk_cif_chip_7961_register();
 		break;
 	case 0x6639:
+		(void)snprintf(bdev->chip_data_file_name, MAX_BIN_FILE_NAME_LEN, "bt_mt%x_data.bin",
+				bdev->chip_id & 0xffff);
+		ret = btmtk_load_raw_data(bdev->chip_data_file_name, bdev);
+		if (ret) {
+			BTMTK_ERR("%s: load raw data from %s failed", __func__, bdev->chip_data_file_name);
+			goto register_end;
+		}
+
+		btmtk_cif_chip_6639_register();
+		break;
 	case 0x7925:
 		(void)snprintf(bdev->chip_data_file_name, MAX_BIN_FILE_NAME_LEN, "bt_mt%x_data.bin",
 				bdev->chip_id & 0xffff);

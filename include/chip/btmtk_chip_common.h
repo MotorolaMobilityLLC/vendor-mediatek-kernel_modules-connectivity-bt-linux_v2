@@ -21,6 +21,7 @@
 #include "btmtk_chip_7922.h"
 #include "btmtk_chip_7961.h"
 #include "btmtk_chip_66xx.h"
+#include "btmtk_chip_6639.h"
 #include "btmtk_chip_connac3.h"
 
 
