@@ -148,13 +148,13 @@ static void btmtk_proc_create_new_entry(void)
 		BTMTK_ERR("Unable to creat dir");
 		return;
 	}
-	proc_show_entry =  proc_create("bt_fw_version", 0640, bmain_info->proc_dir, &BT_proc_fops);
+	proc_show_entry =  proc_create("bt_fw_version", 0600, bmain_info->proc_dir, &BT_proc_fops);
 	if (proc_show_entry == NULL) {
 		BTMTK_ERR("Unable to creat bt_fw_version node");
 		remove_proc_entry("stpbt", NULL);
 	}
 
-	proc_show_chip_reset_count_entry = proc_create(PROC_BT_CHIP_RESET_COUNT, 0640,
+	proc_show_chip_reset_count_entry = proc_create(PROC_BT_CHIP_RESET_COUNT, 0600,
 			bmain_info->proc_dir, &BT_proc_chip_reset_count_fops);
 	if (proc_show_chip_reset_count_entry == NULL) {
 		BTMTK_ERR("Unable to creat %s node", PROC_BT_CHIP_RESET_COUNT);
@@ -850,6 +850,9 @@ int btmtk_dispatch_fwlog_bluetooth_kpi(struct btmtk_dev *bdev, u8 *buf, int len,
 	static u8 fwlog_blocking_warn;
 	int ret = 0;
 
+	if (!g_fwlog)
+		return ret;
+
 	if (g_fwlog->btmtk_bluetooth_kpi &&
 		skb_queue_len(&g_fwlog->fwlog_queue) < FWLOG_BLUETOOTH_KPI_QUEUE_COUNT) {
 		/* sent event to queue, picus tool will log it for bluetooth KPI feature */
@@ -874,6 +877,9 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 	u8 hci_reset_event[HCI_RESET_EVT_LEN] = { 0x04, 0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00 };
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	struct sk_buff *skb_opcode = NULL;
+
+	if (!g_fwlog)
+		return 0;
 
 	if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 			skb->data[0] == 0x6f &&

@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2022040802"
+#define VERSION "7.0.2022051201"
 #define SUBVER ":turnkey"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ

@@ -739,6 +739,7 @@ int btmtk_woble_suspend(struct btmtk_woble *bt_woble)
 	int ret = 0;
 	unsigned char fstate = 0;
 	struct btmtk_dev *bdev = bt_woble->bdev;
+	struct irq_desc *desc;
 
 	BTMTK_INFO("%s: enter", __func__);
 	if (bdev == NULL) {
@@ -755,6 +756,25 @@ int btmtk_woble_suspend(struct btmtk_woble *bt_woble)
 	ret = btmtk_handle_entering_WoBLE_state(bt_woble);
 	if (ret)
 		BTMTK_ERR("%s: btmtk_handle_entering_WoBLE_state return fail %d", __func__, ret);
+
+	if (bdev->bt_cfg.support_woble_by_eint) {
+		if (bt_woble->wobt_irq != 0 && atomic_read(&(bt_woble->irq_enable_count)) == 0) {
+			/* clear irq data before enable woble irq to avoid DUT wake up
+			 * automatically by edge trigger, sync from Jira CONN-50629
+			 */
+			desc = irq_to_desc(bt_woble->wobt_irq);
+			if (desc)
+				desc->irq_data.chip->irq_ack(&desc->irq_data);
+			else
+				BTMTK_INFO("%s:can't get desc\n", __func__);
+
+			BTMTK_INFO("%s, enable BT IRQ:%d", __func__, bt_woble->wobt_irq);
+			irq_set_irq_wake(bt_woble->wobt_irq, 1);
+			enable_irq(bt_woble->wobt_irq);
+			atomic_inc(&(bt_woble->irq_enable_count));
+		} else
+			BTMTK_INFO("%s, irq_enable count:%d", __func__, atomic_read(&(bt_woble->irq_enable_count)));
+	}
 
 exit:
 	BTMTK_INFO("%s: end", __func__);

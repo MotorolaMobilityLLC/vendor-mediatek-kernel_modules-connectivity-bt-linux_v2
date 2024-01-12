@@ -22,6 +22,7 @@
 #include "btmtk_main.h"
 #include "btmtk_fw_log.h"
 #include "btmtk_chip_if.h"
+#include "btmtk_buffer_mode.h"
 
 #define MTKBT_UNSLEEPABLE_LOCK(x, y)	spin_lock_irqsave(x, y)
 #define MTKBT_UNSLEEPABLE_UNLOCK(x, y)	spin_unlock_irqsave(x, y)
@@ -408,6 +409,7 @@ int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value)
 
 	return ret;
 }
+
 void btmtk_free_fw_cfg_struct(struct fw_cfg_struct *fw_cfg, int count)
 {
 	int i = 0;
@@ -3997,6 +3999,8 @@ static int bt_open(struct hci_dev *hdev)
 		 */
 		bdev->power_state = BTMTK_DONGLE_STATE_POWER_ON;
 		BTMTK_INFO("%s, SKIP btmtk_send_init_cmds", __func__);
+		/* We don't need to enable buffer mode during bring-up stage. */
+		BTMTK_INFO("SKIP buffer mode");
 #else
 		ret = btmtk_send_init_cmds(bdev);
 		if (ret < 0) {
@@ -4009,6 +4013,8 @@ static int bt_open(struct hci_dev *hdev)
 			BTMTK_ERR("%s, btmtk_send_apcf_reserved failed", __func__);
 			goto failed;
 		}
+
+		(void)btmtk_buffer_mode_send(bdev->buffer_mode);
 #endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
 		if (main_info.hif_hook.open_done)
@@ -4542,6 +4548,8 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 	(void)snprintf(bdev->country_file_name, MAX_BIN_FILE_NAME_LEN,
 			DEFAULT_COUNTRY_TABLE_NAME);
 
+	btmtk_buffer_mode_initialize(bdev, &bdev->buffer_mode);
+
 #ifdef BTMTK_DEBUG_SOP
 #ifdef DEFAULT_DEBUG_SOP_NAME
 	/* debug sop */
@@ -4768,16 +4776,16 @@ int __init main_driver_init(void)
 	for (i = 0; i < btmtk_intf_num; i++)
 		btmtk_set_chip_state(g_bdev[i], BTMTK_STATE_DISCONNECT);
 
-	ret = btmtk_cif_register();
+	ret = btmtk_fops_initfwlog();
 	if (ret < 0) {
-		BTMTK_ERR("*** USB registration failed(%d)! ***", ret);
+		BTMTK_ERR("*** STPBTFWLOG registration failed(%d)! ***", ret);
 		main_exit();
 		return ret;
 	}
 
-	ret = btmtk_fops_initfwlog();
+	ret = btmtk_cif_register();
 	if (ret < 0) {
-		BTMTK_ERR("*** STPBTFWLOG registration failed(%d)! ***", ret);
+		BTMTK_ERR("*** USB registration failed(%d)! ***", ret);
 		main_exit();
 		return ret;
 	}

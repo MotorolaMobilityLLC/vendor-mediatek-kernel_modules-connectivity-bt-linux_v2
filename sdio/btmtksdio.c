@@ -738,15 +738,7 @@ static int btmtk_sdio_close(struct hci_dev *hdev)
 
 static void btmtk_sdio_open_done(struct btmtk_dev *bdev)
 {
-	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
-
 	BTMTK_INFO("%s enter!", __func__);
-#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
-	/* We don't need to enable buffer mode during bring-up stage. */
-	BTMTK_INFO("SKIP buffer mode");
-#else
-	(void)btmtk_buffer_mode_send(cif_dev->buffer_mode);
-#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 }
 
 static int btmtk_sdio_writesb(u32 offset, u8 *val, int len, struct sdio_func *func)
@@ -1970,8 +1962,6 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 		goto exit;
 	}
 
-	btmtk_buffer_mode_initialize(bdev, &cif_dev->buffer_mode);
-
 #if CFG_SUPPORT_BLUEZ
 	err = btmtk_send_init_cmds(bdev);
 	if (err < 0) {
@@ -2131,7 +2121,6 @@ static int btmtk_cif_suspend(struct device *dev)
 	struct btmtk_sdio_dev *cif_dev = NULL;
 	struct btmtk_woble *bt_woble = NULL;
 	mmc_pm_flag_t pm_flags;
-	struct irq_desc *desc;
 
 	BTMTK_INFO("%s, enter", __func__);
 
@@ -2172,25 +2161,6 @@ static int btmtk_cif_suspend(struct device *dev)
 	if (ret < 0)
 		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
 #endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
-
-	if (bdev->bt_cfg.support_woble_by_eint) {
-		if (bt_woble->wobt_irq != 0 && atomic_read(&(bt_woble->irq_enable_count)) == 0) {
-			/* clear irq data before enable woble irq to avoid DUT wake up
-			 *  automatically by edge trigger, sync from Jira CONN-50629
-			 */
-			desc = irq_to_desc(bt_woble->wobt_irq);
-			if (desc)
-				desc->irq_data.chip->irq_ack(&desc->irq_data);
-			else
-				BTMTK_INFO("%s:can't get desc\n", __func__);
-
-			BTMTK_INFO("%s, enable BT IRQ:%d", __func__, bt_woble->wobt_irq);
-			irq_set_irq_wake(bt_woble->wobt_irq, 1);
-			enable_irq(bt_woble->wobt_irq);
-			atomic_inc(&(bt_woble->irq_enable_count));
-		} else
-			BTMTK_INFO("%s, irq_enable count:%d", __func__, atomic_read(&(bt_woble->irq_enable_count)));
-	}
 
 	pm_flags = sdio_get_host_pm_caps(func);
 	if (!(pm_flags & MMC_PM_KEEP_POWER)) {
@@ -2521,7 +2491,7 @@ static const struct dev_pm_ops btmtk_sdio_pm_ops = {
 #endif
 
 static struct sdio_driver btmtk_sdio_driver = {
-	.name = "btsdio",
+	.name = "btmtksdio",
 	.id_table = btmtk_sdio_tabls,
 	.probe = btmtk_cif_probe,
 	.remove = btmtk_cif_disconnect,
