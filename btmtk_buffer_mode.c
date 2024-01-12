@@ -422,7 +422,7 @@ void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev)
 			if (bdev->setting_file[BT0_CAL_ANT0_ENABLE_OFFSET_7925] == 1) {
 				if (BT0_CAL_ANT0_OFFSET_7925 + BUFFER_MODE_CAL_LENGTH <= code_len)
 					memcpy(btmtk_buffer_mode.bt0_ant0_grp_boundary, &bdev->setting_file[BT0_CAL_ANT0_OFFSET_7925],
-						BUFFER_MODE_CAL_LENGTH);
+						BUFFER_MODE_GROUP_LENGTH);
 				else
 					BTMTK_ERR("%s: error address, %x", __func__, BT0_CAL_ANT0_OFFSET_7925);
 			} else {
