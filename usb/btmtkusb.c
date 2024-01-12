@@ -2272,7 +2272,7 @@ static int btmtk_usb_enter_standby(void)
 	int ret = 0;
 	int i = 0;
 	int cif_event = 0;
-	int state =0;
+	int state = 0;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_usb_dev *cif_dev = NULL;
