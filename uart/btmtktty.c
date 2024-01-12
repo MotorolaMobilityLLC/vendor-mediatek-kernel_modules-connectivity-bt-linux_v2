@@ -2640,14 +2640,35 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 #endif
 				}
 			} else {
-				int i = 0;
-				for (i = 0; i < 3; i++) {
-					/* no need to wait event */
-					ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
-							DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
-					/* wait a while for fw wakeup */
-					usleep_range(6000, 6100);
+				if (cif_dev->sleep_flow_hw_mech_en) {
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+					/* new wakeup flow */
+					/* 3. Set DEVx_HOST_AWAKE = 1 */
+					/* 4. Tx 0xFF, if DEVx_BT_AWAKE = 0 */
+					/* 4~8 Polling CMM_BT_AWAKE = 1 or DEVx_BT_AWAKE = 1 */
+					ret = mtk8250_uart_hub_set_host_awake_sta(0);
+					BTMTK_INFO("%s: Set DEVx_HOST_AWAKE = 1, ret = %d ", __func__, ret);
+
+					if (mtk8250_uart_hub_get_bt_awake_sta()== 0) {
+						ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
+					}
+
+					do {
+						/* If CMM_BT_AWAKE = 1 or DEVx_BT_AWAKE = 1 leave while */
+						BTMTK_INFO("%s: CMM_BT_AWAKE = %d, DEVx_BT_AWAKE = %d", __func__, mtk8250_uart_hub_get_cmm_bt_awake_sta(), mtk8250_uart_hub_get_bt_awake_sta());
+					} while (mtk8250_uart_hub_get_cmm_bt_awake_sta() == 0 && mtk8250_uart_hub_get_bt_awake_sta() == 0);
+#endif
+				} else {
+						int i = 0;
+						for (i = 0; i < 3; i++) {
+							/* no need to wait event */
+							ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
+								DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
+							/* wait a while for fw wakeup */
+							usleep_range(6000, 6100);
+						}
 				}
+
 			}
 			if (ret < 0)
 				BTMTK_ERR("%s btmtk_main_send_cmd 0xFF fail, ret[%d]", __func__, ret);
