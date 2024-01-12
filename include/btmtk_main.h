@@ -550,7 +550,6 @@ struct btmtk_dev {
 
 	/* single sku */
 	unsigned char		*country_file_name;
-	u8 opcode_usr[2];
 	u8 debug_type;
 	int get_hci_reset;
 };
