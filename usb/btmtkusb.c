@@ -2452,7 +2452,7 @@ exit:
 }
 
 static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
-		u8 *fwbuf, int section_dl_size, int section_offset)
+		u8 *fwbuf, int section_dl_size, int section_offset, int patch_flag)
 {
 	int cur_len = 0;
 	int ret = 0;
@@ -2543,8 +2543,11 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, LD_PATCH_CMD_USB, cmd);
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, LD_PATCH_EVT, event);
-	if (is_mt6639(bdev->chip_id) || is_mt7925(bdev->chip_id)) {
-		event.content[4] = 0x01; /* the byte will be modified to 0x54 when download wifi */
+	if ((is_mt6639(bdev->chip_id) || is_mt7925(bdev->chip_id)) && patch_flag == WIFI_DOWNLOAD) {
+		event.content[4] = 0x54; /* the byte will be modified to 0x54 when download Connac3 wifi */
+		cmd.content[4] = 0x54;
+	} else {
+		event.content[4] = 0x01; /* the byte will be modified to 0x01 when download BT */
 		cmd.content[4] = 0x01;
 	}
 
