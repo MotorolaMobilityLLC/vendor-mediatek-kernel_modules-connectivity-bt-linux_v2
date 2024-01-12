@@ -2083,6 +2083,10 @@ static void btusb_waker(struct work_struct *work)
 
 int btmtk_usb_toggle_rst_pin(struct btmtk_dev *bdev)
 {
+#ifdef CFG_CHIP_RESET_KO_SUPPORT
+	rstNotifyWholeChipRstStatus(RST_MODULE_BT, RST_MODULE_STATE_PRERESET , NULL);
+	return 0;
+#else
 	struct device_node *node;
 	int rst_pin_num = 0;
 	int cur = 0;
@@ -2192,6 +2196,7 @@ int btmtk_usb_toggle_rst_pin(struct btmtk_dev *bdev)
 exit:
 	BTMTK_INFO("%s: end", __func__);
 	return 0;
+#endif
 }
 EXPORT_SYMBOL(btmtk_usb_toggle_rst_pin);
 
@@ -2771,6 +2776,12 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 	BTMTK_INFO("%s: MTK BT Driver Version : %s", __func__, VERSION);
 
 	DUMP_TIME_STAMP("probe_start");
+
+#ifdef CFG_CHIP_RESET_KO_SUPPORT
+	/* notify reset ko module BT probe start */
+	rstNotifyWholeChipRstStatus(RST_MODULE_BT, RST_MODULE_STATE_PROBE_START, NULL);
+#endif
+
 	/* USB interface only.
 	 * USB will need to identify thru descriptor's interface numbering.
 	 */
@@ -2812,6 +2823,11 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
 	else
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+
+#ifdef CFG_CHIP_RESET_KO_SUPPORT
+	/* notify reset ko module BT probe done */
+	rstNotifyWholeChipRstStatus(RST_MODULE_BT, RST_MODULE_STATE_PROBE_DONE, NULL);
+#endif
 
 	DUMP_TIME_STAMP("probe_end");
 	return ret;

@@ -646,16 +646,10 @@ static void btmtk_usb_cap_init(struct LD_btmtk_usb_data *data)
 		usb_debug("%s: flavor1 = 0x%x\n", __func__, data->flavor);
 		/* if flavor equals 1, it represent 7920, else it represent 7921 */
 		if (data->flavor) {
-			//snprintf(data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
-			//	"BT_RAM_CODE_MT%04x_1a_%x_hdr.bin", data->chip_id & 0xffff,
-			//	(data->fw_version & 0xff) + 1);
 			sprintf((char *)data->rom_patch_bin_file_name,
 				"BT_RAM_CODE_MT%04x_1a_%x_hdr.bin", data->chip_id & 0xffff,
 				(data->fw_version & 0xff) + 1);
 		} else {
-			//snprintf(data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
-			//		"BT_RAM_CODE_MT%04x_1_%x_hdr.bin",
-			//		data->chip_id & 0xffff, (data->fw_version & 0xff) + 1);
 			sprintf(data->rom_patch_bin_file_name,
 				"BT_RAM_CODE_MT%04x_1_%x_hdr.bin",
 				data->chip_id & 0xffff, (data->fw_version & 0xff) + 1);

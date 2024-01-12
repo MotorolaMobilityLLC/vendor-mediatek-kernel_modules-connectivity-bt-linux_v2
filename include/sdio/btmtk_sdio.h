@@ -184,5 +184,8 @@ struct btmtk_sdio_dev {
 
 int btmtk_sdio_read_bt_mcu_pc(u32 *val);
 int btmtk_sdio_read_conn_infra_pc(u32 *val);
+int btmtk_sdio_set_driver_own_for_subsys_reset(int enable);
+int btmtk_sdio_whole_reset(struct btmtk_dev *bdev);
+int btmtk_sdio_read_wifi_mcu_pc(u8 PcLogSel, u32 *val);
 
 #endif
