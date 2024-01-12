@@ -310,11 +310,21 @@ struct bt_cmds_s commands[] = {
 	{"SET_COMPENSATION_EVT_6639", {{SET_COMPENSATION_EVT_LEN_6639, set_compensation_evt_6639}, {0, NULL}}, DEFAULT}
 };
 
-void btmtk_common_data_initialize(struct btmtk_dev *bdev)
-{
-	bdev->bt_raw_data = commands;
+struct bt_cmds_s command_raw_data[4][BTMTK_CMD_NUM];
 
-	return;
+int btmtk_common_data_initialize(struct btmtk_dev *bdev)
+{
+	int i;
+
+	if (bdev->dongle_index >= 4) {
+		BTMTK_ERR("%s: dongle_index must smaller than 4 (%d)", __func__, bdev->dongle_index);
+		return -1;
+	}
+
+	memcpy(command_raw_data[bdev->dongle_index], commands, sizeof(commands));
+	bdev->bt_raw_data = command_raw_data[bdev->dongle_index];
+
+	return 0;
 }
 
 void btmtk_free_chip_struct(	struct data_struct *fw_cfg, int count)
