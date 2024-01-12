@@ -16,6 +16,7 @@ LOCAL_C_INCLUDES := \
   vendor/mediatek/proprietary/custom/evb6991_64/cgen/inc \
   vendor/mediatek/proprietary/custom/k6989v1_64/cgen/inc \
   vendor/mediatek/proprietary/custom/k6989v1_64_for_dx4/cgen/inc \
+  $(wildcard vendor/mediatek/proprietary/custom/*/cgen/inc) \
   vendor/mediatek/proprietary/custom/k6989v1_64_for_dx4_gpu/cgen/inc \
   vendor/mediatek/proprietary/custom/common/cgen/cfgfileinc/connxo/MT6991 \
   vendor/mediatek/proprietary/custom/common/cgen/cfgfileinc/connxo/MT6989
