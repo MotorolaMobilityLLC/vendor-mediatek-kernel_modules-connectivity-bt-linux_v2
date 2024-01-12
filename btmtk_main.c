@@ -2439,6 +2439,7 @@ struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev)
 
 	if (!bdev)
 		return NULL;
+	memset(bdev, 0, len);
 
 	btmtk_set_chip_state(bdev, BTMTK_STATE_INIT);
 
