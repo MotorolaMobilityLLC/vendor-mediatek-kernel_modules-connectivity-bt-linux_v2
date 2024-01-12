@@ -131,6 +131,18 @@ else
     ccflags-y += -DCFG_SUPPORT_MULTI_DEV_NODE=0
 endif
 
+ifeq ($(CONFIG_SUPPORT_LEAUDIO_CLK), y)
+    ccflags-y += -DCFG_SUPPORT_LEAUDIO_CLK=1
+    ifeq ($(CONFIG_SUPPORT_DEINT_IRQ), y)
+        ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/
+        ccflags-y += -DCFG_SUPPORT_DEINT_IRQ=1
+    else
+        ccflags-y += -DCFG_SUPPORT_DEINT_IRQ=0
+    endif
+else
+    ccflags-y += -DCFG_SUPPORT_LEAUDIO_CLK=0
+endif
+
 ifeq ($(CONFIG_ARCH_MEDIATEK),y)
     ccflags-y += -D BTMTK_PLAT_ALPS=1
 else
@@ -145,12 +157,7 @@ endif
 
 ccflags-y += -DDEBUG_DUMP_TIME
 ccflags-y += -DBTMTK_ISOC_TEST=0
-ifeq ($(CONFIG_SUPPORT_BMR_RX_CLK), y)
-    ccflags-y += -DCFG_SUPPORT_BMR_RX_CLK=1
-    ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/
-else
-    ccflags-y += -DCFG_SUPPORT_BMR_RX_CLK=0
-endif
+
 #################### Configurations ####################
 # For chip interface, driver supports "usb", "sdio", "uart_tty", "uart_serdev" and "btif"
 MTK_CHIP_IF := usb
@@ -235,6 +242,7 @@ ifeq ($(MTK_PROJ_TYPE), sp)
 endif
 
 ccflags-y += -DBTMTK_LOG_LVL=0
+ccflags-y += -D_FORTIFY_SOURCE=2
 ccflags-y += -Werror
 
 $(MOD_NAME)-objs := $(CFILES:.c=.o)

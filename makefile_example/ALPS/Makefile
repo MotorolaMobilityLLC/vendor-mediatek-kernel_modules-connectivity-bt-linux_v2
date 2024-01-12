@@ -80,13 +80,6 @@ else
     ccflags-y += -DCFG_SUPPORT_MULTI_DEV_NODE=0
 endif
 
-ifeq ($(CONFIG_SUPPORT_BMR_RX_CLK), y)
-    ccflags-y += -DCFG_SUPPORT_BMR_RX_CLK=1
-    ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/
-else
-    ccflags-y += -DCFG_SUPPORT_BMR_RX_CLK=0
-endif
-
 #################### Configurations ####################
 # For chip interface, driver supports "usb", "sdio", "uart_tty", "uart_serdev" and "btif"
 MTK_CHIP_IF := sdio

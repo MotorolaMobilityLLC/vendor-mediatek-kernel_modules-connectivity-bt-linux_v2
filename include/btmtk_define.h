@@ -334,6 +334,10 @@ extern uint8_t _raw_buf_[];
 #define BT_DEBUG_SOP_MODE "DEBUG_SOP_MODE"
 #define DTS_SUBSYS_RST "SUPPORT_DTS_SUBSYS_RST"
 #define BT_LOG_LVL "LOG_LVL"
+#if CFG_SUPPORT_LEAUDIO_CLK
+#define BT_LE_AUDIO_CLK "SUPPORT_LE_AUDIO_CLK"
+#define BT_LE_AUDIO_CLK_FW_GPIO "LE_AUDIO_CLK_FW_GPIO"
+#endif
 
 #define PM_KEY_BTW (0x0015) /* Notify PM the unify woble type */
 
@@ -385,6 +389,10 @@ struct bt_cfg_struct {
 	struct fw_cfg_struct audio_pinmux_mode;	/* support on set audio pinmux mode command customization */
 	int debug_sop_mode; /* debug sop mode */
 	bool	support_dts_subsys_rst;
+#if CFG_SUPPORT_LEAUDIO_CLK
+	bool	support_le_audio_clk;
+	int	le_audio_clk_fw_gpio;
+#endif
 };
 
 struct bt_utc_struct {
@@ -466,6 +474,16 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc);
 	} while (0)
 #else
 #define DUMP_TIME_STAMP(__str)
+#endif
+
+#if CFG_SUPPORT_LEAUDIO_CLK
+#if CFG_SUPPORT_DEINT_IRQ
+extern int mtk_deint_enable(unsigned int eint_num, unsigned int spi_num, unsigned long type);
+extern int mtk_deint_ack(unsigned int irq);
+#endif
+//#include <mt-plat/mtk_secure_api.h>
+//#define MTK_SIP_BT_FIQ_REG (0x82000523 | MTK_SIP_SMC_AARCH_BIT)
+//#define MTK_SIP_BT_GET_CLK (0x82000524 | MTK_SIP_SMC_AARCH_BIT)
 #endif
 
 #ifdef CFG_SUPPORT_CHIP_RESET_KO
