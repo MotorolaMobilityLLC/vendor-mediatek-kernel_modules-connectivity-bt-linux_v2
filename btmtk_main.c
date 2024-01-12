@@ -365,6 +365,31 @@ static void btmtk_init_memory(struct btmtk_dev *bdev)
 	bdev->tx_state = 0;
 }
 
+void btmtk_assert_wake_lock(void)
+{
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	BTMTK_INFO("%s: enter", __func__);
+	__pm_stay_awake(bmain_info->assert_ws);
+	BTMTK_INFO("%s: exit", __func__);
+}
+
+void btmtk_assert_wake_unlock(void)
+{
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	BTMTK_INFO("%s: enter", __func__);
+	__pm_relax(bmain_info->assert_ws);
+	BTMTK_INFO("%s: exit", __func__);
+}
+
+bool btmtk_assert_wake_lock_check(void)
+{
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	return bmain_info->assert_ws->active;
+}
+
 u8 btmtk_get_chip_state(struct btmtk_dev *bdev)
 {
 	u8 state = 0;
@@ -462,7 +487,7 @@ static void btmtk_main_info_initialize(void)
 	atomic_set(&main_info.subsys_reset, BTMTK_RESET_DONE);
 
 #if defined(CONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT)
-	main_info.fwdump_ws = wakeup_source_register(NULL, "btmtk_fwdump_wakelock");
+	main_info.assert_ws = wakeup_source_register(NULL, "btmtk_assert_wakelock");
 	main_info.woble_ws = wakeup_source_register(NULL, "btmtk_woble_wakelock");
 	main_info.eint_ws = wakeup_source_register(NULL, "btevent_eint");
 #if WAKEUP_BT_IRQ
@@ -470,14 +495,14 @@ static void btmtk_main_info_initialize(void)
 #endif
 #elif (defined(LINUX_OS) && (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)) ||	\
 	(defined(ANDROID_OS) && (KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE))
-	main_info.fwdump_ws = wakeup_source_register("btmtk_fwdump_wakelock");
+	main_info.assert_ws = wakeup_source_register("btmtk_assert_wakelock");
 	main_info.woble_ws = wakeup_source_register("btmtk_woble_wakelock");
 	main_info.eint_ws = wakeup_source_register("btevent_eint");
 #if WAKEUP_BT_IRQ
 	main_info.irq_ws = wakeup_source_register("btevent_irq");
 #endif
 #else
-	main_info.fwdump_ws = wakeup_source_register(NULL, "btmtk_fwdump_wakelock");
+	main_info.assert_ws = wakeup_source_register(NULL, "btmtk_assert_wakelock");
 	main_info.woble_ws = wakeup_source_register(NULL, "btmtk_woble_wakelock");
 	main_info.eint_ws = wakeup_source_register(NULL, "btevent_eint");
 #if WAKEUP_BT_IRQ
@@ -3507,6 +3532,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		goto exit;
 	}
+	btmtk_assert_wake_lock();
 	bt_cb(skb)->pkt_type = HCI_COMMAND_PKT;
 	memcpy(skb->data, cmd.content, cmd.len);
 	skb->len = cmd.len;
@@ -4003,7 +4029,6 @@ static int bt_close(struct hci_dev *hdev)
 		BTMTK_WARN("%s: wait dump_comp , can't close yet state[%d]", __func__, state);
 		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
 			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
-			btmtk_fwdump_wake_unlock();
 			connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump not complete");
 			btmtk_sp_coredump_end();
 		}
@@ -4231,7 +4256,6 @@ failed:
 		BTMTK_WARN("%s: wait dump_comp, can't close yet state[%d]", __func__, state);
 		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
 			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
-			btmtk_fwdump_wake_unlock();
 			connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump fail");
 			btmtk_sp_coredump_end();
 
@@ -5031,7 +5055,7 @@ static int main_exit(void)
 	/* Is it necessary? bt_close will be called by reboot. */
 	unregister_reboot_notifier(&btmtk_reboot_notifier);
 
-	wakeup_source_unregister(main_info.fwdump_ws);
+	wakeup_source_unregister(main_info.assert_ws);
 	wakeup_source_unregister(main_info.woble_ws);
 	wakeup_source_unregister(main_info.eint_ws);
 #if WAKEUP_BT_IRQ

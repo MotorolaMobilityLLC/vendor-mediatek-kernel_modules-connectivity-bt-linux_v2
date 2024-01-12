@@ -882,23 +882,6 @@ unsigned int btmtk_fops_pollfwlog(struct file *file, poll_table *wait)
 	return mask;
 }
 #endif
-static void btmtk_fwdump_wake_lock(void)
-{
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-
-	BTMTK_INFO("%s: enter", __func__);
-	__pm_stay_awake(bmain_info->fwdump_ws);
-	BTMTK_INFO("%s: exit", __func__);
-}
-
-void btmtk_fwdump_wake_unlock(void)
-{
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-
-	BTMTK_INFO("%s: enter", __func__);
-	__pm_relax(bmain_info->fwdump_ws);
-	BTMTK_INFO("%s: exit", __func__);
-}
 
 static int btmtk_skb_enq_fwlog(struct btmtk_dev *bdev, void *src, u32 len, u8 type, struct sk_buff_head *queue)
 {
@@ -1070,7 +1053,10 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			dump_data_counter = 0;
 			dump_data_length = 0;
 			btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
-			btmtk_fwdump_wake_lock();
+			if (!btmtk_assert_wake_lock_check())
+				btmtk_assert_wake_lock();
+			if (!btmtk_reset_timer_check(bdev))
+				btmtk_reset_timer_update(bdev);
 
 			BTMTK_INFO("dumplog_queue_first1, skb_queue_len = %d",
 					skb_queue_len(&g_fwlog->dumplog_queue_first));
@@ -1113,7 +1099,6 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 					__func__, dump_data_counter, dump_data_length);
 			/* TODO: Chip reset*/
 			bmain_info->reset_stack_flag = HW_ERR_CODE_CORE_DUMP;
-			btmtk_fwdump_wake_unlock();
 			DUMP_TIME_STAMP("FW_dump_end");
 			if (bmain_info->hif_hook.waker_notify)
 				bmain_info->hif_hook.waker_notify(bdev);
@@ -1263,7 +1248,10 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			btmtk_sp_coredump_start();
 
 			btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
-			btmtk_fwdump_wake_lock();
+			if (!btmtk_assert_wake_lock_check())
+				btmtk_assert_wake_lock();
+			if (!btmtk_reset_timer_check(bdev))
+				btmtk_reset_timer_update(bdev);
 			line = __LINE__;
 			ret = connv3_coredump_start(
 					bmain_info->hif_hook.coredump_handler, CONNV3_DRV_TYPE_BT,
@@ -1276,18 +1264,18 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 					"BT exception test", skb->data, bmain_info->fw_version_str);
 			}
 			if (ret)
-				goto coredump_fail_unlock;
+				goto coredump_fail;
 			line = __LINE__;
 			ret = connv3_coredump_get_issue_info(bmain_info->hif_hook.coredump_handler,
 								&issue_info, xml_log, CONNV3_XML_SIZE);
 			if (ret)
-				goto coredump_fail_unlock;
+				goto coredump_fail;
 			BTMTK_INFO("%s: xml_log: %s, assert_info: %s ", __func__, xml_log, issue_info.assert_info);
 			line = __LINE__;
 			ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler,
 							"INFO", xml_log, strlen(xml_log));
 			if (ret)
-				goto coredump_fail_unlock;
+				goto coredump_fail;
 		}
 
 		dump_data_counter++;
@@ -1307,7 +1295,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		line = __LINE__;
 		ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "[M]", skb->data, skb->len);
 		if (ret)
-			goto coredump_fail_unlock;
+			goto coredump_fail;
 
 		/* In the new generation, we will check the keyword of coredump (; coredump end)
 		 * Such as : 79xx
@@ -1320,7 +1308,6 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			skb->data[skb->len - 2] == 'd') {
 			/* TODO: Chip reset*/
 			bmain_info->reset_stack_flag = HW_ERR_CODE_CORE_DUMP;
-			btmtk_fwdump_wake_unlock();
 			DUMP_TIME_STAMP("FW_dump_end");
 			line = __LINE__;
 			/* This is the latest coredump packet. */
@@ -1346,8 +1333,6 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 		}
 		return 1;
-coredump_fail_unlock:
-		btmtk_fwdump_wake_unlock();
 coredump_fail:
 		BTMTK_ERR("%s: coredump fail ret[%d] line[%d]", __func__, ret, line);
 		connv3_coredump_end(bmain_info->hif_hook.coredump_handler, "BT coredump fail");

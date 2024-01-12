@@ -3120,6 +3120,7 @@ static int btusb_probe(struct usb_interface *intf,
 	}
 
 	btmtk_woble_wake_unlock(bdev);
+	btmtk_assert_wake_unlock();
 
 #if CFG_SUPPORT_BLUEZ
 	if (is_mt7925(bdev->chip_id)) {
