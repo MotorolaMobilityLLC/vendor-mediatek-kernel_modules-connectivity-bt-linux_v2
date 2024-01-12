@@ -13,7 +13,7 @@
 #define RHW_DBG_TAG	"[btmtk_dbg_sop_rhw]"
 #define HIF_DBG_TAG	"[btmtk_dbg_sop_hif]"
 /* unified debug sop format */
-#define UNIFIED_DBG_TAG	"[PSOP_1_1]"
+#define UNIFIED_DBG_TAG	"[PSOP_5_1]"
 #define REG_DUMP_NUM_MAX		16
 #define REG_DUMP_ARRAY_SIZE		256
 
@@ -792,7 +792,7 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 	}
 
 	if (bdev->chip_id == 0x6653) {
-		BTMTK_INFO("%s version = %s", UNIFIED_DBG_TAG, MT6653_BT_DEBUGSOP_DUMP_VERSION);
+		BTMTK_INFO("%s version=%s", UNIFIED_DBG_TAG, MT6653_BT_DEBUGSOP_DUMP_VERSION);
 		/* unified dump */
 		mt6653_rhw_dumpReg();
 
