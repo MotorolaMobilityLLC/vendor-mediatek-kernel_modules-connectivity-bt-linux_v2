@@ -3275,8 +3275,8 @@ static int btusb_resume(struct usb_interface *intf)
 			goto done;
 		}
 
-		if (is_mt7961(bdev->chip_id) && BTMTK_IS_BT_0_INTF(ifnum_base)) {
-			BTMTK_INFO("%s 7961 submit urb", __func__);
+		if ((is_mt7961(bdev->chip_id) || is_mt7925(bdev->chip_id)) && BTMTK_IS_BT_0_INTF(ifnum_base)) {
+			BTMTK_INFO("%s submit urb", __func__);
 			if (cif_dev->reset_intr_ep) {
 				err = btusb_submit_intr_reset_urb(hdev, GFP_KERNEL);
 				if (err < 0) {
