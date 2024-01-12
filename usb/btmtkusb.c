@@ -32,7 +32,10 @@
 #include "btmtk_usb.h"
 
 static struct usb_driver btusb_driver;
+#ifdef CFG_CHIP_RESET_KO_SUPPORT
+#else
 static struct btmtk_cif_chip_reset reset_func;
+#endif
 static int intf_to_idx[BT_MCU_INTERFACE_NUM_MAX] = {0, -1, -1, 1};
 static struct btmtk_usb_dev g_usb_dev[BT_MCU_MINIMUM_INTERFACE_NUM][BT_MCU_NUM_MAX];
 
