@@ -243,6 +243,8 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 	if (ret == -1) {
 		BTMTK_ERR("%s wait event timeout!!", __func__);
 		bdev->recv_evt_len = 0;
+		ret = -ERRNUM;
+		goto fw_assert;
 	}
 
 	event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
