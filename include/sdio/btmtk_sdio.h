@@ -109,7 +109,7 @@ typedef int (*set_gpio_high)(u8 gpio);
  */
 #define HCI_EV_VENDOR			0xff
 #define SDIO_BLOCK_SIZE                 512
-#define SDIO_RW_RETRY_COUNT 500
+#define SDIO_RW_RETRY_COUNT 20
 #define MTK_SDIO_PACKET_HEADER_SIZE 4
 
 /* Driver & FW own related */
