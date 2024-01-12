@@ -2807,7 +2807,7 @@ EXPORT_SYMBOL(btmtk_usb_toggle_rst_pin);
 
 static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 {
-	int val, retry = 10;
+	int val = 0, retry = 10;
 	int state = 0;
 	u32 mcu_init_done = MCU_BT0_INIT_DONE;
 	u32 bt_subsys_cr;
