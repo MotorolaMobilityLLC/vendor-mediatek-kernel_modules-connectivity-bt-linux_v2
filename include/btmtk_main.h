@@ -862,7 +862,7 @@ struct btmtk_main_info {
 	char fw_version_str[FW_VERSION_BUF_SIZE];
 
 	atomic_t fwlog_ref_cnt;
-	u8 find_my_phone_mode;
+	u32 find_my_phone_mode;
 	int bk_rs_flag;
 };
 
