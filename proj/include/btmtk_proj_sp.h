@@ -88,6 +88,14 @@ void mtk8250_uart_end_record(struct tty_struct *tty);
 #define HCI_CMD_DY_ADJ_PWR_SET		0x02
 #define BT_RHW_MAX_ERR_COUNT		(2)
 
+
+/* ioctl */
+#define COMBO_IOC_MAGIC				0xb0
+#define COMBO_IOCTL_BT_HOST_DEBUG	_IOW(COMBO_IOC_MAGIC, 4, void*)
+#define COMBO_IOCTL_BT_INTTRX		_IOW(COMBO_IOC_MAGIC, 5, void*)
+#define IOCTL_BT_HOST_DEBUG_BUF_SIZE	(32)
+#define IOCTL_BT_HOST_INTTRX_SIZE		(128)
+
 typedef int (*BT_RX_EVT_HANDLER_CB) (uint8_t *buf, int len);
 
 struct btmtk_dypwr_st {
