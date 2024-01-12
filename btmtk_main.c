@@ -857,20 +857,20 @@ void btmtk_hci_snoop_print(const u8 *buf, u32 len)
 }
 
 /* HCI receive mechnism */
-static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
+static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 					  struct sk_buff *skb,
-					  const unsigned char *buffer,
-					  int count,
+					  const unsigned char *buf,
+					  int size,
 					  const struct h4_recv_pkt *pkts,
 					  int pkts_count)
 {
 	struct btmtk_dev *bdev = NULL;
 	/* used for print debug log*/
-	const unsigned char *buffer_dbg = buffer;
-	int count_dbg = count;
+	const unsigned char *buffer_dbg = buf;
+	int size_dbg = size;
 	unsigned char *skb_tmp = NULL;
 
-	if (hdev == NULL || buffer == NULL) {
+	if (hdev == NULL || buf == NULL) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
 		return ERR_PTR(-EINVAL);
 	}
@@ -880,102 +880,89 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 		BTMTK_ERR("%s, bdev is invalid", __func__);
 		return ERR_PTR(-EINVAL);
 	}
-	/* Check for error from previous call */
-	if (IS_ERR(skb))
-		skb = NULL;
-	/* BTMTK_DBG("%s, buffer[0]=0x%02X, count[%d], pkts_count[%d]", __func__, *buffer, count, pkts_count); */
 
-	while (count) {
-		int i, len;
-
+	while (size) {
+		int index, length;
 		if (!skb) {
-			for (i = 0; i < pkts_count; i++) {
-				if (buffer[0] != (&pkts[i])->type)
-					continue;
-
-				skb = bt_skb_alloc((&pkts[i])->maxlen,
+			for (index = 0; index < pkts_count; index++) {
+				if (buf[0] == (&pkts[index])->type) {
+					skb = bt_skb_alloc(
+						(&pkts[index])->maxlen,
 						   GFP_ATOMIC);
-				if (!skb) {
-					BTMTK_ERR("%s, alloc skb failed!", __func__);
-					return ERR_PTR(-ENOMEM);
-				}
+					if (!skb) {
+						BTMTK_ERR("%s alloc failed!",
+							__func__);
+						return ERR_PTR(-ENOMEM);
+					}
 
-				hci_skb_pkt_type(skb) = (&pkts[i])->type;
-				hci_skb_expect(skb) = (&pkts[i])->hlen;
-				break;
+					hci_skb_pkt_type(skb) = (&pkts[index])->type;
+					hci_skb_expect(skb) = (&pkts[index])->hlen;
+					break;
+				}
 			}
 
-			/* Check for invalid packet type */
+			/* Type not matched */
 			if (!skb) {
 				BTMTK_ERR("%s,skb is invalid, buffer[0] = 0x%02X!", __func__,
-					buffer[0]);
+					buf[0]);
 				if (main_info.hif_hook_chip.err_handler)
 					main_info.hif_hook_chip.err_handler(hdev,
-							buffer, count, buffer_dbg, count_dbg);
+							buf, size, buffer_dbg, size_dbg);
 
 				return ERR_PTR(-EILSEQ);
 			}
 
-			count -= 1;
-			buffer += 1;
+			size -= 1;
+			buf += 1;
 		}
 
-		len = min_t(uint, hci_skb_expect(skb) - skb->len, count);
-		skb_tmp = skb_put(skb, len);
+		length = min_t(uint, hci_skb_expect(skb) - skb->len, size);
+		skb_tmp = skb_put(skb, length);
 		if (!skb_tmp) {
-			BTMTK_ERR("%s, skb_put failed. Len = %d!", __func__, len);
+			BTMTK_ERR("%s, skb_put failed. Len = %d!", __func__, length);
 			kfree_skb(skb);
 			return ERR_PTR(-ENOMEM);
 		}
-		memcpy(skb_tmp, buffer, len);
-		/* If kernel version > 4.x */
-		/* skb_put_data(skb, buffer, len); */
+		memcpy(skb_tmp, buf, length);
+		size -= length;
+		buf += length;
 
-		count -= len;
-		buffer += len;
-
-		/* Check for partial packet */
 		if (skb->len < hci_skb_expect(skb))
 			continue;
 
-		for (i = 0; i < pkts_count; i++) {
-			if (hci_skb_pkt_type(skb) == (&pkts[i])->type)
+		for (index = 0; index < pkts_count; index++) {
+			if (hci_skb_pkt_type(skb) == (&pkts[index])->type)
 				break;
 		}
 
-		if (i >= pkts_count) {
-			BTMTK_ERR("%s, pkt type is invalid!", __func__);
+		if (index >= pkts_count) {
+			BTMTK_ERR("%s, type is invalid!", __func__);
 			if (main_info.hif_hook_chip.err_handler)
 				main_info.hif_hook_chip.err_handler(hdev,
-						buffer, count, buffer_dbg, count_dbg);
+						buf, size, buffer_dbg, size_dbg);
 			kfree_skb(skb);
 			return ERR_PTR(-EILSEQ);
 		}
 
-		/* not use hci_skb_expect instead of hlen */
-		/* because hci_skb_expect will update by +=dlen */
-		if (skb->len == (&pkts[i])->hlen) {
+		if (skb->len == (&pkts[index])->hlen) {
 			u16 dlen;
-
 			/* BTMTK_DBG("%s begin, skb->len = %d, %d, %d", __func__, skb->len, */
-			/* (&pkts[i])->hlen, (&pkts[i])->lsize); */
-			switch ((&pkts[i])->lsize) {
+			switch ((&pkts[index])->lsize) {
 			case 0:
 				/* No variable data length */
 				dlen = 0;
 				break;
 			case 1:
-				/* Single octet variable length */
-				dlen = skb->data[(&pkts[i])->loff];
+				dlen = skb->data[(&pkts[index])->loff];
 				hci_skb_expect(skb) += dlen;
 
 				if (skb_tailroom(skb) < dlen) {
 					BTMTK_ERR("%s, maxlen[%d] skb_tailroom[%d] is not enough, dlen:%d!",
-						__func__, (&pkts[i])->maxlen, skb_tailroom(skb), dlen);
+						__func__, (&pkts[index])->maxlen, skb_tailroom(skb), dlen);
 					BTMTK_INFO_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
 					if (main_info.hif_hook_chip.err_handler)
 						main_info.hif_hook_chip.err_handler(hdev,
-								buffer, count, buffer_dbg, count_dbg);
+								buf, size, buffer_dbg, size_dbg);
 					kfree_skb(skb);
 					return ERR_PTR(-EMSGSIZE);
 				}
@@ -983,9 +970,9 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 			case 2:
 				/* Double octet variable length */
 				dlen = get_unaligned_le16(skb->data +
-							  (&pkts[i])->loff);
+							  (&pkts[index])->loff);
 				/* parse ISO packet len*/
-				if ((&pkts[i])->type == HCI_ISODATA_PKT) {
+				if ((&pkts[index])->type == HCI_ISODATA_PKT) {
 					unsigned char *cp = (unsigned char *)&dlen + 1;
 					*cp = *cp & 0x3F;
 				}
@@ -993,10 +980,10 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 
 				if (skb_tailroom(skb) < dlen) {
 					BTMTK_ERR("%s, maxlen[%d] skb_tailroom[%d] is not enough, dlen:%d!",
-						__func__, (&pkts[i])->maxlen, skb_tailroom(skb), dlen);
+						__func__, (&pkts[index])->maxlen, skb_tailroom(skb), dlen);
 					if (main_info.hif_hook_chip.err_handler)
 						main_info.hif_hook_chip.err_handler(hdev,
-								buffer, count, buffer_dbg, count_dbg);
+								buf, size, buffer_dbg, size_dbg);
 					kfree_skb(skb);
 					return ERR_PTR(-EMSGSIZE);
 				}
@@ -1006,21 +993,21 @@ static inline struct sk_buff *h4_recv_buf(struct hci_dev *hdev,
 				BTMTK_ERR("%s, Unsupported variable length!", __func__);
 				if (main_info.hif_hook_chip.err_handler)
 					main_info.hif_hook_chip.err_handler(hdev,
-							buffer, count, buffer_dbg, count_dbg);
+							buf, size, buffer_dbg, size_dbg);
 				kfree_skb(skb);
 				return ERR_PTR(-EILSEQ);
 			}
 
 			if (!dlen) {
 				/* No more data, complete frame */
-				(&pkts[i])->recv(hdev, skb);
+				(&pkts[index])->recv(hdev, skb);
 				if (is_mt66xx(bdev->chip_id))
 					btmtk_set_sleep(hdev, FALSE);
 				skb = NULL;
 			}
 		} else {
 			/* Complete frame */
-			(&pkts[i])->recv(hdev, skb);
+			(&pkts[index])->recv(hdev, skb);
 			if (is_mt66xx(bdev->chip_id))
 				btmtk_set_sleep(hdev, FALSE);
 			skb = NULL;
@@ -1173,11 +1160,11 @@ int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count)
 #endif
 
 #if ENABLESTP
-		bdev->rx_skb = h4_recv_buf(hdev, bdev->rx_skb, p_h4,
+		bdev->rx_skb = btmtk_parse_buf(hdev, bdev->rx_skb, p_h4,
 					   sz_h4, mtk_recv_pkts,
 					   ARRAY_SIZE(mtk_recv_pkts));
 #else
-		bdev->rx_skb = h4_recv_buf(hdev, bdev->rx_skb, data,
+		bdev->rx_skb = btmtk_parse_buf(hdev, bdev->rx_skb, data,
 					   count, mtk_recv_pkts,
 					   ARRAY_SIZE(mtk_recv_pkts));
 #endif
