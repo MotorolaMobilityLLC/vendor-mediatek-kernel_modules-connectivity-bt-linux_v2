@@ -49,7 +49,7 @@
 #endif
 
 /** Driver version */
-#define VERSION "8.0.2022100902"
+#define VERSION "8.0.2022101001"
 #define SUBVER ":connac3_dev"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -181,7 +181,7 @@ extern uint8_t btmtk_log_lvl;
 extern uint8_t _raw_buf_[];
 #define BTMTK_INFO_RAW(p, l, fmt, ...)						\
 	do {	\
-		if (p && btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) {	\
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) {	\
 			int cnt_ = 0;	\
 			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
 			const unsigned char *ptr = p;	\
@@ -198,7 +198,7 @@ extern uint8_t _raw_buf_[];
 
 #define BTMTK_DBG_RAW(p, l, fmt, ...)						\
 	do {	\
-		if (p && btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {	\
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {	\
 			int cnt_ = 0;	\
 			int pos = 0;	\
 			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
