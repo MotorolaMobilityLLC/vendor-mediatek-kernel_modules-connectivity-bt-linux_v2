@@ -132,6 +132,37 @@ struct platform_prop {
 	struct bt_gpio		rst_gpio;
 };
 
+typedef struct _CONNXO_CFG_PARAM_STRUCT_T
+{
+	uint8_t ucDataLenLSB;
+	uint8_t ucDataLenMSB;
+	uint8_t ucFreqC1Axm52m;
+	uint8_t ucFreqC2Axm52m;
+	uint8_t ucFreqC1Btm52m;
+	uint8_t ucFreqC2Btm52m;
+	uint8_t ucFreqC1Axm80m;
+	uint8_t ucFreqC2Axm80m;
+	uint8_t ucFreqC1Btm80m;
+	uint8_t ucFreqC2Btm80m;
+	uint8_t ucFreqC1Lpm52m;
+	uint8_t ucFreqC2Lpm52m;
+	uint8_t ucFreqC1Lpm80m;
+	uint8_t ucFreqC2Lpm80m;
+	uint8_t ucCompC1Axm52m;
+	uint8_t ucCompC2Axm52m;
+	uint8_t ucCompC1Btm52m;
+	uint8_t ucCompC2Btm52m;
+	uint8_t ucCompC1Axm80m;
+	uint8_t ucCompC2Axm80m;
+	uint8_t ucCompC1Btm80m;
+	uint8_t ucCompC2Btm80m;
+	uint8_t ucCompC1Lpm52m;
+	uint8_t ucCompC2Lpm52m;
+	uint8_t ucCompC1Lpm80m;
+	uint8_t ucCompC2Lpm80m;
+	uint8_t ucExt32Cal;
+} CONNXO_CFG_PARAM_STRUCT, *P_CONNXO_CFG_PARAM_STRUCT;
+
 void btmtk_async_trx_work(struct work_struct *work);
 void btmtk_pwr_on_uds_work(struct work_struct *work);
 int btmtk_pwrctrl_pre_on(struct btmtk_dev *bdev);

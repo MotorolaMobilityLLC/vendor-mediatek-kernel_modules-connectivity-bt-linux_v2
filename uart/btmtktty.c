@@ -63,6 +63,7 @@ static char event_compare_status;
 static struct tty_struct *g_tty;
 static struct tty_ldisc_ops btmtk_uart_ldisc;
 extern struct btmtk_dev *g_sbdev;
+static CONNXO_CFG_PARAM_STRUCT sConnxo_cfg;
 
 #if (SLEEP_ENABLE == 1)
 
@@ -729,6 +730,56 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 	BTMTK_INFO("%s done", __func__);
 	return ret;
 }
+#if (USE_DEVICE_NODE == 1)
+static int btmtk_uart_send_xo_param_cmd(struct hci_dev *hdev, CONNXO_CFG_PARAM_STRUCT *connxo_cfg_param)
+{
+	uint8_t *cmd = NULL;
+	uint8_t cmd_header[] = {0x01, 0x6F, 0xFC, 0x20};
+	uint16_t offset = 0;
+	//u8 cmd[] = { 0x01, 0x6F, 0xFC, 0xXX, 0x01, 0x19, 0xXX, 0x00, 0x00, 0x00, 0x00};
+	/* To-do: event payload */
+	u8 event[] = { 0x04, 0xE4 };
+	u8 cmd_len = cmd_header[3] + sizeof(cmd_header);
+	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
+	int ret = -1;
+
+	cmd = vmalloc(HCI_MAX_ACL_SIZE);
+	memcpy(cmd, cmd_header, sizeof(cmd_header));
+	offset = sizeof(cmd_header);
+
+	cmd[offset++] = 0x01;
+	cmd[offset++] = 0x19;
+
+	// Length: 2 bytes
+	cmd[offset++] = 0x1C;
+	cmd[offset++] = 0x00;
+
+	// flag
+	cmd[offset++] = 0x01;
+
+	// Offset
+	cmd[offset++] = 0x00;
+	cmd[offset++] = 0x00;
+
+	memcpy(&cmd[offset], &connxo_cfg_param->ucFreqC1Axm52m, 25);
+
+	ret = btmtk_main_send_cmd(bdev, cmd, cmd_len, event, sizeof(event), DELAY_TIMES,
+#if (USE_DEVICE_NODE == 0)
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+#else
+			RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+
+	if (ret < 0) {
+		BTMTK_ERR("%s failed!!", __func__);
+		vfree(cmd);
+		return ret;
+	}
+#endif
+	vfree(cmd);
+	BTMTK_INFO("%s done", __func__);
+	return ret;
+}
+#endif
 
 #if (USE_DEVICE_NODE == 0)
 static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
@@ -1105,6 +1156,12 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
 	if (ret < 0)
 		goto exit;
+
+	/* send xo cal cmd */
+	ret = btmtk_uart_send_xo_param_cmd(bdev->hdev, &sConnxo_cfg);
+	if (ret < 0) {
+		BTMTK_ERR("%s btmtk_uart_send_xo_param_cmd fail", __func__);
+	}
 
 	ret = btmtk_load_rom_patch(bdev);
 	if (ret < 0) {
@@ -2058,6 +2115,12 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 	case HCIUARTDEINIT:
 		BTMTK_INFO("%s: <!!> Set HCIUARTDEINIT <!!>", __func__);
 		err = btmtk_uart_deinit(bdev);
+		break;
+        case HCIUARTXOPARAM:
+		if (copy_from_user(&sConnxo_cfg, (CONNXO_CFG_PARAM_STRUCT __user *)arg, sizeof(CONNXO_CFG_PARAM_STRUCT)))
+			return -ENOMEM;
+		BTMTK_INFO("%s: <!!> Set HCIUARTXOPARAM <!!>", __func__);
+		BTMTK_INFO("%s: ucDataLenLSB = %02x, ucDataLenMSB = %02x", __func__, sConnxo_cfg.ucDataLenLSB, sConnxo_cfg.ucDataLenMSB);
 		break;
 	default:
 		/* pr_info("<!!> n_tty_ioctl_helper <!!>\n"); */

@@ -85,6 +85,6 @@ LOCAL_INIT_RC := init.btmtk_uart.rc
 LOCAL_SRC_FILES := $(patsubst $(LOCAL_PATH)/%,%,$(shell find $(LOCAL_PATH) -type f -name '*.[cho]')) Makefile
 
 include $(MTK_KERNEL_MODULE)
-
+include $(LOCAL_PATH)/uart_daemon/Android.mk
 #endif
 endif
