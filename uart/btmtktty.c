@@ -613,8 +613,14 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 
 	/* uarthub setting
 	 * ex: thes last byte means hub enable, rhw disable, crc disable
+	 * DX-4: need to tell connsys using new/old sleep flow
 	 */
-	cmd[hub_crc_rhw_offset] = (cif_dev->fw_hub_en << 4 | !cif_dev->rhw_en << 1 | !cif_dev->crc_en << 0);
+	if (!cif_dev->sleep_flow_hw_mech_en) {
+		BTMTK_INFO("%s sleep_flow_hw_mech_en: %d, old sleep flow", __func__, cif_dev->sleep_flow_hw_mech_en);
+		cif_dev->fw_hub_mode = 3;
+	}
+
+	cmd[hub_crc_rhw_offset] = (cif_dev->fw_hub_mode << 4 | !cif_dev->rhw_en << 1 | !cif_dev->crc_en << 0);
 
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, SETBAUD_CMD_LEN, event, SETBAUD_EVT_LEN, 0,
@@ -994,12 +1000,15 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		uart_cfg.iBaudrate = cif_dev->baudrate;
 
 	/* uarhub setting */
-	cif_dev->fw_hub_en = 0;
+	cif_dev->fw_hub_mode = 0;
 	cif_dev->rhw_en = 0;
 	cif_dev->crc_en = 0;
 	cif_dev->fw_dl_ready = 0;
 	cif_dev->flush_en = 1;
-
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	cif_dev->sleep_flow_hw_mech_en = mtk8250_uart_hub_get_bt_sleep_flow_hw_mech_en();
+	BTMTK_INFO("sleep_flow_hw_mech_en: %d", cif_dev->sleep_flow_hw_mech_en);
+#endif
 	/* Flush any pending characters in the driver and discipline. */
 	tty_ldisc_flush(tty);
 
@@ -1073,7 +1082,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en && !cif_dev->hub_bypass_only) {
 		/* uarhub setting */
-		cif_dev->fw_hub_en = 1;
+		cif_dev->fw_hub_mode = 1;
 		cif_dev->crc_en = 1;
 	} else
 		BTMTK_INFO("%s hub_bypass_only, not send hub_en to fw", __func__);
@@ -1212,7 +1221,22 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 			int ret = 0;
 			/* enable ADSP,MD when fw dl done*/
 			ret = mtk8250_uart_hub_fifo_ctrl(0);
-			BTMTK_INFO("%s: Set mtk8250_uart_hub_fifo_ctrl(0) ret[%d]", __func__, ret);
+			BTMTK_DBG("%s: Set mtk8250_uart_hub_fifo_ctrl(0) ret[%d]", __func__, ret);
+
+			/* 27. Set DEV0_HOST_AWAKE to 1 */
+			if (cif_dev->sleep_flow_hw_mech_en) {
+				int ret = 0;
+				ret = mtk8250_uart_hub_set_host_awake_sta(0);
+				BTMTK_INFO("%s: Set DEV0_HOST_AWAKE ret[%d]", __func__, ret);
+
+				/* 28. If DEV0_BT_AWAKE is 0, send 0xFF */
+				if (mtk8250_uart_hub_get_bt_awake_sta() == 0) {
+					u8 wakeup_cmd[] = { 0xFF };
+					ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+					if (ret < 0)
+						BTMTK_ERR("%s btmtk_main_send_cmd 0xFF fail when DEV0_BT_AWAKE is 0, ret[%d]", __func__, ret);
+				}
+			}
 		} else
 			BTMTK_INFO("%s: hub_bypass_only, not set mtk8250_uart_hub_fifo_ctrl(0)", __func__);
 		mtk8250_uart_hub_assert_bit_ctrl(0);
@@ -2299,7 +2323,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 
 	if (cif_dev->sleep_en) {
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-		if (cif_dev->hub_en) {
+		if (cif_dev->hub_en && !cif_dev->sleep_flow_hw_mech_en) {
 			ret = mtk8250_uart_hub_dev0_clear_tx_request();
 			BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_tx_request, ret[%d]", __func__, ret);
 			/* record host wakeup info to fw, b[4] = AP, b[5] = MD, b[6] = ADSP */
@@ -2338,8 +2362,18 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		atomic_set(&cif_dev->fw_wake, 0);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-		if (cif_dev->hub_en)
+		if (cif_dev->sleep_flow_hw_mech_en) {
+			/*
+				12 Clear DEVx_HOST_AWAKE = 0
+				14 Clear TX/RX REQ
+			*/
+			BTMTK_INFO("%s For Liber new sleep wakeup", __func__);
+			ret = mtk8250_uart_hub_clear_host_awake_sta(0);
+			BTMTK_INFO("%s mtk8250_uart_hub_clear_host_awake_sta, ret[%d]", __func__, ret);
+			btmtk_release_uarthub(true);
+		} else {
 			btmtk_release_uarthub(false);
+		}
 #endif
 		__pm_relax(bt_trx_wakelock);
 		BTMTK_INFO("%s success, cmd[9] = 0x%02x", __func__, cmd[9]);
@@ -2380,6 +2414,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		BTMTK_ERR("%s wait uart resume timeout", __func__);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
+	BTMTK_INFO("%s: cif_dev->hub_en = %d, cif_dev->sleep_en = %d", __func__, cif_dev->hub_en, cif_dev->sleep_en);
 	if (cif_dev->hub_en && cif_dev->sleep_en) {
 		do {
 			ret = btmtk_wakeup_uarthub();
@@ -2406,10 +2441,28 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			usleep_range(4000, 4100);
 		} else {
 			u8 wakeup_cmd[] = { 0xFF };
-			if (bdev->is_eap) {
-				ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN,
-						DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+			 if (bdev->is_eap) {
+				if (!cif_dev->sleep_flow_hw_mech_en) {
+					ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+				} else {
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+					/* new wakeup flow */
+					/* 3. Set DEVx_HOST_AWAKE = 1 */
+					/* 4. Tx 0xFF, if DEVx_BT_AWAKE = 0 */
+					/* 4~8 Polling CMM_BT_AWAKE = 1 or DEVx_BT_AWAKE = 1 */
+					ret = mtk8250_uart_hub_set_host_awake_sta(0);
+					BTMTK_INFO("%s: Set DEVx_HOST_AWAKE = 1, ret = %d ", __func__, ret);
 
+					if (mtk8250_uart_hub_get_bt_awake_sta()== 0) {
+						ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT);
+					}
+
+					do {
+						/* If CMM_BT_AWAKE = 1 or DEVx_BT_AWAKE = 1 leave while */
+						BTMTK_INFO("%s: CMM_BT_AWAKE = %d, DEVx_BT_AWAKE = %d", __func__, mtk8250_uart_hub_get_cmm_bt_awake_sta(), mtk8250_uart_hub_get_bt_awake_sta());
+					} while (mtk8250_uart_hub_get_cmm_bt_awake_sta() == 0 && mtk8250_uart_hub_get_bt_awake_sta() == 0);
+#endif
+				}
 			} else {
 				int i = 0;
 				for (i = 0; i < 3; i++) {
@@ -2420,6 +2473,8 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 					usleep_range(6000, 6100);
 				}
 			}
+			if (ret < 0)
+				BTMTK_ERR("%s btmtk_main_send_cmd 0xFF fail, ret[%d]", __func__, ret);
 		}
 
 		do {
