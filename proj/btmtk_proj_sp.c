@@ -560,6 +560,12 @@ int btmtk_sp_whole_chip_reset(struct btmtk_dev *bdev)
 			, strlen("[BT_DRV assert] BT whole chip reset") + 1);
 	}
 
+	/* If PMIC fault, need to call connv3_trigger_pmic_irq */
+	if (strncmp(g_sbdev->assert_reason, "[BT_FW assert] trigger PMIC fault", strlen("[BT_FW assert] trigger PMIC fault")) == 0) {
+		BTMTK_INFO("%s call connv3_trigger_pmic_irq", __func__);
+		return connv3_trigger_pmic_irq(CONNV3_DRV_TYPE_BT, g_sbdev->assert_reason);
+	}
+
 	return connv3_trigger_whole_chip_rst(CONNV3_DRV_TYPE_BT , g_sbdev->assert_reason);
 }
 

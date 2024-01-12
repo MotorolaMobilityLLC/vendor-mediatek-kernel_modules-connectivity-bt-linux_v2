@@ -1414,33 +1414,39 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				return 1;
 			}
 
-			/* fw trigger whole chip reset */
-			if (skb->len > 7 &&
+			/* fw trigger
+				reset[0]: subsys reset
+				reset[1]: PMIC => call connv3_trigger_pmic_irq
+				reset[2]: whole chip reset (DFD)
+			*/
+			if (skb->len > 9 &&
+				skb->data[skb->len - 9] == 'r' &&
+				skb->data[skb->len - 8] == 'e' &&
 				skb->data[skb->len - 7] == 's' &&
-				skb->data[skb->len - 6] == 'u' &&
-				skb->data[skb->len - 5] == 'b' &&
-				skb->data[skb->len - 4] == 's' &&
-				skb->data[skb->len - 3] == 'y' &&
-				skb->data[skb->len - 2] == 's') {
-				BTMTK_INFO("%s: drop subsys type", __func__);
-				return 1;
-			}
-
-			/* fw trigger whole chip reset */
-			if (skb->len > 6 &&
-				skb->data[skb->len - 6] == 'w' &&
-				skb->data[skb->len - 5] == 'h' &&
-				skb->data[skb->len - 4] == 'o' &&
-				skb->data[skb->len - 3] == 'l' &&
-				skb->data[skb->len - 2] == 'e') {
-				bmain_info->chip_reset_flag = 1;
-				if (bdev->assert_reason[0] == '\0') {
-					memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
-					strncpy(bdev->assert_reason, "[BT_FW assert] trigger whole chip reset",
-							strlen("[BT_FW assert] trigger whole chip reset") + 1);
-				}
-				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
-				return 1;
+				skb->data[skb->len - 6] == 'e' &&
+				skb->data[skb->len - 5] == 't' &&
+				skb->data[skb->len - 4] == '[') {
+					if (skb->data[skb->len - 3] == '0') {
+						BTMTK_INFO("%s: drop subsys type", __func__);
+					} else if (skb->data[skb->len - 3] == '1') {
+						BTMTK_INFO("%s: FW trigger PMIC fault", __func__);
+						bmain_info->chip_reset_flag = 1;
+						if (bdev->assert_reason[0] == '\0') {
+							memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
+							strncpy(bdev->assert_reason, "[BT_FW assert] trigger PMIC fault",
+								strlen("[BT_FW assert] trigger PMIC fault") + 1);
+						}
+						BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+					} else {
+						bmain_info->chip_reset_flag = 1;
+						if (bdev->assert_reason[0] == '\0') {
+							memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
+							strncpy(bdev->assert_reason, "[BT_FW assert] trigger whole chip reset",
+									strlen("[BT_FW assert] trigger whole chip reset") + 1);
+						}
+						BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+					}
+					return 1;
 			}
 
 			DUMP_TIME_STAMP("FW_dump_start");
