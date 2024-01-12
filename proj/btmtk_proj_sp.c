@@ -530,10 +530,13 @@ int btmtk_set_gpio_default(void)
 	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 	msleep(50);
 
-	if(!bmain_info->find_my_phone_mode)
-		btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
-	else
+	if (!bmain_info->find_my_phone_mode) {
+		/* If BT off, Wifi on keep Aux func */
+		//btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
+	} else {
 		BTMTK_INFO("%s: into find my phone mode, skip set tx/rx gpio PD", __func__);
+	}
+
 	btmtk_dump_gpio_state();
 
 	return 0;
@@ -547,6 +550,23 @@ static int btmtk_power_on_notify_handler(void)
 	/* Don't block caller thread for connv3 API */
 	schedule_work(&g_sbdev->pwr_on_uds_work);
 	return 0;
+}
+
+static int btmtk_chip_power_down_notify_handler(unsigned int notify)
+{
+        /* Execute when wifi and bt both power down */
+        BTMTK_INFO("%s", __func__);
+
+	btmtk_dump_gpio_state();
+
+	/* If BT off and Wifi off set GPIO mode input low */
+	BTMTK_INFO("%s: BT off and Wifi off, Set GPIO mode input low", __func__);
+	btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
+
+	btmtk_dump_gpio_state();
+
+        /* If BT off, Wifi on keep Aux func*/
+        return 0;
 }
 
 int btmtk_sp_whole_chip_reset(struct btmtk_dev *bdev)
@@ -603,8 +623,8 @@ int btmtk_sp_close(void)
 
 	cancel_work_sync(&g_sbdev->reset_waker);
 
-	/* set tx/rx gpio PU */
-	btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
+	/* Do not set tx/rx gpio PU, if BT off, wifi on keep Aux func */
+	// btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en) {
@@ -926,6 +946,7 @@ struct connv3_whole_chip_rst_cb btmtk_whole_chip_rst_cb = {
 struct connv3_power_on_cb btmtk_pwr_on_cb = {
 	.pre_power_on = btmtk_pre_power_on_handler,
 	.power_on_notify = btmtk_power_on_notify_handler,
+	.chip_power_down_notify = btmtk_chip_power_down_notify_handler,
 };
 
 struct connv3_pre_calibration_cb btmtk_pre_cal_cb = {
