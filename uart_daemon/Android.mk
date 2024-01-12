@@ -15,6 +15,8 @@ LOCAL_C_INCLUDES := \
   vendor/mediatek/proprietary/custom/k6991v1_64/cgen/inc \
   vendor/mediatek/proprietary/custom/evb6991_64/cgen/inc \
   vendor/mediatek/proprietary/custom/k6989v1_64/cgen/inc \
+  vendor/mediatek/proprietary/custom/k6989v1_64_for_dx4/cgen/inc \
+  vendor/mediatek/proprietary/custom/k6989v1_64_for_dx4_gpu/cgen/inc \
   vendor/mediatek/proprietary/custom/common/cgen/cfgfileinc/connxo/MT6991 \
   vendor/mediatek/proprietary/custom/common/cgen/cfgfileinc/connxo/MT6989
 LOCAL_SRC_FILES  := uart_launcher.c
