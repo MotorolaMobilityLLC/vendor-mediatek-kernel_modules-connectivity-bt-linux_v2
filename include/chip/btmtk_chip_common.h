@@ -135,6 +135,7 @@
 #define RST_AUTO_REVERT 0x70002610
 #define BT_EP_RST_OPT 0x74011890
 #define EP_RST_IN_OUT_OPT 0x00010001
+#define BT_RADIO_OFF_DONE_7925 0x7c059400
 
 enum cmd_index_s {
 	/* UNKNOWN = 0, */
