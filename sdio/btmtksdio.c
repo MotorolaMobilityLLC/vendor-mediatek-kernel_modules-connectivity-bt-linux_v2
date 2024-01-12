@@ -682,7 +682,7 @@ int btmtk_sdio_read_conn_infra_pc(u32 *val)
 EXPORT_SYMBOL(btmtk_sdio_read_conn_infra_pc);
 
 typedef bool (*wifi_driver_own)(uint8_t enable);
-static wifi_driver_own wifi_driver_own_ptr;
+static wifi_driver_own wifi_driver_own_ptr = NULL;
 static void btmtk_sdio_set_wifi_driver_own(uint8_t enable)
 {
 #ifdef CFG_CHIP_RESET_KO_SUPPORT
