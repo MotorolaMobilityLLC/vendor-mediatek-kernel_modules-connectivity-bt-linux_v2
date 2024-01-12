@@ -95,7 +95,9 @@ else
 endif
 
 ifeq ($(SUPPORT_WAKEUP_IRQ), yes)
-    ccflags-y += -DCFG_SUPPORT_WAKEUP_IRQ
+    ccflags-y += -DCFG_SUPPORT_WAKEUP_IRQ=1
+else
+    ccflags-y += -DCFG_SUPPORT_WAKEUP_IRQ=0
 endif
 
 ifeq ($(CONFIG_SUPPORT_WAKEUP_SER), y)

@@ -62,14 +62,19 @@ void btmtk_reset_waker(struct work_struct *work)
 {
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, reset_waker);
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-	int state = BTMTK_STATE_INIT;
+	int state = 0;
 	int err = 0;
 	int cur = 0;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	unsigned char fstate = 0;
 #if (USE_DEVICE_NODE == 0)
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
 #endif
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s bdev is NULL", __func__);
+		return;
+	}
 
 	/* Check chip state is ok to do reset or not */
 	state = btmtk_get_chip_state(bdev);
@@ -147,6 +152,10 @@ void btmtk_reset_waker(struct work_struct *work)
 			err = bmain_info->hif_hook.subsys_reset(bdev);
 			atomic_set(&bmain_info->subsys_reset, BTMTK_RESET_DONE);
 			if (err < 0) {
+				if (err == -ENODEV) {
+					BTMTK_INFO("%s, usb disconnect, no more chip reset", __func__);
+					return;
+				}
 				BTMTK_INFO("subsys reset failed, do whole chip reset!");
 				goto L0RESET;
 			}

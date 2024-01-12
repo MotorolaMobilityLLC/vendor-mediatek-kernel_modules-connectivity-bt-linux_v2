@@ -405,7 +405,7 @@ bool btmtk_assert_wake_lock_check(void)
 
 u8 btmtk_get_chip_state(struct btmtk_dev *bdev)
 {
-	u8 state = BTMTK_STATE_INIT;
+	u8 state = 0;
 
 	CHIP_STATE_MUTEX_LOCK();
 	if (bdev)
@@ -424,6 +424,11 @@ void btmtk_set_chip_state(struct btmtk_dev *bdev, u8 new_state)
 		"FW_DUMP", "STANDBY", "SUBSYS_RESET", "SEND_ASSERT", "CLOSED", "ERROR"
 	};
 
+	if (!bdev) {
+		BTMTK_ERR("%s, invalid parameters!", __func__);
+		return;
+	}
+
 	if (new_state >= BTMTK_STATE_MSG_NUM) {
 		BTMTK_INFO("%s: new_state invalid(%d)", __func__, new_state);
 		return;
@@ -439,7 +444,7 @@ void btmtk_set_chip_state(struct btmtk_dev *bdev, u8 new_state)
 
 u8 btmtk_fops_get_state(struct btmtk_dev *bdev)
 {
-	u8 state = BTMTK_FOPS_STATE_INIT;
+	u8 state = 0;
 
 	FOPS_MUTEX_LOCK();
 	if (bdev)
@@ -456,6 +461,11 @@ static void btmtk_fops_set_state(struct btmtk_dev *bdev, u8 new_state)
 	static const char * const fstate_msg[BTMTK_FOPS_STATE_MSG_NUM] = {
 		"UNKNOWN", "INIT", "OPENING", "OPENED", "CLOSING", "CLOSED",
 	};
+
+	if (!bdev) {
+		BTMTK_ERR("%s, invalid parameters!", __func__);
+		return;
+	}
 
 	if (new_state >= BTMTK_FOPS_STATE_MSG_NUM) {
 		BTMTK_INFO("%s: new_state invalid(%d)", __func__, new_state);
@@ -1460,7 +1470,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 {
 	struct sk_buff *skb = NULL;
 	int ret = 0;
-	int state = BTMTK_STATE_INIT;
+	int state = 0;
 	u8 drv_own_retry = 10;
 
 	if (bdev == NULL) {
@@ -1524,7 +1534,6 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		 */
 		if (ret != -ERRNUM && skb) {
 			kfree_skb(skb);
-			skb = NULL;
 		}
 	}
 
@@ -2652,7 +2661,6 @@ void btmtk_release_dev(struct btmtk_dev *bdev)
 				 * disconnected before probe, can't do chip reset
 				 */
 				bdev->bt_cfg.dongle_reset_gpio_pin = -1;
-				tmp_bdev = NULL;
 				break;
 			}
 		}
@@ -3315,7 +3323,7 @@ static void btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_d
 			BTMTK_ERR("btmtk_usb_load_code_from_setting_files %s failed!!", BT_CFG_NAME);
 			return;
 		}
-		snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s", BT_CFG_NAME);
+		(void)snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s", BT_CFG_NAME);
 	}
 
 	btmtk_load_bt_cfg_item(&bdev->bt_cfg, bdev->setting_file, bdev);
@@ -3667,7 +3675,6 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
 		kfree_skb(skb);
-		skb = NULL;
 		btmtk_reset_trigger(bdev);
 	} else {
 		btmtk_reset_timer_update(bdev);
@@ -4126,8 +4133,8 @@ int bt_close(struct hci_dev *hdev)
 #endif
 {
 	int ret = -1;
-	int state = BTMTK_STATE_INIT;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	int state = 0;
+	unsigned char fstate = 0;
 	struct btmtk_dev *bdev = NULL;
 
 	if (!hdev) {
@@ -4255,9 +4262,9 @@ static int bt_open(struct hci_dev *hdev)
 int bt_open(struct hci_dev *hdev)
 #endif
 {
-	int ret = -1;
-	int state = BTMTK_STATE_INIT;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	int ret = 0;
+	int state = 0;
+	unsigned char fstate = 0;
 	struct btmtk_dev *bdev = NULL;
 	void (*rlm_get_alpha2)(char *);
 	const char *wifi_func_name = "rlm_get_alpha2";
@@ -4642,7 +4649,7 @@ static void btmtk_rx_work(struct work_struct *work)
 	int err = 0;
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, rx_work);
 	struct sk_buff *skb;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	unsigned char fstate = 0;
 
 	while ((skb = skb_dequeue(&bdev->rx_q))) {
 		if (main_info.hif_hook_chip.dispatch_fwlog) {
@@ -4746,7 +4753,7 @@ static void btmtk_rx_work(struct work_struct *work)
 
 void btmtk_free_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 {
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	unsigned char fstate = 0;
 
 	if (!bdev)
 		return;
