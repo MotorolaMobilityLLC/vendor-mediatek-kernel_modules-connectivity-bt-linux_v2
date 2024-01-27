@@ -63,10 +63,10 @@
 #include "uart_launcher.h"
 #ifdef __ANDROID__
 /* use nvram */
+#include <dlfcn.h>
 #include "CFG_BT_File.h"
 #include "CFG_file_lid.h"
 #include "libnvram.h"
-#include "Custom_NvRam_LID.h"
 #include "CFG_CONNXO_File.h"
 #endif
 
@@ -278,11 +278,20 @@ static int xo_read_nvram(CONNXO_CFG_PARAM_STRUCT *pConnxo_cfg_param)
     unsigned char buf[27] = {"\0"};
     unsigned int num_read = 0;
 
-    xo_nvram_fd = NVM_GetFileDesc(AP_CFG_RDEB_FILE_CONNXO_LID, &rec_size, &rec_num, ISREAD);
-    if (xo_nvram_fd.iFileDesc < 0) {
-        BPRINT_I("Open CONNXO NVRAM fails errno %d\n", errno);
-        return -1;
+    void* hcustlib = dlopen("libcustom_nvram.so", RTLD_LAZY);
+    if (!hcustlib) {
+	BPRINT_E("%s(), dlopen fail! (%s)\n", __FUNCTION__, dlerror());
+	return -1;
     }
+
+    unsigned int* iFileXOILID = (unsigned int*)(dlsym(hcustlib, "iFileCONNXOLID")); /* AP_CFG_RDEB_FILE_CONNXO_LID */
+    if (!iFileXOILID) {
+	BPRINT_E("Error reading iBTDefaultSize\n");
+	dlclose(hcustlib);
+	return false;
+    }
+
+    xo_nvram_fd = NVM_GetFileDesc(*iFileXOILID, &rec_size, &rec_num, ISREAD);
 
     BPRINT_I("%s: Open CONNXO NVRAM success", __func__);
     BPRINT_I("%s: xo_nvram_fd %d rec_size %d rec_num %d\n",__func__, xo_nvram_fd.iFileDesc, rec_size, rec_num);
@@ -295,7 +304,7 @@ static int xo_read_nvram(CONNXO_CFG_PARAM_STRUCT *pConnxo_cfg_param)
 
     memcpy(pConnxo_cfg_param, &buf[0], sizeof(CONNXO_CFG_PARAM_STRUCT));
 
-    NVM_CloseFileDesc(xo_nvram_fd);
+    dlclose(hcustlib);
 
     return 0;
 }
