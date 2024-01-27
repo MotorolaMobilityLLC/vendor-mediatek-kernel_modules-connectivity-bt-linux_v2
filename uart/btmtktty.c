@@ -2700,7 +2700,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 					do {
 						/* If CMM_BT_AWAKE = 1 or DEVx_BT_AWAKE = 1 leave while */
-						BTMTK_INFO("%s: CMM_BT_AWAKE = %d, DEVx_BT_AWAKE = %d", __func__, mtk8250_uart_hub_get_cmm_bt_awake_sta(), mtk8250_uart_hub_get_bt_awake_sta());
+						BTMTK_INFO_LIMITTED("%s: CMM_BT_AWAKE = %d, DEVx_BT_AWAKE = %d", __func__, mtk8250_uart_hub_get_cmm_bt_awake_sta(), mtk8250_uart_hub_get_bt_awake_sta());
 					} while (mtk8250_uart_hub_get_cmm_bt_awake_sta() == 0 && mtk8250_uart_hub_get_bt_awake_sta() == 0);
 #endif
 				} else {
