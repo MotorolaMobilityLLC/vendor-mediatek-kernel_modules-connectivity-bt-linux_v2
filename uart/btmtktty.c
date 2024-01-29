@@ -1349,7 +1349,7 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 				BTMTK_INFO("%s: Set DEV0_HOST_AWAKE ret[%d]", __func__, ret);
 
 				/* 28. If DEV0_BT_AWAKE is 0, send 0xFF */
-				if (mtk8250_uart_hub_get_bt_awake_sta() == 0) {
+				if (mtk8250_uart_hub_get_host_bt_awake_sta(0) == 0) {
 					u8 wakeup_cmd[] = { 0xFF };
 					ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
 					if (ret < 0)
@@ -2688,6 +2688,8 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			} else {
 				if (cif_dev->sleep_flow_hw_mech_en) {
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
+					u8 retry_cnt = 50;
+
 					/* new wakeup flow */
 					/* 3. Set DEVx_HOST_AWAKE = 1 */
 					/* 4. Tx 0xFF, if DEVx_BT_AWAKE = 0 */
@@ -2695,14 +2697,24 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 					ret = mtk8250_uart_hub_set_host_awake_sta(0);
 					BTMTK_INFO("%s: Set DEVx_HOST_AWAKE = 1, ret = %d ", __func__, ret);
 
-					if (mtk8250_uart_hub_get_bt_awake_sta()== 0) {
+					if (mtk8250_uart_hub_get_host_bt_awake_sta(0)== 0) {
+						BTMTK_INFO("%s: mtk8250_uart_hub_get_host_bt_awake_sta = 0, send 0xFF ", __func__);
 						ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
 					}
 
-					do {
+					while (mtk8250_uart_hub_get_cmm_bt_awake_sta() == 0 && mtk8250_uart_hub_get_host_bt_awake_sta(0) == 0 && retry_cnt) {
 						/* If CMM_BT_AWAKE = 1 or DEVx_BT_AWAKE = 1 leave while */
-						BTMTK_INFO_LIMITTED("%s: CMM_BT_AWAKE = %d, DEVx_BT_AWAKE = %d", __func__, mtk8250_uart_hub_get_cmm_bt_awake_sta(), mtk8250_uart_hub_get_bt_awake_sta());
-					} while (mtk8250_uart_hub_get_cmm_bt_awake_sta() == 0 && mtk8250_uart_hub_get_bt_awake_sta() == 0);
+						BTMTK_INFO("%s: CMM_BT_AWAKE[%d], DEV0_BT_AWAKE[%d], retry[%d]", __func__,
+								mtk8250_uart_hub_get_cmm_bt_awake_sta(), mtk8250_uart_hub_get_host_bt_awake_sta(0), retry_cnt);
+						retry_cnt--;
+						usleep_range(1000, 1100);
+					}
+
+					if (mtk8250_uart_hub_get_cmm_bt_awake_sta() == 0 && mtk8250_uart_hub_get_host_bt_awake_sta(0) == 0 && !retry_cnt) {
+						BTMTK_ERR("%s: Query BT_AWAKE failed ", __func__);
+						mtk8250_uart_hub_dump_with_tag("BT driver query BT_AWAKE failed");
+						mtk8250_uart_dump(cif_dev->tty);
+					}
 #endif
 				} else {
 						int i = 0;
