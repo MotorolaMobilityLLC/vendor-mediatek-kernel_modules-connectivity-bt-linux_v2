@@ -1567,10 +1567,11 @@ static void btmtk_fb_notify_register(void)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	BTMTK_INFO("%s", __func__);
-
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
 	if (mtk_disp_notifier_register("btmtk_disp_notifier", &btmtk_disp_notifier)) {
 		BTMTK_ERR("%s: Register mtk_disp_notifier failed", __func__);
 	}
+#endif
 #endif
 
 }
@@ -1578,8 +1579,10 @@ static void btmtk_fb_notify_register(void)
 static void btmtk_fb_notify_unregister(void)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
 	BTMTK_INFO("%s", __func__);
 	mtk_disp_notifier_unregister(&btmtk_disp_notifier);
+#endif
 #endif
 }
 
