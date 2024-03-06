@@ -4919,7 +4919,7 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	int ret = 0;
 	int state = 0;
 	unsigned char fstate = 0;
-	u8 fw_coredump_flag = 0;
+	u8 fw_coredump_flag = 0, retry = 20;
 	u8 reset_cmd[HCI_RESET_CMD_LEN] = { 0x01, 0x03, 0x0C, 0x00 };
 #if (USE_DEVICE_NODE == 1)
 	/* parsing commands */
@@ -5001,6 +5001,17 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 #if ENABLESTP
 	skb = btmtk_add_stp(bdev, skb);
 #endif
+
+	/* avoid host send data during re-download */
+	while (bdev->dynamic_fwdl_start && retry--) {
+		BTMTK_INFO("%s: re-download on-goning, wait(%d)", __func__, retry);
+		msleep(50);
+	}
+	/* avoid dynamic_fwdl_start flag keep blocking every cmd if something wrong. */
+	if (bdev->dynamic_fwdl_start && retry == 0) {
+		BTMTK_INFO("%s: wait re-download more than 1s, reset dynamic_fwdl_start flag", __func__);
+		bdev->dynamic_fwdl_start = false;
+	}
 
 	if (main_info.hif_hook_chip.bt_tx_frame_handler) {
 		ret = main_info.hif_hook_chip.bt_tx_frame_handler(bdev, skb, &fw_coredump_flag);
@@ -5170,6 +5181,7 @@ static void btmtk_dynamic_fwdl_work(struct work_struct *work)
 
 	BTMTK_INFO("%s enter", __func__);
 	btmtk_dynamic_load_rom_patch(bdev, bdev->fw_bin_info);
+	bdev->dynamic_fwdl_start = false;
 }
 
 static void btmtk_rx_work(struct work_struct *work)
