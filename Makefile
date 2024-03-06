@@ -118,8 +118,14 @@ endif
 
 ifneq ($(TARGET_BUILD_VARIANT), user)
     ccflags-y += -DSTPBTFWLOG_ENABLE=1
+    ccflags-y += -DBUILD_QA_DBG=1
 else
-    ccflags-y += -DSTPBTFWLOG_ENABLE=0
+    ifeq ($(MTK_PROJ_TYPE), sp)
+        ccflags-y += -DSTPBTFWLOG_ENABLE=1
+    else
+        ccflags-y += -DSTPBTFWLOG_ENABLE=0
+    endif
+    ccflags-y += -DBUILD_QA_DBG=0
 endif
 
 ifeq ($(CONFIG_GKI_SUPPORT), y)
