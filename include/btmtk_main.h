@@ -658,6 +658,7 @@ struct btmtk_dev {
 #endif
 	/* completion */
 	struct completion	dump_comp;
+	struct completion	dump_dfd_comp;
 
 	unsigned int on_fail_count;
 
