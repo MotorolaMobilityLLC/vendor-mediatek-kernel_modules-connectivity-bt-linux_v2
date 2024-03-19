@@ -773,15 +773,6 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
-	if (o_fwlog_buf[0] == HCI_COMMAND_PKT) {
-		BTMTK_DBG("%s: hci_cmd_len[%d], input_len[%d]", __func__, o_fwlog_buf[3], len);
-		if (o_fwlog_buf[3] + HCI_CMD_HEADER_SIZE != len) {
-			BTMTK_ERR("%s: pkt format error, hci_cmd_len[%d], input_len[%d]", __func__, o_fwlog_buf[3], len);
-			ret = -EINVAL;
-			goto exit;
-		}
-	}
-
 	skb = alloc_skb(count + BT_SKB_RESERVE, GFP_ATOMIC);
 	if (!skb) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
