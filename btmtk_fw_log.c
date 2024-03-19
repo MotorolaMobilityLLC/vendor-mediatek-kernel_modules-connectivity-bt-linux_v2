@@ -1520,11 +1520,6 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			}
 			if (ret)
 				goto coredump_fail_unlock;
-			line = __LINE__;
-			ret = connv3_coredump_get_issue_info(bmain_info->hif_hook.coredump_handler,
-								&issue_info, xml_log, CONNV3_XML_SIZE);
-			if (ret)
-				goto coredump_fail_unlock;
 		}
 
 		dump_data_counter++;
@@ -1543,7 +1538,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 					__func__, dump_data_counter, skb->data);
 
 		line = __LINE__;
-		if(bdev->collect_fwdump)
+		if (bdev->collect_fwdump)
 			ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "[M]", skb->data, skb->len);
 		if (ret) {
 			BTMTK_INFO_RAW(skb->data, skb->len, "%s: send fail, len[%d]", __func__, skb->len);
@@ -1561,6 +1556,11 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			/* TODO: Chip reset*/
 			bmain_info->reset_stack_flag = HW_ERR_CODE_CORE_DUMP;
 			DUMP_TIME_STAMP("FW_dump_end");
+			line = __LINE__;
+                        ret = connv3_coredump_get_issue_info(bmain_info->hif_hook.coredump_handler,
+                                                                &issue_info, xml_log, CONNV3_XML_SIZE);
+                        if (ret)
+                                goto coredump_fail_unlock;
 			BTMTK_INFO("%s: xml_log: %s, assert_info: %s ", __func__, xml_log, issue_info.assert_info);
 			line = __LINE__;
 			ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler,
