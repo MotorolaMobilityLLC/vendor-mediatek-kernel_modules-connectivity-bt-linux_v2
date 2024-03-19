@@ -879,7 +879,25 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 	btmtk_dispatch_fwlog_bluetooth_kpi(pp_bdev[hci_idx], skb->data, skb->len, KPI_WITHOUT_TYPE);
 #endif
-	ret = bmain_info->hif_hook.send_cmd(pp_bdev[hci_idx], skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST, CMD_NEED_FILTER);
+	/* intercept dbg event */
+	if (skb->len > 2) {
+		bmain_info->dbg_send = 1;
+		if (skb->data[1] == 0x6F && skb->data[2] == 0xFC) {
+			if (skb->len < 6) {
+				ret = -1;
+				BTMTK_ERR("%s invalid wmt cmd format", __func__);
+				goto free_skb;
+			}
+			bmain_info->dbg_send_opcode[0] = skb->data[5];
+			BTMTK_INFO("wmt dbg_node_send_opcode is [%02x]", bmain_info->dbg_send_opcode[0]);
+		} else {
+			memcpy(bmain_info->dbg_send_opcode, (skb->data + 1), 2);
+			BTMTK_INFO("dbg_node_send_opcode is [%02x, %02x]", bmain_info->dbg_send_opcode[0],
+					bmain_info->dbg_send_opcode[1]);
+		}
+	}
+        ret = bmain_info->hif_hook.send_cmd(pp_bdev[hci_idx], skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST, CMD_NEED_FILTER);
+
 	if (ret < 0) {
 		BTMTK_ERR("%s failed!!", __func__);
 		goto free_skb;
@@ -1607,6 +1625,15 @@ coredump_fail_unlock:
 				skb->len > 7 && skb->data[0] == 0xFF &&
 				skb->data[3] == 0x3A && skb->data[4] == 0xFC) {
 		BTMTK_INFO_RAW(skb->data, skb->len, "%s: FW Schedule Event:", __func__);
+                /* Send Fw Schedule Event to host */
+		return 0;
+	} else if (bt_cb(skb)->pkt_type == HCI_EVENT_PKT && bmain_info->dbg_send
+				&& skb->len > 4 &&
+				skb->data[3] == bmain_info->dbg_send_opcode[0] &&
+				skb->data[4] == bmain_info->dbg_send_opcode[1]) {
+		bmain_info->dbg_send = 0;
+		BTMTK_INFO_RAW(skb->data, skb->len, "%s: dbg_node_event len[%d] %02x", __func__,
+					skb->len + 1, hci_skb_pkt_type(skb));
 		return 1;
 	}
 

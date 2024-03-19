@@ -869,6 +869,8 @@ struct btmtk_main_info {
 
 	u32 find_my_phone_mode;
 	int bk_rs_flag;
+	u8	dbg_send;
+	u8	dbg_send_opcode[2];
 };
 
 static inline int is_mt7925(u32 chip_id)
