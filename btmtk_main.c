@@ -3998,8 +3998,13 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 	}
 
 #if (USE_DEVICE_NODE == 1)
-	if (bmain_info->find_my_phone_mode)
+	if (bmain_info->find_my_phone_mode) {
 		btmtk_find_my_phone_cmd(bmain_info->find_my_phone_mode);
+	}
+
+        if (bmain_info->find_my_phone_mode_extend) {
+                btmtk_find_my_phone_extend_cmd(bmain_info->find_my_phone_mode_extend);
+        }
 #endif
 
 	ret = btmtk_send_wmt_power_off_cmd(bdev);

@@ -636,6 +636,19 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
+        if (strncmp(i_fwlog_buf, "FindMyPhoneCliff=", strlen("FindMyPhoneCliff=")) == 0) {
+                ret = kstrtou32(i_fwlog_buf + strlen("FindMyPhoneCliff="), 0, &bmain_info->find_my_phone_mode_extend);
+
+                if (ret) {
+                        BTMTK_WARN("%s: convert string failed ret[%d]", __func__, ret);
+                        goto exit;
+                }
+
+                BTMTK_INFO("%s: FindMyPhoneCliff[%u]", __func__, bmain_info->find_my_phone_mode_extend);
+                ret = count;
+                goto exit;
+        }
+
 	if (strncmp(i_fwlog_buf, "hif_debug_sop", strlen("hif_debug_sop")) == 0) {
 		state = btmtk_get_chip_state(pp_bdev[hci_idx]);
 		//&& state == BTMTK_STATE_WORKING
