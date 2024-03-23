@@ -341,12 +341,25 @@ int main(int argc, char *argv[])
     sigact.sa_handler = uart_launcher_sig_handler;
     sigact.sa_flags = 0;
     sigemptyset(&sigact.sa_mask);
-    sigaction(SIGINT, &sigact, NULL);
-    sigaction(SIGTERM, &sigact, NULL);
-    sigaction(SIGQUIT, &sigact, NULL);
+    err = sigaction(SIGINT, &sigact, NULL);
+    if (!err)
+        BPRINT_E("SIGINT failed, err = %d", err);
+
+    err = sigaction(SIGTERM, &sigact, NULL);
+    if (!err)
+        BPRINT_E("SIGTERM failed, err = %d", err);
+
+    err = sigaction(SIGQUIT, &sigact, NULL);
+    if (!err)
+        BPRINT_E("SIGQUIT failed, err = %d", err);
     /* SIGKILL, SIGSTOP may not be catched */
-    sigaction(SIGKILL, &sigact, NULL);
-    sigaction(SIGSTOP, &sigact, NULL);
+    err = sigaction(SIGKILL, &sigact, NULL);
+    if (!err)
+        BPRINT_E("SIGKILL failed, err = %d", err);
+
+    err = sigaction(SIGSTOP, &sigact, NULL);
+    if (!err)
+        BPRINT_E("SIGSTOP, err = %d", err);
     init_flock(&fl);
     ld = N_MTK;
 
