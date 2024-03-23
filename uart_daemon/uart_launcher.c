@@ -299,6 +299,7 @@ static int xo_read_nvram(CONNXO_CFG_PARAM_STRUCT *pConnxo_cfg_param)
     num_read = read(xo_nvram_fd.iFileDesc, buf, sizeof(buf)-1);
     if (num_read <= 0) {
         BPRINT_E("%s: num_read <= 0", __func__);
+        dlclose(hcustlib);
         return -1;
     }
 
