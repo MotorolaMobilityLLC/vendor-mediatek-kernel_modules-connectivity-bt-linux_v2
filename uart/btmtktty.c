@@ -737,7 +737,6 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 		return 0;
 	}
 	if (is_mt6639(bdev->chip_id) || is_mt66xx(bdev->chip_id)) {
-		BTMTK_INFO("%s: chip_id = 0x%x", __func__, bdev->chip_id);
 #if (USE_DEVICE_NODE == 0)
 		ret = btmtk_main_send_cmd(bdev, cmd + 4, 1, event_partial, 2,
 					0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
@@ -758,7 +757,7 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 		return ret;
 	}
 
-	BTMTK_INFO("%s done", __func__);
+	BTMTK_INFO("%s done, chip_id = 0x%x", __func__, bdev->chip_id);
 	return ret;
 }
 #if (USE_DEVICE_NODE == 1)
@@ -1363,7 +1362,7 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 			if (cif_dev->sleep_flow_hw_mech_en) {
 				int ret = 0;
 				ret = mtk8250_uart_hub_set_host_awake_sta(0);
-				BTMTK_INFO("%s: Set DEV0_HOST_AWAKE ret[%d]", __func__, ret);
+				BTMTK_DBG("%s: Set DEV0_HOST_AWAKE ret[%d]", __func__, ret);
 
 				/* 28. If DEV0_BT_AWAKE is 0, send 0xFF */
 				if (mtk8250_uart_hub_get_host_bt_awake_sta(0) == 0) {
@@ -2714,10 +2713,10 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 					/* 4. Tx 0xFF, if DEVx_BT_AWAKE = 0 */
 					/* 4~8 Polling CMM_BT_AWAKE = 1 or DEVx_BT_AWAKE = 1 */
 					ret = mtk8250_uart_hub_set_host_awake_sta(0);
-					BTMTK_INFO("%s: Set DEVx_HOST_AWAKE = 1, ret = %d ", __func__, ret);
+					BTMTK_DBG("%s: Set DEVx_HOST_AWAKE = 1, ret = %d ", __func__, ret);
 
 					if (mtk8250_uart_hub_get_host_bt_awake_sta(0)== 0) {
-						BTMTK_INFO("%s: mtk8250_uart_hub_get_host_bt_awake_sta = 0, send 0xFF ", __func__);
+						BTMTK_DBG("%s: mtk8250_uart_hub_get_host_bt_awake_sta = 0, send 0xFF ", __func__);
 						ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
 					}
 
