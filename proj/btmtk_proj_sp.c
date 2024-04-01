@@ -302,7 +302,6 @@ void btmtk_release_uarthub(bool force)
 	}
 
 	/* Clear DEV0_HOST_AWAKE */
-	// 0 -> dujac, 1 -> Liber, 2 -> Jayer
 	if (cif_dev->sleep_flow_hw_mech_en && cif_dev->sleep_en) {
 		ret = mtk8250_uart_hub_clear_host_awake_sta(0);
 		BTMTK_INFO("%s: Clear DEV0_HOST_AWAKE ret[%d]", __func__, ret);
