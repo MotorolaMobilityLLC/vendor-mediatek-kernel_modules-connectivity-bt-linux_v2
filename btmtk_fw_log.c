@@ -1623,7 +1623,7 @@ coredump_fail_unlock:
 				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
 				skb->data[1] == 0x06 && bmain_info->hif_hook.met_log_handler) {
 		skb_pull(skb, 4);
-		bmain_info->hif_hook.met_log_handler(skb->data, skb->len);
+		bmain_info->hif_hook.met_log_handler(bdev, skb->data, skb->len);
 		return 1;
 	} else if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
 				skb->len > 7 && skb->data[0] == 0xFF &&
