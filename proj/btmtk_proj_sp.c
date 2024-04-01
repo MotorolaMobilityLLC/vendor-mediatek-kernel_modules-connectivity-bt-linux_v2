@@ -736,23 +736,28 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason, un
 	atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DOING);
 	bmain_info->hif_hook.trigger_assert(g_sbdev);
 
-	if (reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
+	if (reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP && (btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_DISCONNECT)) {
 		if (!wait_for_completion_timeout(&g_sbdev->dump_dfd_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT)))
 			BTMTK_ERR("%s: uanble to finish dump_dfd_comp in 15s", __func__);
 
 		g_sbdev->dfd_value_addr_remap_base = ioremap(g_sbdev->dfd_value_addr, g_sbdev->dfd_value_size);
 		if (g_sbdev->dfd_value_addr_remap_base == NULL) {
 			BTMTK_ERR("%s: dfd_value_addr_remap_base failed", __func__);
+			goto exit;
 		} else {
 			temp_buf = vmalloc(DFD_EMI_DUMP_SIZE);
 			memcpy_fromio(temp_buf, (char *)g_sbdev->dfd_value_addr_remap_base, g_sbdev->dfd_value_size);
 			BTMTK_INFO("%s: dfd-value-size =  0x%04x, temp_buf[0] =  0x%02x, temp_buf[1] =  0x%02x", __func__, g_sbdev->dfd_value_size, temp_buf[0], temp_buf[1]);
-			ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "PRED", temp_buf, g_sbdev->dfd_value_size);
-			iounmap(g_sbdev->dfd_value_addr_remap_base);
-			if (ret)
-				BTMTK_ERR("%s: connv3_coredump_send failed, ret = %d", __func__, ret);
-		}
 
+			if ((btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_DISCONNECT)) {
+				ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "PRED", temp_buf, g_sbdev->dfd_value_size);
+				if (ret)
+					BTMTK_ERR("%s: connv3_coredump_send failed, ret = %d", __func__, ret);
+			} else {
+				BTMTK_ERR("%s: bt state is disconnect", __func__);
+			}
+			iounmap(g_sbdev->dfd_value_addr_remap_base);
+		}
 		complete_all(&g_sbdev->dump_comp);
 	}
 
