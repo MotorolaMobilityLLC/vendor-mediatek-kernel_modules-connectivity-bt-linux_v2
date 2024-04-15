@@ -29,7 +29,7 @@ MODULE_LICENSE("Dual BSD/GPL");
  *                              C O N S T A N T S
  *******************************************************************************
  */
-#define BT_BUFFER_SIZE				(4096)
+#define BT_BUFFER_SIZE				(5120)
 #define FTRACE_STR_LOG_SIZE			(256)
 #define TRIGGER_HW_ERR_EVT_COUNT	(1000)
 /*
