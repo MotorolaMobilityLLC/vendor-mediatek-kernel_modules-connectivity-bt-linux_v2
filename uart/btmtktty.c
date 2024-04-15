@@ -1608,11 +1608,9 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			}
 
 			if (time_after(jiffies, end_time)) {
-				BTMTK_ERR("%s: download 1 patch more than %d ms, tty_chars[%d], cur_len[%d], zero_pkt[%d], cpu[%u]",
+				BTMTK_ERR("%s: Download 1 patch more than %d ms, tty_chars[%d], cur_len[%d], zero_pkt[%d], cpu[%u]",
 						__func__, TIME_BOUND_OF_FW_PKG_DL, tty_chars_in_buffer(cif_dev->tty),
 						cur_len, zero_pkt_cnt, current_thread_info()->cpu);
-				ret = -1;
-				goto exit;
 			}
 
 			if (ret == UPLOAD_PATCH_UNIT)
