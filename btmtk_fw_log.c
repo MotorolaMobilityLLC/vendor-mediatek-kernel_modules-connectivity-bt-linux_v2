@@ -775,6 +775,8 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		ret = -EPROTONOSUPPORT;
 		goto exit;
 	}
+
+#if 0   /* for fuzzing */
 	/* check HCI command length */
 	if (len < HCI_CMD_HEADER_SIZE) {
 		BTMTK_ERR("%s: command is too short for hci cmd, length = %d", __func__, len);
@@ -785,6 +787,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		ret = -ENOMEM;
 		goto exit;
 	}
+#endif
 
 	skb = alloc_skb(count + BT_SKB_RESERVE, GFP_ATOMIC);
 	if (!skb) {
