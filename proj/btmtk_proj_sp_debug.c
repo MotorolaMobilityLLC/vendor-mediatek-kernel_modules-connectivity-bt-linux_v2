@@ -745,39 +745,24 @@ static inline void btmtk_dump_bt_mcysys_vlp(void)
 
 static int btmtk_connv3_cr_read_cb(void* priv_data, unsigned int addr, unsigned int *value)
 {
-	BTMTK_ERR("%s: not support wmt dump", __func__);
-	return 0;
-#if 0
-
 #if CFG_SUPPORT_RHW_DUMP
 	return RHW_READ(addr, value);
 #else
 	return WMT_READ(addr, value);
 #endif
-
-#endif
 }
 
 static int btmtk_connv3_cr_write_cb(void* priv_data, unsigned int addr, unsigned int value)
 {
-	BTMTK_ERR("%s: not support wmt dump", __func__);
-	return 0;
-#if 0
-
 #if CFG_SUPPORT_RHW_DUMP
 	return RHW_WRITE(addr, value);
 #else
 	return WMT_WRITE(addr, value);
 #endif
-
-#endif
 }
 
 static int btmtk_connv3_cr_write_mask_cb(void* priv_data, unsigned int addr, unsigned int mask, unsigned int value)
 {
-	BTMTK_ERR("%s: not support wmt dump", __func__);
-	return 0;
-#if 0
 	int ret = 0;
 	uint32_t org_value;
 #if CFG_SUPPORT_RHW_DUMP
@@ -795,8 +780,6 @@ static int btmtk_connv3_cr_write_mask_cb(void* priv_data, unsigned int addr, uns
 	return RHW_WRITE(addr, org_value);
 #else
 	return WMT_WRITE(addr, org_value);
-#endif
-
 #endif
 }
 
