@@ -2727,7 +2727,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 					}
 
 					if (mtk8250_uart_hub_get_cmm_bt_awake_sta() == 0 && mtk8250_uart_hub_get_host_bt_awake_sta(0) == 0 && !retry_cnt) {
-						BTMTK_ERR("%s: Query BT_AWAKE failed ", __func__);
+						BTMTK_ERR("%s: Query BT_AWAKE failed, fw_awake = %d", __func__, atomic_read(&cif_dev->fw_wake));
 						mtk8250_uart_hub_dump_with_tag("BT driver query BT_AWAKE failed");
 						mtk8250_uart_dump(cif_dev->tty);
 					}
@@ -2780,7 +2780,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	} else if (cif_dev->no_fw_own == 0) {
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		btmtk_uart_update_fw_own_timer(cif_dev);
-		BTMTK_INFO("%s success", __func__);
+		BTMTK_INFO("%s success, fw_awake = %d", __func__, atomic_read(&cif_dev->fw_wake));
 	}
 
 unlock:

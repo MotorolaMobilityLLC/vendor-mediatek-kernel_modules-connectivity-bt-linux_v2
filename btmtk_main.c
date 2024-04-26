@@ -1228,7 +1228,7 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 		if (!skb) {
 			/* ignore first byte as 0xFF (FW wakeup) & 0x00 (noise from uart) */
 			while (size > 1 && (*buf == 0xFF || *buf == 0x00)) {
-				BTMTK_INFO("%s, receive 0x%02X in pkt head, pkt_len[%d]", __func__, buf[0], size);
+				BTMTK_INFO_LIMITTED("%s, receive 0x%02X in pkt head, pkt_len[%d]", __func__, buf[0], size);
 				buf++;
 				size--;
 			}
@@ -1253,7 +1253,7 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 			/* Check for invalid packet type */
 			if (!skb) {
 				if (*buf == 0xFF || *buf == 0x00) {
-					BTMTK_INFO("%s: skip 0x%02X pkt", __func__, *buf);
+					BTMTK_INFO_LIMITTED("%s: skip 0x%02X pkt", __func__, *buf);
 					return NULL;
 				}
 
