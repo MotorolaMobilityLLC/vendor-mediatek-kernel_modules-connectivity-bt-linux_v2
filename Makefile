@@ -215,6 +215,8 @@ else ifeq ($(MTK_CHIP_IF), uart_tty)
         CFILES += proj/btmtk_proj_sp.c proj/btmtk_proj_sp_debug.c btmtk_queue.c btmtk_char_dev.c
         ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/connectivity/power_throttling
         ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2/
+	ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/connectivity/common
+	ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include/mt-plat
     endif
     ccflags-y += -DCHIP_IF_UART_TTY
     ccflags-y += -I$(KO_CODE_PATH)/include/uart/tty
