@@ -891,10 +891,22 @@ static inline int btmtk_connv3_readable_check(void){
 	}
 
 	HIF_READ(0x18812000, &value);
-	if (value != 0x03000000) {
-		BTMTK_WARN("%s: check 0x18812000 != 0x03000000 failed, value[0x%08x]", __func__, value);
-		return -1;
+	switch (g_sbdev->chip_id) {
+	case 0x6635:
+	case 0x6639:
+		if (value != 0x03000000) {
+			BTMTK_WARN("%s: check 0x18812000 != 0x03000000 failed, value[0x%08x]", __func__, value);
+			return -1;
+		}
+		break;
+	case 0x6653:
+		if (value != 0x03040100) {
+			BTMTK_WARN("%s: check 0x18812000 != 0x03040100 failed, value[0x%08x]", __func__, value);
+			return -1;
+		}
+		break;
 	}
+
 	return 0;
 }
 
