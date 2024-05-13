@@ -1635,7 +1635,7 @@ void btmtk_platform_prop_register(struct btmtk_dev *bdev) {
 	 */
 	mt_ptr = strstr(model, "MT");
 	if (mt_ptr != NULL) {
-		if (strlen(mt_ptr) > PLATFORM_LEN + 2) {
+		if (strlen(mt_ptr) >= PLATFORM_LEN + 2) {
 			strncpy(platform_str, mt_ptr + 2, PLATFORM_LEN);
 			platform_str[PLATFORM_LEN] = '\0';
 			BTMTK_INFO("%s: platform[%s]", __func__, platform_str);
