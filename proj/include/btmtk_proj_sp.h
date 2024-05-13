@@ -72,6 +72,7 @@ extern int mtk8250_uart_hub_clear_host_awake_sta(int dev_index);
 extern int mtk8250_uart_hub_get_host_bt_awake_sta(int dev_index);
 extern int mtk8250_uart_hub_get_cmm_bt_awake_sta(void);
 extern int mtk8250_uart_hub_get_bt_awake_sta(void);
+extern int mtk8250_uart_hub_bt_on_count_inc(void);
 int btmtk_wakeup_uarthub(void);
 void btmtk_release_uarthub(bool force);
 #endif

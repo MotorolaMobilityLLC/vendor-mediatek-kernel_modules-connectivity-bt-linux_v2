@@ -485,6 +485,9 @@ int btmtk_pre_power_on_handler(void)
 		/* use uarthub bypass mode*/
 		ret = mtk8250_uart_hub_enable_bypass_mode(1);
 		BTMTK_INFO("%s mtk8250_uart_hub_enable_bypass_mode(1) ret[%d]", __func__, ret);
+
+		ret = mtk8250_uart_hub_bt_on_count_inc();
+		BTMTK_INFO("%s mtk8250_uart_hub_bt_on_count_inc() ret[%d]", __func__, ret);
 	}
 #endif
 	/* reopen tty */
