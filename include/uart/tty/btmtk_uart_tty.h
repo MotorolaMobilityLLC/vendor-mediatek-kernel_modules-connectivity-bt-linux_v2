@@ -99,7 +99,7 @@ struct btmtk_stp_hdr {
 
 #define BTMTK_MAX_SEND_RETRY 10000
 #if (USE_DEVICE_NODE == 1)
-#define BTMTK_MAX_WAIT_RETRY 200
+#define BTMTK_MAX_WAIT_RETRY 400
 #define BTMTK_MAX_WAKEUP_RETRY 4
 #else
 #define BTMTK_MAX_WAIT_RETRY 30000
@@ -117,7 +117,7 @@ struct btmtk_stp_hdr {
 #define IO_BUF_DELAY_TIME 50
 
 /* Time bound for flush tty: 100ms */
-#define TIMT_BOUND_OF_CHARS_WAIT 10
+#define TIMT_BOUND_OF_CHARS_WAIT 40
 #define TIME_BOUND_OF_TTY_FLUSH 100
 #define TIME_BOUND_OF_FW_PKG_DL 2000
 #define TIME_DUMP_OF_FW_PKG_DL 50
