@@ -4954,11 +4954,6 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	int state = 0;
 	unsigned char fstate = 0;
 	u8 fw_coredump_flag = 0, retry = 20;
-	u8 reset_cmd[HCI_RESET_CMD_LEN] = { 0x01, 0x03, 0x0C, 0x00 };
-#if (USE_DEVICE_NODE == 1)
-	/* parsing commands */
-	u8 fw_coredump_cmd[FW_COREDUMP_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
-#endif
 #if BTMTK_RUNTIME_ENABLE
 	struct btmtk_usb_dev *cif_dev = NULL;
 #endif
@@ -5048,120 +5043,22 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	}
 
 	if (main_info.hif_hook_chip.bt_tx_frame_handler) {
+		/* ret = 0, means data not handle in bt_tx_frame_handler, need to send fw
+		 * ret = -1, means something wrong in bt_tx_frame_handler, may need kree_skb
+		 * ret = 1, means data is already handled in bt_tx_frame_handler
+		 */
 		ret = main_info.hif_hook_chip.bt_tx_frame_handler(bdev, skb, &fw_coredump_flag);
 		if (ret < 0) {
-			BTMTK_ERR("%s btmtk_set_audio_setting failed!!", __func__);
+			BTMTK_INFO("%s bt_tx_frame_handler return failed, ret[%d]", __func__, ret);
 			goto exit;
 		}
-
-#if (USE_DEVICE_NODE == 1)
-		if (hci_skb_pkt_type(skb) == HCI_COMMAND_PKT) {
-			if (skb->len == FW_COREDUMP_CMD_LEN &&
-				!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
-				BTMTK_WARN("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
-				fw_coredump_flag = 1;
-				btmtk_reset_timer_update(bdev);
-				btmtk_hci_snoop_print_to_log();
-				if (bdev->assert_reason[0] == '\0') {
-					memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
-					strncpy(bdev->assert_reason, "[BT_DRV assert] host trigger",
-							strlen("[BT_DRV assert] host trigger") + 1);
-					BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
-				}
-
-				if(main_info.hif_hook.trigger_assert) {
-					main_info.hif_hook.trigger_assert(g_sbdev);
-					goto exit;
-				}
-			}
-		}
-#endif
-		/* save hci cmd pkt for debug */
-		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD_STACK, skb->data, skb->len);
-
-		if (skb->len == FW_COREDUMP_CMD_LEN &&
-			!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
-			BTMTK_WARN("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
-			fw_coredump_flag = 1;
-			btmtk_reset_timer_update(bdev);
-			btmtk_hci_snoop_print_to_log();
-			if (bdev->assert_reason[0] == '\0') {
-				memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
-				strncpy(bdev->assert_reason, "[BT_DRV assert] host trigger",
-						strlen("[BT_DRV assert] host trigger") + 1);
-				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
-			}
-
-			if(main_info.hif_hook.trigger_assert) {
-				main_info.hif_hook.trigger_assert(g_sbdev);
-				goto exit;
-			}
-		} else if (skb->len == HCI_RESET_CMD_LEN &&
-				!memcmp(skb->data, reset_cmd, HCI_RESET_CMD_LEN)) {
-#if (USE_DEVICE_NODE == 1)
-			u8 drv_own_retry = 10;
-			// u8 evt[] = { 0x04, 0x0E, 0x04, 0x01, 0x03, 0x0C };
-
-			BTMTK_INFO("%s: got command: 0x03 0x0C 0x00 (HCI_RESET)", __func__);
-
-			do {
-				ret = main_info.hif_hook.send_and_recv(bdev, skb, skb->data, 3,
-						DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST, CMD_NEED_FILTER);
-			} while (ret == -EAGAIN && drv_own_retry--);
-
-			if (ret < 0) {
-				BTMTK_ERR("%s host call send_and_recv failed,ret[%d]", __func__, ret);
-				/* ERRNUM is used to handle when skb has been sent successful,
-				 * but wait related event failed, in this case, we don't need to free skb here,
-				 * otherwise, it will be double free.
-				 */
-				if (ret != -ERRNUM && skb) {
-					BTMTK_ERR("%s kfree skb", __func__);
-					kfree_skb(skb);
-					skb = NULL;
-				}
-				/* avoid kfree_skb in btmtk_send_data */
-				ret = 0;
-			}
-
-			goto exit;
-#endif
-			BTMTK_INFO("%s: got command: 0x03 0x0C 0x00 (HCI_RESET)", __func__);
-		}
-#if (USE_DEVICE_NODE == 0)
-	} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
-		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ACL_STACK, skb->data, skb->len);
-	} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
-		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ISO_STACK, skb->data, skb->len);
-#else
-	} else if (hci_skb_pkt_type(skb) == MTK_HCI_SCODATA_PKT) {
-		/* for VTS SOC data loopback test workaround
-		 * Uarthub and BT uart SOC format not sync
-		 */
-		u8 new_soc_hd[] = { 0x03, 0x00, 0x00, 0x00, 0x00};
-
-		BTMTK_INFO_RAW(skb->data, skb->len, "%s: VTS TX before rearrange[%d]:",
-					__func__, skb->len);
-
-		/* original:  03 AA BB   LL      PP PP PP
-		 * rearrange: 03 AA LL+2 LL+1 BB PP PP PP
-		 */
-		new_soc_hd[1] = skb->data[1];
-		new_soc_hd[2] = skb->data[3] + 2;
-		new_soc_hd[3] = skb->data[3] + 1;
-		new_soc_hd[4] = skb->data[2];
-
-		skb_tmp = skb_push(skb, 1);
-		if (!skb_tmp) {
-			BTMTK_ERR("%s, skb_put failed!", __func__);
-			ret = -ENOMEM;
+		if (ret == 1) {
+			ret = 0;
+			BTMTK_INFO("%s bt_tx_frame_handler already handle data, skip", __func__);
 			goto exit;
 		}
-		memcpy(skb_tmp, new_soc_hd, sizeof(new_soc_hd));
-		BTMTK_INFO_RAW(skb->data, skb->len, "%s: VTS TX after rearrange[%d]:",
-				__func__, skb->len);
-#endif
-	}
+	} else
+		BTMTK_INFO("%s not register bt_tx_frame_handler", __func__);
 
 	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d ", __func__, skb->len);
 	ret = main_info.hif_hook.send_cmd(bdev, skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);

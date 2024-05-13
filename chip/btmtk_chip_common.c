@@ -657,13 +657,76 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 			*fw_dump = 1;
 			btmtk_reset_timer_update(bdev);
 			btmtk_hci_snoop_print_to_log();
+#if (USE_DEVICE_NODE == 1)
+			if (bdev->assert_reason[0] == '\0') {
+				memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
+				strncpy(bdev->assert_reason, "[BT_DRV assert] host trigger",
+						strlen("[BT_DRV assert] host trigger") + 1);
+				BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
+			}
+			if(bmain_info->hif_hook.trigger_assert) {
+				bmain_info->hif_hook.trigger_assert(bdev);
+				/* return 1 means data already handled */
+				return 1;
+			}
+#endif // (USE_DEVICE_NODE == 1)
 		} else if (skb->len == HCI_RESET_CMD_LEN &&
-				!memcmp(skb->data, reset_cmd.content, reset_cmd.len))
+				!memcmp(skb->data, reset_cmd.content, reset_cmd.len)) {
+#if (USE_DEVICE_NODE == 1)
+				u8 drv_own_retry = 10;
+				// u8 evt[] = { 0x04, 0x0E, 0x04, 0x01, 0x03, 0x0C };
+
+				BTMTK_INFO("%s: got command: 0x03 0x0C 0x00 (HCI_RESET)", __func__);
+
+				do {
+					ret = bmain_info->hif_hook.send_and_recv(bdev, skb, skb->data, 3,
+							DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST, CMD_NEED_FILTER);
+				} while (ret == -EAGAIN && drv_own_retry--);
+
+				if (ret < 0)
+					BTMTK_ERR("%s host call send_and_recv failed, ret[%d]", __func__, ret);
+				else
+					/* return 1 means data already handled */
+					ret = 1;
+				return ret;
+#else
 			BTMTK_INFO("%s: got command: 0x03 0C 00 (HCI_RESET)", __func__);
-	} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
-		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ACL_STACK, skb->data, skb->len);
-	} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
-		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ISO_STACK, skb->data, skb->len);
+#endif
+		}
+#if (USE_DEVICE_NODE == 0)
+		} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
+			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ACL_STACK, skb->data, skb->len);
+		} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
+			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ISO_STACK, skb->data, skb->len);
+#else
+		} else if (hci_skb_pkt_type(skb) == MTK_HCI_SCODATA_PKT) {
+			/* for VTS SOC data loopback test workaround
+			 * Uarthub and BT uart SOC format not sync
+			 */
+			u8 new_soc_hd[] = { 0x03, 0x00, 0x00, 0x00, 0x00};
+			unsigned char *skb_tmp = NULL;
+
+			BTMTK_INFO_RAW(skb->data, skb->len, "%s: VTS TX before rearrange[%d]:",
+						__func__, skb->len);
+
+			/* original:  03 AA BB	 LL 	 PP PP PP
+			 * rearrange: 03 AA LL+2 LL+1 BB PP PP PP
+			 */
+			new_soc_hd[1] = skb->data[1];
+			new_soc_hd[2] = skb->data[3] + 2;
+			new_soc_hd[3] = skb->data[3] + 1;
+			new_soc_hd[4] = skb->data[2];
+
+			skb_tmp = skb_push(skb, 1);
+			if (!skb_tmp) {
+				BTMTK_ERR("%s, skb_put failed!", __func__);
+				ret = -ENOMEM;
+				return ret;
+			}
+			memcpy(skb_tmp, new_soc_hd, sizeof(new_soc_hd));
+			BTMTK_INFO_RAW(skb->data, skb->len, "%s: VTS TX after rearrange[%d]:",
+					__func__, skb->len);
+#endif
 	}
 
 	return ret;

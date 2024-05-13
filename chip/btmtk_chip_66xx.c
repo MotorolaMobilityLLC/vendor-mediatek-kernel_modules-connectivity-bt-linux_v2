@@ -133,7 +133,6 @@ int btmtk_cif_chip_66xx_register(void)
 	bmain_info->hif_hook_chip.rx_handler = btmtk_cif_rx_packet_handler;
 	bmain_info->hif_hook_chip.bt_setup_handler = btmtk_cif_bt_setup;
 	bmain_info->hif_hook_chip.bt_flush_handler = btmtk_cif_bt_flush;
-	bmain_info->hif_hook_chip.bt_tx_frame_handler = NULL;
 	bmain_info->hif_hook_chip.bt_check_power_status = NULL;
 	bmain_info->hif_hook_chip.bt_set_pinmux = NULL;
 	bmain_info->hif_hook_chip.dispatch_fwlog = btmtk_dispatch_fwlog;

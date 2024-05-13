@@ -254,6 +254,7 @@ int32_t btmtk_receive_data(struct hci_dev *hdev, u8 *buf, u32 count)
 int32_t btmtk_send_data(struct hci_dev *hdev, u8 *buf, u32 count)
 {
 	struct sk_buff *skb = NULL;
+	int ret = 0;
 
 	if (hdev == NULL) {
 		BTMTK_ERR("%s hdev is NULL", __func__);
@@ -277,9 +278,14 @@ int32_t btmtk_send_data(struct hci_dev *hdev, u8 *buf, u32 count)
 	memcpy(skb->data, buf + 1, count - 1);
 	skb->len = count - 1;
 
-	if (bt_send_frame(hdev, skb) < 0) {
-		BTMTK_ERR_LIMITTED("%s send fail, free skb", __func__);
-		if (skb) {
+	ret = bt_send_frame(hdev, skb);
+	if (ret < 0) {
+		BTMTK_ERR_LIMITTED("%s send fail, ret[%d]", __func__, ret);
+		/* ERRNUM is used to handle when skb has been sent successful,
+		 * but wait related event failed, in this case, we don't need to free skb here,
+		 * otherwise, it will be double free.
+		 */
+		if (ret != -ERRNUM && skb) {
 			kfree_skb(skb);
 			skb = NULL;
 		}
