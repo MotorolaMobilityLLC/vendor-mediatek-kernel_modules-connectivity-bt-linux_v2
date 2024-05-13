@@ -25,6 +25,7 @@
 #define FW_CR_RD_EVT_PKT_LEN	19
 #define FW_CR_ADDR_LEN	4
 #define FW_CR_DATA_LEN	4
+#define FW_CR_EVT_HEADER	5
 #define FW_CR_CMD_ADDR_OFFSET	(FW_CR_RD_CMD_PKT_LEN - FW_CR_ADDR_LEN)
 #define FW_CR_CMD_DATA_OFFSET	(FW_CR_CMD_ADDR_OFFSET + FW_CR_DATA_LEN)
 #define FW_CR_EVT_ADDR_OFFSET	(FW_CR_RD_EVT_PKT_LEN - FW_CR_ADDR_LEN - FW_CR_DATA_LEN)
@@ -220,7 +221,7 @@ int WMT_WRITE(uint32_t addr, uint32_t val)
 	memcpy(&cmd[FW_CR_CMD_ADDR_OFFSET], &addr, FW_CR_ADDR_LEN);
 	memcpy(&cmd[FW_CR_CMD_DATA_OFFSET], &val, FW_CR_DATA_LEN);
 
-	ret = btmtk_main_send_cmd(g_sbdev, cmd, FW_CR_WR_CMD_PKT_LEN, evt, FW_CR_WR_EVT_PKT_LEN,
+	ret = btmtk_main_send_cmd(g_sbdev, cmd, FW_CR_WR_CMD_PKT_LEN, evt, FW_CR_EVT_HEADER,
 			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s failed", __func__);
@@ -264,7 +265,7 @@ int WMT_READ(uint32_t addr, uint32_t *val)
 	memcpy(&evt[FW_CR_EVT_ADDR_OFFSET], &addr, sizeof(addr));
 
 	ret = btmtk_main_send_cmd(g_sbdev, cmd, FW_CR_RD_CMD_PKT_LEN,
-			evt, FW_CR_EVT_DATA_OFFSET, DELAY_TIMES,
+			evt, FW_CR_EVT_HEADER, DELAY_TIMES,
 			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 
 	if (ret >= 0) {
