@@ -2222,11 +2222,11 @@ int btmtk_send_hw_err_to_host(struct btmtk_dev *bdev)
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, HWERR_EVT, hwerr_event);
 
 	if (main_info.reset_stack_flag) {
+#if (USE_DEVICE_NODE == 0)
 		skb = alloc_skb(hwerr_event.len + BT_SKB_RESERVE, GFP_KERNEL);
 		if (skb == NULL) {
 			BTMTK_ERR("%s allocate skb failed!!", __func__);
 		} else {
-#if (USE_DEVICE_NODE == 0)
 			hci_skb_pkt_type(skb) = HCI_EVENT_PKT;
 			skb->data[0] = hwerr_event.content[1];
 			skb->data[1] = hwerr_event.content[2];
@@ -2234,19 +2234,30 @@ int btmtk_send_hw_err_to_host(struct btmtk_dev *bdev)
 			skb->len = hwerr_event.len - 1;
 			BTMTK_DBG_RAW(skb->data, skb->len, "%s: hw err event:", __func__);
 			hci_recv_frame(bdev->hdev, skb);
+		}
 #else
+		/* copy assert reason to hw error event payload */
+		/* ASSERT_REASON_SIZE + 3 is payload 255 add event header 3 bytes */
+		skb = alloc_skb(ASSERT_REASON_SIZE + 3 + BT_SKB_RESERVE, GFP_KERNEL);
+		if (skb == NULL) {
+			BTMTK_ERR("%s allocate skb failed!!", __func__);
+		} else {
 			/* send to RX buffer instead of hci driver */
 			skb_reserve(skb, BT_SKB_RESERVE);
 			hci_skb_pkt_type(skb) = HCI_EVENT_PKT;
 			skb->data[0] = hwerr_event.content[1];
-			skb->data[1] = hwerr_event.content[2];
-			skb->data[2] = 0x00;
-			skb->len = hwerr_event.len - 1;
-			BTMTK_DBG_RAW(skb->data, skb->len, "%s: hw err event: ", __func__);
+			skb->data[1] = ASSERT_REASON_SIZE;
+			skb->data[2] = HW_ERR_NONE;
+			strncpy(&skb->data[3], bdev->assert_reason, ASSERT_REASON_SIZE - 1);
+			/* +2 is for event header without pkt type
+			 * and set the last byte to 0 for string end */
+			skb->data[ASSERT_REASON_SIZE + 2 - 1] = '\0';
+			skb->len = ASSERT_REASON_SIZE + 2;
+			BTMTK_INFO_RAW(skb->data, skb->len, "%s: hw err event: ", __func__);
 			skb_queue_tail(&bdev->rx_q, skb);
 			queue_work(bdev->workqueue, &bdev->rx_work);
-#endif
 		}
+#endif
 	}
 	return 0;
 }
