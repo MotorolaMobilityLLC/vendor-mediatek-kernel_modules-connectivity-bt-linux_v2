@@ -1176,7 +1176,7 @@ int btmtk_read_pmic_state(struct btmtk_dev *bdev)
 
 static int btmtk_send_connfem_new(struct btmtk_dev *bdev)
 {
-	const struct connfem_sku *fem_info;
+	const struct connfem_sku *fem_info = NULL;
 	uint32_t i = 0, j = 0, fem_id = 0;
 	uint16_t offset = 0, cmd_len = 0;
 	uint8_t value = 0;
@@ -1189,6 +1189,11 @@ static int btmtk_send_connfem_new(struct btmtk_dev *bdev)
 
 	/* Get data from connfem_api */
 	connfem_sku_data(&fem_info);
+	if (!fem_info)
+	{
+		BTMTK_ERR("%s: get sku failed\n", __func__);
+		return -EINVAL;
+	}
 
 	cmd = vmalloc(HCI_MAX_ACL_SIZE);
 
@@ -2423,4 +2428,3 @@ int btmtk_uart_launcher_deinit(void)
 }
 
 #endif // (USE_DEVICE_NODE == 1)
-
