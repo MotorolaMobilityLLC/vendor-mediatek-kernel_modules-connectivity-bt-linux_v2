@@ -766,13 +766,12 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason, un
 
 exit:
 	g_sbdev->is_whole_chip_reset = TRUE;
+	vfree(temp_buf);
 	ret = bt_close(g_sbdev->hdev);
 	if (ret) {
 		BTMTK_ERR("%s: BT turn off fail!", __func__);
-		vfree(temp_buf);
 		return ret;
 	}
-	vfree(temp_buf);
 
 	return 0;
 }
