@@ -285,7 +285,7 @@ static void rhw_dump_utility(const struct bt_dump_list *dump_list)
 	uint32_t readCmdSize = dump_list->read_cmd_size;
 	const struct bt_dbg_command *pCmdList = NULL;
 	char dumpLineBuf[REG_DUMP_ARRAY_SIZE] = {0};
-	uint32_t line = 0, readCount = 0, readVal;
+	uint32_t line = 0, readCount = 0, readVal = 0;
 	uint32_t offset = 0, totalLen = REG_DUMP_ARRAY_SIZE;
 	uint32_t i;
 
