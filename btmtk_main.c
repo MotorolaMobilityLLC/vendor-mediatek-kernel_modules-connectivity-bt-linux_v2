@@ -4042,8 +4042,9 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 		btmtk_find_my_phone_cmd(bmain_info->find_my_phone_mode);
 	}
 
-        if (bdev->poweroff_finder_mode && bmain_info->shut_down) {
-                btmtk_set_powered_off_finder_mode(bdev->poweroff_finder_mode);
+	BTMTK_INFO("%s: poweroff_finder_mode = %d, bdev = %p", __func__, atomic_read(&bdev->poweroff_finder_mode), bdev);
+        if (atomic_read(&bdev->poweroff_finder_mode)) {
+                btmtk_set_powered_off_finder_mode(atomic_read(&bdev->poweroff_finder_mode));
         }
 #endif
 
@@ -5698,11 +5699,7 @@ static int btmtk_reboot_notify(struct notifier_block *nb,
 	int state = 0;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	/* set shut_down to true */
-	bmain_info->shut_down = true;
-	BTMTK_WARN("%s shut_down is %d", __func__, bmain_info->shut_down);
 	BTMTK_INFO("%s: btmtk_reboot_notify(%d)", __func__, (int)event);
 
 	if (event == SYS_POWER_OFF && main_info.hif_hook.enter_standby != NULL) {

@@ -492,8 +492,8 @@ static long BT_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long
 		if (copy_from_user(ioc_buf, (uint8_t __user *)arg, 1))
 			retval = -EFAULT;
 
-		BTMTK_INFO("Finder's switch fucntion [%d]", ioc_buf[0]);
-		g_sbdev->poweroff_finder_mode = ioc_buf[0];
+		BTMTK_INFO("Finder's switch fucntion [%d], g_sbdev = %p", ioc_buf[0], g_sbdev);
+		atomic_set(&g_sbdev->poweroff_finder_mode, ioc_buf[0]);
 		break;
 	default:
 		break;
