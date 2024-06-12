@@ -145,4 +145,44 @@ static struct speed_map speeds[] = {
     {4000000,    B4000000},
 };
 
+#define UINT_64 unsigned long long
+#define UINT_32 unsigned int
+#define UINT_16 unsigned short
+#define UINT_8 unsigned char
+
+#define INT_32  int
+#define INT_16  short
+#define INT_8  char
+
+typedef struct _CONNXO_CFG_PARAM_STRUCT_T
+{
+    UINT_8 ucDataLenLSB;
+    UINT_8 ucDataLenMSB;
+    UINT_8 ucFreqC1Axm52m;
+    UINT_8 ucFreqC2Axm52m;
+    UINT_8 ucFreqC1Btm52m;
+    UINT_8 ucFreqC2Btm52m;
+    UINT_8 ucFreqC1Axm80m;
+    UINT_8 ucFreqC2Axm80m;
+    UINT_8 ucFreqC1Btm80m;
+    UINT_8 ucFreqC2Btm80m;
+    UINT_8 ucFreqC1Lpm52m;
+    UINT_8 ucFreqC2Lpm52m;
+    UINT_8 ucFreqC1Lpm80m;
+    UINT_8 ucFreqC2Lpm80m;
+    UINT_8 ucCompC1Axm52m;
+    UINT_8 ucCompC2Axm52m;
+    UINT_8 ucCompC1Btm52m;
+    UINT_8 ucCompC2Btm52m;
+    UINT_8 ucCompC1Axm80m;
+    UINT_8 ucCompC2Axm80m;
+    UINT_8 ucCompC1Btm80m;
+    UINT_8 ucCompC2Btm80m;
+    UINT_8 ucCompC1Lpm52m;
+    UINT_8 ucCompC2Lpm52m;
+    UINT_8 ucCompC1Lpm80m;
+    UINT_8 ucCompC2Lpm80m;
+    UINT_8 ucExt32Cal;
+} CONNXO_CFG_PARAM_STRUCT, *P_CONNXO_CFG_PARAM_STRUCT;
+
 #endif /*__UART_LAUNCHER_H__*/
