@@ -216,6 +216,7 @@ int btmtk_find_my_phone_cmd(u32 hr);
 int btmtk_find_my_phone_extend_cmd(u32 para);
 
 void btmtk_dump_gpio_state(void);
+void btmtk_dump_gpio_state_unmap(void);
 
 int btmtk_uart_launcher_deinit(void);
 
