@@ -799,7 +799,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	}
 #endif
 
-	skb = alloc_skb(count + BT_SKB_RESERVE, GFP_ATOMIC);
+	skb = alloc_skb(count + BT_SKB_RESERVE, GFP_KERNEL);
 	if (!skb) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		ret = -ENOMEM;
@@ -845,7 +845,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		// 0xFC26 is get link & profile information command.
 		// 0xFCF5 is get iso perf link info command.
 		if (*(uint16_t *)(o_fwlog_buf + 1) != 0xFC26) {
-			skb_opcode = alloc_skb(len + FWLOG_PRSV_LEN, GFP_ATOMIC);
+			skb_opcode = alloc_skb(len + FWLOG_PRSV_LEN, GFP_KERNEL);
 			if (!skb_opcode) {
 				BTMTK_ERR("%s allocate skb failed!!", __func__);
 				ret = -ENOMEM;

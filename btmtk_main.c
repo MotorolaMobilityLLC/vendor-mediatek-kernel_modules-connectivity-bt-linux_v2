@@ -1237,7 +1237,7 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 				if (buf[0] == (&pkts[index])->type) {
 					skb = bt_skb_alloc(
 						(&pkts[index])->maxlen,
-						   GFP_ATOMIC);
+						   GFP_KERNEL);
 					if (!skb) {
 						BTMTK_ERR("%s alloc failed!",
 							__func__);
@@ -1792,7 +1792,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		goto exit;
 	}
 
-	skb = alloc_skb(cmd_len + BT_SKB_RESERVE, GFP_ATOMIC);
+	skb = alloc_skb(cmd_len + BT_SKB_RESERVE, GFP_KERNEL);
 	if (skb == NULL) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		ret = -ENOMEM;
@@ -2302,7 +2302,7 @@ static int btmtk_parsing_fw_rom_patch(struct btmtk_dev *bdev,
 	}
 
 	bdev->sectionMap_table = kmalloc_array(section_num,
-			sizeof(struct _Section_Map), GFP_ATOMIC);
+			sizeof(struct _Section_Map), GFP_KERNEL);
 	if (!bdev->sectionMap_table) {
 		BTMTK_ERR("%s: alloc memory fail (bdev->sectionMap_table)", __func__);
 		ret = -1;
@@ -2409,7 +2409,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 		goto exit;
 	}
 
-	pos = kmalloc(UPLOAD_PATCH_UNIT, GFP_ATOMIC);
+	pos = kmalloc(UPLOAD_PATCH_UNIT, GFP_KERNEL);
 	if (!pos) {
 		BTMTK_ERR("%s: alloc memory failed", __func__);
 		ret = -1;
@@ -4092,7 +4092,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	}
 #endif
 
-	skb = alloc_skb(cmd.len + BT_SKB_RESERVE, GFP_ATOMIC);
+	skb = alloc_skb(cmd.len + BT_SKB_RESERVE, GFP_KERNEL);
 	if (!skb) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		goto exit;
