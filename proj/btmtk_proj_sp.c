@@ -1724,6 +1724,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 		return -1;
 	}
 
+	bdev->poweroff_finder_mode = false;
 	bdev->dfd_value_addr_remap_base = NULL;
 	tty->dev->of_node = of_find_compatible_node(NULL, NULL, "mediatek,mt6991-conn_scp");
 	if (!tty->dev->of_node)
@@ -2145,6 +2146,26 @@ int32_t btmtk_intcmd_wmt_utc_sync(void)
 	return 0;
 }
 
+int32_t btmtk_send_finder_eids(uint8_t *buf, uint32_t len)
+{
+	int ret = 0;
+	uint8_t evt[] = {0x04, 0x0E, 0x04, 0x01, 0x64, 0xFD};
+
+	BTMTK_INFO("%s", __func__);
+	if (g_sbdev->dynamic_fwdl_start) {
+		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
+                return 0;
+        }
+
+	ret = btmtk_main_send_cmd(g_sbdev, buf, len,
+		evt, sizeof(evt), DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
+
+	if (ret < 0)
+		BTMTK_ERR("%s: failed(%d)", __func__, ret);
+
+	return ret;
+}
+
 /*******************************************************************************
 *                           bt gpio dump
 ********************************************************************************
@@ -2419,15 +2440,17 @@ int btmtk_find_my_phone_cmd(u32 hr)
 	return ret;
 }
 
-int btmtk_find_my_phone_extend_cmd(u32 para)
+int btmtk_set_powered_off_finder_mode(bool enable)
 {
         u8 cmd1[] = { 0x01, 0x64, 0xFD, 0x02, 0x01, 0x01 };
+#if 0
         u8 evt1[] = { 0x04, 0x0E, 0x04, 0x01, 0x64, 0xFD, 0x00 };
         u8 cmd2[] = { 0x01, 0x64, 0xFD, 0x17, 0x05, 0x03, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
         u8 evt2[] = { 0x04, 0x0E, 0x04, 0x01, 0x64, 0xFD, 0x00 };
+#endif
         int ret = 0;
 
-        BTMTK_INFO("%s set para[%u]", __func__, para);
+	BTMTK_INFO("%s enable[%d]", __func__, enable);
 
         if (g_sbdev->dynamic_fwdl_start) {
                 BTMTK_INFO("%s: fw doing re-download, skip", __func__);
@@ -2435,13 +2458,13 @@ int btmtk_find_my_phone_extend_cmd(u32 para)
         }
 
 	/* cmd1 */
-        ret = btmtk_main_send_cmd(g_sbdev, cmd1, sizeof(cmd1), evt1, sizeof(evt1),
+        ret = btmtk_main_send_cmd(g_sbdev, cmd1, sizeof(cmd1), NULL, 0,
                         DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
         if (ret < 0) {
                 BTMTK_ERR("%s: cmd1 failed, ret[%d]", __func__, ret);
                 return ret;
         }
-
+#if 0
 	/* cmd 2 */
         ret = btmtk_main_send_cmd(g_sbdev, cmd2, sizeof(cmd2), evt2, sizeof(evt2),
                         DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
@@ -2449,7 +2472,7 @@ int btmtk_find_my_phone_extend_cmd(u32 para)
                 BTMTK_ERR("%s: cmd2 failed, ret[%d]", __func__, ret);
                 return ret;
         }
-
+#endif
         return ret;
 }
 

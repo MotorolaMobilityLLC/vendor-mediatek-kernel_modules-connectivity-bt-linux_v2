@@ -655,6 +655,9 @@ struct btmtk_dev {
 	u32	dfd_value_size;
 	char temp_buf[DFD_EMI_DUMP_SIZE];
 	u8 dfd_pstd[DFD_EMI_DUMP_SIZE];
+
+	/* BLE Finding function */
+	bool poweroff_finder_mode;
 #endif
 	/* completion */
 	struct completion	dump_comp;
@@ -869,6 +872,7 @@ struct btmtk_main_info {
 
 	u32 find_my_phone_mode;
 	u32 find_my_phone_mode_extend;
+	bool shut_down;
 	int bk_rs_flag;
 	u8	dbg_send;
 	u8	dbg_send_opcode[2];

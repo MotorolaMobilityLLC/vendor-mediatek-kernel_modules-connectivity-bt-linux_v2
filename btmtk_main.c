@@ -4042,8 +4042,8 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 		btmtk_find_my_phone_cmd(bmain_info->find_my_phone_mode);
 	}
 
-        if (bmain_info->find_my_phone_mode_extend) {
-                btmtk_find_my_phone_extend_cmd(bmain_info->find_my_phone_mode_extend);
+        if (bdev->poweroff_finder_mode && bmain_info->shut_down) {
+                btmtk_set_powered_off_finder_mode(bdev->poweroff_finder_mode);
         }
 #endif
 
@@ -5698,7 +5698,11 @@ static int btmtk_reboot_notify(struct notifier_block *nb,
 	int state = 0;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
+	/* set shut_down to true */
+	bmain_info->shut_down = true;
+	BTMTK_WARN("%s shut_down is %d", __func__, bmain_info->shut_down);
 	BTMTK_INFO("%s: btmtk_reboot_notify(%d)", __func__, (int)event);
 
 	if (event == SYS_POWER_OFF && main_info.hif_hook.enter_standby != NULL) {
@@ -5785,10 +5789,10 @@ static int main_init(void)
 	BTMTK_DBG("%s supported intf count <%d>", __func__, btmtk_intf_num);
 
 	BTMTK_DBG("%s: Register reboot_notifier callback success.", __func__);
-#if (USE_DEVICE_NODE == 0)
-	/* Is it necessary? bt_close will be called by reboot. */
+
+	/* reboot callback */
 	register_reboot_notifier(&btmtk_reboot_notifier);
-#endif
+
 	g_bdev = kzalloc((sizeof(*g_bdev) * btmtk_intf_num), GFP_KERNEL);
 	if (!g_bdev) {
 		BTMTK_WARN("%s insufficient memory", __func__);

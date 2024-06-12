@@ -95,8 +95,9 @@ void mtk8250_uart_end_record(struct tty_struct *tty);
 #define COMBO_IOC_MAGIC				0xb0
 #define COMBO_IOCTL_BT_HOST_DEBUG	_IOW(COMBO_IOC_MAGIC, 4, void*)
 #define COMBO_IOCTL_BT_INTTRX		_IOW(COMBO_IOC_MAGIC, 5, void*)
+#define COMBO_IOCTL_BT_FINDER_MODE	_IOW(COMBO_IOC_MAGIC, 6, void*)
 #define IOCTL_BT_HOST_DEBUG_BUF_SIZE	(32)
-#define IOCTL_BT_HOST_INTTRX_SIZE		(128)
+#define IOCTL_BT_HOST_INTTRX_SIZE		(256)
 
 typedef int (*BT_RX_EVT_HANDLER_CB) (uint8_t *buf, int len);
 
@@ -213,7 +214,8 @@ void btmtk_hif_dump_work(struct work_struct *work);
 
 /* find my phone mode api */
 int btmtk_find_my_phone_cmd(u32 hr);
-int btmtk_find_my_phone_extend_cmd(u32 para);
+int btmtk_set_powered_off_finder_mode(bool enable);
+int btmtk_send_finder_eids(u8 *buf, u32 len);
 
 void btmtk_dump_gpio_state(void);
 void btmtk_dump_gpio_state_unmap(void);
