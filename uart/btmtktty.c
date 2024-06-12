@@ -287,6 +287,8 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 #if (USE_DEVICE_NODE == 0)
 	const u8 read_address_event[READ_ADDRESS_EVT_HDR_LEN] = { 0x4, 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00 };
 	const u8 get_baudrate_event[GETBAUD_EVT_LEN] = { 0x04, 0xE4, 0x0A, 0x02, 0x04, 0x06, 0x00, 0x00, 0x02 };
+#else
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 #endif
 
 	if (bdev == NULL) {
@@ -306,6 +308,21 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 			/* return 0 not drop event by driver */
 			return 0;
+		}
+		if (skb->data[2] == 0x02 && skb->data[3] == 0x18) {
+			int ret = 0;
+			BTMTK_INFO("match DFD event");
+			if (skb->data[6] == 0x00) {
+				event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+				memcpy(bdev->dfd_pstd, &skb->data[7], skb->len - 7);
+				ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "PSTD", &g_sbdev->dfd_pstd[0], skb->len - 7);
+				if (ret)
+					BTMTK_ERR("%s: connv3_coredump_send fail, ret = %d", __func__, ret);
+				return 1;
+			} else {
+				BTMTK_ERR("%s compare fail!!!", __func__);
+				BTMTK_INFO_RAW(skb->data, skb->len, "%s: skb->data:", __func__);
+			}
 		}
 #else // (USE_DEVICE_NODE == 0)
 		if ((skb->len == (GETBAUD_EVT_LEN - HCI_TYPE_SIZE + BAUD_SIZE)) &&
@@ -2412,20 +2429,6 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 #else
 		BTMTK_INFO_RAW(data, count, "[SKIP] %s: count[%zu]", __func__, count);
 #endif
-
-#if (USE_DEVICE_NODE == 1)
-		/* check opcode, for dfd post dump evt, and only copy payload */
-		if (data[4] == 0x18 && count > 7) {
-			if (data[7] != 0) {
-				BTMTK_WARN("%s: For dfd post dump evt, evt status = %d, data is over or invalid evt", __func__, data[7]);
-			} else {
-				BTMTK_INFO("%s: For dfd post dump evt, copy to bdev->dfd_pstd", __func__);
-			}
-			if (&bdev->dfd_pstd[0] != NULL)
-				memcpy(bdev->dfd_pstd, &data[7], count - 7);
-		}
-#endif
-		return;
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
