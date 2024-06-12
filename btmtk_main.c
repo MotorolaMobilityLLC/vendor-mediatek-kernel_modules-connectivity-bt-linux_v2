@@ -5217,6 +5217,18 @@ static void btmtk_rx_work(struct work_struct *work)
 				skb = NULL;
 				continue;
 			}
+#if (USE_DEVICE_NODE == 1)
+			/* intercept picus event */
+			if (skb->data[0] == 0x0E && skb->data[1] == 0x07 && skb->data[2] == 0x01
+				&& skb->data[3] == 0x5D && skb->data[4] == 0xFC) {
+				BTMTK_INFO_RAW(skb->data, skb->len, "%s: intercept picus event", __func__);
+
+				/* Drop by driver, don't send to stack */
+				kfree_skb(skb);
+				skb = NULL;
+				continue;
+			}
+#endif
 		} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
 			/* calibration backup */
 			if (skb->data[0] == 0xff && skb->data[1] <= 0x03) {
