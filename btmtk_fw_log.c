@@ -1652,11 +1652,10 @@ coredump_fail_unlock:
                 /* Send Fw Schedule Event to host */
 		return 0;
 	} else if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
-				skb->len > 7 && skb->data[0] == 0x0E &&
-				skb->data[1] == 0x06 && skb->data[2] == 0x01
-				&& skb->data[3] == 0x2D && skb->data[4] == 0xFC && skb->data[6] == 0x0D) {
+				skb->len > 7 && skb->data[0] == 0xFF &&
+				skb->data[1] == 0x02 && skb->data[2] == 0x20) {
 		BTMTK_INFO_RAW(skb->data, skb->len, "%s: Tx power abnormal Event:", __func__);
-		switch (skb->data[7]) {
+		switch (skb->data[3]) {
 		case 0x00:
 			BTMTK_INFO("%s: RF0 TSSI offset too large", __func__);
 			conn_dbg_add_log(CONN_DBG_LOG_TYPE_HW_ERR, "[bt] RF0 TSSI offset too large");
@@ -1683,6 +1682,26 @@ coredump_fail_unlock:
                         break;
 		}
 		aee_kernel_warning("bt thermal", "BT power abnormal\n");
+		return 1;
+        } else if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
+		skb->data[0] == 0xFF && skb->data[2] == 0x21) {
+		BTMTK_INFO_RAW(skb->data, skb->len, "%s: Tx power abnormal Event 2:", __func__);
+		switch (skb->data[3] & 0x0F) {
+		case 0x00:
+			BTMTK_INFO_RAW(skb->data, skb->len, "%s: [0x00] power abnormal Event", __func__);
+			conn_dbg_add_log(CONN_DBG_LOG_TYPE_HW_ERR, "[bt] RF0 TSSI offset too large");
+			break;
+		case 0x01:
+			BTMTK_INFO_RAW(skb->data, skb->len, "%s: [0x01] power abnormal Event", __func__);
+			conn_dbg_add_log(CONN_DBG_LOG_TYPE_HW_ERR, "[bt] RF1 TSSI offset too large");
+			break;
+		case 0x02:
+			BTMTK_INFO_RAW(skb->data, skb->len, "%s: [0x02] power abnormal Event", __func__);
+			conn_dbg_add_log(CONN_DBG_LOG_TYPE_HW_ERR, "[bt] RF0 TX chipout power abnormal");
+			break;
+		}
+		if (skb->data[3] & 0x80)
+			aee_kernel_warning("combo_bt", "BT power abnormal!\n");
 		return 1;
 	} else if (bt_cb(skb)->pkt_type == HCI_EVENT_PKT && bmain_info->dbg_send
 				&& skb->len > 4 &&
