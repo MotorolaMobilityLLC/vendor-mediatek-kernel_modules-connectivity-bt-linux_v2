@@ -528,11 +528,6 @@ void btmtk_get_cmd_or_event(struct btmtk_dev *bdev,
 	bt_raw_cmds = (struct bt_cmds_s *)bdev->bt_raw_data;
 	bt_cmd = bt_raw_cmds[type];
 
-	if (bt_cmd.usage < 0) {
-		BTMTK_ERR("%s: bt_cmd.usage is a negative value", __func__);
-		return;
-	}
-
 	if (bt_cmd.usage == SEND_NULL) {
 		default_cmd->content = NULL;
 		default_cmd->len = 0;
