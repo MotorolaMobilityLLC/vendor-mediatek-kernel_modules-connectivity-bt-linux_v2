@@ -34,6 +34,7 @@
 #define DFD_CB_INFRA_SRAM_LEN		1024
 #define DFD_CB_INFRA_BT_SRAM_LEN	(1024 * 4)
 #define DFD_BT_DEBUG_INFO_LEN		(768 + 16)
+#define DFD_CB_INFRA_DEBUG_INFO_HW_LOG_LEL_ADDR    (128)
 
 #define DEFAULT_STATE_PINCTRL_NAME	("bt_combo_gpio_init")
 #define PRE_ON_PINCTRL_NAME		("bt_combo_gpio_pre_on")
@@ -835,7 +836,7 @@ static int btmtk_post_chip_rst_on_handler(unsigned int type)
 			goto end;
 		}
 
-		for (int region = 1; region <= 4; region++) {
+		for (int region = 1; region <= 5; region++) {
 			BTMTK_INFO("%s: region[%d]", __func__, region);
 			switch (region) {
 			case 1:
@@ -874,6 +875,17 @@ static int btmtk_post_chip_rst_on_handler(unsigned int type)
 				cmd[8] = 0x07;
 				total_length = DFD_BT_DEBUG_INFO_LEN;
 				/* DFD_BT_DEBUG_INFO_ADDR 0x7405B580 */
+				/* reset offset to 0 */
+				offset = 0;
+				/* reset length to 0 */
+				length = 0;
+				break;
+
+			case 5:
+				BTMTK_WARN("%s: dump DFD_CB_INFRA_DEBUG_INFO_HW_LOG_LEL", __func__);
+				cmd[8] = 0x05;
+				total_length = DFD_CB_INFRA_DEBUG_INFO_HW_LOG_LEL_ADDR;
+				/* DFD_BT_DEBUG_INFO_ADDR 0x7C05B260 */
 				/* reset offset to 0 */
 				offset = 0;
 				/* reset length to 0 */
