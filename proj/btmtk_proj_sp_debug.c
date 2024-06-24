@@ -47,7 +47,7 @@ extern struct btmtk_dev *g_sbdev;
 
 static inline uint32_t btmtk_conninfra_view_remap(uint32_t pos)
 {
-	if ((pos & 0xffff0000) == 0x18020000)
+	if ((pos & 0xff000000) == 0x18000000)
 		return (pos & 0x00ffffff) | 0x7c000000;
 	//else if (pos >= 0x1880000 && pos <= 0x18bfffff)
 		//return (pos & 0x000fffff) | 0x18800000;
@@ -891,7 +891,7 @@ static inline int btmtk_connv3_readable_check(void){
 		return -1;
 	}
 
-	HIF_READ(0x18812000, &value);
+	HIF_READ(0x7C812000, &value);
 	switch (g_sbdev->chip_id) {
 	case 0x6635:
 	case 0x6639:
@@ -902,7 +902,7 @@ static inline int btmtk_connv3_readable_check(void){
 		break;
 	case 0x6653:
 		if (value != 0x03040100) {
-			BTMTK_WARN("%s: check 0x18812000 != 0x03040100 failed, value[0x%08x]", __func__, value);
+			BTMTK_WARN("%s: check 0x7C812000 != 0x03040100 failed, value[0x%08x]", __func__, value);
 			return -1;
 		}
 		break;
@@ -1024,11 +1024,17 @@ static inline void btmtk_hif_dump_bg_mcu_core_dx4(void)
 	} else {
 		BTMTK_INFO("%s [BG MCU core registers] - mcu_flg1, mcu_flg2 count[%d]", HIF_DBG_TAG, cr_count);
 		BT_DUMP_CR_INIT(cr_count);
+
+		/* 0x7C800A00[0] = 0x0 */
+		HIF_READ(0x7C800A00, &value);
+		value &= 0xFFFFFFFE;
+		HIF_WRITE(0x7C800A00, value);
+
 		/* mcu_flag1 */
 		for (i = 0; i < 0x26; i++) {
-			HIF_WRITE(0x7C023A0C, 0xC0040100 + i);
-			HIF_WRITE_MASK(0x18800A00, 29, 24, i);
-			HIF_READ(0x7C023A10, &value);
+			HIF_WRITE(0x20023A0C, 0xC0040200 + i);
+			//HIF_WRITE_MASK(0x18800A00, 29, 24, i);
+			HIF_READ(0x20023A10, &value);
 			if (BT_DUMP_CR_PRINT(value))
 				return;
 		}
@@ -1036,8 +1042,8 @@ static inline void btmtk_hif_dump_bg_mcu_core_dx4(void)
 
 	/* mcu_flag2 */
 	for (i = 0; i < 4; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0040300 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0040400 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
@@ -1072,14 +1078,14 @@ static inline void btmtk_hif_dump_dsp_debug_flags_dx4(void)
 	BTMTK_INFO("%s [BG DSP debug flags] - mcu_flg3, mcu_flg4 count[%d]", HIF_DBG_TAG, cr_count);
 
 	/* mcu_flag3 */
-	HIF_WRITE(0x7C023A0C, 0xC0040600);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0040600);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_flag4 */
 	for (i = 0; i <= 0x17; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0040800 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0040800 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
@@ -1118,16 +1124,16 @@ static inline void btmtk_hif_dump_mcusys_clk_gals_debug_flags_dx4(void)
 
 	/* mcu_flag5 */
 	for (i = 0; i < 4; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0040A00 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0040A00 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_flag6 */
 	for (i = 0; i < 16; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0040C00 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0040C00 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
@@ -1160,8 +1166,8 @@ static inline void btmtk_hif_dump_mcu_pc_lr_dx4(void)
 
 	/* mcu_flag7 */
 	for (i = 0; i <= 0x54; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0040E00 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0040E00 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
@@ -1176,62 +1182,62 @@ static inline void btmtk_hif_dump_mcusys_common_off_dx4(void)
 				, HIF_DBG_TAG, cr_count);
 
 	/* mcu_flag0 */
-	HIF_WRITE(0x7C023A0C, 0xC0050000);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0050000);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_flag1 */
-	HIF_WRITE(0x7C023A0C, 0xC0050100);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0050100);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_flag2 */
-	HIF_WRITE(0x7C023A0C, 0xC0050241);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0050241);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_flag3 ~ mcu_flag10 */
 	for (i = 0; i <= 7; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0050300 + (i << 8));
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0050300 + (i << 8));
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_flag11 */
 	for (i = 0; i <= 9; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0050B00 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0050B00 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_flag12 */
 	for (i = 0; i <= 9; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0050C00 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0050C00 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_flag13 */
-	HIF_WRITE(0x7C023A0C, 0xC0050D00);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0050D00);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_flag14 */
-	HIF_WRITE(0x7C023A0C, 0xC0050E00);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0050E00);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_flag15 */
-	HIF_WRITE(0x7C023A0C, 0xC0050F00);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0050F00);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_flag16 */
-	HIF_WRITE(0x7C023A0C, 0xC0051000);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0051000);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 }
@@ -1269,16 +1275,16 @@ static inline void btmtk_hif_dump_peri_debug_flags_dx4(void)
 
 	/* mcu_flag11 */
 	for (i = 0; i < 4; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0041600 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0041600 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_flag12 */
 	for (i = 0; i < 6; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0041800 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0041800 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
@@ -1325,43 +1331,43 @@ static inline void btmtk_hif_dump_bus_debug_flags_dx4(void)
 
 	/* mcu_flag13.5 */
 	for (i = 0; i <= 4; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0041A00 + (i << 4));
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0041A00 + (i << 4));
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_flg14.5 */
 	for (i = 0; i < 0x12; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0041C00 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0041C00 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_flg15.5 */
-	HIF_WRITE(0x7C023A0C, 0xC0041E00);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0041E00);
+	HIF_READ(0x20023A10, &value);
 	if (BT_DUMP_CR_PRINT(value))
 		return;
 
 	/* mcu_flg16.5 */
 	for (i = 0; i <= 0x10; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0042000 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0042000 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_flg17.5 */
-	HIF_WRITE(0x7C023A0C, 0xC0042200);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0042200);
+	HIF_READ(0x20023A10, &value);
 	if (BT_DUMP_CR_PRINT(value))
 		return;
 
 	/* mcu_flg18.5 */
-	HIF_WRITE(0x7C023A0C, 0xC0042400);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0042400);
+	HIF_READ(0x20023A10, &value);
 	if (BT_DUMP_CR_PRINT(value))
 		return;
 
@@ -1370,39 +1376,39 @@ static inline void btmtk_hif_dump_bus_debug_flags_dx4(void)
 
 	/* mcu_flg13 */
 	for (i = 0; i <= 1; i++) {
-		HIF_WRITE(0x7C023A1C, 0x300D80 + (i << 4));
-		HIF_READ(0x7C023A20, &value);
+		HIF_WRITE(0x20023A1C, 0x300D80 + (i << 4));
+		HIF_READ(0x20023A20, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_flg14 */
 	for (i = 0; i < 4; i++) {
-		HIF_WRITE(0x7C023A1C, 0x300E00 + (i << 4));
-		HIF_READ(0x7C023A20, &value);
+		HIF_WRITE(0x20023A1C, 0x300E00 + (i << 4));
+		HIF_READ(0x20023A20, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_flg15 */
 	for (i = 0; i < 3; i++) {
-		HIF_WRITE(0x7C023A1C, 0x300F00 + (i << 4));
-		HIF_READ(0x7C023A20, &value);
+		HIF_WRITE(0x20023A1C, 0x300F00 + (i << 4));
+		HIF_READ(0x20023A20, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_flg15 */
 	for (i = 0; i < 0xB; i++) {
-		HIF_WRITE(0x7C023A1C, 0x300F81 + i);
-		HIF_READ(0x7C023A20, &value);
+		HIF_WRITE(0x20023A1C, 0x300F81 + i);
+		HIF_READ(0x20023A20, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_flg15 */
-	HIF_WRITE(0x7C023A1C, 0x300FC0);
-	HIF_READ(0x7C023A20, &value);
+	HIF_WRITE(0x20023A1C, 0x300FC0);
+	HIF_READ(0x20023A20, &value);
 	BT_DUMP_CR_PRINT(value);
 }
 
@@ -1459,48 +1465,48 @@ static inline void btmtk_hif_dump_dma_uart_debug_flags_dx4(void)
 
 	/* mcu_flag19 */
 	for (i = 0; i <= 10; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0042600 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0042600 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_flg20 */
-	HIF_WRITE(0x7C023A0C, 0xC0042800);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0042800);
+	HIF_READ(0x20023A10, &value);
 	if (BT_DUMP_CR_PRINT(value))
 		return;
 
 	/* mcu_flg21 */
-	HIF_WRITE(0x7C023A0C, 0xC0042A00);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0042A00);
+	HIF_READ(0x20023A10, &value);
 	if (BT_DUMP_CR_PRINT(value))
 		return;
 
 	/* mcu_flg22 */
-	HIF_WRITE(0x7C023A0C, 0xC0042C00);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0042C00);
+	HIF_READ(0x20023A10, &value);
 	if (BT_DUMP_CR_PRINT(value))
 		return;
 
 	/* mcu_flag23 */
 	for (i = 0; i <= 0x1B; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0042E00 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0042E00 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_flag24 */
 	for (i = 0; i <= 0xF; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0043000 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0043000 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
-	HIF_WRITE(0x7C023A0C, 0xC004301E);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC004301E);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 }
 
@@ -1530,43 +1536,43 @@ static inline void btmtk_hif_dump_cryto_debug_flags_dx4(void)
 	BTMTK_INFO("%s [BG CRYPTO debug flags] - mcu_flg25 ~ mcu_flg32 (optional) count[%d]", HIF_DBG_TAG, cr_count);
 
 	/* mcu_flag25 */
-	HIF_WRITE(0x7C023A0C, 0xC0043200);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0043200);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_flag26 */
-	HIF_WRITE(0x7C023A0C, 0xC0043400);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0043400);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_flag27 */
-	HIF_WRITE(0x7C023A0C, 0xC0043600);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0043600);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_flag28 */
-	HIF_WRITE(0x7C023A0C, 0xC0043800);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0043800);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_flag29 */
-	HIF_WRITE(0x7C023A0C, 0xC0043A00);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0043A00);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_flag30 */
-	HIF_WRITE(0x7C023A0C, 0xC0043C00);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0043C00);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_flag31 */
-	HIF_WRITE(0x7C023A0C, 0xC0043E00);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0043E00);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_flag32 */
-	HIF_WRITE(0x7C023A0C, 0xC0044000);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0044000);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 }
 
@@ -1606,19 +1612,19 @@ static inline void btmtk_hif_dump_dma1_dx4(void) {
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s DMA1 count[%d]", HIF_DBG_TAG, cr_count);
 
-	HIF_READ(0x18810000, &value);
+	HIF_READ(0x20810000, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18810410, &value);
+	HIF_READ(0x20810410, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18810414, &value);
+	HIF_READ(0x20810414, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18810418, &value);
+	HIF_READ(0x20810418, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x1881041C, &value);
+	HIF_READ(0x2081041C, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18810424, &value);
+	HIF_READ(0x20810424, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18810738, &value);
+	HIF_READ(0x20810738, &value);
 	BT_DUMP_CR_PRINT(value);
 }
 
@@ -1632,7 +1638,7 @@ static inline void btmtk_hif_dump_bg_sysram1(void) {
 	}
 
 	BT_DUMP_CR_INIT(cr_count);
-	HIF_READ(0x1881042C, &value);
+	HIF_READ(0x7C81042C, &value);
 
 	/* boundary check */
 	if(value < 0x00400000 || value > 0x00430000) {
@@ -1642,12 +1648,12 @@ static inline void btmtk_hif_dump_bg_sysram1(void) {
 
 	/* dynamic mapping to 0x1890_0000 */
 	value = (value & ~(0x3)) - 32;
-	HIF_WRITE(0x18815014, value);
+	HIF_WRITE(0x7C815014, value);
 
-	BTMTK_INFO("%s bg_sysram1 for 0x1881042C[0x%08x], read from 0x1890_0000, count[%d]"
+	BTMTK_INFO("%s bg_sysram1 for 0x7C81042C[0x%08x], read from 0x7C90_0000, count[%d]"
 				, HIF_DBG_TAG, value, cr_count);
 
-	pos = 0x18900000;
+	pos = 0x7C900000;
 
 	for (; cr_count > 0; cr_count--, pos+=4) {
 		HIF_READ(pos, &value);
@@ -1664,7 +1670,7 @@ static inline void btmtk_hif_dump_bg_sysram2(void) {
 	}
 
 	BT_DUMP_CR_INIT(cr_count);
-	HIF_READ(0x18810730, &pos);
+	HIF_READ(0x7C810730, &pos);
 
 	/* boundary check */
 	if(pos < 0x00400000 || pos > 0x00430000) {
@@ -1672,23 +1678,23 @@ static inline void btmtk_hif_dump_bg_sysram2(void) {
 		return;
 	}
 
-	pos += 0x18440000;
+	pos += 0x7C440000;
 
-	HIF_READ(0x1881072C, &base);
+	HIF_READ(0x7C81072C, &base);
 	if (CHECK_ERR_MSG(base)) {
-		BTMTK_INFO("%s %s: get error code 0x1881072C[0x%08x]", HIF_DBG_TAG, __func__, base);
+		BTMTK_INFO("%s %s: get error code 0x7C81072C[0x%08x]", HIF_DBG_TAG, __func__, base);
 		return;
 	}
 
-	base += 0x18440000;
+	base += 0x7C440000;
 
-	HIF_READ(0x18810744, &vff_size);
+	HIF_READ(0x7C810744, &vff_size);
 	if (CHECK_ERR_MSG(vff_size)) {
-		BTMTK_INFO("%s %s: get error code 0x18810744[0x%08x]", HIF_DBG_TAG, __func__, vff_size);
+		BTMTK_INFO("%s %s: get error code 0x7C810744[0x%08x]", HIF_DBG_TAG, __func__, vff_size);
 		return;
 	}
 
-	BTMTK_INFO("%s bg_sysram2 for 0x18810730[0x%08x], base[0x%08x], vff_size[0x%08x], count[%d]"
+	BTMTK_INFO("%s bg_sysram2 for 0x7C810730[0x%08x], base[0x%08x], vff_size[0x%08x], count[%d]"
 				, HIF_DBG_TAG, pos, base, vff_size, cr_count);
 
 	/* 4 bytes alignment */
@@ -1714,7 +1720,7 @@ static inline void btmtk_hif_dump_bg_sysram3(void) {
 	}
 
 	BT_DUMP_CR_INIT(cr_count);
-	HIF_READ(0x18810734, &pos);
+	HIF_READ(0x7C810734, &pos);
 
 	/* boundary check */
 	if(pos < 0x00400000 || pos > 0x00430000) {
@@ -1722,24 +1728,24 @@ static inline void btmtk_hif_dump_bg_sysram3(void) {
 		return;
 	}
 
-	pos += 0x18440000;
+	pos += 0x7C440000;
 
-	HIF_READ(0x1881072C, &base);
+	HIF_READ(0x7C81072C, &base);
 	if (CHECK_ERR_MSG(base)) {
 		BTMTK_INFO("%s %s: get error code 0x1881072C[0x%08x]", HIF_DBG_TAG, __func__, base);
 		return;
 	}
 
-	base += 0x18440000;
+	base += 0x7C440000;
 
 
-	HIF_READ(0x18810744, &vff_size);
+	HIF_READ(0x7C810744, &vff_size);
 	if (CHECK_ERR_MSG(vff_size)) {
 		BTMTK_INFO("%s %s: get error code 0x18810744[0x%08x]", HIF_DBG_TAG, __func__, vff_size);
 		return;
 	}
 
-	BTMTK_INFO("%s bg_sysram3 for 0x18810734[0x%08x], base[0x%08x], vff_size[0x%08x], count[%d]"
+	BTMTK_INFO("%s bg_sysram3 for 0x7C810734[0x%08x], base[0x%08x], vff_size[0x%08x], count[%d]"
 				, HIF_DBG_TAG, pos, base, vff_size, cr_count);
 
 	/* 4 bytes alignment */
@@ -1826,87 +1832,87 @@ static inline void btmtk_hif_dump_hif_uart1_dx4(void) {
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s HIF_UART count[%d]", HIF_DBG_TAG, cr_count);
 
-	HIF_READ(0x1881900C, &value);
+	HIF_READ(0x7C81900C, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819000, &value);
+	HIF_READ(0x7C819000, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819004, &value);
+	HIF_READ(0x7C819004, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819008, &value);
+	HIF_READ(0x7C819008, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819010, &value);
+	HIF_READ(0x7C819010, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819014, &value);
+	HIF_READ(0x7C819014, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819018, &value);
+	HIF_READ(0x7C819018, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x1881901C, &value);
+	HIF_READ(0x7C81901C, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819024, &value);
+	HIF_READ(0x7C819024, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819028, &value);
+	HIF_READ(0x7C819028, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x1881902C, &value);
+	HIF_READ(0x7C81902C, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819040, &value);
+	HIF_READ(0x7C819040, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819044, &value);
+	HIF_READ(0x7C819044, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819054, &value);
+	HIF_READ(0x7C819054, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819058, &value);
+	HIF_READ(0x7C819058, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x1881906C, &value);
+	HIF_READ(0x7C81906C, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819070, &value);
+	HIF_READ(0x7C819070, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819074, &value);
+	HIF_READ(0x7C819074, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819078, &value);
+	HIF_READ(0x7C819078, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x1881907C, &value);
+	HIF_READ(0x7C81907C, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819080, &value);
+	HIF_READ(0x7C819080, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819084, &value);
+	HIF_READ(0x7C819084, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819088, &value);
+	HIF_READ(0x7C819088, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x1881908C, &value);
+	HIF_READ(0x7C81908C, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819090, &value);
+	HIF_READ(0x7C819090, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190A0, &value);
+	HIF_READ(0x7C8190A0, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190A4, &value);
+	HIF_READ(0x7C8190A4, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190A8, &value);
+	HIF_READ(0x7C8190A8, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190AC, &value);
+	HIF_READ(0x7C8190AC, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190B0, &value);
+	HIF_READ(0x7C8190B0, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190B4, &value);
+	HIF_READ(0x7C8190B4, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190B8, &value);
+	HIF_READ(0x7C8190B8, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190BC, &value);
+	HIF_READ(0x7C8190BC, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190C0, &value);
+	HIF_READ(0x7C8190C0, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190C4, &value);
+	HIF_READ(0x7C8190C4, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190C8, &value);
+	HIF_READ(0x7C8190C8, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190CC, &value);
+	HIF_READ(0x7C8190CC, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190D0, &value);
+	HIF_READ(0x7C8190D0, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190D4, &value);
+	HIF_READ(0x7C8190D4, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190D8, &value);
+	HIF_READ(0x7C8190D8, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188190E4, &value);
+	HIF_READ(0x7C8190E4, &value);
 	BT_DUMP_CR_PRINT(value);
 }
 
@@ -1919,36 +1925,36 @@ static inline void btmtk_hif_dump_hif_uart2(void) {
 	}
 
 	BT_DUMP_CR_INIT(cr_count);
-	BTMTK_INFO("%s HIF_UART(0x1881900C) count[%d]", HIF_DBG_TAG, cr_count);
+	BTMTK_INFO("%s HIF_UART(0x7C81900C) count[%d]", HIF_DBG_TAG, cr_count);
 
-	HIF_WRITE(0x1881900C, 0x00000010);
-	HIF_READ(0x18819000, &value);
+	HIF_WRITE(0x7C81900C, 0x00000010);
+	HIF_READ(0x7C819000, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819004, &value);
-	BT_DUMP_CR_PRINT(value);
-
-	HIF_WRITE(0x1881900C, 0x000000BF);
-	HIF_READ(0x18819008, &value);
-	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819010, &value);
-	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819014, &value);
-	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819018, &value);
-	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x1881901C, &value);
+	HIF_READ(0x7C819004, &value);
 	BT_DUMP_CR_PRINT(value);
 
-	HIF_WRITE(0x1881900C, 0x00000003);
-	HIF_READ(0x18819008, &value);
+	HIF_WRITE(0x7C81900C, 0x000000BF);
+	HIF_READ(0x7C819008, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819010, &value);
+	HIF_READ(0x7C819010, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819014, &value);
+	HIF_READ(0x7C819014, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18819018, &value);
+	HIF_READ(0x7C819018, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x1881901C, &value);
+	HIF_READ(0x7C81901C, &value);
+	BT_DUMP_CR_PRINT(value);
+
+	HIF_WRITE(0x7C81900C, 0x00000003);
+	HIF_READ(0x7C819008, &value);
+	BT_DUMP_CR_PRINT(value);
+	HIF_READ(0x7C819010, &value);
+	BT_DUMP_CR_PRINT(value);
+	HIF_READ(0x7C819014, &value);
+	BT_DUMP_CR_PRINT(value);
+	HIF_READ(0x7C819018, &value);
+	BT_DUMP_CR_PRINT(value);
+	HIF_READ(0x7C81901C, &value);
 	BT_DUMP_CR_PRINT(value);
 
 }
@@ -2071,60 +2077,60 @@ static inline void btmtk_hif_dump_bg_cfg_dx4(void)
 
 	/* bg_cfg */
 	for (i = 0; i < 3; i++) {
-		HIF_READ(0x18812168 + (i << 3), &value);
+		HIF_READ(0x7C812168 + (i << 3), &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* conn_mcu_cirq_on */
 	for (i = 0; i < 4; i++) {
-		HIF_READ(0x18828400 + (i << 2), &value);
+		HIF_READ(0x7C828400 + (i << 2), &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
-	HIF_READ(0x188280E0, &value);
+	HIF_READ(0x7C8280E0, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188280E4, &value);
+	HIF_READ(0x7C8280E4, &value);
 	BT_DUMP_CR_PRINT(value);
 
-	HIF_READ(0x18828070, &value);
+	HIF_READ(0x7C828070, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18828074, &value);
+	HIF_READ(0x7C828074, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* conn_mcu_eint_vlp */
-	HIF_READ(0x18860600, &value);
+	HIF_READ(0x7C860600, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18860604, &value);
+	HIF_READ(0x7C860604, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188606C0, &value);
+	HIF_READ(0x7C8606C0, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* conn_mcu_dbg_cirq_on */
-	HIF_READ(0x18828900, &value);
+	HIF_READ(0x7C828900, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18828904, &value);
+	HIF_READ(0x7C828904, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x188004E4, &value);
+	HIF_READ(0x7C8004E4, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* conn_mcu_confg */
-	HIF_READ(0x18800410, &value);
+	HIF_READ(0x7C800410, &value);
 	BT_DUMP_CR_PRINT(value);
 	for (i = 0; i < 10; i++) {
-		HIF_READ(0x18800418 + (i << 2), &value);
+		HIF_READ(0x7C800418 + (i << 2), &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
-	HIF_READ(0x18802214, &value);
+	HIF_READ(0x7C802214, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18802218, &value);
+	HIF_READ(0x7C802218, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* con_mcu_bus_cr */
 	for (i = 0; i < 6; i++) {
-		HIF_READ(0x18815010 + (i << 2), &value);
+		HIF_READ(0x7C815010 + (i << 2), &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
@@ -2184,47 +2190,47 @@ static inline void btmtk_hif_dump_bt_mcusys_vlp_dx4(void)
 
 	/* mcu_vlp_flg1 */
 	for (i = 0; i < 3; i++) {
-		HIF_WRITE(0x7C060C04, 0x30510 + i);
-		HIF_READ(0x7C060C00, &value);
+		HIF_WRITE(0x20060C04, 0x30510 + i);
+		HIF_READ(0x20060C00, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 	/* mcu_vlp_flg2 */
-	HIF_WRITE(0x7C060C04, 0x30520);
-	HIF_READ(0x7C060C00, &value);
+	HIF_WRITE(0x20060C04, 0x30520);
+	HIF_READ(0x20060C00, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_vlp_flg3 */
-	HIF_WRITE(0x7C060C04, 0x30530);
-	HIF_READ(0x7C060C00, &value);
+	HIF_WRITE(0x20060C04, 0x30530);
+	HIF_READ(0x20060C00, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_vlp_flg4 */
-	HIF_WRITE(0x7C060C04, 0x30540);
-	HIF_READ(0x7C060C00, &value);
+	HIF_WRITE(0x20060C04, 0x30540);
+	HIF_READ(0x20060C00, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_vlp_flg5 */
 	for (i = 0; i < 7; i++) {
-		HIF_WRITE(0x7C060C04, 0x30550 + i);
-		HIF_READ(0x7C060C00, &value);
+		HIF_WRITE(0x20060C04, 0x30550 + i);
+		HIF_READ(0x20060C00, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* mcu_vlp_flg6 */
-	HIF_WRITE(0x7C060C04, 0x30560);
-	HIF_READ(0x7C060C00, &value);
+	HIF_WRITE(0x20060C04, 0x30560);
+	HIF_READ(0x20060C00, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_vlp_flg7 */
-	HIF_WRITE(0x7C060C04, 0x30570);
-	HIF_READ(0x7C060C00, &value);
+	HIF_WRITE(0x20060C04, 0x30570);
+	HIF_READ(0x20060C00, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* mcu_vlp_flg8 */
-	HIF_WRITE(0x7C060C04, 0x30580);
-	HIF_READ(0x7C060C00, &value);
+	HIF_WRITE(0x20060C04, 0x30580);
+	HIF_READ(0x20060C00, &value);
 	BT_DUMP_CR_PRINT(value);
 }
 
@@ -2471,24 +2477,24 @@ static inline void btmtk_hif_dump_mcu_var1_dx4(void)
 	BTMTK_INFO("%s [MCU VAR1] ctrl_info_ram[0], g1_exp_counter, g_exp_type, g4_exp_1st_PC_log count[%d]"
 			, HIF_DBG_TAG, cr_count);
 
-	/* CACHE memory REMAP : 0xE0900000 -> 0x18C00000 for patch not enable yet */
-	HIF_WRITE(0x18815018, 0xE0900000);
+	/* CACHE memory REMAP : 0x00B00000 -> 0x18C00000 for patch not enable yet */
+	HIF_WRITE(0x7C815018, 0x00B00000);
 
 	/* ctrl_info_ram[0] */
-	HIF_READ(0x188B0678, &value);
+	HIF_READ(0x7CB00678, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* g1_exp_counter */
-	HIF_READ(0x188C89CC, &value);
+	HIF_READ(0x7C8C89CC, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* g_exp_type */
-	HIF_READ(0x188B0914, &value);
+	HIF_READ(0x7C8B0914, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* g4_exp_1st_PC_log */
 	for (i = 0; i < 66; i++) {
-		HIF_READ(0x188B0708 + (i << 2), &value);
+		HIF_READ(0x7CB00708 + (i << 2), &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
@@ -2616,15 +2622,15 @@ static inline void btmtk_hif_dump_mcu_var3_dx4(void)
 	BTMTK_INFO("%s [MCU VAR3] g_exp_eva ~ processing_eintx count[%d]", HIF_DBG_TAG, cr_count);
 
 	/* g_exp_eva */
-	HIF_READ(0x188B0838, &value);
+	HIF_READ(0x18B00838, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* g_exp_ipc */
-	HIF_READ(0x188B0840, &value);
+	HIF_READ(0x18B00840, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* g_exp_itype */
-	HIF_READ(0x188B0848, &value);
+	HIF_READ(0x18B00848, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* Current_Task_Id */
@@ -2743,83 +2749,83 @@ static inline void btmtk_hif_dump_bt_top_host_dx4(void)
 
     /* bg_bt_cfg_Debug_Signal */
 	for (i = 0; i < 6; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0000000 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0000000 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* bg_bt_clkgen_off_Signal */
 	for (i = 0; i < 6; i++) {
-		HIF_WRITE(0x7C023A0C, 0xC0000100 + i);
-		HIF_READ(0x7C023A10, &value);
+		HIF_WRITE(0x20023A0C, 0xC0000100 + i);
+		HIF_READ(0x20023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* bg_bt_met_Debug_Signal */
-	HIF_WRITE(0x7C023A0C, 0xC0000200);
-	HIF_READ(0x7C023A10, &value);
+	HIF_WRITE(0x20023A0C, 0xC0000200);
+	HIF_READ(0x20023A10, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* bg_bt_cfg_on_Debug_Signal */
 	for (i = 0; i < 26; i++) {
-		HIF_WRITE(0x7C023A1C, 0x00300040 + i);
-		HIF_READ(0x7C023A20, &value);
+		HIF_WRITE(0x20023A1C, 0x00300040 + i);
+		HIF_READ(0x20023A20, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* bg_bt_rgu_on_Debug_Signal */
 	for (i = 0; i < 14; i++) {
-		HIF_WRITE(0x7C023A1C, 0x00300001 + i);
-		HIF_READ(0x7C023A20, &value);
+		HIF_WRITE(0x20023A1C, 0x00300001 + i);
+		HIF_READ(0x20023A20, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
 	/* bg_bt_rgu_on_Debug_Signal */
 	for (i = 0; i < 4; i++) {
-		HIF_WRITE(0x7C023A1C, 0x00300080 + i);
-		HIF_READ(0x7C023A20, &value);
+		HIF_WRITE(0x20023A1C, 0x00300080 + i);
+		HIF_READ(0x20023A20, &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
 	}
 
-	HIF_WRITE(0x7C023A1C, 0x00300100);
-	HIF_READ(0x7C023A20, &value);
+	HIF_WRITE(0x20023A1C, 0x00300100);
+	HIF_READ(0x20023A20, &value);
 	BT_DUMP_CR_PRINT(value);
 
-	HIF_WRITE(0x7C023A1C, 0x00300140);
-	HIF_READ(0x7C023A20, &value);
+	HIF_WRITE(0x20023A1C, 0x00300140);
+	HIF_READ(0x20023A20, &value);
 	BT_DUMP_CR_PRINT(value);
 
 
 	/* bg_bt_misc_vlp_Debug_Signal */
-	HIF_WRITE(0x7C060C04, 0x00030000);
-	HIF_READ(0x7C060C00, &value);
+	HIF_WRITE(0x20060C04, 0x00030000);
+	HIF_READ(0x20060C00, &value);
 	BT_DUMP_CR_PRINT(value);
 
-	HIF_WRITE(0x7C060C04, 0x00030010);
-	HIF_READ(0x7C060C00, &value);
+	HIF_WRITE(0x20060C04, 0x00030010);
+	HIF_READ(0x20060C00, &value);
 	BT_DUMP_CR_PRINT(value);
 
-	HIF_WRITE(0x7C060C04, 0x00030020);
-	HIF_READ(0x7C060C00, &value);
+	HIF_WRITE(0x20060C04, 0x00030020);
+	HIF_READ(0x20060C00, &value);
 	BT_DUMP_CR_PRINT(value);
 
-	HIF_WRITE(0x7C060C04, 0x00030050);
-	HIF_READ(0x7C060C00, &value);
+	HIF_WRITE(0x20060C04, 0x00030050);
+	HIF_READ(0x20060C00, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* bg_bt_met_on_Debug_Signal */
-	HIF_WRITE(0x7C060C04, 0x00030040);
-	HIF_READ(0x7C060C00, &value);
+	HIF_WRITE(0x20060C04, 0x00030040);
+	HIF_READ(0x20060C00, &value);
 	BT_DUMP_CR_PRINT(value);
 
 /* bg_bt_kmem_Debug_Signal */
-	HIF_WRITE(0x7C060C04, 0x00030100);
-	HIF_READ(0x7C060C00, &value);
+	HIF_WRITE(0x20060C04, 0x00030100);
+	HIF_READ(0x20060C00, &value);
 	BT_DUMP_CR_PRINT(value);
 
 }
@@ -2836,86 +2842,90 @@ static inline void btmtk_hif_dump_bt_top_mcu_dx4(void)
 	BT_DUMP_CR_INIT(cr_count);
 	BTMTK_INFO("%s [bt_top mcu dump] count[%d]", HIF_DBG_TAG, cr_count);
 
-	HIF_READ(0x18860000, &value);
+	HIF_READ(0x7C860000, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18860020, &value);
+	HIF_READ(0x7C860020, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18860028, &value);
+	HIF_READ(0x7C860028, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18860030, &value);
+	HIF_READ(0x7C860030, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18860034, &value);
+	HIF_READ(0x7C860034, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18860128, &value);
+	HIF_READ(0x7C860128, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x1886012C, &value);
+	HIF_READ(0x7C86012C, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18821120, &value);
+	HIF_READ(0x7C821120, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18821148, &value);
+	HIF_READ(0x7C821148, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18821200, &value);
+	HIF_READ(0x7C821200, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18821210, &value);
+	HIF_READ(0x7C821210, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18821504, &value);
+	HIF_READ(0x7C821504, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18821508, &value);
+	HIF_READ(0x7C821508, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x1882150C, &value);
+	HIF_READ(0x7C82150C, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18821510, &value);
+	HIF_READ(0x7C821510, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18821640, &value);
+	HIF_READ(0x7C821640, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18821644, &value);
+	HIF_READ(0x7C821644, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18821648, &value);
+	HIF_READ(0x7C821648, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x1882164C, &value);
+	HIF_READ(0x7C82164C, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18821700, &value);
+	HIF_READ(0x7C821700, &value);
 	BT_DUMP_CR_PRINT(value);
 
-	HIF_READ(0x18820004, &value);
+	HIF_READ(0x7C820004, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18820010, &value);
+	HIF_READ(0x7C820010, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x1882006C, &value);
+	HIF_READ(0x7C82006C, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18820088, &value);
+	HIF_READ(0x7C820088, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18820090, &value);
+	HIF_READ(0x7C820090, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18812100, &value);
+	HIF_READ(0x7C812100, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18812104, &value);
+	HIF_READ(0x7C812104, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18812108, &value);
+	HIF_READ(0x7C812108, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18812114, &value);
+	HIF_READ(0x7C812114, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18812118, &value);
+	HIF_READ(0x7C812118, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18812120, &value);
+	HIF_READ(0x7C812120, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18812124, &value);
+	HIF_READ(0x7C812124, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18812150, &value);
+	HIF_READ(0x7C812150, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18812168, &value);
+	HIF_READ(0x7C812168, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x1881216C, &value);
+	HIF_READ(0x7C81216C, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18812170, &value);
+	HIF_READ(0x7C812170, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18812174, &value);
+	HIF_READ(0x7C812174, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18812178, &value);
+	HIF_READ(0x7C812178, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x1881217C, &value);
+	HIF_READ(0x7C81217C, &value);
 	BT_DUMP_CR_PRINT(value);
-	HIF_READ(0x18812400, &value);
+	HIF_READ(0x7C812400, &value);
+	BT_DUMP_CR_PRINT(value);
+	HIF_READ(0x7C825230, &value);
+	BT_DUMP_CR_PRINT(value);
+	HIF_READ(0x7C82523C, &value);
 	BT_DUMP_CR_PRINT(value);
 
 }
