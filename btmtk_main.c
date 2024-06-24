@@ -3803,7 +3803,9 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 	btmtk_cif_chip_common_register(); /* load default hook func */
 
 #if (USE_DEVICE_NODE == 1)
-	bdev->chip_id = 0x6635;
+	BTMTK_INFO("%s bdev->chip_id = 0x%04x", __func__, bdev->chip_id);
+	if (!bdev->chip_id)
+		bdev->chip_id = 0x6653;
 
 	ret = btmtk_cif_chip_register(bdev);
 	if (ret == -ENOENT) {

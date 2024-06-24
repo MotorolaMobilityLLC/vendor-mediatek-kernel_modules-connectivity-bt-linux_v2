@@ -950,6 +950,7 @@ int btmtk_cif_chip_register(struct btmtk_dev *bdev)
 		break;
 	case 0x6631:
 	case 0x6635:
+	case 0x6653:
 		btmtk_cif_chip_66xx_register();
 		break;
 	default:

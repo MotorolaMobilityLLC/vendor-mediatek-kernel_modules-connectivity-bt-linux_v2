@@ -721,8 +721,7 @@ static int btmtk_uart_read_chip_id_cmd(struct hci_dev *hdev)
 	}
 
 	bdev->chip_id = (bdev->io_buf[9] == 0x39) ? 0x6639 : 0x6653;
-	BTMTK_INFO("%s: bdev->chip_id = %04x", __func__, bdev->chip_id);
-	BTMTK_INFO("%s done", __func__);
+	BTMTK_INFO("%s done, bdev->chip_id = 0x%04x", __func__, bdev->chip_id);
 	return ret;
 }
 
@@ -1206,7 +1205,8 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 
 	/* read chip id */
 	ret = btmtk_uart_read_chip_id_cmd(bdev->hdev);
-	BTMTK_INFO("%s btmtk_uart_read_chip_id_cmd, ret[%d], chip_id = %04x", __func__, ret, bdev->chip_id);
+	if (ret < 0)
+		BTMTK_ERR("%s: btmtk_uart_read_chip_id_cmd failed", __func__);
 
 	/* set chip baud and flowcontrol to config setting */
 	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
