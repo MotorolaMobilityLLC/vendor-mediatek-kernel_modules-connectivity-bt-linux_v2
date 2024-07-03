@@ -1439,7 +1439,7 @@ static inline void btmtk_hif_dump_dma_uart_debug_flags(void)
 		return;
 
 	/* mcu_flag23 */
-	for (i = 0; i <= 0x0D; i++) {
+	for (i = 0; i <= 0x0F; i++) {
 		HIF_WRITE(0x7C023A0C, 0xC0042D00 + i);
 		HIF_READ(0x7C023A10, &value);
 		if (BT_DUMP_CR_PRINT(value))
@@ -1865,6 +1865,8 @@ static inline void btmtk_hif_dump_hif_uart1_dx4(void) {
 	HIF_READ(0x7C819054, &value);
 	BT_DUMP_CR_PRINT(value);
 	HIF_READ(0x7C819058, &value);
+	BT_DUMP_CR_PRINT(value);
+	HIF_READ(0x7C819068, &value);
 	BT_DUMP_CR_PRINT(value);
 	HIF_READ(0x7C81906C, &value);
 	BT_DUMP_CR_PRINT(value);
@@ -2493,7 +2495,7 @@ static inline void btmtk_hif_dump_mcu_var1_dx4(void)
 	BT_DUMP_CR_PRINT(value);
 
 	/* g_exp_type */
-	HIF_READ(0x7C8B0914, &value);
+	HIF_READ(0x7CB00914, &value);
 	BT_DUMP_CR_PRINT(value);
 
 	/* g4_exp_1st_PC_log */
@@ -2545,7 +2547,7 @@ static inline void btmtk_hif_dump_mcu_var2_dx4(void)
 	BTMTK_INFO("%s [MCU VAR2] csr_reg_value, register_value count[%d]", HIF_DBG_TAG, cr_count);
 
 	/* csr_reg_value */
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < 6; i++) {
 		HIF_READ(0x188C8818 + (i << 2), &value);
 		if (BT_DUMP_CR_PRINT(value))
 			return;
