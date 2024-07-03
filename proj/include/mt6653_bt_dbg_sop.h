@@ -229,6 +229,7 @@ const struct bt_dump_list mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_c = {
 
 const struct bt_dbg_command mt6653_bg_mcu_off_hostcsr_a[] = {
 	/* write, w_addr, mask, value, read, r_addr*/
+	{true, 0x7c800a00, 0x1, 0x0, false, 0},
 	{true, 0x20023a0c, 0, 0xc0040200, true, 0x20023a10},
 	{true, 0x20023a0c, 0, 0xc0040201, true, 0x20023a10},
 	{true, 0x20023a0c, 0, 0xc0040202, true, 0x20023a10},
