@@ -2500,6 +2500,7 @@ int btmtk_set_powered_off_finder_mode(bool enable)
 int btmtk_uart_launcher_deinit(void)
 {
 	int ret = 0;
+	struct btmtk_uart_dev *cif_dev = NULL;
 
 	BTMTK_INFO("%s: Start", __func__);
 	cancel_work_sync(&g_sbdev->pwr_on_uds_work);
@@ -2509,6 +2510,12 @@ int btmtk_uart_launcher_deinit(void)
 	if (ret) {
 		BTMTK_ERR("%s: BT turn off fail!", __func__);
 		return ret;
+	}
+	if (g_sbdev != NULL) {
+		cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+		if (cif_dev && cif_dev->tty && cif_dev->tty->port
+			&& cif_dev->tty->port->count == 0)
+			cif_dev->tty->port->count = 1;
 	}
 
 	BTMTK_INFO("%s: BT turn off OK", __func__);
