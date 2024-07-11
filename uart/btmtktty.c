@@ -490,7 +490,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 			/* if during re-download, not wait hci reset cmd/blank cmd.
 			 * Cuz in test mode, tool would use hci reset cmd to trigger re-download */
 			if (bdev->dynamic_fwdl_start &&
-				((opcode[0] == 0x03 && opcode[1] == 0x0C) || (opcode[0] == 0x5D && opcode[1] == 0xFC))) {
+				((opcode[0] == 0x03 && opcode[1] == 0x0C) || (opcode[0] == 0x5D && opcode[1] == 0xFC && skb->data[3] == 0x03))) {
 				BTMTK_WARN("%s: hci reset cmd trigger re-download, don't wait evt, opecode[0x%02x%02x]",
 							__func__, opcode[1], opcode[0]);
 				ret = 0;
