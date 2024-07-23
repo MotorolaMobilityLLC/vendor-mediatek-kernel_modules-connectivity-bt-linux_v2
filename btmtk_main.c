@@ -5235,10 +5235,10 @@ static void btmtk_rx_work(struct work_struct *work)
 				continue;
 			}
 #if (USE_DEVICE_NODE == 1)
-			/* intercept picus event */
-			if (skb->data[0] == 0x0E && skb->data[1] == 0x07 && skb->data[2] == 0x01
+			/* intercept picus event and wmt utc sync event */
+			if (skb->data[0] == 0x0E && skb->data[2] == 0x01
 				&& skb->data[3] == 0x5D && skb->data[4] == 0xFC) {
-				BTMTK_INFO_RAW(skb->data, skb->len, "%s: intercept picus event", __func__);
+				BTMTK_INFO_RAW(skb->data, skb->len, "%s: intercept picus event and wmt utc sync event", __func__);
 
 				/* Drop by driver, don't send to stack */
 				kfree_skb(skb);
