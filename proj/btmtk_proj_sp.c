@@ -2501,9 +2501,20 @@ int btmtk_uart_launcher_deinit(void)
 {
 	int ret = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
+	u8 retry = 10;
+	u8 count = 0;
 
 	BTMTK_INFO("%s: Start", __func__);
 	cancel_work_sync(&g_sbdev->pwr_on_uds_work);
+
+	if (g_sbdev != NULL) {
+		/* wait poweroff_finder_mode set to 0 in post_fmd_cb and make sure BT state is not DISCONNECT */
+		while(atomic_read(&g_sbdev->poweroff_finder_mode) && (count <= retry)) {
+			BTMTK_WARN("%s: poweroff_finder_mode = %d", __func__, atomic_read(&g_sbdev->poweroff_finder_mode));
+			count++;
+			mdelay(200);
+		}
+	}
 
 	ret = bt_close(g_sbdev->hdev);
 
