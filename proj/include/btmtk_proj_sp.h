@@ -222,5 +222,7 @@ void btmtk_dump_gpio_state_unmap(void);
 
 int btmtk_uart_launcher_deinit(void);
 
+int btmtk_intcmd_wmt_blank_status(unsigned char blank_state);
+
 #endif // (USE_DEVICE_NODE == 1)
 #endif
