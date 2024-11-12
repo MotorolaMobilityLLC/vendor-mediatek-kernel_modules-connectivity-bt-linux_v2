@@ -44,7 +44,7 @@ static DEFINE_MUTEX(btmtk_filter_cmd_num_mutex);
 #define FILTER_CMD_NUM_LOCK()	mutex_lock(&btmtk_filter_cmd_num_mutex)
 #define FILTER_CMD_NUM_UNLOCK()	mutex_unlock(&btmtk_filter_cmd_num_mutex)
 
-#define SECTION_NUM_MAX 10
+#define SECTION_NUM_MAX 11
 
 /**
  * Global parameters(mtkbt_)
