@@ -2402,6 +2402,27 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, char 
 #elif (KERNEL_VERSION(6, 6, 0) > LINUX_VERSION_CODE)
 static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const char *flags, int count)
 #else
+
+static int match_dirty_data(const u8 *data_ptr, size_t count)
+{
+	const u8 expected_tail[10] = { 0x04, 0xE4, 0x07,
+		0x02, 0x03, 0x03, 0x00, 0x00, 0x03, 0x01};
+	int i = 0;
+
+	if (data_ptr == NULL || count != 73)
+		return 0;
+
+	for (i = 1; i < 63; i++) {
+		if (data_ptr[i] != data_ptr[0])
+			return 0;
+	}
+
+	if (memcmp(data_ptr + 63, expected_tail, sizeof(expected_tail)) != 0)
+		return 0;
+
+	return 1;
+}
+
 static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const u8 *flags, size_t count)
 #endif
 {
@@ -2464,6 +2485,14 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 		} else
 			return;
 		BTMTK_INFO_RAW(data, count, "%s: data after trim", __func__);
+	}
+	/* Filter 0x 0x 0x ... */
+	if (cif_dev->own_state == BTMTK_DRV_OWNING && count == 73 &&
+		match_dirty_data(data, count) == 1 && cif_dev->sleep_en) {
+		BTMTK_INFO_RAW(data, count, "%s: recv 0x 0x 0x ...", __func__);
+		data = data + 63;
+		count = 10;
+		BTMTK_INFO_RAW(data, count, "%s: data after trim 0x 0x 0x ... ", __func__);
 	}
 #endif
 	if (data != NULL && (count > 1 || data[0] != 0x00) && cif_dev->own_state != BTMTK_FW_OWNING) {
