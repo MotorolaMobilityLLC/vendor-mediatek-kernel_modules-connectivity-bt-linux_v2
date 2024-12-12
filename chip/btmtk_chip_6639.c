@@ -21,6 +21,11 @@ void btmtk_cif_connac3_calibration_backup_free(struct btmtk_dev *bdev)
 {
 	BTMTK_INFO("%s enter", __func__);
 
+	if (!bdev) {
+		BTMTK_ERR("%s: bdev is null", __func__);
+		return;
+	}
+
 	if (bdev->cali_backup.num) {
 		BTMTK_INFO("%s: clear %d calibration data", __func__, bdev->cali_backup.num);
 		btmtk_free_fw_cfg_struct(bdev->cali_backup.cal_data, CAL_DATA_PACKET_NUM);
@@ -147,6 +152,11 @@ int btmtk_cif_connac3_calibration_backup_send(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s enter", __func__);
 
+	if (!bdev) {
+		BTMTK_ERR("%s: bdev is null", __func__);
+		return -1;
+	}
+
 	start_time = jiffies;
 	/* check hci event /wmt event for SDIO/UART interface, check hci
 	 * event for USB interface
@@ -193,6 +203,11 @@ int btmtk_cif_connac3_calibration_backup_save(struct btmtk_dev *bdev, struct sk_
 	u32 pkt_len = 0;
 
 	BTMTK_INFO("%s", __func__);
+
+	if (bdev == NULL || skb == NULL) {
+		BTMTK_ERR("bdev or skb is NULL");
+		return -1;
+	}
 
 	if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 				skb->data[0] == 0xff &&
