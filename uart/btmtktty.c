@@ -1451,6 +1451,29 @@ static int btmtk_uart_set_para(struct btmtk_dev *bdev, int val)
 	return 0;
 }
 
+static int btmtk_uart_set_xonv(struct btmtk_dev *bdev, u8 *connxo, int nvsz)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+
+	BTMTK_INFO("%s start nvsz[%d]", __func__, nvsz);
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+
+	BTMTK_INFO("%s:sConnxo_cfg.ucDataLenLSB[%02x] sConnxo_cfg.ucDataLenMSB[%02x], sConnxo_cfg.ucFreqC1Axm52m[%02x]", __func__
+				, sConnxo_cfg.ucDataLenLSB, sConnxo_cfg.ucDataLenMSB, sConnxo_cfg.ucFreqC1Axm52m);
+
+	// update sConnxo_cfg
+	memcpy(&sConnxo_cfg, connxo, nvsz);
+
+	BTMTK_INFO("%s:[new] sConnxo_cfg.ucDataLenLSB[%02x] sConnxo_cfg.ucDataLenMSB[%02x], sConnxo_cfg.ucFreqC1Axm52m[%02x]", __func__
+				, sConnxo_cfg.ucDataLenLSB, sConnxo_cfg.ucDataLenMSB, sConnxo_cfg.ucFreqC1Axm52m);
+	return 0;
+}
 
 static void btmtk_uart_cif_mutex_lock(struct btmtk_dev *bdev)
 {
@@ -3239,6 +3262,7 @@ int btmtk_cif_register(void)
 	hook.waker_notify = btmtk_uart_waker_notify;
 	hook.enter_standby = btmtk_cif_suspend;
 	hook.set_para = btmtk_uart_set_para;
+	hook.set_xonv = btmtk_uart_set_xonv;
 	btmtk_reg_hif_hook(&hook);
 
 	ret = uart_register();

@@ -582,6 +582,19 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
+	/* For update sConnxo_cfg */
+	if (strncmp(i_fwlog_buf, "set_xonv=", strlen("set_xonv=")) == 0) {
+		u8 *val = i_fwlog_buf + strlen("set_xonv=");
+		int nvsz = count - strlen("set_xonv=");
+
+		if (bmain_info->hif_hook.set_xonv)
+			bmain_info->hif_hook.set_xonv(pp_bdev[hci_idx], val, nvsz);
+		else
+			BTMTK_WARN("%s: not support set_xonv", __func__);
+		ret = count;
+		goto exit;
+	}
+
 	if (strncmp(i_fwlog_buf, "chip_reset=", strlen("chip_reset=")) == 0) {
 		u8 val = *(i_fwlog_buf + strlen("chip_reset=")) - '0';
 
