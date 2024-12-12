@@ -1971,6 +1971,11 @@ void btmtk_pwr_on_uds_work(struct work_struct *work)
 		return;
 	}
 
+	if (btmtk_fops_get_state(g_sbdev) == BTMTK_FOPS_STATE_OPENED) {
+		BTMTK_WARN("%s: fops is already opened", __func__);
+		return;
+	}
+
 	ret = bt_open(g_sbdev->hdev);
 
 	if (ret) {
