@@ -90,10 +90,16 @@ static s32 rx_pkt_enqueue(u8 *buffer, u32 length)
 	s32 tail_len = 0;
 	struct bt_ring_buffer_mgmt *p_ring = &g_rx_buffer;
 
+#if 0
+	/*
+	 * Remove this check since VTS will test ACL with 4096
+	 * payload from Android V
+	 */
 	if (length > BT_HCI_MAX_FRAME_SIZE) {
 		BTMTK_ERR("Abnormal packet length %u, not enqueue!", length);
 		return -EINVAL;
 	}
+#endif
 
 	spin_lock(&p_ring->lock);
 	if (p_ring->write_idx + length < RING_BUFFER_SIZE) {
