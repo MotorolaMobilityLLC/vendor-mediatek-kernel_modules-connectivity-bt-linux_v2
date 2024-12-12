@@ -5101,6 +5101,7 @@ static void btmtk_rx_work(struct work_struct *work)
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, rx_work);
 	struct sk_buff *skb;
 	unsigned char fstate = 0;
+	unsigned char state = 0;
 
 	while ((skb = skb_dequeue(&bdev->rx_q))) {
 		if (main_info.hif_hook_chip.dispatch_fwlog) {
@@ -5181,15 +5182,16 @@ static void btmtk_rx_work(struct work_struct *work)
 		}
 
 		fstate = btmtk_fops_get_state(bdev);
+		state = btmtk_get_chip_state(bdev);
 
 #if (USE_DEVICE_NODE == 1)
 		/* is_whole_chip_reset need to send hw err event after bt close */
 		if (fstate != BTMTK_FOPS_STATE_OPENED && !bdev->is_whole_chip_reset) {
 #else
-		if (fstate != BTMTK_FOPS_STATE_OPENED) {
+		if (fstate != BTMTK_FOPS_STATE_OPENED && state != BTMTK_STATE_FW_DUMP) {
 #endif
 			/* BT close case, drop by driver, don't send to stack */
-			BTMTK_WARN("%s Drop by driver, fops(%d) state is not opened", __func__, fstate);
+			BTMTK_WARN("%s Drop by driver, fops(%d) chip(%d) state is not opened", __func__, fstate, state);
 			kfree_skb(skb);
 			skb = NULL;
 			continue;

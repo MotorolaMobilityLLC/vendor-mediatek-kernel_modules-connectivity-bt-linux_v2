@@ -53,7 +53,7 @@ static int btmtk_chip_reg_init(struct btmtk_dev *bdev)
 	return ret;
 }
 
-int btmtk_load_fw_patch(struct btmtk_dev *bdev)
+static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 {
 	int err = 0;
 	int retry = 20;
