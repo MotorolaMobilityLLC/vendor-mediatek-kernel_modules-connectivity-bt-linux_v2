@@ -113,7 +113,8 @@ void btmtk_reset_waker(struct work_struct *work)
 
 	bdev->sco_num = 0;
 
-	if (bmain_info->chip_reset_flag == 0 && atomic_read(&bmain_info->subsys_reset_conti_count) < BTMTK_MAX_SUBSYS_RESET_COUNT) {
+	if (bmain_info->chip_reset_flag == 0 &&
+			atomic_read(&bmain_info->subsys_reset_conti_count) < BTMTK_MAX_SUBSYS_RESET_COUNT) {
 		if (bmain_info->hif_hook.subsys_reset) {
 			cur = atomic_cmpxchg(&bmain_info->subsys_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
 			if (cur == BTMTK_RESET_DOING) {
@@ -125,31 +126,32 @@ void btmtk_reset_waker(struct work_struct *work)
 			atomic_set(&bmain_info->subsys_reset, BTMTK_RESET_DONE);
 			if (err < 0) {
 				BTMTK_INFO("subsys reset failed, do whole chip reset!");
-			} else {
-				atomic_inc(&bmain_info->subsys_reset_count);
-				atomic_inc(&bmain_info->subsys_reset_conti_count);
-				DUMP_TIME_STAMP("subsys_chip_reset_end");
-
-				bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
-
-				err = btmtk_cap_init(bdev);
-				if (err < 0) {
-					BTMTK_ERR("btmtk init failed!");
-				} else {
-					err = btmtk_load_rom_patch(bdev);
-					if (err < 0) {
-						BTMTK_INFO("btmtk load rom patch failed!");
-					} else {
-						btmtk_send_hw_err_to_host(bdev);
-						btmtk_woble_wake_unlock(bdev);
-						if (bmain_info->hif_hook.chip_reset_notify)
-							bmain_info->hif_hook.chip_reset_notify(bdev);
-					}
-				}
+				goto L0RESET;
 			}
+			atomic_inc(&bmain_info->subsys_reset_count);
+			atomic_inc(&bmain_info->subsys_reset_conti_count);
+			DUMP_TIME_STAMP("subsys_chip_reset_end");
+
+			bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
+
+			err = btmtk_cap_init(bdev);
+			if (err < 0) {
+				BTMTK_ERR("btmtk init failed!");
+				goto L0RESET;
+			}
+			err = btmtk_load_rom_patch(bdev);
+			if (err < 0) {
+				BTMTK_INFO("btmtk load rom patch failed!");
+				goto L0RESET;
+			}
+			btmtk_send_hw_err_to_host(bdev);
+			btmtk_woble_wake_unlock(bdev);
+			if (bmain_info->hif_hook.chip_reset_notify)
+				bmain_info->hif_hook.chip_reset_notify(bdev);
 		} else {
 			err = -1;
 			BTMTK_INFO("%s: Not support subsys chip reset", __func__);
+			goto L0RESET;
 		}
 	} else {
 		err = -1;
@@ -159,6 +161,7 @@ void btmtk_reset_waker(struct work_struct *work)
 			atomic_read(&bmain_info->subsys_reset_conti_count));
 	}
 
+L0RESET:
 	if (err < 0) {
 		/* L0.5 reset failed or not support, do whole chip reset */
 		/* TODO: need to confirm with usb host when suspend fail, to do chip reset,
