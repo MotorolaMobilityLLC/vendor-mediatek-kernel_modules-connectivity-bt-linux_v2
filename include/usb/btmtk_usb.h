@@ -14,15 +14,6 @@
 #define HCI_MAX_COMMAND_SIZE	255
 #define URB_MAX_BUFFER_SIZE	(4*1024)
 
-#define BT0_MCU_INTERFACE_NUM 0
-#define BT1_MCU_INTERFACE_NUM 3
-
-#define BTMTK_IS_BT_0_INTF(ifnum_base) \
-	(ifnum_base == BT0_MCU_INTERFACE_NUM)
-
-#define BTMTK_IS_BT_1_INTF(ifnum_base) \
-	(ifnum_base == BT1_MCU_INTERFACE_NUM)
-
 typedef int (*pdwnc_func) (u8 fgReset);
 typedef int (*reset_func_ptr2) (unsigned int gpio, int init_value);
 typedef int (*set_gpio_low)(u8 gpio);

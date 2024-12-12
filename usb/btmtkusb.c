@@ -67,6 +67,9 @@ MODULE_DEVICE_TABLE(usb, btusb_table);
 #define DEVICE_CLASS_REQUEST_OUT	0x20
 #define USB_CTRL_IO_TIMO		1000
 
+#define BT0_MCU_INTERFACE_NUM 0
+#define BT1_MCU_INTERFACE_NUM 3
+
 #define BTMTK_IS_BT_0_INTF(ifnum_base) \
 	(ifnum_base == BT0_MCU_INTERFACE_NUM)
 
@@ -2240,7 +2243,6 @@ static void btmtk_usb_cif_mutex_lock(struct btmtk_dev *bdev)
 		return;
 	}
 	USB_OPS_MUTEX_LOCK(cif_dev);
-
 }
 
 static void btmtk_usb_cif_mutex_unlock(struct btmtk_dev *bdev)
@@ -4915,6 +4917,32 @@ static int btmtk_probe_retry(struct btmtk_dev *bdev)
 }
 #endif
 
+static void btmtk_usb_get_hw_info(struct btmtk_dev *bdev, unsigned int ifnum_base)
+{
+	char *hci = NULL;
+	unsigned long res = 0;
+	struct btmtk_usb_dev *cif_dev = bdev->cif_dev;
+
+	bdev->hw_addr.hw_info = (cif_dev->udev->bus->busnum << 8) | (cif_dev->udev->portnum - 1);
+	if (BTMTK_IS_BT_0_INTF(ifnum_base))
+		bdev->hw_addr.bt_info = 0;
+	else
+		bdev->hw_addr.bt_info = 1;
+
+	bdev->hw_addr.hci = 0;
+	hci = strstr(bdev->hdev->name, "hci");
+	if (hci) {
+		hci += strlen("hci");
+		if (kstrtoul(hci, 0, &res) != 0)
+			BTMTK_ERR_DEV(bdev, "%s: parse hci failed ", __func__);
+		else
+			bdev->hw_addr.hci = (u8)res;
+	}
+
+	BTMTK_INFO_DEV(bdev, "%s: hw_info=0x%04x, bt_info=%u, hci=%u",
+			__func__, bdev->hw_addr.hw_info, bdev->hw_addr.bt_info, bdev->hw_addr.hci);
+}
+
 static int btusb_probe(struct usb_interface *intf,
 			   const struct usb_device_id *id)
 {
@@ -5025,15 +5053,6 @@ static int btusb_probe(struct usb_interface *intf,
 	init_waitqueue_head(&bdev->probe_fail_wq);
 	init_waitqueue_head(&bdev->compare_event_wq);
 
-	bdev->match_data = (cif_dev->udev->bus->busnum << 8) | (cif_dev->udev->portnum - 1);
-	bdev->dongle_index = btmtk_get_dongle_index(bdev->match_data, ifnum_base);
-	if (bdev->dongle_index < 0) {
-		BTMTK_ERR_DEV(bdev, "get dongle index failed");
-		err = -ENODEV;
-		goto end;
-	}
-	BTMTK_INFO_DEV(bdev, "%s: bdev->dongle_index = %d, ", __func__, bdev->dongle_index);
-
 	err = btmtk_main_cif_initialize(bdev, HCI_USB);
 	if (err < 0) {
 		if (err == -EIO) {
@@ -5135,9 +5154,11 @@ LOAD_PATCH_RETRY:
 	}
 
 	/* dongle_index - 1 since BT1 is in same interface */
+#if 0
 	if (BTMTK_IS_BT_1_INTF(ifnum_base))
 		bdev->dongle_index--;
-	BTMTK_DBG_DEV(bdev, "%s: bdev->dongle_index = %d ", __func__, bdev->dongle_index);
+#endif
+	BTMTK_INFO_DEV(bdev, "%s: bdev->dongle_index = %d ", __func__, bdev->dongle_index);
 
 	usb_set_intfdata(intf, bdev);
 
@@ -5188,6 +5209,8 @@ SEND_INIT_RETRY:
 		BTMTK_ERR_DEV(bdev, "btmtk_register_hci_device failed!");
 		goto free_setting;
 	}
+
+	btmtk_usb_get_hw_info(bdev, ifnum_base);
 
 	err = 0;
 	goto end;

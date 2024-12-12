@@ -759,6 +759,8 @@ struct btmtk_main_info {
 	struct bt_power_setting PWS;
 	/* save Hci Snoop for debug*/
 	struct hci_snoop snoop[HCI_SNOOP_TYPE_MAX];
+	spinlock_t snoop_lock;
+	uint8_t _raw_buf_[HCI_SNOOP_MAX_BUF_SIZE * 3 + 3];
 
 	u8 wmt_over_hci_header[WMT_OVER_HCI_HEADER_SIZE];
 	u8 read_iso_packet_size_cmd[READ_ISO_PACKET_CMD_SIZE];
@@ -790,9 +792,18 @@ enum {
 #define DONGLE_FILE_IS_VALID(bdev, file_idx) \
 		(bdev->dongle_index == DONGLE_IDX_0 || file_idx == BTMTK_DONGLE_TYPE_DONGLE_INDEX)
 
-struct st_btmtk_dongle_mapping {
-	unsigned int match_data;
-	bool used;
+/*
+ * hw_info format
+ *           usb: busid < 8 | portid
+ *           sdio:
+ *           uart: X(ttyGSX)
+ * bt_info: 00-BT0, 01-BT1
+ */
+struct st_hw_addr {
+	u16 hw_info;
+	u8 bt_info;
+	u8 hci;
+	u8 open_ref;
 };
 
 struct btmtk_dev {
@@ -859,7 +870,8 @@ struct btmtk_dev {
 	unsigned int	dualBT;
 	unsigned int	proj;
 	unsigned int	fw_version;
-	unsigned int	match_data;
+
+	struct st_hw_addr		hw_addr;
 	int				dongle_index;
 	unsigned char	power_state;
 	unsigned char	fops_state;
@@ -1071,6 +1083,8 @@ static inline unsigned int get_pkt_len(unsigned char type, unsigned char *buf)
 	return len;
 }
 
+struct btmtk_dev *btmtk_get_bt0(struct btmtk_dev *bdev);
+struct btmtk_dev *btmtk_get_bt1(struct btmtk_dev *bdev);
 unsigned char btmtk_get_chip_state(struct btmtk_dev *bdev);
 void btmtk_set_chip_state(struct btmtk_dev *bdev, unsigned char new_state);
 int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
@@ -1108,7 +1122,6 @@ void btmtk_hci_snoop_print_to_log(struct btmtk_dev *bdev);
 #if (CFG_GKI_SUPPORT == 0)
 void *btmtk_kallsyms_lookup_name(const char *name);
 #endif
-int btmtk_get_dongle_index(unsigned int match_data, unsigned int ifnum_base);
 void btmtk_get_UTC_time_str(char *ts_str);
 void btmtk_reg_hif_hook(struct btmtk_dev *bdev, struct hif_hook_ptr *hook);
 int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus);

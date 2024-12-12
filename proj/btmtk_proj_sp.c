@@ -631,9 +631,9 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason, un
 		goto exit;
 	} else if (reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
 		/* DFD
-		1. Debug SOP
-		2. Coredump, don't call coredump end
-		*/
+		 * 1. Debug SOP
+		 * 2. Coredump, don't call coredump end
+		 */
 		g_sbdev->reset_type = reset_type;
 		g_sbdev->is_dfd_done = FALSE;
 		BTMTK_INFO("%s: reset type = %d", __func__, g_sbdev->reset_type);
@@ -1441,11 +1441,11 @@ int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v
 	int32_t new_state = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	/*
-		MTK_DISP_EARLY_EVENT_BLANK (0x00): This event will happen before lcm suspend/resume
-		MTK_DISP_EVENT_BLANK (0x01): This event will happen after lcm suspend/resume
-		MTK_DISP_BLANK_UNBLANK (0x00): which means display resume (power on)
-		MTK_DISP_BLANK_POWERDOWN (0x01): which mean display suspend (power off)
-	*/
+	 *	MTK_DISP_EARLY_EVENT_BLANK (0x00): This event will happen before lcm suspend/resume
+	 *	MTK_DISP_EVENT_BLANK (0x01): This event will happen after lcm suspend/resume
+	 *	MTK_DISP_BLANK_UNBLANK (0x00): which means display resume (power on)
+	 *	MTK_DISP_BLANK_POWERDOWN (0x01): which mean display suspend (power off)
+	 */
 
 	BTMTK_INFO("%s: before_after_blank[%ld], blank_power_down[%d], fops_state[%d], fw_log_on[%d]",
 				__func__, value, *data, btmtk_fops_get_state(g_sbdev), bmain_info->fw_log_on);

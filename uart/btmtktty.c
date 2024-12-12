@@ -115,13 +115,13 @@ static void btmtk_uart_create_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 		BTMTK_DBG_LIMITTED("%s: created yet", __func__);
 	} else {
 		BTMTK_WARN("%s: create fw own timer", __func__);
-	#if (KERNEL_VERSION(4, 15, 0) > LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(4, 15, 0) > LINUX_VERSION_CODE)
 		init_timer(&cif_dev->fw_own_timer);
 		cif_dev->fw_own_timer.function = btmtk_fw_own_timer;
 		cif_dev->fw_own_timer.data = (unsigned long)cif_dev;
-	#else
+#else
 		timer_setup(&cif_dev->fw_own_timer, btmtk_fw_own_timer, 0);
-	#endif
+#endif
 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_INIT);
 	}
 }
@@ -901,9 +901,9 @@ static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 		msleep(SUBSYS_RESET_GPIO_DELAY_TIME);
 		gpio_set_value(bdev->bt_cfg.dongle_reset_gpio_pin, 1);
 		/* Basically, we need to polling the cr (BT_MISC) untill the subsys reset is completed
-		* However, there is no uart_hw mechnism in buzzard, we can't read the info from controller now
-		* use msleep instead currently
-		*/
+		 * However, there is no uart_hw mechnism in buzzard, we can't read the info from controller now
+		 * use msleep instead currently
+		 */
 		msleep(SUBSYS_RESET_GPIO_DELAY_TIME);
 	}
 
@@ -2690,9 +2690,9 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 		if (cif_dev->sleep_flow_hw_mech_en && cif_dev->sleep_en) {
 			/*
-				12 Clear DEVx_HOST_AWAKE = 0
-				14 Clear TX/RX REQ
-			*/
+			 *	12 Clear DEVx_HOST_AWAKE = 0
+			 *	14 Clear TX/RX REQ
+			 */
 			BTMTK_DBG_LIMITTED("%s For new sleep wakeup", __func__);
 			btmtk_release_uarthub(true);
 		} else {

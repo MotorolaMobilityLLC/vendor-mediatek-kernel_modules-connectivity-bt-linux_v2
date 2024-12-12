@@ -120,6 +120,11 @@ static int btmtk_buffer_mode_set_radio(struct btmtk_dev *bdev, struct st_buffer_
 	struct data_struct cmd = {0}, event = {0};
 	int ret = 0, i = 0;
 
+	if (bdev == NULL) {
+		BTMTK_ERR("%s bdev is NULL", __func__);
+		return -1;
+	}
+
 	BTMTK_INFO_DEV(bdev, "%s enter", __func__);
 
 	if (is_connac3(buffer_mode->bdev->chip_id)) {
@@ -154,6 +159,11 @@ static int btmtk_buffer_mode_set_group_boundary(struct btmtk_dev *bdev, struct s
 	struct data_struct cmd = {0}, event = {0};
 	int ret = 0;
 
+	if (bdev == NULL) {
+		BTMTK_ERR("%s bdev is NULL", __func__);
+		return -1;
+	}
+
 	BTMTK_INFO_DEV(bdev, "%s enter", __func__);
 
 	BTMTK_GET_CMD_OR_EVENT_DATA(buffer_mode->bdev, SET_GRP_CMD, cmd);
@@ -175,6 +185,11 @@ static int btmtk_buffer_mode_set_power_offset(struct btmtk_dev *bdev, struct st_
 {
 	struct data_struct cmd = {0}, event = {0};
 	int ret = 0;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s bdev is NULL", __func__);
+		return -1;
+	}
 
 	BTMTK_INFO_DEV(bdev, "%s enter", __func__);
 
@@ -198,6 +213,11 @@ static int btmtk_buffer_mode_set_compensation(struct btmtk_dev *bdev, struct st_
 {
 	struct data_struct cmd = {0}, event = {0};
 	int ret = 0;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s bdev is NULL", __func__);
+		return -1;
+	}
 
 	BTMTK_INFO_DEV(bdev, "%s enter", __func__);
 
@@ -234,6 +254,11 @@ static int btmtk_buffer_mode_set_compensation_by_channel(struct btmtk_dev *bdev,
 	struct data_struct cmd = {0}, event = {0};
 	int ret = 0;
 
+	if (bdev == NULL) {
+		BTMTK_ERR("%s bdev is NULL", __func__);
+		return -1;
+	}
+
 	BTMTK_GET_CMD_OR_EVENT_DATA(buffer_mode->bdev, SET_COMPENSATION_CMD, cmd);
 	BTMTK_GET_CMD_OR_EVENT_DATA(buffer_mode->bdev, SET_COMPENSATION_EVT, event);
 
@@ -255,6 +280,11 @@ static int btmtk_buffer_mode_set_bt_loss(struct btmtk_dev *bdev, struct st_buffe
 {
 	struct data_struct cmd = {0}, event = {0};
 	int ret = 0;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s bdev is NULL", __func__);
+		return -1;
+	}
 
 	BTMTK_INFO_DEV(bdev, "%s enter", __func__);
 

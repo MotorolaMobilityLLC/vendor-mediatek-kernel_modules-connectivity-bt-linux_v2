@@ -21,8 +21,8 @@ static void btmtk_uart_write_wakeup(struct serdev_device *serdev)
 	//struct btmtk_dev *bdev = serdev_device_get_drvdata(serdev);
 
 	/* call
-	schedule_work(&bdev->tx_work); or serdev_device_write_buf(serdev, skb->data, skb->len);
-	*/
+	 * schedule_work(&bdev->tx_work); or serdev_device_write_buf(serdev, skb->data, skb->len);
+	 */
 }
 
 
@@ -609,4 +609,3 @@ int btmtk_cif_deregister(void)
 	BTMTK_INFO("%s: Done", __func__);
 	return 0;
 }
-

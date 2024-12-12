@@ -447,11 +447,11 @@ static int btmtk_set_Woble_Radio_Off(struct st_woble *bt_woble)
 		}
 
 		/* Don't send G20 apcf index when BT off with G20 to do suspend. Because when
-		* the power key is pressed at the first time, the platform will be woken up by the
-		* wake-up advertisment. G20 will send wake-up adv when rc disconnected, but
-		* AB1613 will not send wake-up adv. AB1613 APCF manu data type:0x06, G20 service
-		* data type:0x07
-		*/
+		 * the power key is pressed at the first time, the platform will be woken up by the
+		 * wake-up advertisment. G20 will send wake-up adv when rc disconnected, but
+		 * AB1613 will not send wake-up adv. AB1613 APCF manu data type:0x06, G20 service
+		 * data type:0x07
+		 */
 		if ((fstate == BTMTK_FOPS_STATE_CLOSED ||
 			fstate == BTMTK_FOPS_STATE_INIT) && state == BTMTK_STATE_SUSPEND) {
 			length = length - 1;

@@ -66,7 +66,7 @@ KO_CODE_PATH := $(if $(filter /%,$(src)),,$(srctree)/)$(src)
 ifndef TOP
     TOP := $(srctree)/..
 endif
-
+TARGET_BUILD_VARIANT=userdebug
 ifneq ($(filter $(TARGET_BUILD_VARIANT), userdebug eng),)
     ccflags-y += -DBUILD_QA_DBG=1
     ccflags-y += -DSTPBTFWLOG_ENABLE=1

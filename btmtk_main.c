@@ -46,7 +46,6 @@
  * Global parameters(mtkbt_)
  */
 uint8_t btmtk_log_lvl = BTMTK_LOG_LVL_DEF;
-uint8_t _raw_buf_[HCI_SNOOP_MAX_BUF_SIZE * 3 + 3];
 
 /* To support dynamic mount of interface can be probed */
 int btmtk_dongle_num = BT_MULTI_DONGLE_NUM_MAX;
@@ -570,39 +569,6 @@ void btmtk_free_setting_file(struct btmtk_dev *bdev)
 	bdev->bt_cfg.dongle_reset_gpio_pin = -1;
 }
 
-struct st_btmtk_dongle_mapping btmtk_dongle_mapping[DONGLE_IDX_MAX] = {0};
-
-int btmtk_get_dongle_index(unsigned int match_data, unsigned int ifnum_base)
-{
-	int idx;
-
-	for (idx = DONGLE_IDX_0; idx < DONGLE_IDX_MAX; idx++) {
-		if (match_data == btmtk_dongle_mapping[idx].match_data && btmtk_dongle_mapping[idx].used == true) {
-#ifdef CHIP_IF_USB
-			if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
-				BTMTK_INFO("%s: is BT 0", __func__);
-				return idx;
-			} else {
-				BTMTK_INFO("%s: is BT 1", __func__);
-				return (idx + 1);
-			}
-#else
-			BTMTK_INFO("%s: is always BT 0", __func__);
-			return idx;
-#endif
-		}
-	}
-
-	for (idx = DONGLE_IDX_0; idx < DONGLE_IDX_MAX; idx++) {
-		if (btmtk_dongle_mapping[idx].used != true) {
-			btmtk_dongle_mapping[idx].match_data = match_data;
-			btmtk_dongle_mapping[idx].used = true;
-			return idx;
-		}
-	}
-	return -1;
-}
-
 static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 {
 	if (bdev == NULL) {
@@ -808,6 +774,7 @@ static void btmtk_main_info_initialize(struct btmtk_dev *bdev)
 	memset(&bdev->main_info, 0, sizeof(bdev->main_info));
 	for (snoop_idx = 0; snoop_idx < HCI_SNOOP_TYPE_MAX; snoop_idx++)
 		bdev->main_info.snoop[snoop_idx].index = HCI_SNOOP_ENTRY_NUM - 1;
+	spin_lock_init(&bdev->main_info.snoop_lock);
 	atomic_set(&bdev->main_info.chip_reset, BTMTK_RESET_DONE);
 	atomic_set(&bdev->main_info.subsys_reset, BTMTK_RESET_DONE);
 
@@ -4843,6 +4810,28 @@ static int bt_flush(struct hci_dev *hdev)
 		return 0;
 }
 
+struct btmtk_dev *btmtk_get_bt0(struct btmtk_dev *bdev)
+{
+	int i;
+
+	for (i = 0; i < btmtk_mcu_num; i++) {
+		if (bdev->hw_addr.hw_info == g_bdev[i]->hw_addr.hw_info && g_bdev[i]->hw_addr.bt_info == 0)
+			return g_bdev[i];
+	}
+	return NULL;
+}
+
+struct btmtk_dev *btmtk_get_bt1(struct btmtk_dev *bdev)
+{
+	int i;
+
+	for (i = 0; i < btmtk_mcu_num; i++) {
+		if (bdev->hw_addr.hw_info == g_bdev[i]->hw_addr.hw_info && g_bdev[i]->hw_addr.bt_info == 1)
+			return g_bdev[i];
+	}
+	return NULL;
+}
+
 #if (USE_DEVICE_NODE == 0)
 static int bt_close(struct hci_dev *hdev)
 #else
@@ -4853,6 +4842,11 @@ int bt_close(struct hci_dev *hdev)
 	int state = 0;
 	unsigned char fstate = 0;
 	struct btmtk_dev *bdev = NULL;
+
+	struct btmtk_dev *bt0 = NULL;
+	struct btmtk_dev *multi_bdev[2] = {NULL};
+	int i, dev_num;
+
 #if BTMTK_RUNTIME_ENABLE
 	struct btmtk_usb_dev *cif_dev = NULL;
 #endif
@@ -4868,108 +4862,133 @@ int bt_close(struct hci_dev *hdev)
 		return ret;
 	}
 
+	if (bdev->hw_addr.bt_info == 1) {
+		bt0 = btmtk_get_bt0(bdev);
+		if (bt0 == NULL) {
+			BTMTK_ERR_DEV(bdev, "%s: find BT0 failed", __func__);
+			return -ENODEV;
+		}
+		multi_bdev[0] = bt0;
+		multi_bdev[1] = bdev;
+		dev_num = 2;
+	} else {
+		bt0 = bdev;
+		multi_bdev[0] = bdev;
+		dev_num = 1;
+	}
+
+	for (i = dev_num - 1; i >= 0; i--) {
+		bdev = multi_bdev[i];
+
 #if BTMTK_RUNTIME_ENABLE
-	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
-	ret = usb_autopm_get_interface(cif_dev->intf);
-	if (ret < 0) {
-		BTMTK_INFO_DEV(bdev, "%s: autopm get interface fail.", __func__);
-	}
-#endif
-
-	if(bdev->is_whole_chip_reset) {
-		BTMTK_WARN_DEV(bdev, "%s: is_whole_chip_reset, fstate(%d)", __func__, fstate);
-		if (bdev->main_info.hif_hook.cif_mutex_lock)
-			bdev->main_info.hif_hook.cif_mutex_lock(bdev);
-		goto unlock;
-	}
-
-	fstate = btmtk_fops_get_state(bdev);
-	if (fstate != BTMTK_FOPS_STATE_OPENED) {
-		BTMTK_WARN_DEV(bdev, "%s: fops is not allow close(%d)", __func__, fstate);
-		goto err;
-	}
-	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSING);
-
-	state = btmtk_get_chip_state(bdev);
-
-#if (USE_DEVICE_NODE == 1)
-	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
-			|| state == BTMTK_STATE_SUBSYS_RESET) {
-		if (bdev->main_info.hif_hook.cif_mutex_lock)
-			bdev->main_info.hif_hook.cif_mutex_lock(bdev);
-		goto unlock;
-	}
-#endif
-
-	if (state != BTMTK_STATE_WORKING && state != BTMTK_STATE_STANDBY) {
-		/* If hif disconnect occurs,
-		 * it will call cif_mutex_lock and release hci device.
-		 * Release hci device will call bt_close.
-		 * It must return with this,
-		 * otherwise the below cif_mutex_lock will cause deadlock
-		 */
-
-		BTMTK_WARN_DEV(bdev, "%s: not in working state and standby state(%d).", __func__, state);
-		goto exit;
-	}
-
-	if (bdev->main_info.hif_hook.cif_mutex_lock)
-		bdev->main_info.hif_hook.cif_mutex_lock(bdev);
-
-	state = btmtk_get_chip_state(bdev);
-	BTMTK_INFO_DEV(bdev, "%s, enter, state[%d]", __func__, state);
-
-	if (state != BTMTK_STATE_WORKING && state != BTMTK_STATE_STANDBY) {
-		/* It's for the case that
-		 * bt_close and hif_disconnect occur at the same time
-		 */
-		BTMTK_WARN_DEV(bdev, "%s: not in working state and standby state(%d).", __func__, state);
-		goto unlock;
-	}
-
-#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
-	/* Don't send init cmd for DVT
-	 * Such as Lowpower DVT
-	 */
-	bdev->power_state = BTMTK_DONGLE_STATE_POWER_OFF;
-	BTMTK_INFO_DEV(bdev, "%s, SKIP btmtk_send_deinit_cmds", __func__);
-#else
-	if (state != BTMTK_STATE_STANDBY && bdev->main_info.reset_stack_flag != HW_ERR_CODE_CORE_DUMP
-		&& bdev->main_info.reset_stack_flag != HW_ERR_CODE_CHIP_RESET) {
-		ret = btmtk_send_deinit_cmds(bdev);
+		cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
+		ret = usb_autopm_get_interface(cif_dev->intf);
 		if (ret < 0) {
-			BTMTK_ERR_DEV(bdev, "%s, btmtk_send_deinit_cmds failed", __func__);
+			BTMTK_INFO_DEV(bdev, "%s: autopm get interface fail.", __func__);
+		}
+#endif
+
+		if(bdev->is_whole_chip_reset) {
+			BTMTK_WARN_DEV(bdev, "%s: is_whole_chip_reset, fstate(%d)", __func__, fstate);
+			if (bdev->main_info.hif_hook.cif_mutex_lock)
+				bdev->main_info.hif_hook.cif_mutex_lock(bdev);
 			goto unlock;
 		}
-	} else
-		BTMTK_WARN_DEV(bdev, "%s, SKIP by state[%d], reset_stack_flag[%d]",
-					__func__, state, bdev->main_info.reset_stack_flag);
+
+		fstate = btmtk_fops_get_state(bdev);
+		if (fstate != BTMTK_FOPS_STATE_OPENED) {
+			BTMTK_WARN_DEV(bdev, "%s: fops is not allow close(%d)", __func__, fstate);
+			goto err;
+		}
+
+		if (dev_num == 1 || i == 1)
+			bt0->hw_addr.open_ref &= ~(0x1 << i);
+		if (i == 0 && bt0->hw_addr.open_ref != 0)
+			continue;
+
+		btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSING);
+
+		state = btmtk_get_chip_state(bdev);
+
+#if (USE_DEVICE_NODE == 1)
+		if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
+				|| state == BTMTK_STATE_SUBSYS_RESET) {
+			if (bdev->main_info.hif_hook.cif_mutex_lock)
+				bdev->main_info.hif_hook.cif_mutex_lock(bdev);
+			goto unlock;
+		}
+#endif
+
+		if (state != BTMTK_STATE_WORKING && state != BTMTK_STATE_STANDBY) {
+			/* If hif disconnect occurs,
+			 * it will call cif_mutex_lock and release hci device.
+			 * Release hci device will call bt_close.
+			 * It must return with this,
+			 * otherwise the below cif_mutex_lock will cause deadlock
+			 */
+
+			BTMTK_WARN_DEV(bdev, "%s: not in working state and standby state(%d).", __func__, state);
+			goto exit;
+		}
+
+		if (bdev->main_info.hif_hook.cif_mutex_lock)
+			bdev->main_info.hif_hook.cif_mutex_lock(bdev);
+
+		state = btmtk_get_chip_state(bdev);
+		BTMTK_INFO_DEV(bdev, "%s, enter, state[%d]", __func__, state);
+
+		if (state != BTMTK_STATE_WORKING && state != BTMTK_STATE_STANDBY) {
+			/* It's for the case that
+			 * bt_close and hif_disconnect occur at the same time
+			 */
+			BTMTK_WARN_DEV(bdev, "%s: not in working state and standby state(%d).", __func__, state);
+			goto unlock;
+		}
+
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
+		/* Don't send init cmd for DVT
+		 * Such as Lowpower DVT
+		 */
+		bdev->power_state = BTMTK_DONGLE_STATE_POWER_OFF;
+		BTMTK_INFO_DEV(bdev, "%s, SKIP btmtk_send_deinit_cmds", __func__);
+#else
+		if (state != BTMTK_STATE_STANDBY && bdev->main_info.reset_stack_flag != HW_ERR_CODE_CORE_DUMP
+			&& bdev->main_info.reset_stack_flag != HW_ERR_CODE_CHIP_RESET) {
+			ret = btmtk_send_deinit_cmds(bdev);
+			if (ret < 0) {
+				BTMTK_ERR_DEV(bdev, "%s, btmtk_send_deinit_cmds failed", __func__);
+				goto unlock;
+			}
+		} else
+			BTMTK_WARN_DEV(bdev, "%s, SKIP by state[%d], reset_stack_flag[%d]",
+						__func__, state, bdev->main_info.reset_stack_flag);
 #endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
-	/* Flush RX works */
-	flush_work(&bdev->rx_work);
-	flush_work(&bdev->dynamic_fwdl_work);
+		/* Flush RX works */
+		flush_work(&bdev->rx_work);
+		flush_work(&bdev->dynamic_fwdl_work);
 
 unlock:
-	fstate = btmtk_fops_get_state(bdev);
-	if (fstate == BTMTK_FOPS_STATE_CLOSED)
-		BTMTK_WARN_DEV(bdev, "%s: fops is already close", __func__);
-	else
-		bdev->main_info.hif_hook.close(hdev);
+		fstate = btmtk_fops_get_state(bdev);
+		if (fstate == BTMTK_FOPS_STATE_CLOSED)
+			BTMTK_WARN_DEV(bdev, "%s: fops is already close", __func__);
+		else
+			bdev->main_info.hif_hook.close(bdev->hdev);
 
-	if (bdev->main_info.hif_hook.cif_mutex_unlock)
-		bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
+		if (bdev->main_info.hif_hook.cif_mutex_unlock)
+			bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
 exit:
 #if (USE_DEVICE_NODE == 1)
-	/* avoid reset start at new bt on */
-	btmtk_reset_timer_del(bdev);
-	state = btmtk_get_chip_state(bdev);
+		/* avoid reset start at new bt on */
+		btmtk_reset_timer_del(bdev);
+		state = btmtk_get_chip_state(bdev);
 
-	if (state != BTMTK_STATE_DISCONNECT)
-		btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
+		if (state != BTMTK_STATE_DISCONNECT)
+			btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
 
 #endif
-	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
+		btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
+	}
 
 err:
 	bdev->main_info.reset_stack_flag = HW_ERR_NONE;
@@ -5009,23 +5028,29 @@ int bt_open(struct hci_dev *hdev)
 	const char *wifi_func_name = "rlm_get_alpha2";
 	char alpha2[5];
 #endif
+
+	struct btmtk_dev *bt0 = NULL;
+	struct btmtk_dev *multi_bdev[2] = {NULL};
+	int i, dev_num;
+
 #if BTMTK_RUNTIME_ENABLE
 	struct btmtk_usb_dev *cif_dev = NULL;
 #endif
 
-	BTMTK_INFO_DEV(bdev, "%s: MTK BT Driver Version : %s", __func__, VERSION);
 	DUMP_TIME_STAMP("open_start");
 
 	if (!hdev) {
-		BTMTK_ERR_DEV(bdev, "%s: invalid parameters!", __func__);
+		BTMTK_ERR("%s: invalid parameters!", __func__);
 		return -EFAULT;
 	}
 
 	bdev = hci_get_drvdata(hdev);
 	if (!bdev) {
-		BTMTK_ERR_DEV(bdev, "%s: bdev is invalid", __func__);
+		BTMTK_ERR("%s: bdev is invalid", __func__);
 		return -EFAULT;
 	}
+
+	BTMTK_INFO_DEV(bdev, "%s: MTK BT Driver Version : %s", __func__, VERSION);
 
 #if BTMTK_RUNTIME_ENABLE
 	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
@@ -5036,149 +5061,209 @@ int bt_open(struct hci_dev *hdev)
 	}
 #endif
 
-	fstate = btmtk_fops_get_state(bdev);
-	if (fstate == BTMTK_FOPS_STATE_OPENED) {
-		BTMTK_WARN_DEV(bdev, "%s: fops opened!", __func__);
-		return -EIO;
+	if (bdev->hw_addr.bt_info == 1) {
+		bt0 = btmtk_get_bt0(bdev);
+		if (bt0 == NULL) {
+			BTMTK_ERR_DEV(bdev, "%s: find BT0 failed", __func__);
+			return -ENODEV;
+		}
+		multi_bdev[0] = bt0;
+		multi_bdev[1] = bdev;
+		dev_num = 2;
+	} else {
+		bt0 = bdev;
+		multi_bdev[0] = bdev;
+		dev_num = 1;
 	}
 
-	if ((fstate == BTMTK_FOPS_STATE_CLOSING) ||
-		(fstate == BTMTK_FOPS_STATE_OPENING)) {
-		BTMTK_WARN_DEV(bdev, "%s: fops open/close is on-going !", __func__);
-		return -EAGAIN;
-	}
+	for (i = 0; i < dev_num; i++) {
+		bdev = multi_bdev[i];
 
-	/* mutex with bt close and disconnect */
-	if (bdev->main_info.hif_hook.cif_mutex_lock)
-		bdev->main_info.hif_hook.cif_mutex_lock(bdev);
-
-	fstate = btmtk_fops_get_state(bdev);
-	if (fstate == BTMTK_FOPS_STATE_OPENED) {
-		BTMTK_WARN_DEV(bdev, "%s: fops opened!", __func__);
-		ret = -EIO;
-		goto unlock;
-	}
-
-	if ((fstate == BTMTK_FOPS_STATE_CLOSING) ||
-		(fstate == BTMTK_FOPS_STATE_OPENING)) {
-		BTMTK_WARN_DEV(bdev, "%s: fops open/close is on-going !", __func__);
-		ret = -EAGAIN;
-		goto unlock;
-	}
-
-	state = btmtk_get_chip_state(bdev);
-	if (state == BTMTK_STATE_INIT || state == BTMTK_STATE_DISCONNECT
-#if (USE_DEVICE_NODE == 0)
-		|| state == BTMTK_STATE_PROBE) {
-#else
-	) {
+		fstate = btmtk_fops_get_state(bdev);
+		if (fstate == BTMTK_FOPS_STATE_OPENED) {
+			if (dev_num == 1) {
+				if (bdev->hw_addr.open_ref == (0x1 << 1)) {
+					BTMTK_INFO_DEV(bdev, "%s: BT0 is opened for BT1 yet", __func__);
+					bdev->hw_addr.open_ref |= (0x1 << 0);
+					return 0;
+				} else {
+					BTMTK_ERR_DEV(bdev, "%s: BT0 status(%d)", __func__, bdev->hw_addr.open_ref);
+					return -EIO;
+				}
+			}
+			if (i == 1)
+				return -EIO;
+			if ((bdev->hw_addr.open_ref == 0x1) != 0) {
+				BTMTK_INFO_DEV(bdev, "%s: BT0 is opened yet", __func__);
+				continue;
+			}
+#if 0
+			BTMTK_WARN_DEV(bdev, "%s: fops opened!", __func__);
+			return -EIO;
 #endif
-		BTMTK_WARN_DEV(bdev, "%s: chip_state[%d] is init or disconnect!", __func__, state);
-		ret = -EAGAIN;
-		goto unlock;
-	}
+		}
 
-	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENING);
+		if ((fstate == BTMTK_FOPS_STATE_CLOSING) ||
+			(fstate == BTMTK_FOPS_STATE_OPENING)) {
+			BTMTK_WARN_DEV(bdev, "%s: fops open/close is on-going !", __func__);
+			return -EAGAIN;
+		}
 
-	if (bdev->main_info.hif_hook.pre_open) {
-		ret = bdev->main_info.hif_hook.pre_open(bdev);
-		if (ret < 0) {
-			BTMTK_ERR_DEV(bdev, "%s: pre_open fail", __func__);
+		/* mutex with bt close and disconnect */
+		if (bdev->main_info.hif_hook.cif_mutex_lock)
+			bdev->main_info.hif_hook.cif_mutex_lock(bdev);
+#if 0
+		fstate = btmtk_fops_get_state(bdev);
+		if (fstate == BTMTK_FOPS_STATE_OPENED) {
+			BTMTK_WARN_DEV(bdev, "%s: fops opened!", __func__);
+			ret = -EIO;
+			if (bdev->main_info.hif_hook.cif_mutex_unlock)
+				bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
+			return ret;
+		}
+#endif
+		if ((fstate == BTMTK_FOPS_STATE_CLOSING) ||
+			(fstate == BTMTK_FOPS_STATE_OPENING)) {
+			BTMTK_WARN_DEV(bdev, "%s: fops open/close is on-going !", __func__);
+			ret = -EAGAIN;
+			if (bdev->main_info.hif_hook.cif_mutex_unlock)
+				bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
+			return ret;
+		}
+
+		state = btmtk_get_chip_state(bdev);
+		if (state == BTMTK_STATE_INIT || state == BTMTK_STATE_DISCONNECT
+#if (USE_DEVICE_NODE == 0)
+			|| state == BTMTK_STATE_PROBE) {
+#else
+		) {
+#endif
+			BTMTK_WARN_DEV(bdev, "%s: chip_state[%d] is init or disconnect!", __func__, state);
+			ret = -EAGAIN;
+			if (bdev->main_info.hif_hook.cif_mutex_unlock)
+				bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
+			return ret;
+		}
+
+		btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENING);
+
+		if (bdev->main_info.hif_hook.pre_open) {
+			ret = bdev->main_info.hif_hook.pre_open(bdev);
+			if (ret < 0) {
+				BTMTK_ERR_DEV(bdev, "%s: pre_open fail", __func__);
+				if (bdev->main_info.hif_hook.cif_mutex_unlock)
+					bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
+				goto failed;
+			}
+		}
+
+		state = btmtk_get_chip_state(bdev);
+		if (state != BTMTK_STATE_WORKING && state != BTMTK_STATE_STANDBY) {
+			BTMTK_WARN_DEV(bdev, "%s: not in working state and standby state(%d).", __func__, state);
+			ret = -ENODEV;
+			if (bdev->main_info.hif_hook.cif_mutex_unlock)
+				bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
 			goto failed;
 		}
-	}
 
-	state = btmtk_get_chip_state(bdev);
-	if (state != BTMTK_STATE_WORKING && state != BTMTK_STATE_STANDBY) {
-		BTMTK_WARN_DEV(bdev, "%s: not in working state and standby state(%d).", __func__, state);
-		ret = -ENODEV;
-		goto failed;
-	}
+		BTMTK_DBG_DEV(bdev, "%s state[%d], fstate[%d]", __func__, state, fstate);
 
-	BTMTK_DBG_DEV(bdev, "%s state[%d], fstate[%d]", __func__, state, fstate);
-
-	ret = bdev->main_info.hif_hook.open(hdev);
-	if (ret < 0 && ret != -EBUSY) {
-		BTMTK_ERR_DEV(bdev, "%s, cif_open failed", __func__);
-		goto failed;
-	}
+		ret = bdev->main_info.hif_hook.open(bdev->hdev);
+		if (ret < 0 && ret != -EBUSY) {
+			BTMTK_ERR_DEV(bdev, "%s, cif_open failed", __func__);
+			if (bdev->main_info.hif_hook.cif_mutex_unlock)
+				bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
+			goto failed;
+		}
 
 #if (USE_DEVICE_NODE == 0)
-	if (bdev->main_info.hif_hook_chip.bt_open_handler) {
-		ret = bdev->main_info.hif_hook_chip.bt_open_handler(bdev);
-		if (ret < 0) {
-			BTMTK_ERR_DEV(bdev, "bt_open_handler fail");
-			goto failed;
+		if (bdev->main_info.hif_hook_chip.bt_open_handler) {
+			ret = bdev->main_info.hif_hook_chip.bt_open_handler(bdev);
+			if (ret < 0) {
+				BTMTK_ERR_DEV(bdev, "bt_open_handler fail");
+				if (bdev->main_info.hif_hook.cif_mutex_unlock)
+					bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
+				goto failed;
+			}
 		}
-	}
 #endif
 
 #if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
-	/* Don't send init cmd for DVT
-	 * Such as Lowpower DVT
-	 */
-	bdev->power_state = BTMTK_DONGLE_STATE_POWER_ON;
-	BTMTK_INFO_DEV(bdev, "%s, SKIP btmtk_send_init_cmds", __func__);
-	/* We don't need to enable buffer mode during bring-up stage. */
-	BTMTK_INFO_DEV(bdev, "SKIP buffer mode");
+		/* Don't send init cmd for DVT
+		 * Such as Lowpower DVT
+		 */
+		bdev->power_state = BTMTK_DONGLE_STATE_POWER_ON;
+		BTMTK_INFO_DEV(bdev, "%s, SKIP btmtk_send_init_cmds", __func__);
+		/* We don't need to enable buffer mode during bring-up stage. */
+		BTMTK_INFO_DEV(bdev, "SKIP buffer mode");
 #else
-	ret = btmtk_send_init_cmds(bdev);
-	if (ret < 0) {
-		BTMTK_ERR_DEV(bdev, "%s, btmtk_send_init_cmds failed", __func__);
-		goto failed;
-	}
+		ret = btmtk_send_init_cmds(bdev);
+		if (ret < 0) {
+			BTMTK_ERR_DEV(bdev, "%s, btmtk_send_init_cmds failed", __func__);
+			if (bdev->main_info.hif_hook.cif_mutex_unlock)
+				bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
+			goto failed;
+		}
 
 #if (USE_DEVICE_NODE == 0)
-	ret = btmtk_send_apcf_reserved(bdev);
-	if (ret < 0) {
-		BTMTK_ERR_DEV(bdev, "%s, btmtk_send_apcf_reserved failed", __func__);
-		goto failed;
-	}
+		ret = btmtk_send_apcf_reserved(bdev);
+		if (ret < 0) {
+			BTMTK_ERR_DEV(bdev, "%s, btmtk_send_apcf_reserved failed", __func__);
+			if (bdev->main_info.hif_hook.cif_mutex_unlock)
+				bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
+			goto failed;
+		}
 
-	(void)btmtk_buffer_mode_send(bdev);
+		(void)btmtk_buffer_mode_send(bdev);
 #endif
 #endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
-	if (bdev->main_info.hif_hook.open_done)
-		bdev->main_info.hif_hook.open_done(bdev);
+		if (bdev->main_info.hif_hook.open_done)
+			bdev->main_info.hif_hook.open_done(bdev);
 
-	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENED);
-	bdev->main_info.reset_stack_flag = HW_ERR_NONE;
-	bdev->on_fail_count = 0;
+		btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENED);
+		bdev->main_info.reset_stack_flag = HW_ERR_NONE;
+		bdev->on_fail_count = 0;
 
 #if (CFG_GKI_SUPPORT == 0)
-	if (bdev->bt_cfg.support_bt_single_sku) {
-		rlm_get_alpha2 = (void *)btmtk_kallsyms_lookup_name(wifi_func_name);
+		if (bdev->bt_cfg.support_bt_single_sku) {
+			rlm_get_alpha2 = (void *)btmtk_kallsyms_lookup_name(wifi_func_name);
 
-		if (rlm_get_alpha2) {
-			rlm_get_alpha2(alpha2);
-			if (strlen(alpha2) == COUNTRY_CODE_LEN) {
-				BTMTK_INFO_DEV(bdev, "Wifi set country code %s", alpha2);
-				memcpy(bdev->main_info.PWS.country_code, alpha2,
-						sizeof(bdev->main_info.PWS.country_code));
+			if (rlm_get_alpha2) {
+				rlm_get_alpha2(alpha2);
+				if (strlen(alpha2) == COUNTRY_CODE_LEN) {
+					BTMTK_INFO_DEV(bdev, "Wifi set country code %s", alpha2);
+					memcpy(bdev->main_info.PWS.country_code, alpha2,
+							sizeof(bdev->main_info.PWS.country_code));
+				} else {
+					BTMTK_ERR_DEV(bdev, "Country code length is wrong");
+				}
 			} else {
-				BTMTK_ERR_DEV(bdev, "Country code length is wrong");
+				BTMTK_INFO_DEV(bdev, "Wifi didn't set country code");
 			}
-		} else {
-			BTMTK_INFO_DEV(bdev, "Wifi didn't set country code");
-		}
 
-		bdev->main_info.PWS.country_code[COUNTRY_CODE_LEN] = '\0';
-		if (strcmp(bdev->main_info.PWS.country_code, "") != 0)
-			btmtk_load_country_table(bdev);
-	}
+			bdev->main_info.PWS.country_code[COUNTRY_CODE_LEN] = '\0';
+			if (strcmp(bdev->main_info.PWS.country_code, "") != 0)
+				btmtk_load_country_table(bdev);
+		}
 #endif
 
 #if CFG_SUPPORT_LEAUDIO_CLK
-	btmtk_le_audio_clk_init(bdev);
+		btmtk_le_audio_clk_init(bdev);
 #endif
 #if BTMTK_RUNTIME_ENABLE
-	usb_autopm_put_interface(cif_dev->intf);
+		usb_autopm_put_interface(cif_dev->intf);
 #endif
+
+		if (dev_num == 1 || i == 1)
+			bt0->hw_addr.open_ref |= (0x1 << i);
+		if (bdev->main_info.hif_hook.cif_mutex_unlock)
+			bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
+	}
 
 	DUMP_TIME_STAMP("open_end");
 	ret = 0;
-	goto unlock;
+	return 0;
 
 failed:
 #if (USE_DEVICE_NODE == 1)
@@ -5209,10 +5294,6 @@ failed:
 
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
 	bdev->main_info.reset_stack_flag = HW_ERR_NONE;
-
-unlock:
-	if (bdev->main_info.hif_hook.cif_mutex_unlock)
-		bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
 
 	return ret;
 }

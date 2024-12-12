@@ -589,9 +589,10 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 		if (bdev->hdev == NULL)
 			continue;
 
-		ptr = NULL;
 		if (hci_dev != NULL && strncmp(bdev->hdev->name, hci_dev, strlen(hci_dev)) != 0)
 			continue;
+
+		ptr = NULL;
 
 #if CFG_SUPPORT_LEAUDIO_CLK
 		ptr = strstr(cmd, "le_audio_clk=");
@@ -767,6 +768,10 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 }
 #endif
 
+/* Format for BTX, X=0,1
+ * echo hciX 01 03 0C 00 > /dev/stpbtfwlog
+ * echo hciX dump btsnoop > /dev/stpbtfwlog
+ */
 ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos)
 {
 #if (CFG_ENABLE_DEBUG_WRITE == 0)
@@ -834,6 +839,10 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		memcpy(hci_dev, p_hci, hci_len);
 		hci_dev[hci_len] = '\0';
 		p_hci = hci_dev;
+		BTMTK_INFO("%s, set hci dev(%d): %s, cmd: %s", __func__, hci_len, p_hci, i_fwlog_buf + hci_len);
+	} else {
+		BTMTK_INFO("%s, set all hci dev", __func__);
+		hci_len = 0;
 	}
 
 	if (btmtk_cmd_handler_fwlog(p_hci, i_fwlog_buf, count) == 0) {
@@ -843,8 +852,8 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 	/* hci input command format : echo 01 be fc 01 05 > /dev/stpbtfwlog */
 	/* We take the data from index three to end. */
-	for (i = 0; i < count; i++) {
-		char *pos = i_fwlog_buf + i;
+	for (i = 0; i < count - hci_len; i++) {
+		char *pos = i_fwlog_buf + hci_len + i;
 		char temp_str[3] = {'\0'};
 		long res = 0;
 
@@ -855,11 +864,11 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 			continue;
 		} else if (!(*pos >= '0' && *pos <= '9') && !(*pos >= 'A' && *pos <= 'F')
 			&& !(*pos >= 'a' && *pos <= 'f')) {
-			BTMTK_ERR_DEV(pp_bdev[hci_idx], "%s: There is an invalid input(%c)", __func__, *pos);
+			BTMTK_ERR("%s: There is an invalid input(%x)", __func__, *pos);
 			ret = -EINVAL;
 			goto exit;
 		} else if (len + 1 >= HCI_MAX_COMMAND_SIZE) {
-			BTMTK_ERR_DEV(pp_bdev[hci_idx], "%s: input data exceed maximum command length (%d)", __func__, len);
+			BTMTK_ERR("%s: input data exceed maximum command length (%d)", __func__, len);
 			ret = -EINVAL;
 			goto exit;
 		}
@@ -943,15 +952,15 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		bt_cb(skb)->pkt_type = HCI_COMMAND_PKT;
 
 		/* Picus -> Driver
-			* F0 XX XX 00 01 AA 10 BB CC CC CC ...
-			* F0 : specific header between picus and driver
-			* XX XX total command length
-			* 00 : hci interface setting type
-			* 01 AA length of this segment is 1, AA is dongle index
-			* 10 : raw data type, FWLOG_TX
-			* BB CC CC ... : BB is raw data's length (<256)
-			*			   : CC CC ... is raw data
-			*/
+		 * F0 XX XX 00 01 AA 10 BB CC CC CC ...
+		 * F0 : specific header between picus and driver
+		 * XX XX total command length
+		 * 00 : hci interface setting type
+		 * 01 AA length of this segment is 1, AA is dongle index
+		 * 10 : raw data type, FWLOG_TX
+		 * BB CC CC ... : BB is raw data's length (<256)
+		 *			   : CC CC ... is raw data
+		 */
 		vlen = 0;
 		index = 3;
 		if (o_fwlog_buf[0] == FWLOG_TYPE) {
@@ -1128,6 +1137,14 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 	struct btmtk_dev **pp_bdev = btmtk_get_pp_bdev();
 	struct btmtk_dev *bdev = NULL;
 
+	u32 in = 0, out = 0;
+	struct st_hw_addr hw_addr = {0};
+
+	if (cmd == BT_FWLOG_IOC_GET_DONGLE) {
+		if (copy_from_user(&in, (u32 __user *)arg, sizeof(u32)))
+			return -EIO;
+	}
+
 	down(&ioctl_mtx);
 	/* mutex with bt open/close/disconnect flow */
 	for (i = 0; i < btmtk_mcu_num; i++) {
@@ -1174,6 +1191,23 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 			retval = g_log_level;
 			BTMTK_INFO_DEV(bdev, "[GET_LEVEL]return");
 			break;
+		case BT_FWLOG_IOC_GET_DONGLE:
+			hw_addr.hw_info = in & 0xFFFF;
+			hw_addr.bt_info = (in & 0xC0000000) >> 30;
+
+			BTMTK_INFO_DEV(bdev, "in: 0x%08x, hw_info=0x%04X, bt_info=%u", in, bdev->hw_addr.hw_info, bdev->hw_addr.bt_info);
+			if (hw_addr.hw_info == bdev->hw_addr.hw_info) {
+				if (bdev->hw_addr.bt_info == 0) {
+					out |= bdev->hw_addr.hci;
+					BTMTK_INFO_DEV(bdev, "find hci%d", bdev->hw_addr.hci);
+				} else {
+					if (hw_addr.bt_info == bdev->hw_addr.bt_info) {
+						out |= bdev->hw_addr.hci << 8;
+						BTMTK_INFO_DEV(bdev, "find hci%d", bdev->hw_addr.hci);
+					}
+				}
+			}
+			break;
 		default:
 			BTMTK_ERR_DEV(bdev, "Unknown cmd: 0x%08x", cmd);
 			retval = -EOPNOTSUPP;
@@ -1181,11 +1215,15 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 		}
 
 		bdev->main_info.fw_log_on = g_log_current;
-
 		if (bdev->main_info.hif_hook.cif_mutex_unlock)
 			bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
+	}
 
-}
+	if (cmd == BT_FWLOG_IOC_GET_DONGLE) {
+		BTMTK_INFO("Get dongle info(%08x)", out);
+		if (copy_to_user((u32 __user *)arg, &out, sizeof(u32)))
+			retval = -EIO;
+	}
 
 	up(&ioctl_mtx);
 	return retval;
@@ -1359,7 +1397,7 @@ int btmtk_dispatch_fwlog_bluetooth_kpi(struct btmtk_dev *bdev, u8 *buf, int len,
 	} else {
 		if (fwlog_blocking_warn == 0) {
 			fwlog_blocking_warn = 1;
-			BTMTK_WARN_DEV(bdev, "btmtk_usb fwlog queue size is full(bluetooth_kpi)");
+			BTMTK_WARN_DEV(bdev, "fwlog queue size is full(bluetooth_kpi)");
 		}
 	}
 	return ret;
@@ -1657,10 +1695,10 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			}
 
 			/* fw trigger
-				reset[0]: subsys reset
-				reset[1]: PMIC => call connv3_trigger_pmic_irq
-				reset[2]: whole chip reset (DFD)
-			*/
+			 *	reset[0]: subsys reset
+			 *	reset[1]: PMIC => call connv3_trigger_pmic_irq
+			 *	reset[2]: whole chip reset (DFD)
+			 */
 			if (skb->len > 9 &&
 				skb->data[skb->len - 9] == 'r' &&
 				skb->data[skb->len - 8] == 'e' &&
@@ -1796,8 +1834,8 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				btmtk_sp_coredump_end();
 
 				/* if do complete and bt close with btmtk_reset_waker start
-				* no need to wait hw_err event, cause bt already start close
-				*/
+				 * no need to wait hw_err event, cause bt already start close
+				 */
 
 				BTMTK_INFO_DEV(bdev, "%s: complete dump_comp , coredump_end", __func__);
 				complete_all(&bdev->dump_comp);
