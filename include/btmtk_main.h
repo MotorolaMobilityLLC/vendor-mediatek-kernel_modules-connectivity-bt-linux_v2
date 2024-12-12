@@ -585,6 +585,11 @@ struct btmtk_dev {
 	/* debug sop */
 	struct debug_reg_struct debug_sop_reg_dump;
 	unsigned char		debug_sop_file_name[MAX_BIN_FILE_NAME_LEN];
+
+#ifdef CHIP_IF_USB
+	unsigned char	chip_reset_signal;
+#endif
+
 };
 
 typedef int (*cif_bt_init_ptr)(void);
