@@ -281,8 +281,12 @@ static void rhw_dump_utility(const struct bt_dump_list *dump_list)
 	/* Print register value */
 	pCmdList = dump_list->cmd_list;
 	for (i = 0; i < dump_list->dump_size; i++) {
-		if (pCmdList[i].write) {
-			RHW_WRITE(pCmdList[i].w_addr, (pCmdList[i].value & pCmdList[i].mask));
+		if (pCmdList[i].mask == 0)
+			RHW_WRITE(pCmdList[i].w_addr, (pCmdList[i].value));
+		else {
+			if (pCmdList[i].write) {
+				RHW_WRITE(pCmdList[i].w_addr, (pCmdList[i].value & pCmdList[i].mask));
+			}
 		}
 
 		if (pCmdList[i].read) {
@@ -316,31 +320,26 @@ static void bt_hw_dbg_unify_rhw_dump_utility(const struct bt_dump_list *dump_lis
 
 void mt6653_rhw_dumpReg(void)
 {
-	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_b);
-
-	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_c);
-
-	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_d);
-
-	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_e);
-
-	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_f);
-
-	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_g);
-
-	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_h);
-
-	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_i);
-
-	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_j);
-
-	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bgsys_top_a);
-
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_top_hostcsr_a);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_top_hostcsr_b);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_top_hostcsr_c);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_top_apb_a);
 	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_a);
-
 	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_b);
-
 	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_c);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_a);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_b);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_c);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_d);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_e);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_f);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_g);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_h);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_i);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_j);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_mcu_on_hostcsr_a);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_mcu_vlp_hostcsr_a);
+	bt_hw_dbg_unify_rhw_dump_utility(&mt6653_dump_list_bg_mcu_common_off_hostcsr_a);
 }
 
 static inline void btmtk_dump_bg_mcu_core(void)
@@ -887,8 +886,12 @@ static void hif_dump_utility(const struct bt_dump_list *dump_list)
 	/* Print register value */
 	pCmdList = dump_list->cmd_list;
 	for (i = 0; i < dump_list->dump_size; i++) {
-		if (pCmdList[i].write) {
-			HIF_WRITE(pCmdList[i].w_addr, (pCmdList[i].value & pCmdList[i].mask));
+		if (pCmdList[i].mask == 0)
+			RHW_WRITE(pCmdList[i].w_addr, (pCmdList[i].value));
+		else {
+			if (pCmdList[i].write) {
+				HIF_WRITE(pCmdList[i].w_addr, (pCmdList[i].value & pCmdList[i].mask));
+			}
 		}
 
 		if (pCmdList[i].read) {
@@ -922,31 +925,26 @@ static void bt_hw_dbg_unify_hif_dump_utility(const struct bt_dump_list *dump_lis
 
 void mt6653_hif_dumpReg(void)
 {
-	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_b);
-
-	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_c);
-
-	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_d);
-
-	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_e);
-
-	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_f);
-
-	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_g);
-
-	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_h);
-
-	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_i);
-
-	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_j);
-
-	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bgsys_top_a);
-
-	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_a);
-
-	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_b);
-
-	bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_c);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_top_hostcsr_a);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_top_hostcsr_b);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_top_hostcsr_c);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_top_apb_a);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_a);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_b);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_c);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_a);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_b);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_c);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_d);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_e);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_f);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_g);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_h);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_i);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_mcu_off_hostcsr_j);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_mcu_on_hostcsr_a);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_mcu_vlp_hostcsr_a);
+        bt_hw_dbg_unify_hif_dump_utility(&mt6653_dump_list_bg_mcu_common_off_hostcsr_a);
 }
 
 static inline void btmtk_hif_dump_bg_mcu_core(void)
