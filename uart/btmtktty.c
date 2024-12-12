@@ -735,7 +735,8 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 static int btmtk_uart_send_xo_param_cmd(struct hci_dev *hdev, CONNXO_CFG_PARAM_STRUCT *connxo_cfg_param)
 {
 	uint8_t *cmd = NULL;
-	uint8_t cmd_header[] = {0x01, 0x6F, 0xFC, 0x20};
+	// 0x47 = OP + Length + flag + + Offset + data(64 Bytes)
+	uint8_t cmd_header[] = {0x01, 0x6F, 0xFC, 0x47};
 	uint16_t offset = 0;
 	//u8 cmd[] = { 0x01, 0x6F, 0xFC, 0xXX, 0x01, 0x19, 0xXX, 0x00, 0x00, 0x00, 0x00};
 	/* To-do: event payload */
@@ -743,16 +744,19 @@ static int btmtk_uart_send_xo_param_cmd(struct hci_dev *hdev, CONNXO_CFG_PARAM_S
 	u8 cmd_len = cmd_header[3] + sizeof(cmd_header);
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	int ret = -1;
+	uint8_t *data = NULL;
+	uint32_t size = 0;
 
 	cmd = vmalloc(HCI_MAX_ACL_SIZE);
 	memcpy(cmd, cmd_header, sizeof(cmd_header));
 	offset = sizeof(cmd_header);
 
+	// OP code
 	cmd[offset++] = 0x01;
 	cmd[offset++] = 0x19;
 
-	// Length: 2 bytes
-	cmd[offset++] = 0x1C;
+	// Length: 2 bytes, cmd_header[3] - 4
+	cmd[offset++] = 0x43;
 	cmd[offset++] = 0x00;
 
 	// flag
@@ -763,6 +767,11 @@ static int btmtk_uart_send_xo_param_cmd(struct hci_dev *hdev, CONNXO_CFG_PARAM_S
 	cmd[offset++] = 0x00;
 
 	memcpy(&cmd[offset], &connxo_cfg_param->ucFreqC1Axm52m, 25);
+
+	data = connv3_get_plat_config(&size);
+	BTMTK_INFO("%s: 0x%02x, 0x%02x, 0x%02x, 0x%02x", __func__, data[0], data[1], data[2], data[3]);
+	// platform customized config, total 64 bytes, 60~63 bytes
+	memcpy(&cmd[offset + 60], data, 4);
 
 	ret = btmtk_main_send_cmd(bdev, cmd, cmd_len, event, sizeof(event), DELAY_TIMES,
 #if (USE_DEVICE_NODE == 0)
