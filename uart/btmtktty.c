@@ -2812,16 +2812,50 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 				if (!cif_dev->sleep_flow_hw_mech_en)
 					ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN, DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
 			} else {
+#if IS_ENABLED(CONFIG_MTK_UARTHUB)
+				if (cif_dev->sleep_flow_hw_mech_en) {
+					u8 retry_cnt = 50;
+
+					/* new wakeup flow */
+					/* 3. Set DEVx_HOST_AWAKE = 1 */
+					/* 4. Tx 0xFF, if DEVx_BT_AWAKE = 0 */
+					/* 4~8 Polling CMM_BT_AWAKE = 1 or DEVx_BT_AWAKE = 1 */
+					ret = mtk8250_uart_hub_set_host_awake_sta(0);
+					BTMTK_DBG("%s: Set DEVx_HOST_AWAKE = 1, ret = %d ", __func__, ret);
+
+					if (mtk8250_uart_hub_get_host_bt_awake_sta(0) == 0) {
+						BTMTK_DBG("%s: host_bt_awake_sta = 0, send 0xFF ", __func__);
+						ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
+										DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
+					}
+
+					while (mtk8250_uart_hub_get_cmm_bt_awake_sta() == 0 && mtk8250_uart_hub_get_host_bt_awake_sta(0) == 0 && retry_cnt) {
+						/* If CMM_BT_AWAKE = 1 or DEVx_BT_AWAKE = 1 leave while */
+						BTMTK_INFO("%s: CMM_BT_AWAKE[%d], DEV0_BT_AWAKE[%d], retry[%d]", __func__,
+								mtk8250_uart_hub_get_cmm_bt_awake_sta(), mtk8250_uart_hub_get_host_bt_awake_sta(0), retry_cnt);
+						retry_cnt--;
+						usleep_range(1000, 1100);
+					}
+
+					if (mtk8250_uart_hub_get_cmm_bt_awake_sta() == 0 && mtk8250_uart_hub_get_host_bt_awake_sta(0) == 0 && !retry_cnt) {
+						BTMTK_ERR("%s: Query BT_AWAKE failed, fw_awake = %d", __func__, atomic_read(&cif_dev->fw_wake));
+						mtk8250_uart_hub_dump_with_tag("BT driver query BT_AWAKE failed");
+						mtk8250_uart_dump(cif_dev->tty);
+					}
 #endif
-				int i = 0;
-				for (i = 0; i < 3; i++) {
-					/* no need to wait event */
-					ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
+				} else {
+#endif
+					int i = 0;
+
+					for (i = 0; i < 3; i++) {
+						/* no need to wait event */
+						ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
 							DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
-					/* wait a while for fw wakeup */
-					usleep_range(6000, 6100);
-				}
+						/* wait a while for fw wakeup */
+						usleep_range(6000, 6100);
+					}
 #if (USE_DEVICE_NODE == 1)
+				}
 			}
 #endif
 			if (ret < 0)
