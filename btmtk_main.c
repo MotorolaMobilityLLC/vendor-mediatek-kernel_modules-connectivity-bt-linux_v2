@@ -1720,7 +1720,8 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 			/* wifi is big-endian */
 			section_offset = be2cpu32(sectionMap->u4SecOffset);
 			dl_size = be2cpu32(sectionMap->bin_info_spec.u4DLSize);
-			dma_flag = be2cpu32(sectionMap->bin_info_spec.u4DLModeCrcType) & 0xFF;
+			if (main_info.hif_hook.dl_dma)
+				dma_flag = be2cpu32(sectionMap->bin_info_spec.u4DLModeCrcType) & 0xFF;
 		} else {
 			/* BT is little-endian */
 			section_offset = sectionMap->u4SecOffset;
@@ -1730,7 +1731,8 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 			 *              1: BT ILM
 			 * only BT ILM support DL DMA for Buzzard
 			 */
-			dma_flag = le2cpu32(sectionMap->bin_info_spec.u4DLModeCrcType) & 0xFF;
+			if (main_info.hif_hook.dl_dma)
+				dma_flag = le2cpu32(sectionMap->bin_info_spec.u4DLModeCrcType) & 0xFF;
 		}
 		BTMTK_INFO("%s: loop_count = %d, section_offset = 0x%08x, download patch_len = 0x%08x, dl mode = %d\n",
 				__func__, loop_count, section_offset, dl_size, dma_flag);

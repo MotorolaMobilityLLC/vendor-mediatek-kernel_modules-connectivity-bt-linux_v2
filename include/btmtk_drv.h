@@ -144,9 +144,6 @@ struct ring_buffer {
 
 #ifdef CONFIG_DEBUG_FS
 
-#define FIXED_STPBT_MAJOR_DEV_ID 111
-
-
 
 #define FW_DUMP_END_EVENT "coredump end"
 
