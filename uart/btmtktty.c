@@ -2433,13 +2433,14 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 
 #if (USE_DEVICE_NODE == 1)
 		/* check opcode, for dfd post dump evt, and only copy payload */
-		if (data[4] == 0x18) {
+		if (data[4] == 0x18 && count > 7) {
 			if (data[7] != 0) {
 				BTMTK_WARN("%s: For dfd post dump evt, evt status = %d, data is over or invalid evt", __func__, data[7]);
 			} else {
 				BTMTK_INFO("%s: For dfd post dump evt, copy to bdev->dfd_pstd", __func__);
 			}
-			memcpy(bdev->dfd_pstd, &data[7], count - 7);
+			if (&bdev->dfd_pstd[0] != NULL)
+				memcpy(bdev->dfd_pstd, &data[7], count - 7);
 		}
 #endif
 		return;
