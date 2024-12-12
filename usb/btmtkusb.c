@@ -5601,6 +5601,7 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 	unsigned int ifnum_base;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
+	unsigned char state = 0;
 
 	/* Mediatek Driver Version */
 	BTMTK_INFO("%s: MTK BT Driver Version : %s", __func__, VERSION);
@@ -5659,12 +5660,14 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 		ret = btusb_probe(intf, id);
 	}
 
-	/* Set End/Error state */
-	if (ret == 0)
-		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
-	else
-		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
-
+	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_PROBE) {
+		/* Set End/Error state */
+		if (ret == 0)
+			btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+		else
+			btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+	}
 #ifdef CFG_SUPPORT_CHIP_RESET_KO
 	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_PROBE_SUCCESS);
 #endif
