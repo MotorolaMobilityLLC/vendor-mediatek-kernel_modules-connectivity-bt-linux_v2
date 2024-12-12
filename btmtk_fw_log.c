@@ -202,13 +202,22 @@ static int btmtk_proc_show(struct seq_file *m, void *v)
 	char cif_info[64] = {0};
 
 	for (i = 0; i < btmtk_mcu_num; i++) {
+		if (g_bdev[i] == NULL)
+			continue;
+
 		if (g_bdev[i]->hdev != NULL) {
 			if (strlen(g_bdev[i]->main_info.fw_version_str))
-				(void)seq_printf(m, "%s(Dongle%d)\n	patch version:%s, driver version:%s\n",
+				(void)seq_printf(m, "%s(Dongle%d)\n    patch version:%s\n    driver version:%s\n",
 					g_bdev[i]->hdev->name, g_bdev[i]->dongle_index,
 					g_bdev[i]->main_info.fw_version_str, VERSION);
 			else
-				(void)seq_printf(m, "patch version:null\ndriver version:%s\n", VERSION);
+				(void)seq_printf(m, "%s(Dongle%d)\n    patch version:null\n    driver version:%s\n",
+					g_bdev[i]->hdev->name, g_bdev[i]->dongle_index, VERSION);
+
+			if (g_bdev[i]->rom_patch_bin_file_name)
+				(void)seq_printf(m, "    fw_file_name:%s\n", g_bdev[i]->rom_patch_bin_file_name);
+			else
+				(void)seq_puts(m, "    fw_file_name:null\n");
 		}
 		if (g_bdev[i]->main_info.hif_hook.get_cif_info
 				&& g_bdev[i]->main_info.hif_hook.get_cif_info(g_bdev[i],
