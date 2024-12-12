@@ -667,7 +667,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 			case FWLOG_HCI_IDX:    /* hci index */
 				vlen = o_fwlog_buf[index + 1];
 				hci_idx = o_fwlog_buf[index + 2];
-				BTMTK_DBG("%s: send to hci%d", __func__, hci_idx);
+				BTMTK_DBG("%s: send to hci%d, vlen %d", __func__, hci_idx, vlen);
 				index += (FWLOG_ATTR_TL_SIZE + vlen);
 				break;
 			case FWLOG_TX:    /* tx raw data */
@@ -1158,7 +1158,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 	if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
 			skb->data[0] == 0x0E) {
 		if (skb_queue_len(&g_fwlog->usr_opcode_queue)) {
-			BTMTK_INFO("%s: opcode queue len is %d", __func__,
+			BTMTK_DBG("%s: opcode queue len is %d", __func__,
 					skb_queue_len(&g_fwlog->usr_opcode_queue));
 			skb_opcode = skb_dequeue(&g_fwlog->usr_opcode_queue);
 		}
@@ -1168,19 +1168,17 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 		if (skb_opcode->data[0] == skb->data[3] &&
 					skb_opcode->data[1] == skb->data[4]) {
-			BTMTK_INFO_RAW(skb->data, skb->len, "%s: Discard event from user hci command - ", __func__);
-#if defined(DRV_RETURN_SPECIFIC_HCE_ONLY) && (DRV_RETURN_SPECIFIC_HCE_ONLY == 0)
+			BTMTK_INFO_RAW(skb->data, skb->len, "%s: recv event from user hci command - ", __func__);
 			// should return to upper layer tool
-			if (btmtk_skb_enq_fwlog(bdev, skb->data, skb->len, FWLOG_TYPE,
+			if (btmtk_skb_enq_fwlog(bdev, skb->data, skb->len, bt_cb(skb)->pkt_type,
 						&g_fwlog->fwlog_queue) == 0) {
 				wake_up_interruptible(&g_fwlog->fw_log_inq);
 			}
 			kfree_skb(skb_opcode);
-#endif
 			return 1;
 		}
 
-		BTMTK_INFO("%s: check opcode fail!", __func__);
+		BTMTK_DBG("%s: check opcode fail!", __func__);
 		skb_queue_head(&g_fwlog->usr_opcode_queue, skb_opcode);
 	}
 
