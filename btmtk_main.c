@@ -4998,10 +4998,6 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	int state = 0;
 	unsigned char fstate = 0;
 	u8 fw_coredump_flag = 0, retry = 20;
-#if (USE_DEVICE_NODE == 1)
-	/* parsing commands */
-	u8 fw_coredump_cmd[FW_COREDUMP_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
-#endif
 #if BTMTK_RUNTIME_ENABLE
 	struct btmtk_usb_dev *cif_dev = NULL;
 #endif
@@ -5091,36 +5087,22 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	}
 
 	if (main_info.hif_hook_chip.bt_tx_frame_handler) {
+		/* ret = 0, means data not handle in bt_tx_frame_handler, need to send fw
+		 * ret = -1, means something wrong in bt_tx_frame_handler, may need kree_skb
+		 * ret = 1, means data is already handled in bt_tx_frame_handler
+		 */
 		ret = main_info.hif_hook_chip.bt_tx_frame_handler(bdev, skb, &fw_coredump_flag);
 		if (ret < 0) {
-			BTMTK_ERR("%s btmtk_set_audio_setting failed!!", __func__);
+			BTMTK_INFO("%s bt_tx_frame_handler return failed, ret[%d]", __func__, ret);
 			goto exit;
 		}
-
-#if (USE_DEVICE_NODE == 1)
-		if (hci_skb_pkt_type(skb) == HCI_COMMAND_PKT) {
-			if (skb->len == FW_COREDUMP_CMD_LEN &&
-				!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
-				BTMTK_WARN("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
-				fw_coredump_flag = 1;
-				btmtk_reset_timer_update(bdev);
-				btmtk_hci_snoop_print_to_log();
-				if (bdev->assert_reason[0] == '\0') {
-					memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
-					strncpy(bdev->assert_reason, "[BT_DRV assert] host trigger",
-							strlen("[BT_DRV assert] host trigger") + 1);
-					BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
-				}
-
-				if(main_info.hif_hook.trigger_assert) {
-					main_info.hif_hook.trigger_assert(g_sbdev);
-					goto exit;
-				}
-			}
+		if (ret == 1) {
+			ret = 0;
+			BTMTK_INFO("%s bt_tx_frame_handler already handle data, skip", __func__);
+			goto exit;
 		}
-#endif
-
-	}
+	} else
+		BTMTK_INFO("%s not register bt_tx_frame_handler", __func__);
 
 	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d ", __func__, skb->len);
 	ret = main_info.hif_hook.send_cmd(bdev, skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
