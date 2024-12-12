@@ -158,33 +158,10 @@ __weak int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 	return -1;
 }
 
-#if 0
-void btmtk_do_gettimeofday(struct timeval *tv)
-{
-#if (KERNEL_VERSION(4, 19, 85) > LINUX_VERSION_CODE)
-	do_gettimeofday(tv);
-#else
-	struct timespec64 ts;
-
-	ktime_get_real_ts64(&ts);
-	tv->tv_sec = ts.tv_sec;
-	tv->tv_usec = ts.tv_nsec/1000;
-#endif
-}
-#endif
 void btmtk_getUTCtime(struct bt_utc_struct *utc)
 {
-#if (KERNEL_VERSION(4, 19, 85) > LINUX_VERSION_CODE)
-	struct timeval tv;
-
-	do_gettimeofday(&tv);
-	rtc_time_to_tm(tv.tv_sec, &utc->tm);
-	utc->usec = tv.tv_usec;
-	utc->sec = tv.tv_sec;
-#else
 	struct timespec64 ts;
 	unsigned long long kerneltime;
-
 
 	ktime_get_real_ts64(&ts);
 	rtc_time64_to_tm(ts.tv_sec, &utc->tm);
@@ -196,7 +173,6 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc)
 	kerneltime = sched_clock();
 	utc->ksec = kerneltime/1000000000;
 	utc->knsec = do_div(kerneltime, 1000000000)/1000;
-#endif
 	utc->tm.tm_year += 1900;
 	utc->tm.tm_mon += 1;
 }
@@ -2518,7 +2494,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 	struct _Global_Descr *globalDescr;
 	struct data_struct event = {0};
 #if DEBUG_LD_PATCH_TIME
-	struct timeval tv_start, tv_bgf, tv_ilm;
+	struct timespec64 tv_start, tv_bgf, tv_ilm;
 	u32 dlt_dma = 0, dlt_all = 0;
 
 	memset(&tv_start, 0, sizeof(tv_start));
