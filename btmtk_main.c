@@ -1143,8 +1143,13 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 			/* ignore first byte as 0xFF (FW wakeup) & 0x00 (noise from uart) */
 			if (bdev->main_info.hif_hook.raw_filter) {
 				while (size > 1 && bdev->main_info.hif_hook.raw_filter(bdev, buf, size)) {
+#if (USE_DEVICE_NODE == 0)
 					BTMTK_DBG_DEV(bdev, "%s, receive 0x%02X in pkt head, pkt_len[%d]",
 								__func__, buf[0], size);
+#else
+					BTMTK_INFO_DEV(bdev, "%s, receive 0x%02X in pkt head, pkt_len[%d]",
+								__func__, buf[0], size);
+#endif
 					buf++;
 					size--;
 				}
@@ -1179,6 +1184,14 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 #if (USE_DEVICE_NODE == 0)
 					BTMTK_DBG_DEV(bdev, "%s: skip 0x%02X pkt", __func__, *buf);
 #else
+					if (*buf == 0xFF && bdev->main_info.hif_hook.wakeup_host) {
+						/* 0xFF may follow fw own event, so need to do driver own */
+						BTMTK_INFO_DEV(bdev, "%s: get 0x%02X pkt, add driver own",
+								__func__, *buf);
+						bdev->main_info.hif_hook.wakeup_host(bdev);
+						return NULL;
+					}
+
 					BTMTK_INFO_DEV(bdev, "%s: skip 0x%02X pkt", __func__, *buf);
 #endif
 					return NULL;
