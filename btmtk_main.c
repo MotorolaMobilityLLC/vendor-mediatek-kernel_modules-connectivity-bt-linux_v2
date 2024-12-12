@@ -3345,6 +3345,8 @@ exit:
 	return ret;
 }
 
+#if CFG_SUPPORT_BLUEZ
+#else
 __attribute__((unused)) static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
 {
 	int ret = 0;
@@ -3378,6 +3380,7 @@ exit:
 	BTMTK_INFO("%s exit", __func__);
 	return ret;
 }
+#endif
 
 static int btmtk_send_phase1_wmt_cfg(struct btmtk_dev *bdev)
 {
