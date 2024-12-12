@@ -453,6 +453,7 @@ static void btmtk_fops_set_state(struct btmtk_dev *bdev, u8 new_state)
 #endif
 }
 
+#if (CFG_GKI_SUPPORT == 0)
 void *btmtk_kallsyms_lookup_name(const char *name)
 {
 	void *addr = __symbol_get(name);
@@ -468,6 +469,7 @@ void *btmtk_kallsyms_lookup_name(const char *name)
 	}
 	return addr;
 }
+#endif
 
 static void btmtk_main_info_initialize(void)
 {
@@ -4225,6 +4227,7 @@ int bt_open(struct hci_dev *hdev)
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_OPENED);
 	main_info.reset_stack_flag = HW_ERR_NONE;
 
+#if (CFG_GKI_SUPPORT == 0)
 	if (bdev->bt_cfg.support_bt_single_sku) {
 		rlm_get_alpha2 = (void *)btmtk_kallsyms_lookup_name(wifi_func_name);
 
@@ -4244,7 +4247,7 @@ int bt_open(struct hci_dev *hdev)
 		if (strcmp(main_info.PWS.country_code, "") != 0)
 			btmtk_load_country_table(bdev);
 	}
-
+#endif
 	DUMP_TIME_STAMP("open_end");
 	return 0;
 

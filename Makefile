@@ -70,6 +70,12 @@ else
     ccflags-y += -DSTPBTFWLOG_ENABLE=0
 endif
 
+ifeq ($(CONFIG_GKI_SUPPORT), y)
+    ccflags-y += -DCFG_GKI_SUPPORT=1
+else
+    ccflags-y += -DCFG_GKI_SUPPORT=0
+endif
+
 ifeq ($(CONFIG_SUPPORT_MULTI_DEV_NODE), y)
     ccflags-y += -DCFG_SUPPORT_MULTI_DEV_NODE=1
 else

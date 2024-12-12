@@ -692,6 +692,7 @@ static int ATTRIBUTE_NO_KCFI btmtk_handle_entering_WoBLE_state(struct btmtk_wobl
 		}
 	}
 	if (is_support_unify_woble(bdev)) {
+#if (CFG_GKI_SUPPORT == 0)
 		do {
 			typedef ssize_t (*func) (u16 u16Key, const char *buf, size_t size);
 			char *func_name = "MDrv_PM_Write_Key";
@@ -710,7 +711,7 @@ static int ATTRIBUTE_NO_KCFI btmtk_handle_entering_WoBLE_state(struct btmtk_wobl
 				BTMTK_WARN("%s: No Exported Func Found [%s]", __func__, func_name);
 			}
 		} while (0);
-
+#endif
 		ret = btmtk_send_woble_read_BDADDR_cmd(bdev);
 		if (ret < 0)
 			goto STOP_TRAFFIC;
