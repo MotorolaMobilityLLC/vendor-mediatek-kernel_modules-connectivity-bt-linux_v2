@@ -1035,7 +1035,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	cif_dev->fw_dl_ready = 0;
 	cif_dev->flush_en = 1;
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	cif_dev->sleep_flow_hw_mech_en = mtk8250_uart_hub_get_bt_sleep_flow_hw_mech_en();
+	cif_dev->sleep_flow_hw_mech_en = (mtk8250_uart_hub_get_bt_sleep_flow_hw_mech_en() <= 0) ? 0 : mtk8250_uart_hub_get_bt_sleep_flow_hw_mech_en();
 	BTMTK_INFO("sleep_flow_hw_mech_en: %d", cif_dev->sleep_flow_hw_mech_en);
 #endif
 	/* Flush any pending characters in the driver and discipline. */
