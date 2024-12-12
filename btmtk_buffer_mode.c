@@ -315,12 +315,32 @@ void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	u32 code_len = 0;
+	char buffer_mode_switch_file_name[MAX_BIN_FILE_NAME_LEN] = {0};
+	unsigned int chip_id = 0;
 
 	btmtk_buffer_mode.bdev = bdev;
-	ret = btmtk_load_code_from_setting_files(BUFFER_MODE_SWITCH_FILE, bdev->intf_dev, &code_len, bdev);
+
+	if (bdev->chip_id == 0x7920) {
+		chip_id = 0x7961;
+	} else {
+		chip_id = bdev->chip_id;
+	}
+
+	(void)snprintf(buffer_mode_switch_file_name, MAX_BIN_FILE_NAME_LEN, "%s%x.%s",
+		WIFI_CFG_NAME_PREFIX, chip_id & 0xffff, WIFI_CFG_NAME_SUFFIX);
+	BTMTK_INFO("%s: buffer mode file name is %s", __func__, buffer_mode_switch_file_name);
+
+	ret = btmtk_load_code_from_setting_files(buffer_mode_switch_file_name, bdev->intf_dev, &code_len, bdev);
 	if (ret < 0) {
-		BTMTK_ERR("load code failed");
-		return;
+		BTMTK_ERR("%s: btmtk_load_code_from_setting_files %s failed!", __func__, buffer_mode_switch_file_name);
+		if (ret != -ENOENT) {
+			return;
+		}
+
+		if (btmtk_load_code_from_setting_files(BUFFER_MODE_SWITCH_FILE, bdev->intf_dev, &code_len, bdev) != 0) {
+			BTMTK_ERR("%s: btmtk_load_code_from_setting_files %s failed!", __func__, BUFFER_MODE_SWITCH_FILE);
+			return;
+		}
 	}
 
 	btmtk_buffer_mode.efuse_mode = btmtk_buffer_mode_parse_mode(bdev->setting_file, code_len);

@@ -2823,7 +2823,7 @@ int btmtk_load_code_from_setting_files(char *setting_file_name,
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: g_data is NULL!!", __func__);
-		err = -1;
+		err = -EINVAL;
 		goto end;
 	}
 
@@ -2834,7 +2834,7 @@ int btmtk_load_code_from_setting_files(char *setting_file_name,
 				__func__, setting_file_name, err, fw_entry);
 		if (fw_entry)
 			release_firmware(fw_entry);
-		err = -2;
+		err = -ENOENT;
 		goto end;
 	}
 
@@ -2847,7 +2847,7 @@ int btmtk_load_code_from_setting_files(char *setting_file_name,
 	if (bdev->setting_file == NULL) {
 		BTMTK_ERR("%s: kzalloc size %zu failed!!", __func__, fw_entry->size);
 		release_firmware(fw_entry);
-		err = -3;
+		err = -ENOMEM;
 		goto end;
 	}
 
@@ -3139,7 +3139,7 @@ static void btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_d
 	ret = btmtk_load_code_from_setting_files(cfg_name, dev, &code_len, bdev);
 	if (ret != 0) {
 		BTMTK_ERR("btmtk_usb_load_code_from_setting_files %s failed!!", cfg_name);
-		if (ret != -2)
+		if (ret != -ENOENT)
 			return;
 
 		if (btmtk_load_code_from_setting_files(BT_CFG_NAME, dev, &code_len, bdev) != 0) {
