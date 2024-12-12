@@ -582,6 +582,7 @@ struct btmtk_stp_info {
 
 #if (USE_DEVICE_NODE == 1)
 typedef void (*cif_chrdev_fw_log_state_ptr)(struct btmtk_dev *bdev, uint8_t state);
+typedef void (*cif_fw_sleep_handler_ptr)(struct btmtk_dev *bdev);
 #endif
 typedef int (*cif_bt_init_ptr)(void);
 typedef void (*cif_bt_exit_ptr)(void);
@@ -626,6 +627,7 @@ struct hif_hook_ptr {
 #if (USE_DEVICE_NODE == 1)
 	cif_chrdev_fw_log_state_ptr fw_log_state;
 	cif_met_log_handler_ptr 	met_log_handler;
+	cif_fw_sleep_handler_ptr 	fw_sleep_handler;
 #endif
 	cif_bt_init_ptr			init;
 	cif_bt_exit_ptr			exit;
@@ -913,6 +915,9 @@ struct btmtk_dev {
 	bool dynamic_fwdl_start;
 	struct cali_data_s cali_backup;
 
+	/* fw onw sleep evt */
+	atomic_t receive_sleep_event;
+
 #if (USE_DEVICE_NODE == 1)
 	/* asynchronize tx/rx */
 	struct work_struct  async_trx_work;
@@ -1174,6 +1179,7 @@ int rx_skb_enqueue(struct sk_buff *skb);
 int btmtk_chardev_init(void);
 int btmtk_met_log_handler(struct btmtk_dev *bdev, u8 *buf, u32 size);
 int32_t btmtk_intcmd_set_fw_log(struct btmtk_dev *bdev, uint8_t flag);
+void btmtk_fw_sleep_handler(struct btmtk_dev *bdev);
 int btmtk_send_connfem_cmd(struct btmtk_dev *bdev);
 int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb);
 int bt_open(struct hci_dev *hdev);

@@ -105,7 +105,10 @@ static void btmtk_uart_update_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 	if (atomic_read(&cif_dev->fw_own_timer_flag)) {
 		BTMTK_DBG_LIMITTED("update fw own timer");
 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_INIT);
-		mod_timer(&cif_dev->fw_own_timer, jiffies + msecs_to_jiffies(FW_OWN_TIMEOUT));
+		if (atomic_read(&g_sbdev->receive_sleep_event))
+			mod_timer(&cif_dev->fw_own_timer, jiffies + msecs_to_jiffies(0));
+		else
+			mod_timer(&cif_dev->fw_own_timer, jiffies + msecs_to_jiffies(FW_OWN_TIMEOUT));
 	} else
 		BTMTK_DBG_LIMITTED("%s: not create yet", __func__);
 }
@@ -1182,6 +1185,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	atomic_set(&bdev->main_info.subsys_reset, BTMTK_RESET_DONE);
 	bdev->main_info.chip_reset_flag = 0;
 	atomic_set(&bdev->assert_state, BTMTK_ASSERT_NONE);
+	atomic_set(&bdev->receive_sleep_event, 0);
 	cif_dev->rhw_fail_cnt = 0;
 	reinit_completion(&bdev->dump_comp);
 	reinit_completion(&bdev->dump_dfd_comp);
@@ -2720,7 +2724,8 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		if (bdev->bt_cfg.drv_own_wakelock_enable)
 #endif
 			__pm_relax(bt_trx_wakelock);
-		BTMTK_DBG("%s success, cmd[9] = 0x%02x", __func__, cmd[9]);
+
+		BTMTK_DBG("%s: success, cmd[9] = 0x%02x, receive_sleep_event = %d", __func__, cmd[9], atomic_read(&bdev->receive_sleep_event));
 	}
 unlock:
 	/* use fw own mutex to protect flag
@@ -2728,6 +2733,7 @@ unlock:
 	 * which may also cause driver own at the same time
 	 */
 	atomic_set(&g_sbdev->main_info.suspend_entry, 0);
+	atomic_set(&bdev->receive_sleep_event, 0);
 	UART_OWN_MUTEX_UNLOCK();
 	return ret;
 }
@@ -3147,6 +3153,7 @@ static void btmtk_cif_hook_register(struct btmtk_dev *bdev)
 	rx_queue_initialize();
 	hook.fw_log_state = fw_log_bt_state_cb;
 	hook.met_log_handler = btmtk_met_log_handler;
+	hook.fw_sleep_handler = btmtk_fw_sleep_handler;
 	hook.init = btmtk_chardev_init;
 	hook.dump_debug_sop = btmtk_uart_sp_dump_debug_sop;
 	hook.dump_hif_debug_sop = btmtk_hif_sp_dump_debug_sop;
@@ -3602,5 +3609,30 @@ int btmtk_met_log_handler(struct btmtk_dev *bdev, u8 *buf, u32 size)
 	}
 
 	return 0;
+}
+
+void btmtk_fw_sleep_handler(struct btmtk_dev *bdev)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+	if (bdev == NULL) {
+		BTMTK_ERR("bdev is NULL");
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	if (cif_dev == NULL) {
+		BTMTK_ERR("cif_dev is NULL, bdev=%p", bdev);
+		return;
+	}
+
+	if (bdev->dynamic_fwdl_start) {
+		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
+		return;
+	}
+
+	BTMTK_DBG("%s: Receive sleep evt and need to do fw own flow now!", __func__);
+	atomic_set(&bdev->receive_sleep_event, 1);
+	btmtk_uart_update_fw_own_timer(cif_dev);
+	return;
 }
 #endif
