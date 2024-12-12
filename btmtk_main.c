@@ -4115,6 +4115,8 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: poweroff_finder_mode = %d, bdev = %p", __func__, atomic_read(&bdev->poweroff_finder_mode), bdev);
 	if (atomic_read(&bdev->poweroff_finder_mode)) {
 		btmtk_set_powered_off_finder_mode(atomic_read(&bdev->poweroff_finder_mode));
+		BTMTK_WARN("%s: FMD enable, do not sent power off, return directly", __func__);
+		return 0;
 	}
 #endif
 
