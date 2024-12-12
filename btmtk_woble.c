@@ -212,7 +212,7 @@ static int btmtk_set_Woble_APCF_filter_parameter(struct btmtk_dev *bdev)
 		0x01, 0x00, 0x0A, 0x20, 0x00, 0x20, 0x00, 0x01, 0x80, 0x00 };
 	u8 event[APCF_FILTER_EVT_HDR_LEN] = { 0x04, 0x0E, 0x07,
 		0x01, 0x57, 0xFD, 0x00, 0x01/*, 00, 63*/ };
-	int ret = -1;
+	int ret = 0;
 
 	BTMTK_INFO("%s: begin", __func__);
 	ret = btmtk_main_send_cmd(bdev, cmd, APCF_FILTER_CMD_LEN,
@@ -237,7 +237,7 @@ static int btmtk_set_Woble_APCF(struct btmtk_woble *bt_woble)
 		0xFF, 0xFF, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 		0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 	u8 event[APCF_EVT_HDR_LEN] = { 0x04, 0x0E, 0x07, 0x01, 0x57, 0xFD, 0x00, /* 0x06 00 63 */ };
-	int ret = -1;
+	int ret = 0;
 	u8 i = 0;
 	struct btmtk_dev *bdev = bt_woble->bdev;
 
@@ -344,7 +344,7 @@ Finish:
 
 static int btmtk_set_Woble_Radio_On(struct btmtk_woble *bt_woble)
 {
-	int ret = -1;
+	int ret = 0;
 	struct btmtk_dev *bdev = bt_woble->bdev;
 
 	BTMTK_INFO("%s: woble_setting_radio_on.length %d", __func__,
@@ -528,7 +528,7 @@ static void btmtk_check_wobx_debug_log(struct btmtk_dev *bdev)
 	/* 0xFF, 0xFF, 0xFF, 0xFF is log level */
 	u8 cmd[CHECK_WOBX_DEBUG_CMD_LEN] = { 0X01, 0xCE, 0xFC, 0x04, 0xFF, 0xFF, 0xFF, 0xFF };
 	u8 event[CHECK_WOBX_DEBUG_EVT_HDR_LEN] = { 0x04, 0xE8 };
-	int ret = -1;
+	int ret = 0;
 
 	BTMTK_INFO("%s: begin", __func__);
 
@@ -784,7 +784,7 @@ exit:
 int btmtk_woble_resume(struct btmtk_woble *bt_woble)
 {
 	int ret = 0;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	unsigned char fstate = BTMTK_FOPS_STATE_UNKNOWN;
 	struct btmtk_dev *bdev = bt_woble->bdev;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 

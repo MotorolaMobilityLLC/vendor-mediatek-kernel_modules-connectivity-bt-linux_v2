@@ -244,6 +244,8 @@ void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev, struct btmtk_buffer_mo
 
 	btmtk_buffer_mode.bdev = bdev;
 	ret = btmtk_load_code_from_setting_files(BUFFER_MODE_SWITCH_FILE, bdev->intf_dev, &code_len, bdev);
+	if (ret < 0)
+		BTMTK_ERR("set load %s failed", BUFFER_MODE_SWITCH_FILE);
 
 	btmtk_buffer_mode.efuse_mode = btmtk_buffer_mode_parse_mode(bdev->setting_file, code_len);
 	if (btmtk_buffer_mode.efuse_mode == EFUSE_MODE)

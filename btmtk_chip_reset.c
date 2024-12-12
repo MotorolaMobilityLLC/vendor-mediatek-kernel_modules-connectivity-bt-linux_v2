@@ -63,7 +63,7 @@ void btmtk_reset_waker(struct work_struct *work)
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, reset_waker);
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-	int state = BTMTK_STATE_INIT;
+	int state = BTMTK_STATE_UNKNOWN;
 	int cif_event = 0, err = 0;
 	int cur = 0;
 

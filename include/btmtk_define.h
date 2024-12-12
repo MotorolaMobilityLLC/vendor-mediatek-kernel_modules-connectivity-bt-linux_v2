@@ -47,10 +47,10 @@
 #endif
 
 /** Driver version */
-#define VERSION "7.0.2022071401"
+#define VERSION "7.0.2022081001"
 #define SUBVER ":turnkey"
 
-#ifdef CFG_SUPPORT_WAKEUP_IRQ
+#if CFG_SUPPORT_WAKEUP_IRQ
 #define WAKEUP_BT_IRQ 1
 #else
 #define WAKEUP_BT_IRQ 0
