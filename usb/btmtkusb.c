@@ -2823,7 +2823,7 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	}
 
 
-	if (is_mt7922(bdev->chip_id)) {
+	if (is_mt7922(bdev->chip_id) || is_mt7902(bdev->chip_id)) {
 		delay = PATCH_DOWNLOAD_PHASE3_SECURE_BOOT_DELAY_TIME;
 		reg_value = BT_GDMA_DONE_7922_VALUE_W;
 	} else {

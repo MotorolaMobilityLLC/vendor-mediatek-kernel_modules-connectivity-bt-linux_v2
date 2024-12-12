@@ -31,7 +31,7 @@
 
 #define isdigit(c)    ('0' <= (c) && (c) <= '9')
 //- Local Configuration -----------------------------------------------------
-#define LD_VERSION "3.0.21110301"
+#define LD_VERSION "3.0.21110401"
 
 #define BUFFER_SIZE  (1024 * 4)	/* Size of RX Queue */
 #define BT_SEND_HCI_CMD_BEFORE_SUSPEND 1
@@ -666,7 +666,7 @@ static void btmtk_usb_cap_init(struct LD_btmtk_usb_data *data)
 		 *  $$$$ : chip id
 		 *  % : fw version & 0xFF + 1 (in HEX)
 		 */
-		if (is_mt7902(bdev->chip_id)) {
+		if (is_mt7902(data->chip_id)) {
 			/* 7902 cant't use the same rule to recognize */
 			data->flavor = 0;
 		} else {
