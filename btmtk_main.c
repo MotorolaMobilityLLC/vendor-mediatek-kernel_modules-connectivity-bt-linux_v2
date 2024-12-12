@@ -4193,6 +4193,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 #if (USE_DEVICE_NODE == 0)
 		btmtk_reset_trigger(bdev);
 #else
+		btmtk_assert_wake_unlock();
 		return ret;
 #endif
 	} else {
