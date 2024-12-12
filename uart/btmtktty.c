@@ -1160,6 +1160,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	atomic_set(&bdev->assert_state, BTMTK_ASSERT_NONE);
 	cif_dev->rhw_fail_cnt = 0;
 	reinit_completion(&bdev->dump_comp);
+	reinit_completion(&bdev->dump_dfd_comp);
 	memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
 	bdev->is_whole_chip_reset = FALSE;
 
@@ -3095,6 +3096,7 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 
 	/* Init completion */
 	init_completion(&bdev->dump_comp);
+	init_completion(&bdev->dump_dfd_comp);
 
 	/* Init semaphore */
 	sema_init(&cif_dev->evt_comp_sem, 1);

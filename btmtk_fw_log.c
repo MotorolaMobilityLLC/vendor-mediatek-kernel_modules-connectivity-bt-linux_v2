@@ -1508,6 +1508,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 					} else if (skb->data[skb->len - 3] == '1') {
 						BTMTK_INFO("%s: FW trigger PMIC fault", __func__);
 						bmain_info->chip_reset_flag = 1;
+						bdev->reset_type = CONNV3_CHIP_RST_TYPE_PMIC_FAULT_B;
 						if (bdev->assert_reason[0] == '\0') {
 							memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
 							strncpy(bdev->assert_reason, "[BT_FW assert] trigger PMIC fault",
@@ -1516,6 +1517,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 						BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 					} else {
 						bmain_info->chip_reset_flag = 1;
+						bdev->reset_type = CONNV3_CHIP_RST_TYPE_DFD_DUMP;
 						if (bdev->assert_reason[0] == '\0') {
 							memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
 							strncpy(bdev->assert_reason, "[BT_FW assert] trigger whole chip reset",
@@ -1575,12 +1577,6 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 								&issue_info, xml_log, CONNV3_XML_SIZE);
 			if (ret)
 				goto coredump_fail_unlock;
-			BTMTK_INFO("%s: xml_log: %s, assert_info: %s ", __func__, xml_log, issue_info.assert_info);
-			line = __LINE__;
-			ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler,
-							"INFO", xml_log, strlen(xml_log));
-			if (ret)
-				goto coredump_fail_unlock;
 		}
 
 		dump_data_counter++;
@@ -1617,7 +1613,12 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			/* TODO: Chip reset*/
 			bmain_info->reset_stack_flag = HW_ERR_CODE_CORE_DUMP;
 			DUMP_TIME_STAMP("FW_dump_end");
+			BTMTK_INFO("%s: xml_log: %s, assert_info: %s ", __func__, xml_log, issue_info.assert_info);
 			line = __LINE__;
+			ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler,
+							"INFO", xml_log, strlen(xml_log));
+			if (ret)
+				goto coredump_fail_unlock;
 			/* This is the latest coredump packet. */
 			BTMTK_INFO("%s: FW dump end, dump_data_counter[%d], dump_data_length[%d]",
 						__func__, dump_data_counter, dump_data_length);
@@ -1635,25 +1636,10 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				if (bmain_info->hif_hook.waker_notify)
 					bmain_info->hif_hook.waker_notify(bdev);
 			} else {
-				BTMTK_INFO("%s: coredump end, but not call coredump_end here, DFD pre-dump", __func__);
-				bdev->dfd_value_addr_remap_base = ioremap(bdev->dfd_value_addr, bdev->dfd_value_size);
-				if (bdev->dfd_value_addr_remap_base == NULL) {
-					BTMTK_ERR("%s: dfd_value_addr_remap_base failed", __func__);
-				} else {
-					memcpy_fromio(bdev->temp_buf, (char *)bdev->dfd_value_addr_remap_base, bdev->dfd_value_size);
-					BTMTK_INFO("%s: dfd-value-size =  0x%04x, bdev->temp_buf[0] =  0x%02x, bdev->temp_buf[1] =  0x%02x", __func__, bdev->dfd_value_size, bdev->temp_buf[0], bdev->temp_buf[1]);
-					ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "PRED", bdev->temp_buf, bdev->dfd_value_size);
-					iounmap(bdev->dfd_value_addr_remap_base);
-					if (ret) {
-						BTMTK_ERR("%s: connv3_coredump_send failed, ret = %d", __func__, ret);
-						goto coredump_fail_unlock;
-					}
-				}
-
-				BTMTK_INFO("%s: DFD pre-dump, set bt assert_state end", __func__);
+				BTMTK_INFO("%s: Not call coredump_end, DFD pre-dump, set bt assert_state end", __func__);
 				atomic_set(&bdev->assert_state, BTMTK_ASSERT_END);
-				BTMTK_INFO("%s: DFD pre-dump, complete dump_comp , coredump_end", __func__);
-				complete_all(&bdev->dump_comp);
+				BTMTK_INFO("%s: DFD pre-dump, complete dump_dfd_comp , coredump_end", __func__);
+				complete_all(&bdev->dump_dfd_comp);
 			}
 		}
 
