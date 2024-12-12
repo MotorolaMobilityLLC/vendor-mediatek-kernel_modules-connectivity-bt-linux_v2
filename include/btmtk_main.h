@@ -621,6 +621,9 @@ struct btmtk_dev {
 
 	/* fw wakeup host irq */
 	int	wakeup_irq;
+
+	/* DFD reset_type */
+	unsigned int reset_type;
 #endif
 	/* completion */
 	struct completion	dump_comp;

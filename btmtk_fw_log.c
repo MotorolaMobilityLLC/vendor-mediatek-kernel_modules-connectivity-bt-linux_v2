@@ -1519,18 +1519,19 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			BTMTK_INFO("%s: FW dump end, dump_data_counter[%d], dump_data_length[%d]",
 						__func__, dump_data_counter, dump_data_length);
 
-			btmtk_sp_coredump_end();
+			if (bdev->reset_type != CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
+				btmtk_sp_coredump_end();
 
-			/* if do complete and bt close with btmtk_reset_waker start
-			 * no need to wait hw_err event, cause bt already start close
-			 */
+				/* if do complete and bt close with btmtk_reset_waker start
+				* no need to wait hw_err event, cause bt already start close
+				*/
 
-			BTMTK_INFO("%s: complete dump_comp , coredump_end", __func__);
-			complete_all(&bdev->dump_comp);
+				BTMTK_INFO("%s: complete dump_comp , coredump_end", __func__);
+				complete_all(&bdev->dump_comp);
 
-			if (bmain_info->hif_hook.waker_notify)
-				bmain_info->hif_hook.waker_notify(bdev);
-
+				if (bmain_info->hif_hook.waker_notify)
+					bmain_info->hif_hook.waker_notify(bdev);
+			}
 		}
 
 		return 1;
