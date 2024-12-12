@@ -1654,7 +1654,7 @@ static void btusb_bulk_complete(struct urb *urb)
 	 */
 	if (urb->status == 0) {
 		buf = urb->transfer_buffer;
- 		if ((buf[0] == 0x6f && buf[1] == 0xfc) ||
+		if ((buf[0] == 0x6f && buf[1] == 0xfc) ||
 			((buf[0] == 0xff || buf[0] == 0xfe) && buf[1] == 0x05))
 			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_RX_ACL_HIF,
 				buf, urb->actual_length);
@@ -2454,8 +2454,7 @@ static int submit_tx_urb(struct hci_dev *hdev, struct urb *urb, int type)
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 	int err;
 
-	switch (type)
-	{
+	switch (type) {
 	case HCI_COMMAND_PKT:
 		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD_HIF,
 			urb->transfer_buffer, urb->transfer_buffer_length);
@@ -2740,7 +2739,8 @@ exit:
 					return ret;
 				}
 			} else {
-				BTMTK_WARN("btusb_send_frame send iso data, but iso channel not exit, %d", bdev->iso_threshold);
+				BTMTK_WARN("btusb_send_frame send iso data, but iso channel not exit, %d",
+						bdev->iso_threshold);
 				/* if iso channel not exist, we need to drop iso data then free the skb */
 				kfree_skb(skb);
 				skb = NULL;
