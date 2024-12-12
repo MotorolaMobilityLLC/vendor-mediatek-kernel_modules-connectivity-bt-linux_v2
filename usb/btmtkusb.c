@@ -2714,22 +2714,16 @@ static int btusb_resume(struct usb_interface *intf)
 			clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 			goto done;
 		}
-
-		btusb_submit_bulk_urb(hdev, GFP_NOIO);
 	}
 
 	if (test_bit(BTUSB_ISOC_RUNNING, &bdev->flags)) {
 		if (btusb_submit_isoc_urb(hdev, GFP_NOIO) < 0)
 			clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
-		else
-			btusb_submit_isoc_urb(hdev, GFP_NOIO);
 	}
 
 	if (test_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags)) {
 		if (btusb_submit_intr_ble_isoc_urb(hdev, GFP_NOIO) < 0)
 			clear_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags);
-		else
-			btusb_submit_intr_ble_isoc_urb(hdev, GFP_NOIO);
 	}
 
 	spin_lock_irq(&bdev->txlock);
