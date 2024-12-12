@@ -3771,7 +3771,7 @@ static void btmtk_load_bt_cfg_item(struct st_bt_cfg *bt_cfg,
 		if (kstrtoul(text, 10, &text_value) == 0)
 			bt_cfg->le_audio_clk_fw_gpio = text_value;
 		else
-			BTMTK_WARN_DEV(bdev, "%s: kstrtoul failed %s!", __func__, BT_DONGLE_RESET_PIN);
+			BTMTK_WARN_DEV(bdev, "%s: kstrtoul failed %s!", __func__, BT_LE_AUDIO_CLK_FW_GPIO);
 	} else {
 		BTMTK_WARN_DEV(bdev, "%s: search item %s is invalid!", __func__, BT_LE_AUDIO_CLK_FW_GPIO);
 	}
