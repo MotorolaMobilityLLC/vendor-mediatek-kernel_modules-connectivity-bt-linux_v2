@@ -680,16 +680,16 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 		ptr = strstr(cmd, "FindMyPhone=");
 		if (ptr != NULL) {
 			val = *(ptr + strlen("FindMyPhone=")) - '0';
-			BTMTK_INFO_DEV(bdev, "%s: FindMyPhone[%u]",
-					__func__, bdev->main_info.find_my_phone_mode);
+			BTMTK_INFO_DEV(bdev, "%s: FindMyPhone[%u][%u]",
+					__func__, bdev->main_info.find_my_phone_mode, val);
 			continue;
 		}
 
 		ptr = strstr(cmd, "FindMyPhoneCliff=");
 		if (ptr != NULL) {
 			val = *(ptr + strlen("FindMyPhoneCliff=")) - '0';
-			BTMTK_INFO_DEV(bdev, "%s: FindMyPhoneCliff[%u]",
-					__func__, bdev->main_info.find_my_phone_mode);
+			BTMTK_INFO_DEV(bdev, "%s: FindMyPhoneCliff[%u][%u]",
+					__func__, bdev->main_info.find_my_phone_mode, val);
 			continue;
 		}
 
@@ -813,7 +813,6 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	if (count > HCI_MAX_COMMAND_BUF_SIZE) {
 		BTMTK_ERR("%s: your command is larger than maximum length, count = %zd",
 				__func__, count);
-		ret = -ENOMEM;
 		goto exit;
 	}
 
@@ -822,13 +821,11 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 	if (buf == NULL || count == 0) {
 		BTMTK_ERR("%s: worng input data", __func__);
-		ret = -ENODATA;
 		goto exit;
 	}
 
 	if (copy_from_user(i_fwlog_buf, buf, count) != 0) {
 		BTMTK_ERR("%s: Failed to copy data", __func__);
-		ret = -ENODATA;
 		goto exit;
 	}
 
@@ -865,11 +862,9 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		} else if (!(*pos >= '0' && *pos <= '9') && !(*pos >= 'A' && *pos <= 'F')
 			&& !(*pos >= 'a' && *pos <= 'f')) {
 			BTMTK_ERR("%s: There is an invalid input(%x)", __func__, *pos);
-			ret = -EINVAL;
 			goto exit;
 		} else if (len + 1 >= HCI_MAX_COMMAND_SIZE) {
 			BTMTK_ERR("%s: input data exceed maximum command length (%d)", __func__, len);
-			ret = -EINVAL;
 			goto exit;
 		}
 
@@ -885,23 +880,19 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 	if (o_fwlog_buf[0] != HCI_COMMAND_PKT && o_fwlog_buf[0] != FWLOG_TYPE) {
 		BTMTK_ERR_DEV(pp_bdev[hci_idx], "%s: Not support 0x%02X yet", __func__, o_fwlog_buf[0]);
-		ret = -EPROTONOSUPPORT;
 		goto exit;
 	}
 
 	if (btmtk_cmd_length_check(o_fwlog_buf, len, o_fwlog_buf[0])) {
-		ret = -EPROTONOSUPPORT;
 		goto exit;
 	}
 
 	/* check HCI command length */
 	if (len < HCI_CMD_HEADER_SIZE) {
 		BTMTK_ERR_DEV(pp_bdev[hci_idx], "%s: command is too short for hci cmd, length = %d", __func__, len);
-		ret = -EINVAL;
 		goto exit;
 	} else if (len > HCI_MAX_COMMAND_SIZE) {
 		BTMTK_ERR_DEV(pp_bdev[hci_idx], "%s: command is larger than max buf size, length = %d", __func__, len);
-		ret = -ENOMEM;
 		goto exit;
 	}
 
@@ -910,7 +901,6 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		if (o_fwlog_buf[3] + HCI_CMD_HEADER_SIZE != len) {
 			BTMTK_ERR_DEV(pp_bdev[hci_idx], "%s: pkt format error, hci_cmd_len[%d], input_len[%d]",
 						__func__, o_fwlog_buf[3], len);
-			ret = -EINVAL;
 			goto exit;
 		}
 	}
@@ -944,7 +934,6 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		skb = alloc_skb(count + BT_SKB_RESERVE, GFP_ATOMIC);
 		if (!skb) {
 			BTMTK_ERR_DEV(bdev, "%s allocate skb failed!!", __func__);
-			ret = -ENOMEM;
 			continue;
 		}
 
@@ -971,7 +960,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 					hci_idx = o_fwlog_buf[index + 2];
 					BTMTK_INFO_DEV(bdev, "%s: send to hci%d, vlen %d",
 							__func__, hci_idx, vlen);
-					snprintf(hci_dev, sizeof(hci_dev), "hci%d", hci_idx);
+					(void)snprintf(hci_dev, sizeof(hci_dev), "hci%d", hci_idx);
 					if (strncmp(hci_dev, bdev->hdev->name, strlen(hci_dev)) != 0) {
 						kfree_skb(skb);
 						skb = NULL;
@@ -988,7 +977,6 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 					BTMTK_WARN_DEV(bdev, "%s: Invalid opcode(%d)",
 							__func__, o_fwlog_buf[index]);
 					kfree_skb(skb);
-					skb = NULL;
 				}
 			}
 		} else {
@@ -1003,7 +991,6 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 				if (!skb_opcode) {
 					BTMTK_ERR_DEV(bdev, "%s allocate skb failed!!", __func__);
 					kfree_skb(skb);
-					skb = NULL;
 					continue;
 				}
 				memcpy(skb_opcode->data, (o_fwlog_buf + 1), 2);
@@ -1031,9 +1018,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 			bdev->main_info.dbg_send = 1;
 			if (skb->data[1] == 0x6F && skb->data[2] == 0xFC) {
 				if (skb->len < 6) {
-					ret = -1;
 					kfree_skb(skb);
-					skb = NULL;
 					BTMTK_ERR_DEV(bdev, "%s invalid wmt cmd format", __func__);
 					goto exit;
 				}
@@ -1053,7 +1038,6 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		if (ret < 0) {
 			BTMTK_ERR_DEV(bdev, "%s failed!!", __func__);
 			kfree_skb(skb);
-			skb = NULL;
 #if (USE_DEVICE_NODE == 0)
 			/* clean opcode queue if bt is disable */
 			skb_queue_purge(&g_fwlog->usr_opcode_queue);

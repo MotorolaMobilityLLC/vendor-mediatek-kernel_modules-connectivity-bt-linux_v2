@@ -1034,14 +1034,13 @@ void btmtk_load_debug_sop_register(struct btmtk_dev *bdev)
 	u32 code_len = 0;
 #endif
 
-	if (is_connac3(bdev->chip_id) || is_mt7663(bdev->chip_id)) {
-		BTMTK_WARN_DEV(bdev, "%s: connac3 chip not supported", __func__);
+	if (bdev == NULL) {
+		BTMTK_ERR("%s, bdev is NULL!", __func__);
 		return;
 	}
 
-
-	if (bdev == NULL) {
-		BTMTK_ERR("%s, bdev is NULL!", __func__);
+	if (is_connac3(bdev->chip_id) || is_mt7663(bdev->chip_id)) {
+		BTMTK_WARN_DEV(bdev, "%s: connac3 chip not supported", __func__);
 		return;
 	}
 
@@ -3320,6 +3319,11 @@ int btmtk_picus_enable(struct btmtk_dev *bdev, int via_uart)
 			return ret;
 		}
 	} else {
+		if (cmd.len < MTK_HCI_CMD_HEAD_SIZE || cmd.len > HCI_MAX_FRAME_SIZE) {
+			BTMTK_INFO_RAW(bdev, cmd.content, cmd.len,
+					"%s: get picus enable cmd failed:", __func__);
+			return -1;
+		}
 		if (via_uart) {
 			cmd.content[cmd.len - 1] = 0x03;
 			cmd.content[cmd.len - 2] = 0x03;
