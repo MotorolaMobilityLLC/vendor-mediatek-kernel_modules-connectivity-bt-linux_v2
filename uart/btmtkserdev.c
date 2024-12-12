@@ -353,6 +353,11 @@ static int btmtk_cif_probe(struct serdev_device *serdev)
 
 	/* Retrieve priv data and set to interface structure */
 	bdev = btmtk_get_dev();
+	if (!bdev) {
+		BTMTK_WARN("%s: bdev is NULL!", __func__);
+		return -ENODEV;
+	}
+
 	bdev->cif_dev = &g_uart_dev;
 	serdev_device_set_drvdata(serdev, bdev);
 
@@ -471,7 +476,7 @@ static int btmtk_cif_suspend(struct device *dev)
 
 static int btmtk_cif_resume(struct device *dev)
 {
-	u8 ret = 0;
+	int ret = 0;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct btmtk_cif_state *cif_state = NULL;

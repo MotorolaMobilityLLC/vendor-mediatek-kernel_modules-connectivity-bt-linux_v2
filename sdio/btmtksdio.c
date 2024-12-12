@@ -1515,12 +1515,12 @@ static int btmtk_sdio_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	u32 delay_count = 0;
 	struct btmtk_sdio_dev *cif_dev = NULL;
 
-	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
-
 	if (bdev == NULL || image == NULL || fwbuf == NULL) {
 		BTMTK_ERR("%s: invalid parameters!", __func__);
 		return -1;
 	}
+
+	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
 	BTMTK_INFO("%s: loading rom patch... start", __func__);
 	while (section_dl_size != cur_len) {
@@ -2559,7 +2559,7 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 	u32 u32ReadCRValue = 0;
 	int retry = RETRY_TIMES;
-	u32 ret = 0;
+	int ret = 0;
 	atomic_t subreset_retry;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
@@ -2579,7 +2579,7 @@ reset_retry:
 		btmtk_sdio_keep_driver_own(cif_dev, 1);
 		if (!bmain_info->hif_hook_chip.patched)
 			break;
-		ret = btmtk_sdio_readl(PD2HRM0R, &u32ReadCRValue, cif_dev->func);
+		(void)btmtk_sdio_readl(PD2HRM0R, &u32ReadCRValue, cif_dev->func);
 		msleep(DELAY_TIMES);
 		retry--;
 	} while (((u32ReadCRValue & PD2HRM0R_DRIVER_OWN) != PD2HRM0R_DRIVER_OWN)
@@ -2597,28 +2597,28 @@ reset_retry:
 
 	/* write CHCR[3] 0 */
 	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
-	BTMTK_INFO("%s read CHCR 0x%08X", __func__, u32ReadCRValue);
+	BTMTK_INFO("%s read CHCR 0x%08X, ret = %d", __func__, u32ReadCRValue, ret);
 	u32ReadCRValue &= 0xFFFFFFF7;
 	BTMTK_INFO("%s write CHCR 0x%08X", __func__, u32ReadCRValue);
 	btmtk_sdio_writel(CHCR, u32ReadCRValue, cif_dev->func);
 
 	/* write CHCR[3] to 1 */
 	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
-	BTMTK_INFO("%s read CHCR 0x%08X", __func__, u32ReadCRValue);
+	BTMTK_INFO("%s read CHCR 0x%08X, ret = %d", __func__, u32ReadCRValue, ret);
 	u32ReadCRValue |= 0x00000008;
 	BTMTK_INFO("%s write CHCR 0x%08X", __func__, u32ReadCRValue);
 	btmtk_sdio_writel(CHCR, u32ReadCRValue, cif_dev->func);
 
 	/* write CHCR[5] to 0 */
 	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
-	BTMTK_INFO("%s read CHCR 0x%08X", __func__, u32ReadCRValue);
+	BTMTK_INFO("%s read CHCR 0x%08X, ret = %d", __func__, u32ReadCRValue, ret);
 	u32ReadCRValue &= 0xFFFFFFDF;
 	BTMTK_INFO("%s write CHCR 0x%08X", __func__, u32ReadCRValue);
 	btmtk_sdio_writel(CHCR, u32ReadCRValue, cif_dev->func);
 
 	/* write CHCR[5] to 1 */
 	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
-	BTMTK_INFO("%s read CHCR 0x%08X", __func__, u32ReadCRValue);
+	BTMTK_INFO("%s read CHCR 0x%08X, ret = %d", __func__, u32ReadCRValue, ret);
 	u32ReadCRValue |= 0x00000020;
 	BTMTK_INFO("%s write CHCR 0x%08X", __func__, u32ReadCRValue);
 	btmtk_sdio_writel(CHCR, u32ReadCRValue, cif_dev->func);
