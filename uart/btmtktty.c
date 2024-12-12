@@ -530,6 +530,14 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 				ret = -2;
 				break;
 			}
+
+			/* if uart disconnected, do not wait event anymore */
+			if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT) {
+				BTMTK_WARN("%s chip state disconnect, break", __func__);
+				ret = 0;
+				break;
+			}
+
 #if (USE_DEVICE_NODE == 1)
 			usleep_range(1000, 1100);
 #else

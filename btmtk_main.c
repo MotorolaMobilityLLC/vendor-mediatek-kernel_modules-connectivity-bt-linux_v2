@@ -4792,18 +4792,10 @@ int bt_close(struct hci_dev *hdev)
 			goto unlock;
 		}
 
-		fstate = btmtk_fops_get_state(bdev);
-		if (fstate != BTMTK_FOPS_STATE_OPENED) {
-			BTMTK_WARN_DEV(bdev, "%s: fops is not allow close(%d)", __func__, fstate);
-			goto err;
-		}
-
 		if (dev_num == 1 || i == 1)
 			bt0->hw_addr.open_ref &= ~(0x1 << i);
 		if (i == 0 && bt0->hw_addr.open_ref != 0)
 			continue;
-
-		btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSING);
 
 		state = btmtk_get_chip_state(bdev);
 
@@ -4830,6 +4822,14 @@ int bt_close(struct hci_dev *hdev)
 
 		if (bdev->main_info.hif_hook.cif_mutex_lock)
 			bdev->main_info.hif_hook.cif_mutex_lock(bdev);
+
+		fstate = btmtk_fops_get_state(bdev);
+		if (fstate != BTMTK_FOPS_STATE_OPENED) {
+			BTMTK_WARN_DEV(bdev, "%s: fops is not allow close(%d)", __func__, fstate);
+			goto unlock;
+		}
+
+		btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSING);
 
 		state = btmtk_get_chip_state(bdev);
 		BTMTK_INFO_DEV(bdev, "%s, enter, state[%d]", __func__, state);
@@ -4887,7 +4887,7 @@ exit:
 		btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
 	}
 
-err:
+// err:
 	bdev->main_info.reset_stack_flag = HW_ERR_NONE;
 	bdev->get_hci_reset = 0;
 
