@@ -53,6 +53,7 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define BT_GDMA_DONE_ADDR_W 0x74000A0C
 #define BT_GDMA_DONE_7921_VALUE_W 0x00403FA9
 #define BT_GDMA_DONE_7922_VALUE_W 0x00403EA9
+#define BT_GDMA_DONE_7902_VALUE_W 0x00403EA9
 #define BT_GDMA_DONE_ADDR_R 0x74000A08
 #define BT_GDMA_DONE_VALUE_R 0xFFFFFFFB /* bit2: 0 - dma done, 1 - dma doing */
 

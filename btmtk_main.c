@@ -1274,7 +1274,7 @@ exit:
 }
 
 int btmtk_load_code_from_bin(u8 **image, char *bin_name, struct device *dev,
-											u32 *code_len, u8 retry)
+		u32 *code_len, u8 retry)
 {
 	const struct firmware *fw_entry = NULL;
 	int err = 0;
@@ -1434,7 +1434,7 @@ static void btmtk_print_wifi_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
 
 static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 		int cmd_len, u8 *event, int event_len, struct _Section_Map *sectionMap,
-		u8 fw_state, u8 dma_flag, bool patch_flag)
+		u8 fw_state, u8 dma_flag, int patch_flag)
 {
 	int payload_len = 0;
 	int ret = -1;
@@ -1467,7 +1467,7 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 		cmd[9] = dma_flag; /* 1:using DMA to download, 0:using legacy wmt cmd*/
 		cmd_len = SEC_MAP_NEED_SEND_SIZE + PATCH_HEADER_SIZE;
 
-		if (patch_flag) {
+		if (patch_flag == WIFI_DOWNLOAD) {
 			for (i = 0; i < SECTION_SPEC_NUM; i++) {
 				revert_SecSpec = be2cpu32(sectionMap->u4SecSpec[i]);
 				memcpy(&cmd[PATCH_HEADER_SIZE] + i * sizeof(u32), (u8 *)&revert_SecSpec, sizeof(u32));
@@ -1603,7 +1603,7 @@ void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev)
 }
 
 static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
-		u8 *fwbuf, bool patch_flag)
+		u8 *fwbuf, int patch_flag)
 {
 	u8 *pos;
 	int loop_count = 0;
@@ -1636,7 +1636,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 
 	BTMTK_INFO("%s: loading rom patch...\n", __func__);
 
-	if (patch_flag)
+	if (patch_flag == WIFI_DOWNLOAD)
 		section_num = be2cpu32(globalDescr->u4SectionNum);
 	else
 		section_num = globalDescr->u4SectionNum;
@@ -1659,14 +1659,14 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 		sectionMap = (struct _Section_Map *)(fwbuf + FW_ROM_PATCH_HEADER_SIZE +
 				FW_ROM_PATCH_GD_SIZE + FW_ROM_PATCH_SEC_MAP_SIZE * loop_count);
 
-		if (patch_flag) {
+		if (patch_flag == WIFI_DOWNLOAD) {
 			/* wifi is big-endian */
 			section_offset = be2cpu32(sectionMap->u4SecOffset);
 			dl_size = be2cpu32(sectionMap->bin_info_spec.u4DLSize);
 			if (main_info.hif_hook.dl_dma)
 				dma_flag = be2cpu32(sectionMap->bin_info_spec.u4DLModeCrcType) & 0xFF;
 		} else {
-			/* BT is little-endian */
+			/* BT & ZB are little-endian */
 			section_offset = sectionMap->u4SecOffset;
 			dl_size = sectionMap->bin_info_spec.u4DLSize;
 			/*
@@ -1728,47 +1728,45 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 		}
 		/* FW Download finished */
 		/* remove it, comment from fw dl owner
-		 * if (patch_flag) {
+		 * if (patch_flag == WIFI_DOWNLOAD) {
 		 * if (loop_count == section_num - 1) {
 		 * mdelay(500);
 		 * }
 		 * }
 		 */
 #if DEBUG_LD_PATCH_TIME
-		if (!patch_flag) {
-			if (loop_count == 0) {
-				btmtk_do_gettimeofday(&tv_bgf);
-			} else if (loop_count == 1) {
-				btmtk_do_gettimeofday(&tv_ilm);
-				if (tv_bgf.tv_sec != 0 || tv_bgf.tv_usec != 0) {
-					if (tv_ilm.tv_sec >= tv_bgf.tv_sec)
-						dlt_dma = (tv_ilm.tv_sec - tv_bgf.tv_sec) * 1000;
-					else
-						dlt_dma = (~(tv_bgf.tv_sec - tv_ilm.tv_sec) + 1) * 1000;
-
-					dlt_dma += (tv_ilm.tv_usec - tv_bgf.tv_usec) / 1000;
-				}
-				if (tv_ilm.tv_sec >= tv_start.tv_sec)
-					dlt_all = (tv_ilm.tv_sec - tv_start.tv_sec) * 1000;
+		if (loop_count == 0) {
+			btmtk_do_gettimeofday(&tv_bgf);
+		} else if (loop_count == 1) {
+			btmtk_do_gettimeofday(&tv_ilm);
+			if (tv_bgf.tv_sec != 0 || tv_bgf.tv_usec != 0) {
+				if (tv_ilm.tv_sec >= tv_bgf.tv_sec)
+					dlt_dma = (tv_ilm.tv_sec - tv_bgf.tv_sec) * 1000;
 				else
-					dlt_all = (~(tv_start.tv_sec - tv_ilm.tv_sec) + 1) * 1000;
+					dlt_dma = (~(tv_bgf.tv_sec - tv_ilm.tv_sec) + 1) * 1000;
 
-				dlt_all += (tv_ilm.tv_usec - tv_start.tv_usec) / 1000;
+				dlt_dma += (tv_ilm.tv_usec - tv_bgf.tv_usec) / 1000;
+			}
+			if (tv_ilm.tv_sec >= tv_start.tv_sec)
+				dlt_all = (tv_ilm.tv_sec - tv_start.tv_sec) * 1000;
+			else
+				dlt_all = (~(tv_start.tv_sec - tv_ilm.tv_sec) + 1) * 1000;
 
-				BTMTK_INFO("LD PATCH 1 tv_start: tv_sec:%zu, tv_usec:%zu.",
+			dlt_all += (tv_ilm.tv_usec - tv_start.tv_usec) / 1000;
+
+			BTMTK_INFO("LD PATCH 1 tv_start: tv_sec:%zu, tv_usec:%zu.",
 					tv_start.tv_sec, tv_start.tv_usec);
-				BTMTK_INFO("LD PATCH 2 tv_bgf: tv_sec:%zu, tv_usec:%zu.",
+			BTMTK_INFO("LD PATCH 2 tv_bgf: tv_sec:%zu, tv_usec:%zu.",
 					tv_bgf.tv_sec, tv_bgf.tv_usec);
-				BTMTK_INFO("LD PATCH 3 tv_ilm: tv_sec:%zu, tv_usec:%zu.",
+			BTMTK_INFO("LD PATCH 3 tv_ilm: tv_sec:%zu, tv_usec:%zu.",
 					tv_ilm.tv_sec, tv_ilm.tv_usec);
 
-				if (dlt_dma != 0)
-					BTMTK_INFO("LD PATCH time: ILM_DMA:%ums, ALL:%ums.",
+			if (dlt_dma != 0)
+				BTMTK_INFO("LD PATCH time: ILM_DMA:%ums, ALL:%ums.",
 						dlt_dma, dlt_all);
-				else
-					BTMTK_INFO("LD PATCH time: ILM_DMA:%ums.",
+			else
+				BTMTK_INFO("LD PATCH time: ILM_DMA:%ums.",
 						dlt_all);
-			}
 		}
 #endif
 next_section:
@@ -1783,7 +1781,7 @@ exit:
 	return ret;
 }
 
-int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, bool patch_flag)
+int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, int patch_flag)
 {
 	int ret = 0;
 	u8 *rom_patch = NULL;
@@ -1791,15 +1789,14 @@ int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, bool patch_flag)
 
 	BTMTK_INFO("%s, patch_flag = %d!", __func__, patch_flag);
 
-
 	if (!bdev) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
 		return -EINVAL;
 	}
 
-	if (patch_flag) {
+	if (patch_flag == WIFI_DOWNLOAD) {
 		/* For 7902, we can't read flavor from controller successfully */
-		if (bdev->flavor && !is_mt7902(bdev->chip_id))
+		if (bdev->flavor)
 			/* if flavor equals 1, it represent 7920, else it represent 7921*/
 			(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 					"WIFI_MT%04x_patch_mcu_1a_%x_hdr.bin",
@@ -1807,6 +1804,15 @@ int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, bool patch_flag)
 		else
 			(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 					"WIFI_MT%04x_patch_mcu_1_%x_hdr.bin",
+					bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
+	} else if (patch_flag == ZB_DOWNLOAD) {
+		if (bdev->flavor)
+			(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+					"ZB_RAM_CODE_MT%04x_1a_%x_hdr.bin",
+					bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
+		else
+			(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+					"ZB_RAM_CODE_MT%04x_1_%x_hdr.bin",
 					bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
 	}
 
@@ -1820,10 +1826,13 @@ int btmtk_load_rom_patch_79xx(struct btmtk_dev *bdev, bool patch_flag)
 		goto err;
 	}
 
-	if (patch_flag)
+	if (patch_flag == WIFI_DOWNLOAD) {
 		/*Display rom patch info*/
 		btmtk_print_wifi_patch_info(bdev, rom_patch);
-	else
+	} else if (patch_flag == ZB_DOWNLOAD) {
+		/* ZB header is the same to ZB little endian */
+		btmtk_print_bt_patch_info(bdev, rom_patch, rom_patch_len);
+	} else
 		btmtk_print_bt_patch_info(bdev, rom_patch, rom_patch_len);
 
 	ret = btmtk_send_fw_rom_patch_79xx(bdev, rom_patch, patch_flag);
@@ -1876,6 +1885,15 @@ int btmtk_load_rom_patch(struct btmtk_dev *bdev)
 			return err;
 		}
 
+#if CFG_SUPPORT_BT_DL_ZB_PATCH
+		if (is_mt7902(bdev->chip_id)) {
+			err = btmtk_load_rom_patch_79xx(bdev, ZB_DOWNLOAD);
+			if (err < 0) {
+				BTMTK_WARN("%s: btmtk_load_rom_patch_79xx ZB patch failed!", __func__);
+				err = 0;
+			}
+		}
+#endif
 #if CFG_SUPPORT_BT_DL_WIFI_PATCH
 		err = btmtk_load_rom_patch_79xx(bdev, WIFI_DOWNLOAD);
 		if (err < 0) {
@@ -1883,6 +1901,7 @@ int btmtk_load_rom_patch(struct btmtk_dev *bdev)
 			err = 0;
 		}
 #endif
+
 	} else if (is_mt66xx(bdev->chip_id)) {
 		err = btmtk_load_rom_patch_66xx(bdev);
 	} else
@@ -2704,7 +2723,7 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 	 *  % : fw version & 0xFF + 1 (in HEX)
 	 */
 	if (is_mt7902(bdev->chip_id)) {
-		/* 7902 cant't use the same rule to recognize */
+		/* 7902 can't use the same rule to recognize */
 		bdev->flavor = 0;
 	} else {
 		bdev->flavor = (bdev->flavor & 0x00000080) >> 7;
