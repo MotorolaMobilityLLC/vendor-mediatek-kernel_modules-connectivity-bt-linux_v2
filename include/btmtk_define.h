@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2021081101"
+#define VERSION "7.0.2021081102"
 #define SUBVER ":turnkey"
 
 #define ENABLESTP FALSE
@@ -113,6 +113,7 @@
 #define HCI_SNOOP_ENTRY_NUM	30
 #define HCI_SNOOP_BUF_SIZE	32
 #define HCI_SNOOP_MAX_BUF_SIZE	66
+#define HCI_SNOOP_TS_STR_LEN	24
 #define WMT_OVER_HCI_HEADER_SIZE	3
 #define READ_ISO_PACKET_CMD_SIZE	4
 

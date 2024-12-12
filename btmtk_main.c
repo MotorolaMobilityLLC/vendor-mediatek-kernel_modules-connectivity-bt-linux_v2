@@ -127,6 +127,21 @@ void btmtk_getUTCtime(struct rtc_time *tm, u32 *usec)
 	*usec = tv.tv_usec;
 }
 
+static void btmtk_get_UTC_time_str(char *ts_str)
+{
+	struct rtc_time tm;
+	u32 usec;
+
+	btmtk_getUTCtime(&tm, &usec);
+
+	memset(ts_str, 0, HCI_SNOOP_TS_STR_LEN);
+	(void)snprintf(ts_str, HCI_SNOOP_TS_STR_LEN,
+			"%04d%02d%02d-%02d%02d%02d.%06u",
+			tm.tm_year, tm.tm_mon, tm.tm_mday,
+			tm.tm_hour, tm.tm_min, tm.tm_sec, usec);
+
+}
+
 /*get 1 byte only*/
 int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value)
 {
@@ -359,11 +374,11 @@ void *btmtk_kallsyms_lookup_name(const char *name)
 
 static void btmtk_main_info_initialize(void)
 {
+	u32 snoop_idx = 0;
+
 	memset(&main_info, 0, sizeof(main_info));
-	main_info.hci_cmd_index = HCI_SNOOP_ENTRY_NUM - 1;
-	main_info.hci_event_index = HCI_SNOOP_ENTRY_NUM - 1;
-	main_info.hci_adv_event_index = HCI_SNOOP_ENTRY_NUM - 1;
-	main_info.hci_acl_index = HCI_SNOOP_ENTRY_NUM - 1;
+	for (snoop_idx = 0; snoop_idx < HCI_SNOOP_TYPE_MAX; snoop_idx ++)
+		main_info.snoop[snoop_idx].index = HCI_SNOOP_ENTRY_NUM - 1;
 	atomic_set(&main_info.chip_reset, BTMTK_RESET_DONE);
 	atomic_set(&main_info.subsys_reset, BTMTK_RESET_DONE);
 
@@ -405,236 +420,67 @@ struct btmtk_dev **btmtk_get_pp_bdev(void)
 
 void btmtk_hci_snoop_print_to_log(void)
 {
-	u8 counter, index;
+	u8 counter, index, snoop_index;
+	char *snoop_str[HCI_SNOOP_TYPE_MAX] = {"Command", "Event", "ADV Event", "NOCP Event", "TX ACL", "RX ACL"};
 
-	BTMTK_INFO("HCI Command Dump");
-	BTMTK_INFO("Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data");
-	BTMTK_INFO("index(len)(timestamp:us) :HCI Command");
-
-	if (main_info.hci_cmd_index >= (HCI_SNOOP_ENTRY_NUM - 1))
-		index = 0;
-	else
-		index = main_info.hci_cmd_index + 1;
-	for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
-		if (main_info.hci_cmd_len[index] > 0)
-			BTMTK_INFO_RAW(main_info.hci_cmd_buf[index], main_info.hci_cmd_len[index],
-				"time(%u)-act_len(%d)-len(%d):", main_info.hci_cmd_timestamp[index],
-				main_info.hci_cmd_actual_len[index], main_info.hci_cmd_len[index]);
-		index++;
-		if (index >= HCI_SNOOP_ENTRY_NUM)
+	for (snoop_index = 0; snoop_index < HCI_SNOOP_TYPE_MAX; snoop_index++) {
+		BTMTK_INFO("HCI %s Dump: Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data", snoop_str[snoop_index]);
+		if (main_info.snoop[snoop_index].index >= (HCI_SNOOP_ENTRY_NUM - 1))
 			index = 0;
-	}
-
-	BTMTK_INFO("HCI Event Dump");
-	BTMTK_INFO("Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data");
-	BTMTK_INFO("index(len)(timestamp:us) :HCI Event");
-	if (main_info.hci_event_index >= (HCI_SNOOP_ENTRY_NUM - 1))
-		index = 0;
-	else
-		index = main_info.hci_event_index + 1;
-	for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
-		if (main_info.hci_event_len[index] > 0)
-			BTMTK_INFO_RAW(main_info.hci_event_buf[index], main_info.hci_event_len[index],
-				"time(%u)-act_len(%d)-len(%d):", main_info.hci_event_timestamp[index],
-				main_info.hci_event_actual_len[index], main_info.hci_event_len[index]);
-		index++;
-		if (index >= HCI_SNOOP_ENTRY_NUM)
-			index = 0;
-	}
-
-	BTMTK_INFO("HCI ADV Event Dump");
-	BTMTK_INFO("Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data");
-	BTMTK_INFO("index(len)(timestamp:us) :HCI ADV Event");
-	if (main_info.hci_adv_event_index >= (HCI_SNOOP_ENTRY_NUM - 1))
-		index = 0;
-	else
-		index = main_info.hci_adv_event_index + 1;
-	for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
-		if (main_info.hci_adv_event_len[index] > 0)
-			BTMTK_INFO_RAW(main_info.hci_adv_event_buf[index], main_info.hci_adv_event_len[index],
-				"time(%u)-act_len(%d)-len(%d):", main_info.hci_adv_event_timestamp[index],
-				main_info.hci_adv_event_actual_len[index], main_info.hci_adv_event_len[index]);
-		index++;
-		if (index >= HCI_SNOOP_ENTRY_NUM)
-			index = 0;
-	}
-
-	BTMTK_INFO("HCI ACL Dump");
-	BTMTK_INFO("Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data");
-	BTMTK_INFO("index(len)(timestamp:us) :ACL");
-	if (main_info.hci_acl_index >= (HCI_SNOOP_ENTRY_NUM - 1))
-		index = 0;
-	else
-		index = main_info.hci_acl_index + 1;
-	for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
-		if (main_info.hci_acl_len[index] > 0) {
-			BTMTK_INFO_RAW(main_info.hci_acl_buf[index], main_info.hci_acl_len[index],
-				"time(%u)-act_len(%d)-len(%d):", main_info.hci_acl_timestamp[index],
-				main_info.hci_acl_actual_len[index], main_info.hci_acl_len[index]);
+		else
+			index = main_info.snoop[snoop_index].index + 1;
+		for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
+			if (main_info.snoop[snoop_index].len[index] > 0)
+				BTMTK_INFO_RAW(main_info.snoop[snoop_index].buf[index], main_info.snoop[snoop_index].len[index],
+					"time(%s)-act_len(%d)-len(%d):", main_info.snoop[snoop_index].timestamp[index],
+					main_info.snoop[snoop_index].actual_len[index], main_info.snoop[snoop_index].len[index]);
+			index++;
+			if (index >= HCI_SNOOP_ENTRY_NUM)
+				index = 0;
 		}
-		index++;
-		if (index >= HCI_SNOOP_ENTRY_NUM)
-			index = 0;
 	}
 }
 
-static unsigned int btmtk_hci_snoop_get_microseconds(void)
-{
-	struct timeval now;
-
-	btmtk_do_gettimeofday(&now);
-	return now.tv_sec * 1000000 + now.tv_usec;
-}
-
-void btmtk_hci_snoop_save_cmd(u32 len, u8 *buf)
+void btmtk_hci_snoop_save(unsigned int type, u32 len, u8 *buf)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
 	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
 	u8 separator_char[SEPARATOR_LEN] = {0xA5, 0xA5};
 	u8 *copy_tail_buf;
 
-	if (buf && len > 0 && main_info.hci_cmd_index < HCI_SNOOP_ENTRY_NUM) {
-		if (len < HCI_SNOOP_BUF_SIZE) {
-			copy_len = len;
-			copy_tail_len = 0;
-		} else if (len > HCI_SNOOP_BUF_SIZE && len <= HCI_SNOOP_BUF_SIZE * 2)
-			copy_tail_len = len - copy_len;
-
-		main_info.hci_cmd_len[main_info.hci_cmd_index] = copy_len & 0xff;
-		main_info.hci_cmd_actual_len[main_info.hci_cmd_index] = len & 0xffff;
-		main_info.hci_cmd_timestamp[main_info.hci_cmd_index] = btmtk_hci_snoop_get_microseconds();
-		memset(main_info.hci_cmd_buf[main_info.hci_cmd_index], 0, HCI_SNOOP_MAX_BUF_SIZE);
-		memcpy(main_info.hci_cmd_buf[main_info.hci_cmd_index], buf, copy_len & 0xff);
-		/* save less then 32 bytes data in the buffer tail, using A5 A5 to
-		 * separator the head 32 bytes data and the tail 32 bytes data
-		 */
-		if (copy_tail_len > 0) {
-			copy_tail_buf = buf + len - copy_tail_len;
-			main_info.hci_cmd_len[main_info.hci_cmd_index] +=
-				(copy_tail_len + SEPARATOR_LEN) & 0xff;
-			memcpy(main_info.hci_cmd_buf[main_info.hci_cmd_index] + copy_len, separator_char,
-				SEPARATOR_LEN);
-			memcpy(main_info.hci_cmd_buf[main_info.hci_cmd_index] + copy_len + SEPARATOR_LEN,
-				copy_tail_buf, copy_tail_len);
-		}
-
-		if (main_info.hci_cmd_index == 0)
-			main_info.hci_cmd_index = HCI_SNOOP_ENTRY_NUM;
-		main_info.hci_cmd_index--;
+	if (!buf || len == 0 || type >= HCI_SNOOP_TYPE_MAX) {
+		BTMTK_ERR("%s, invalid parameters!", __func__);
+		return;
 	}
-}
 
-void btmtk_hci_snoop_save_adv_event(u32 len, u8 *buf)
-{
-	u32 copy_len = HCI_SNOOP_BUF_SIZE;
-	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
-	u8 separator_char[SEPARATOR_LEN] = {0xA5, 0xA5};
-	u8 *copy_tail_buf;
-
-	if (buf && len > 0 && main_info.hci_adv_event_index < HCI_SNOOP_ENTRY_NUM) {
+	if (main_info.snoop[type].index < HCI_SNOOP_ENTRY_NUM) {
 		if (len < HCI_SNOOP_BUF_SIZE) {
 			copy_len = len;
 			copy_tail_len = 0;
 		} else if (len > HCI_SNOOP_BUF_SIZE && len <= HCI_SNOOP_BUF_SIZE * 2)
 			copy_tail_len = len - copy_len;
 
-		main_info.hci_adv_event_len[main_info.hci_adv_event_index] = copy_len & 0xff;
-		main_info.hci_adv_event_actual_len[main_info.hci_adv_event_index] = len & 0xffff;
-		main_info.hci_adv_event_timestamp[main_info.hci_adv_event_index] = btmtk_hci_snoop_get_microseconds();
-		memset(main_info.hci_adv_event_buf[main_info.hci_adv_event_index], 0, HCI_SNOOP_MAX_BUF_SIZE);
-		memcpy(main_info.hci_adv_event_buf[main_info.hci_adv_event_index], buf, copy_len);
+		main_info.snoop[type].len[main_info.snoop[type].index] = copy_len & 0xff;
+		main_info.snoop[type].actual_len[main_info.snoop[type].index] = len & 0xffff;
+		btmtk_get_UTC_time_str(main_info.snoop[type].timestamp[main_info.snoop[type].index]);
+		memset(main_info.snoop[type].buf[main_info.snoop[type].index], 0, HCI_SNOOP_MAX_BUF_SIZE);
+		memcpy(main_info.snoop[type].buf[main_info.snoop[type].index], buf, copy_len & 0xff);
 		/* save less then 32 bytes data in the buffer tail, using A5 A5 to
 		 * separator the head 32 bytes data and the tail 32 bytes data
 		 */
 		if (copy_tail_len > 0) {
 			copy_tail_buf = buf + len - copy_tail_len;
-			main_info.hci_adv_event_len[main_info.hci_adv_event_index] +=
+			main_info.snoop[type].len[main_info.snoop[type].index] +=
 				(copy_tail_len + SEPARATOR_LEN) & 0xff;
-			memcpy(main_info.hci_adv_event_buf[main_info.hci_adv_event_index] + copy_len, separator_char,
+			memcpy(main_info.snoop[type].buf[main_info.snoop[type].index] + copy_len, separator_char,
 				SEPARATOR_LEN);
-			memcpy(main_info.hci_adv_event_buf[main_info.hci_adv_event_index] + copy_len + SEPARATOR_LEN,
+			memcpy(main_info.snoop[type].buf[main_info.snoop[type].index] + copy_len + SEPARATOR_LEN,
 				copy_tail_buf, copy_tail_len);
 		}
 
-		if (main_info.hci_adv_event_index == 0)
-			main_info.hci_adv_event_index = HCI_SNOOP_ENTRY_NUM;
-		main_info.hci_adv_event_index--;
-	}
-}
-
-void btmtk_hci_snoop_save_event(u32 len, u8 *buf)
-{
-	u32 copy_len = HCI_SNOOP_BUF_SIZE;
-	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
-	u8 separator_char[SEPARATOR_LEN] = {0xA5, 0xA5};
-	u8 *copy_tail_buf;
-
-	if (buf && len > 0 && main_info.hci_event_index < HCI_SNOOP_ENTRY_NUM) {
-		if (len < HCI_SNOOP_BUF_SIZE) {
-			copy_len = len;
-			copy_tail_len = 0;
-		} else if (len > HCI_SNOOP_BUF_SIZE && len <= HCI_SNOOP_BUF_SIZE * 2)
-			copy_tail_len = len - copy_len;
-
-		main_info.hci_event_len[main_info.hci_event_index] = copy_len & 0xff;
-		main_info.hci_event_actual_len[main_info.hci_event_index] = len & 0xffff;
-		main_info.hci_event_timestamp[main_info.hci_event_index] = btmtk_hci_snoop_get_microseconds();
-		memset(main_info.hci_event_buf[main_info.hci_event_index], 0, HCI_SNOOP_MAX_BUF_SIZE);
-		memcpy(main_info.hci_event_buf[main_info.hci_event_index], buf, copy_len);
-		/* save less then 32 bytes data in the buffer tail, using A5 A5 to
-		 * separator the head 32 bytes data and the tail 32 bytes data
-		 */
-		if (copy_tail_len > 0) {
-			copy_tail_buf = buf + len - copy_tail_len;
-			main_info.hci_event_len[main_info.hci_event_index] +=
-				(copy_tail_len + SEPARATOR_LEN) & 0xff;
-			memcpy(main_info.hci_event_buf[main_info.hci_event_index] + copy_len, separator_char,
-				SEPARATOR_LEN);
-			memcpy(main_info.hci_event_buf[main_info.hci_event_index] + copy_len + SEPARATOR_LEN,
-				copy_tail_buf, copy_tail_len);
-		}
-
-		if (main_info.hci_event_index == 0)
-			main_info.hci_event_index = HCI_SNOOP_ENTRY_NUM;
-		main_info.hci_event_index--;
-	}
-}
-
-void btmtk_hci_snoop_save_acl(u32 len, u8 *buf)
-{
-	u32 copy_len = HCI_SNOOP_BUF_SIZE;
-	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
-	u8 separator_char[SEPARATOR_LEN] = {0xA5, 0xA5};
-	u8 *copy_tail_buf;
-
-	if (buf && len > 0 && main_info.hci_acl_index < HCI_SNOOP_ENTRY_NUM) {
-		if (len < HCI_SNOOP_BUF_SIZE) {
-			copy_len = len;
-			copy_tail_len = 0;
-		} else if (len > HCI_SNOOP_BUF_SIZE && len <= HCI_SNOOP_BUF_SIZE * 2)
-			copy_tail_len = len - copy_len;
-
-		main_info.hci_acl_len[main_info.hci_acl_index] = copy_len & 0xff;
-		main_info.hci_acl_actual_len[main_info.hci_acl_index] = len & 0xffff;
-		main_info.hci_acl_timestamp[main_info.hci_acl_index] = btmtk_hci_snoop_get_microseconds();
-		memset(main_info.hci_acl_buf[main_info.hci_acl_index], 0, HCI_SNOOP_MAX_BUF_SIZE);
-		memcpy(main_info.hci_acl_buf[main_info.hci_acl_index], buf, copy_len & 0xff);
-		/* save less then 32 bytes data in the buffer tail, using A5 A5 to
-		 * separator the head 32 bytes data and the tail 32 bytes data
-		 */
-		if (copy_tail_len > 0) {
-			copy_tail_buf = buf + len - copy_tail_len;
-			main_info.hci_acl_len[main_info.hci_acl_index] +=
-				(copy_tail_len + SEPARATOR_LEN) & 0xff;
-			memcpy(main_info.hci_acl_buf[main_info.hci_acl_index] + copy_len, separator_char,
-				SEPARATOR_LEN);
-			memcpy(main_info.hci_acl_buf[main_info.hci_acl_index] + copy_len + SEPARATOR_LEN,
-				copy_tail_buf, copy_tail_len);
-		}
-
-		if (main_info.hci_acl_index == 0)
-			main_info.hci_acl_index = HCI_SNOOP_ENTRY_NUM;
-		main_info.hci_acl_index--;
+		if (main_info.snoop[type].index == 0)
+			main_info.snoop[type].index = HCI_SNOOP_ENTRY_NUM;
+		main_info.snoop[type].index--;
 	}
 }
 
@@ -2715,6 +2561,15 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 		goto exit;
 	}
 
+	if (is_mt7961(bdev->chip_id)) {
+		if (bdev->flavor & DUAL_BT_FLAG)
+			bdev->dualBT = 1;
+		else
+			bdev->dualBT = 0;
+	} else {
+		bdev->dualBT = 0;
+	}
+
 	/* Bin filename format : "BT_RAM_CODE_MT%04x_%x_%x_hdr.bin"
 	 *  $$$$ : chip id
 	 *  % : fw version & 0xFF + 1 (in HEX)
@@ -3666,7 +3521,7 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				}
 			}
 			/* save hci cmd pkt for debug */
-			btmtk_hci_snoop_save_cmd(skb->len, skb->data);
+			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD, skb->len, skb->data);
 			if (skb->len == FW_COREDUMP_CMD_LEN &&
 				!memcmp(skb->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
 				BTMTK_INFO("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
@@ -3676,7 +3531,9 @@ static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			} else if (skb->len == HCI_RESET_CMD_LEN &&
 					!memcmp(skb->data, reset_cmd, HCI_RESET_CMD_LEN))
 				BTMTK_INFO("%s: got command: 0x03 0C 00 (HCI_RESET)", __func__);
-			}
+		} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
+			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ACL, skb->len, skb->data);
+		}
 
 		ret = main_info.hif_hook.send_cmd(bdev, skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST);
 		if (ret < 0) {
@@ -3727,9 +3584,11 @@ static void btmtk_rx_work(struct work_struct *work)
 		if (hci_skb_pkt_type(skb) == HCI_EVENT_PKT) {
 			/* save hci evt pkt for debug */
 			if (skb->data[0] == 0x3E)
-				btmtk_hci_snoop_save_adv_event(skb->len, skb->data);
+				btmtk_hci_snoop_save(HCI_SNOOP_TYPE_ADV_EVT, skb->len, skb->data);
+			else if (skb->data[0] == 0x13)
+				btmtk_hci_snoop_save(HCI_SNOOP_TYPE_NOCP_EVT, skb->len, skb->data);
 			else
-				btmtk_hci_snoop_save_event(skb->len, skb->data);
+				btmtk_hci_snoop_save(HCI_SNOOP_TYPE_EVT, skb->len, skb->data);
 
 			if (main_info.hif_hook.event_filter(bdev, skb)) {
 				/* Drop by driver, don't send to stack */
@@ -3738,7 +3597,8 @@ static void btmtk_rx_work(struct work_struct *work)
 			}
 		} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
 			/* save hci acl pkt for debug, not include picus log and coredump*/
-			btmtk_hci_snoop_save_acl(skb->len, skb->data);
+			if (!(skb->data[0] == 0xFF && skb->data[1] == 0xF0))
+				btmtk_hci_snoop_save(HCI_SNOOP_TYPE_RX_ACL, skb->len, skb->data);
 		}
 
 		fstate = btmtk_fops_get_state(bdev);
@@ -4122,13 +3982,7 @@ static int btmtk_reboot_notify(struct notifier_block *nb,
 				ret = btmtk_send_deinit_cmds(bdev);
 				if (ret < 0)
 					BTMTK_ERR("%s, btmtk_send_deinit_cmds failed", __func__);
-#if 0
-				/* Flush RX works */
-				flush_work(&bdev->rx_work);
 
-				/* Drop queues */
-				skb_queue_purge(&bdev->rx_q);
-#endif
 				main_info.hif_hook.close(bdev->hdev);
 
 				if (main_info.hif_hook.cif_mutex_unlock)
