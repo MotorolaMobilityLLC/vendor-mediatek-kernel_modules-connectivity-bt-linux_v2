@@ -173,16 +173,41 @@ extern uint8_t btmtk_log_lvl;
 #define BTMTK_DBG(fmt, ...)	 \
 	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) PRINTF_INFO("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__); } while (0)
 
-#define BTMTK_ERR_LIMITTED(fmt, ...)	\
+#define BTMTK_ERR_DEV(bdev, fmt, ...)	 \
 	do { \
-		if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR)	\
-			printk_ratelimited(PRINTK_LIMITE_LVL "[btmtk_err_limit] "fmt"\n", ##__VA_ARGS__);	\
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR && bdev) \
+			PRINTF_INFO("[btmtk_err][%d][%s] ***"fmt"***\n", \
+				bdev->dongle_index, bdev->hdev ? bdev->hdev->name : "hciX", ##__VA_ARGS__); \
+	} while (0)
+#define BTMTK_WARN_DEV(bdev, fmt, ...)	\
+	do { \
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN && bdev) \
+			PRINTF_INFO("[btmtk_warn][%d][%s] "fmt"\n", \
+				bdev->dongle_index, bdev->hdev ? bdev->hdev->name : "hciX", ##__VA_ARGS__); \
+	} while (0)
+#define BTMTK_INFO_DEV(bdev, fmt, ...)	\
+	do { \
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO && bdev) \
+			PRINTF_INFO("[btmtk_info][%d][%s] "fmt"\n", \
+				bdev->dongle_index, bdev->hdev ? bdev->hdev->name : "hciX", ##__VA_ARGS__); \
+	} while (0)
+#define BTMTK_DBG_DEV(bdev, fmt, ...)	 \
+	do { \
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG && bdev) \
+			PRINTF_INFO("[btmtk_dbg][%d][%s] "fmt"\n", \
+				bdev->dongle_index, bdev->hdev ? bdev->hdev->name : "hciX", ##__VA_ARGS__); \
 	} while (0)
 
 #define BTMTK_WARN_LIMITTED(fmt, ...)	\
 	do { \
-		if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN)	\
-			printk_ratelimited(PRINTK_LIMITE_LVL "[btmtk_warn_limit] "fmt"\n", ##__VA_ARGS__);	\
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN) \
+			printk_ratelimited(PRINTK_LIMITE_LVL "[btmtk_warn_limit] "fmt"\n", ##__VA_ARGS__); \
+	} while (0)
+
+#define BTMTK_ERR_LIMITTED(fmt, ...)	\
+	do { \
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR)	\
+			printk_ratelimited(PRINTK_LIMITE_LVL "[btmtk_err_limit] "fmt"\n", ##__VA_ARGS__);	\
 	} while (0)
 
 #define BTMTK_DBG_LIMITTED(fmt, ...)	\
@@ -198,7 +223,7 @@ extern uint8_t _raw_buf_[];
 			printk_ratelimited(KERN_WARNING "[btmtk_info_limit] "fmt"\n", ##__VA_ARGS__);	\
 	} while (0)
 
-#define BTMTK_INFO_RAW(p, l, fmt, ...)						\
+#define BTMTK_INFO_RAW(bdev, p, l, fmt, ...)						\
 	do {	\
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) {	\
 			int cnt_ = 0;	\
@@ -208,14 +233,16 @@ extern uint8_t _raw_buf_[];
 				(void)snprintf(_raw_buf_+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
 			_raw_buf_[3*cnt_] = '\0';	\
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-				PR_CONT("[btmtk_info] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
+				PR_CONT("[btmtk_info][%u][%s] "fmt"%s\n", \
+						bdev->dongle_index, bdev->hdev?bdev->hdev->name:"hciX", ##__VA_ARGS__, _raw_buf_);	\
 			} else {	\
-				PR_CONT("[btmtk_info] "fmt" %s (partial)\n", ##__VA_ARGS__, _raw_buf_);	\
+				PR_CONT("[btmtk_info][%u][%s] "fmt"%s (prtail)\n", \
+						bdev->dongle_index, bdev->hdev?bdev->hdev->name:"hciX", ##__VA_ARGS__, _raw_buf_);	\
 			}	\
 		}	\
 	} while (0)
 
-#define BTMTK_DBG_RAW(p, l, fmt, ...)						\
+#define BTMTK_DBG_RAW(bdev, p, l, fmt, ...)						\
 	do {	\
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {	\
 			int cnt_ = 0;	\
@@ -225,9 +252,11 @@ extern uint8_t _raw_buf_[];
 				(void)snprintf(_raw_buf_+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
 			_raw_buf_[3*cnt_] = '\0'; \
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-				PR_CONT("[btmtk_debug] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_); \
+				PR_CONT("[btmtk_debug][%u][%s] "fmt"%s\n", \
+						bdev->dongle_index, bdev->hdev?bdev->hdev->name:"hciX", ##__VA_ARGS__, _raw_buf_);	\
 			} else {	\
-				PR_CONT("[btmtk_debug] "fmt" %s (partial)\n", ##__VA_ARGS__, _raw_buf_);	\
+				PR_CONT("[btmtk_debug][%u][%s] "fmt"%s (prtail)\n", \
+						bdev->dongle_index, bdev->hdev?bdev->hdev->name:"hciX", ##__VA_ARGS__, _raw_buf_); \
 			}	\
 		}	\
 	} while (0)

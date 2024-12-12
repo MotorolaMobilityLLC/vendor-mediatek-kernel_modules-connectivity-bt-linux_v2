@@ -19,19 +19,19 @@ static char calibration_status = BTMTK_CAL_DATA_STATE_UNKNOWN;
 
 void btmtk_cif_connac3_calibration_backup_free(struct btmtk_dev *bdev)
 {
-	BTMTK_INFO("%s enter", __func__);
+	BTMTK_INFO_DEV(bdev, "%s enter", __func__);
 
 	if (!bdev) {
-		BTMTK_ERR("%s: bdev is null", __func__);
+		BTMTK_ERR_DEV(bdev, "%s: bdev is null", __func__);
 		return;
 	}
 
 	if (bdev->cali_backup.num) {
-		BTMTK_INFO("%s: clear %d calibration data", __func__, bdev->cali_backup.num);
+		BTMTK_INFO_DEV(bdev, "%s: clear %d calibration data", __func__, bdev->cali_backup.num);
 		btmtk_free_fw_cfg_struct(bdev->cali_backup.cal_data, CAL_DATA_PACKET_NUM);
 		bdev->cali_backup.num = 0;
 	}
-	BTMTK_INFO("%s end", __func__);
+	BTMTK_INFO_DEV(bdev, "%s end", __func__);
 }
 
 int btmtk_cif_connac3_calibration_restore(struct btmtk_dev *bdev)
@@ -49,10 +49,10 @@ int btmtk_cif_connac3_calibration_restore(struct btmtk_dev *bdev)
 	//s32 sent_len_max = UPLOAD_PATCH_UNIT - PATCH_HEADER_SIZE;
 	int i = 0;
 
-	BTMTK_INFO("%s enter", __func__);
+	BTMTK_INFO_DEV(bdev, "%s enter", __func__);
 
 	if (bdev == NULL) {
-		BTMTK_WARN("%s, invalid parameters!", __func__);
+		BTMTK_WARN_DEV(bdev, "%s, invalid parameters!", __func__);
 		ret = -1;
 		goto exit;
 	}
@@ -62,15 +62,15 @@ int btmtk_cif_connac3_calibration_restore(struct btmtk_dev *bdev)
 			event, CAL_DATA_EVNET_LEN,
 			WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 	if (ret < 0) {
-		BTMTK_ERR("%s: failed(%d)", __func__, ret);
+		BTMTK_ERR_DEV(bdev, "%s: failed(%d)", __func__, ret);
 		ret = -1;
 	} else if (ret == 0 && bdev->recv_evt_len > 0) {
 		switch (bdev->io_buf[CAL_DATA_EVNET_LEN - 1]) {
 		case 0:			 /* successful */
-			BTMTK_INFO("%s: calibration restore begin!!", __func__);
+			BTMTK_INFO_DEV(bdev, "%s: calibration restore begin!!", __func__);
 			break;
 		default:
-			BTMTK_WARN("%s: no need to restore", __func__);
+			BTMTK_WARN_DEV(bdev, "%s: no need to restore", __func__);
 			ret = 0;
 			goto exit;
 		}
@@ -78,7 +78,7 @@ int btmtk_cif_connac3_calibration_restore(struct btmtk_dev *bdev)
 
 	image = kmalloc(UPLOAD_PATCH_UNIT, GFP_ATOMIC);
 	if (!image) {
-		BTMTK_ERR("%s: alloc memory failed", __func__);
+		BTMTK_ERR_DEV(bdev, "%s: alloc memory failed", __func__);
 		ret = -1;
 		goto exit;
 	}
@@ -121,13 +121,13 @@ int btmtk_cif_connac3_calibration_restore(struct btmtk_dev *bdev)
 			image[12] = ((packet_len) >> 8) & 0xFF;
 			memcpy(&image[13], data_buf, packet_len);
 
-			BTMTK_INFO("%s: current cal data num is %d", __func__, i);
-			BTMTK_INFO_RAW(image, packet_len + 12, "%s, send, len = %d", __func__, (packet_len + 12));
+			BTMTK_INFO_DEV(bdev, "%s: current cal data num is %d", __func__, i);
+			BTMTK_INFO_RAW(bdev, image, packet_len + 12, "%s, send, len = %d", __func__, (packet_len + 12));
 
 			ret = btmtk_main_send_cmd(bdev, image, packet_len + 12,
 					event, CAL_DATA_EVNET_LEN - 1, delay, retry, BTMTK_TX_ACL_FROM_DRV, CMD_NO_NEED_FILTER);
 			if (ret < 0) {
-				BTMTK_ERR("%s: send cal data failed, terminate", __func__);
+				BTMTK_ERR_DEV(bdev, "%s: send cal data failed, terminate", __func__);
 				goto err;
 			}
 		} else
@@ -150,10 +150,10 @@ int btmtk_cif_connac3_calibration_backup_send(struct btmtk_dev *bdev)
 	int ret;
 	unsigned long single_timo = 0, start_time = 0, total_timo = 0;
 
-	BTMTK_INFO("%s enter", __func__);
+	BTMTK_INFO_DEV(bdev, "%s enter", __func__);
 
 	if (!bdev) {
-		BTMTK_ERR("%s: bdev is null", __func__);
+		BTMTK_ERR_DEV(bdev, "%s: bdev is null", __func__);
 		return -1;
 	}
 
@@ -167,7 +167,7 @@ int btmtk_cif_connac3_calibration_backup_send(struct btmtk_dev *bdev)
 	btmtk_cif_connac3_calibration_backup_free(bdev);
 	/* save calibration data in btmtk_dispatch_fwlog */
 	do {
-		BTMTK_INFO_RAW(cmd, cmd_len, "%s, send, len(%d)", __func__, cmd_len);
+		BTMTK_INFO_RAW(bdev, cmd, cmd_len, "%s, send, len(%d)", __func__, cmd_len);
 		ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
 			NULL, 0, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_ACL_FROM_DRV, CMD_NO_NEED_FILTER);
 		while (time_before(jiffies, single_timo)) {
@@ -179,13 +179,13 @@ int btmtk_cif_connac3_calibration_backup_send(struct btmtk_dev *bdev)
 		}
 
 		if (calibration_status == BTMTK_CAL_DATA_STATE_UNKNOWN) {
-			BTMTK_ERR("%s: calibration_status error", __func__);
+			BTMTK_ERR_DEV(bdev, "%s: calibration_status error", __func__);
 			ret = -1;
 			break;
 		}
-		BTMTK_INFO("%s: calibration_status %d", __func__, calibration_status);
+		BTMTK_INFO_DEV(bdev, "%s: calibration_status %d", __func__, calibration_status);
 		if (calibration_status == BTMTK_CAL_DATA_STATE_END) {
-			BTMTK_INFO("%s: calibration recv end", __func__);
+			BTMTK_INFO_DEV(bdev, "%s: calibration recv end", __func__);
 			calibration_status = BTMTK_CAL_DATA_STATE_UNKNOWN;/* re-init for next time */
 			ret = 0;
 			break;
@@ -193,7 +193,7 @@ int btmtk_cif_connac3_calibration_backup_send(struct btmtk_dev *bdev)
 		calibration_status = BTMTK_CAL_DATA_STATE_UNKNOWN;
 	} while (time_before(jiffies, total_timo));
 
-	BTMTK_INFO("%s end", __func__);
+	BTMTK_INFO_DEV(bdev, "%s end", __func__);
 
 	return ret;
 }
@@ -202,10 +202,10 @@ int btmtk_cif_connac3_calibration_backup_save(struct btmtk_dev *bdev, struct sk_
 {
 	u32 pkt_len = 0;
 
-	BTMTK_INFO("%s", __func__);
+	BTMTK_INFO_DEV(bdev, "%s", __func__);
 
 	if (bdev == NULL || skb == NULL) {
-		BTMTK_ERR("bdev or skb is NULL");
+		BTMTK_ERR_DEV(bdev, "bdev or skb is NULL");
 		return -1;
 	}
 
@@ -217,16 +217,16 @@ int btmtk_cif_connac3_calibration_backup_save(struct btmtk_dev *bdev, struct sk_
 		 * 0x02: continue;
 		 * 0x03: end
 		 */
-		BTMTK_INFO_RAW(skb->data, skb->len, "%s, len = %d", __func__, skb->len);
+		BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s, len = %d", __func__, skb->len);
 		calibration_status = skb->data[1];
-		BTMTK_INFO("%s: calibration_status %d", __func__, calibration_status);
+		BTMTK_INFO_DEV(bdev, "%s: calibration_status %d", __func__, calibration_status);
 		/* FF 01 LL LL data ...*/
 		pkt_len = (skb->data[3] << 8) + skb->data[2];
 		bdev->cali_backup.cal_data[bdev->cali_backup.num].length = pkt_len;
 		bdev->cali_backup.cal_data[bdev->cali_backup.num].content = kzalloc(pkt_len, GFP_KERNEL);
 		memcpy(bdev->cali_backup.cal_data[bdev->cali_backup.num].content, skb->data + 4, pkt_len);
 		bdev->cali_backup.num++;
-		BTMTK_INFO("%s: recv %d calibration data", __func__, bdev->cali_backup.num);
+		BTMTK_INFO_DEV(bdev, "%s: recv %d calibration data", __func__, bdev->cali_backup.num);
 		return 1; /* not send to host */
 	}
 	return 0;
@@ -236,7 +236,7 @@ static int btmtk_bt_open(struct btmtk_dev *bdev)
 {
 	int ret = 0;	/* if successful, 0 */
 
-	BTMTK_INFO("%s", __func__);
+	BTMTK_INFO_DEV(bdev, "%s", __func__);
 
 	btmtk_dynamic_load_rom_patch(bdev, 1);
 
@@ -244,12 +244,12 @@ static int btmtk_bt_open(struct btmtk_dev *bdev)
 			SET_EFEM1_CMD, SET_EFEM1_EVT,
 			WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 	if (ret < 0) {
-		BTMTK_ERR("%s, btmtk_calibration_flow failed!", __func__);
+		BTMTK_ERR_DEV(bdev, "%s, btmtk_calibration_flow failed!", __func__);
 		goto exit;
 	}
 
 exit:
-	BTMTK_INFO("%s: ret %d", __func__, ret);
+	BTMTK_INFO_DEV(bdev, "%s: ret %d", __func__, ret);
 	return ret;
 
 }

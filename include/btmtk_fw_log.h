@@ -75,6 +75,6 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 long btmtk_fops_compat_ioctlfwlog(struct file *filp, unsigned int cmd, unsigned long arg);
 int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb);
 int btmtk_dispatch_fwlog_bluetooth_kpi(struct btmtk_dev *bdev, u8 *buf, int len, u8 type);
-int btmtk_update_bt_status(u8 onoff_flag);
+int btmtk_update_bt_status(struct btmtk_dev *bdev, u8 onoff_flag);
 
 #endif /* __BTMTK_FW_LOG_H__ */

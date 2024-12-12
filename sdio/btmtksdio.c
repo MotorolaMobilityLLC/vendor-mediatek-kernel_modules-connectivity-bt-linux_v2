@@ -1179,7 +1179,7 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 			!memcmp(skb->data, fw_assert_cmd.content, fw_assert_cmd.len))
 			|| (skb->len == fw_assert_cmd1.len &&
 			!memcmp(skb->data, fw_assert_cmd1.content, fw_assert_cmd1.len))) {
-		BTMTK_INFO_RAW(skb->data, skb->len, "%s: Trigger FW assert, dump CR", __func__);
+		BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: Trigger FW assert, dump CR", __func__);
 #if BTMTK_SDIO_DEBUG
 		rx_debug_print();
 #endif
@@ -1249,12 +1249,12 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 	if (sdio_header_length != rx_length) {
 		BTMTK_ERR("%s sdio header length %d, rx_length %d mismatch, trigger assert",
 			__func__, sdio_header_length, rx_length);
-		BTMTK_INFO_RAW(cif_dev->transfer_buf, rx_length, "%s: raw data is :", __func__);
+		BTMTK_INFO_RAW(bdev, cif_dev->transfer_buf, rx_length, "%s: raw data is :", __func__);
 		btmtk_send_assert_cmd(bdev);
 		return -EIO;
 	}
 
-	BTMTK_DBG_RAW(cif_dev->transfer_buf, rx_length, "%s: raw data is :", __func__);
+	BTMTK_DBG_RAW(bdev, cif_dev->transfer_buf, rx_length, "%s: raw data is :", __func__);
 
 	hci_type = cif_dev->transfer_buf[MTK_SDIO_PACKET_HEADER_SIZE];
 	hci_pkt_len = get_pkt_len(hci_type, &cif_dev->transfer_buf[MTK_SDIO_PACKET_HEADER_SIZE + 1]) + 1;
@@ -1272,7 +1272,7 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 		memcpy(cif_dev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE, bdev->io_buf, hci_pkt_len);
 		/* make sure memcpy done before send to hci layer */
 		smp_wmb();
-		BTMTK_DBG_RAW(cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
+		BTMTK_DBG_RAW(bdev, cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
 	}
 #if 0
 	switch (hci_type) {
@@ -1307,7 +1307,7 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 		memcpy(cif_dev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE, bdev->io_buf, hci_pkt_len);
 		/* make sure memcpy done before send to hci layer */
 		smp_wmb();
-		BTMTK_DBG_RAW(cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
+		BTMTK_DBG_RAW(bdev, cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
 		break;
 	}
 #endif
@@ -1349,7 +1349,7 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			 * by driver, don't send to stack
 			 */
 			if (skb->data[0] == WOBLE_DEBUG_EVT_TYPE) {
-				BTMTK_INFO_RAW(skb->data, skb->len, "%s: wobx debug log:", __func__);
+				BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: wobx debug log:", __func__);
 				/* parse WoBX debug log */
 				p = &skb->data[1];
 				pend = p + skb->data[1];
@@ -1381,9 +1381,9 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			if (skb->data[0] != BLE_EVT_TYPE) {
 				/* Don't care BLE event */
 				BTMTK_INFO("%s compare fail", __func__);
-				BTMTK_INFO_RAW(event_need_compare, event_need_compare_len,
+				BTMTK_INFO_RAW(bdev, event_need_compare, event_need_compare_len,
 					"%s: event_need_compare:", __func__);
-				BTMTK_INFO_RAW(skb->data, skb->len, "%s: skb->data:", __func__);
+				BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: skb->data:", __func__);
 			}
 
 			if (btmtk_vendor_cmd_filter(bdev, skb))
@@ -1432,7 +1432,7 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 		event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 	}
 
-	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
+	BTMTK_DBG_RAW(bdev, skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
 
 	ret = btmtk_sdio_send_cmd(bdev, skb, delay, retry, pkt_type, flag);
 	if (ret < 0) {
@@ -1769,7 +1769,7 @@ static int btmtk_tx_pkt(struct btmtk_sdio_dev *cif_dev, struct sk_buff *skb)
 	memcpy(cif_dev->sdio_packet + MTK_SDIO_PACKET_HEADER_SIZE, skb->data,
 		skb->len);
 	len = skb->len + MTK_SDIO_PACKET_HEADER_SIZE;
-	BTMTK_DBG_RAW(cif_dev->sdio_packet, len,
+	BTMTK_DBG_RAW(cif_dev->bdev, cif_dev->sdio_packet, len,
 			"%s: sent, len =%d:", __func__, len);
 
 	MultiBluckCount = len / SDIO_BLOCK_SIZE;
@@ -2870,4 +2870,3 @@ int btmtk_cif_deregister(void)
 	BTMTK_INFO("%s: Done", __func__);
 	return 0;
 }
-

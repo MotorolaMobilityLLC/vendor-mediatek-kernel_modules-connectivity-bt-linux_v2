@@ -349,7 +349,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			 * by driver, don't send to stack
 			 */
 			if (skb->data[0] == WOBLE_DEBUG_EVT_TYPE)
-				BTMTK_INFO_RAW(skb->data, skb->len, "%s: wobx debug log:", __func__);
+				BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: wobx debug log:", __func__);
 
 			/* If driver need to check result from skb, it can get from io_buf */
 			/* Such as chip_id, fw_version, etc. */
@@ -367,9 +367,9 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			BTMTK_DBG("%s, compare success", __func__);
 		} else {
 			BTMTK_INFO("%s compare fail", __func__);
-			BTMTK_INFO_RAW(event_need_compare, event_need_compare_len,
+			BTMTK_INFO_RAW(bdev, event_need_compare, event_need_compare_len,
 				"%s: event_need_compare_len[%d]", __func__, event_need_compare_len);
-			BTMTK_INFO_RAW(skb->data, skb->len, "%s: skb->data:", __func__);
+			BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: skb->data:", __func__);
 			return 0;
 		}
 		return 1;
@@ -378,7 +378,8 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 	else {
 		if ((skb->len > sizeof(picus_evt)) &&
 			memcmp(skb->data, &picus_evt[1], sizeof(picus_evt) - 1) == 0) {
-			BTMTK_INFO_RAW(skb->data, skb->len, "%s: intercept picus event without during send_and_recv:", __func__);
+			BTMTK_INFO_RAW(bdev, skb->data, skb->len,
+					"%s: intercept picus event without during send_and_recv:", __func__);
 			return 1;
 		}
 	}
@@ -428,8 +429,8 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		atomic_set(&cif_dev->need_drv_own, 1);
 	}
 #endif
-	btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD_HIF, skb->data, skb->len);
-	BTMTK_DBG_RAW(skb->data, skb->len, "%s: len[%d]", __func__, skb->len);
+	btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_CMD_HIF, skb->data, skb->len);
+	BTMTK_DBG_RAW(bdev, skb->data, skb->len, "%s: len[%d]", __func__, skb->len);
 
 	/* if just protect event, another cmd would reinit event_compare_status */
 	down(&cif_dev->evt_comp_sem);
@@ -1029,7 +1030,7 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 #endif
 
 	/* driver dump */
-	btmtk_hci_snoop_print_to_log();
+	btmtk_hci_snoop_print_to_log(bdev);
 	btmtk_dump_gpio_state();
 
 #if (SLEEP_ENABLE == 1)
@@ -1748,10 +1749,11 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 	}
 #if (USE_DEVICE_NODE == 1)
 	/* use HCI_SNOOP_TYPE_TX_ISO_HIF to record data sended to tty */
-	btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ISO_HIF, cmd, cmd_len);
+	btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_TX_ISO_HIF, cmd, cmd_len);
 #endif
-	BTMTK_DBG_RAW(cmd, cmd_len, "%s, len[%d] write_retry[%d] room[%d] flush_retry[%d] CMD :", __func__, cmd_len,
-						count, tty_write_room(cif_dev->tty), flush_retry);
+	BTMTK_DBG_RAW(bdev, cmd, cmd_len,
+					"%s, len[%d] write_retry[%d] room[%d] flush_retry[%d] CMD :", __func__, cmd_len,
+					count, tty_write_room(cif_dev->tty), flush_retry);
 
 	return ret;
 }
@@ -2468,9 +2470,9 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 #endif
 	) {
 #if (KERNEL_VERSION(6, 6, 0) > LINUX_VERSION_CODE)
-		BTMTK_INFO_RAW(data, count, "[SKIP] %s: count[%d]", __func__, count);
+		BTMTK_INFO_RAW(bdev, data, count, "[SKIP] %s: count[%d]", __func__, count);
 #else
-		BTMTK_INFO_RAW(data, count, "[SKIP] %s: count[%zu]", __func__, count);
+		BTMTK_INFO_RAW(bdev, data, count, "[SKIP] %s: count[%zu]", __func__, count);
 #endif
 
 #if (USE_DEVICE_NODE == 1)
@@ -2491,11 +2493,11 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
 	/* record data from tty */
-	btmtk_hci_snoop_save(HCI_SNOOP_TYPE_EVT_HIF, data, count);
-	BTMTK_DBG_RAW(data, count, "%s: len[%d]", __func__, count);
+	btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_EVT_HIF, data, count);
+	BTMTK_DBG_RAW(bdev, data, count, "%s: len[%d]", __func__, count);
 
 #if (SLEEP_ENABLE == 1)
-	//BTMTK_INFO_RAW(data, count, "%s: count[%d]", __func__, count);
+	//BTMTK_INFO_RAW(bdev, data, count, "%s: count[%d]", __func__, count);
 
 	/* if flag is BTMTK_FW_OWNING not set driver own , because data is fw own event */
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
@@ -2505,7 +2507,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 		unsigned int index = 0, _count = count;
 		u8 *buf = (u8 *)data;
 
-		BTMTK_INFO_RAW(data, count, "%s: recv none 0xFF as first byte in FW own state", __func__);
+		BTMTK_INFO_RAW(bdev, data, count, "%s: recv none 0xFF as first byte in FW own state", __func__);
 		while (_count && *(buf + index) != 0xFF) {
 			index++;
 			_count--;
@@ -2516,7 +2518,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 			data = buf + index;
 		} else
 			return;
-		BTMTK_INFO_RAW(data, count, "%s: data after trim", __func__);
+		BTMTK_INFO_RAW(bdev, data, count, "%s: data after trim", __func__);
 	}
 #endif
 	if (data != NULL && (count > 1 || data[0] != 0x00) && cif_dev->own_state != BTMTK_FW_OWNING) {
@@ -2529,7 +2531,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 		wake_up_interruptible(&tx_wait_q);
 #if (USE_DEVICE_NODE == 0)
 		} else {
-			BTMTK_INFO_RAW(data, count, "%s: drop driver own request when suspend,", __func__);
+			BTMTK_INFO_RAW(bdev, data, count, "%s: drop driver own request when suspend,", __func__);
 		}
 #endif
 	}

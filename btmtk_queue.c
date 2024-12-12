@@ -246,7 +246,7 @@ int32_t btmtk_receive_data(struct hci_dev *hdev, u8 *buf, u32 count)
 	u32 read_bytes = 0;
 
 	rx_dequeue(hdev, buf, count, &read_bytes);
-	//BTMTK_DBG_RAW(buf, read_bytes, "%s, len[%d]", __func__, read_bytes);
+	//BTMTK_DBG_RAW(bdev, buf, read_bytes, "%s, len[%d]", __func__, read_bytes);
 	/* TODO: disable quick PS mode by traffic density */
 	return read_bytes;
 }
@@ -626,7 +626,7 @@ void print_dump_packet(struct bt_dump_packet *p_packet)
 	else
 		copysize = p_packet->data_length;
 
-	BTMTK_INFO_RAW(p_packet->data, copysize, "Dump: Time:%02d:%02d:%02d.%06u,
+	BTMTK_INFO_RAW(bdev, p_packet->data, copysize, "Dump: Time:%02d:%02d:%02d.%06u,
 				   Kernel Time:%6d.%09u, %s, Size = %3d, Data: ",
 				   tm.tm_hour+8, tm.tm_min, tm.tm_sec, usec, ksec, knsec,
 				   direction_tostring(p_packet->direction_type),
