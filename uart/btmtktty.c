@@ -1587,6 +1587,7 @@ static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev, bool do_flus
 static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset, int patch_flag)
 {
+#define TX_RETRY 100
 	int cur_len = 0;
 	int flush_retry = 0, max_pkt_cnt = 0;
 	int ret = -1;
@@ -1595,6 +1596,7 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	u8 cmd[LD_PATCH_CMD_LEN] = {0x02, 0x6F, 0xFC, 0x05, 0x00, 0x01, 0x01, 0x01, 0x00, PATCH_PHASE3};
 	u8 event[LD_PATCH_EVT_LEN] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
 	unsigned long start_time = 0, time_diff = 0;
+	int retry = TX_RETRY;
 
 	if (bdev == NULL || image == NULL || fwbuf == NULL) {
 		BTMTK_ERR("%s: invalid parameters!", __func__);
@@ -1636,9 +1638,19 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 				max_pkt_cnt++;
 				/* reset start time for next packet */
 				start_time = jiffies;
-			} else if (ret == 0)
+				retry = TX_RETRY;
+			} else if (ret == 0) {
 				udelay(500);
-			else if (time_diff >= TIME_BOUND_OF_FW_PKG_DL) {
+				retry--;
+				if (retry < 0) {
+					BTMTK_ERR("%s: download retry 200 times", __func__);
+#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
+					mtk8250_uart_dump(cif_dev->tty);
+#endif
+					ret = -1;
+					goto exit;
+				}
+			} else if (time_diff >= TIME_BOUND_OF_FW_PKG_DL) {
 				BTMTK_ERR("%s:, download single packet more than 2s [%lu]",
 					__func__, time_diff);
 #if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
@@ -1646,9 +1658,11 @@ static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 #endif
 				ret = -1;
 				goto exit;
-			} else
+			} else {
 				BTMTK_DBG("%s, sent_len[%d] tty_write[%d], flush_retry[%d] max_pkt_cnt[%d]",
 							__func__, sent_len, ret, flush_retry, max_pkt_cnt);
+				retry = TX_RETRY;
+			}
 			cur_len += ret;
 		} else
 			break;
