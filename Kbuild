@@ -100,7 +100,7 @@ endif
 
 ifeq ($(CONFIG_RESET_KO_SUPPORT), y)
     ccflags-y += -DCFG_SUPPORT_CHIP_RESET_KO
-    ccflags-y += -I$(src)/../wlan_driver/gen4m_connac3/reset/include/
+    ccflags-y += -I$(src)/../wlan_driver/gen4m_mt7961/reset/include/
     RESET_DIR = $(shell pwd)/../../KERNEL_MODULES/mtreset.ko_intermediates/LINKED/Module.symvers
     $(warning bt driver unify1111 RESET_DIR=$(RESET_DIR))
     $(info 'RESET_DIR=' $(RESET_DIR))

@@ -6165,8 +6165,10 @@ int __init main_driver_init(void)
 	/* Register reset function to reset ko */
 	resetko_register_module(RESET_MODULE_TYPE_BT,
 				"bt",
+#if !defined(RESETKO_API_VERSION) || (RESETKO_API_VERSION == 1)
 				TRIGGER_RESET_TYPE_GPIO_API,
 				btmtk_resetko_reset,
+#endif
 				btmtk_resetko_notify);
 #endif
 
