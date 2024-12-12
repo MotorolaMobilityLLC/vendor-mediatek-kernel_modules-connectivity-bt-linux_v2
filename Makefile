@@ -1,13 +1,13 @@
 $(info [bt_drv] linux_v2/makefile start)
 # Support GKI mixed build
 ifeq ($(DEVICE_MODULES_PATH),)
-DEVICE_MODULES_PATH = $(DEVICE_MODULES_PATH)
-CONFIG_SUPPORT_DEVICE_NODE=n
-CONFIG_SUPPORT_UARTDBG=n
+   DEVICE_MODULES_PATH = $(DEVICE_MODULES_PATH)
+   CONFIG_SUPPORT_DEVICE_NODE=n
+   CONFIG_SUPPORT_UARTDBG=n
 else
-CONFIG_SUPPORT_DEVICE_NODE=y
-CONFIG_SUPPORT_UARTDBG=y
-LINUXINCLUDE := $(DEVCIE_MODULES_INCLUDE) $(LINUXINCLUDE)
+   CONFIG_SUPPORT_DEVICE_NODE=y
+   CONFIG_SUPPORT_UARTDBG=y
+   LINUXINCLUDE := $(DEVCIE_MODULES_INCLUDE) $(LINUXINCLUDE)
 endif
 
 CONN_ALPS_OUT_PATH := $(wildcard $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/))
@@ -33,30 +33,47 @@ ifneq ($(CONNECTIVITY_OUT_PATH),)
 else
     MTK_PROJ_TYPE := ce
     M_OPTION := $(PWD)
+    ifeq ($(LINUX_SRC), )
+        export KERNEL_SRC := /lib/modules/$(shell uname -r)/build
+    else
+        export KERNEL_SRC := $(LINUX_SRC)
+    endif
 endif
 
-ifeq ($(LINUX_SRC), )
-	export KERNEL_SRC := /lib/modules/$(shell uname -r)/build
-else
-	export KERNEL_SRC := $(LINUX_SRC)
+#LOCAL_PATH   := $(call my-dir)
+#src = $(LOCAL_PATH)
+ifeq ($(KERNEL_MIXED_BUILD_SUPPORT),true)
+    include $(KERNEL_MIXED_BUILD_PATH)/Kbuild.common
 endif
+
 #################### Configurations ####################
 # Compile Options for bt driver configuration.
 CONFIG_SUPPORT_BT_DL_WIFI_PATCH=y
-CONFIG_SUPPORT_BT_DL_ZB_PATCH=y
+CONFIG_SUPPORT_BT_DL_ZB_PATCH=n
 CONFIG_SUPPORT_BLUEZ=n
 CONFIG_SUPPORT_DVT=n
 CONFIG_SUPPORT_HW_DVT=n
 CONFIG_SUPPORT_MULTI_DEV_NODE=n
-BT_CONFIG_TRACING=n
-CFG_SUPPORT_HOSTWAKE=n
 CONFIG_SUPPORT_WAKEUP_SER=n
-CONFIG_MTK_BT_DFD_DUMP_SUPPORT=y
-CFG_SUPPORT_RHW_DBG_SOP=n
-CFG_SUPPORT_RHW_DUMP=y
+ifeq ($(MTK_PROJ_TYPE), sp)
+    BT_CONFIG_TRACING=n
+    CFG_SUPPORT_HOSTWAKE=n
+    CONFIG_MTK_BT_DFD_DUMP_SUPPORT=y
+    CFG_SUPPORT_RHW_DBG_SOP=n
+    CFG_SUPPORT_RHW_DUMP=y
+else
+    CONFIG_RESET_KO_SUPPORT=y
+    CONFIG_RUNTIME_SUSPEND=n
+    CONFIG_BT_SWIP_SUPPORT=y
+    CONFIG_GKI_SUPPORT=y
+    ccflags-y += -DBTMTK_LOG_LVL=0
+    ccflags-y += -DCFG_SUPPORT_DEINT_IRQ=0
+endif
+
 ifeq ($(CONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT), y)
     ccflags-y += -DCONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT
 endif
+
 ifeq ($(CONFIG_DISABLE_SYMBOL_GET_SET), y)
     ccflags-y += -DCONFIG_DISABLE_SYMBOL_GET_SET
 endif
@@ -74,6 +91,21 @@ ifneq ($(filter $(TARGET_BUILD_VARIANT), userdebug eng),)
 else
     ccflags-y += -DBUILD_QA_DBG=0
     ccflags-y += -DSTPBTFWLOG_ENABLE=0
+endif
+
+ifeq ($(CONFIG_BT_SWIP_SUPPORT), y)
+    ccflags-y += -DBT_SWIP_SUPPORT=1
+else
+    ccflags-y += -DBT_SWIP_SUPPORT=0
+endif
+
+ifeq ($(CONFIG_RESET_KO_SUPPORT), y)
+    ccflags-y += -DCFG_SUPPORT_CHIP_RESET_KO
+    ccflags-y += -I$(src)/../wlan_driver/gen4m_connac3/reset/include/
+    RESET_DIR = $(shell pwd)/../../KERNEL_MODULES/mtreset.ko_intermediates/LINKED/Module.symvers
+    $(warning bt driver unify1111 RESET_DIR=$(RESET_DIR))
+    $(info 'RESET_DIR=' $(RESET_DIR))
+    KBUILD_EXTRA_SYMBOLS += $(RESET_DIR)
 endif
 
 ifeq ($(CONFIG_SUPPORT_BT_DL_WIFI_PATCH), y)
@@ -98,6 +130,12 @@ ifeq ($(CONFIG_SUPPORT_HW_DVT), y)
     ccflags-y += -DCFG_SUPPORT_HW_DVT=1
 else
     ccflags-y += -DCFG_SUPPORT_HW_DVT=0
+endif
+
+ifeq ($(CONFIG_GKI_SUPPORT), y)
+    ccflags-y += -DCFG_GKI_SUPPORT=1
+else
+    ccflags-y += -DCFG_GKI_SUPPORT=0
 endif
 
 ifeq ($(SUPPORT_WAKEUP_IRQ), yes)
@@ -131,16 +169,10 @@ else
     ccflags-y += -DCFG_SUPPORT_MULTI_DEV_NODE=0
 endif
 
-ifeq ($(CONFIG_SUPPORT_LEAUDIO_CLK), y)
-    ccflags-y += -DCFG_SUPPORT_LEAUDIO_CLK=1
-    ifeq ($(CONFIG_SUPPORT_DEINT_IRQ), y)
-        ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/
-        ccflags-y += -DCFG_SUPPORT_DEINT_IRQ=1
-    else
-        ccflags-y += -DCFG_SUPPORT_DEINT_IRQ=0
-    endif
+ifeq ($(CONFIG_RUNTIME_SUSPEND), y)
+    ccflags-y += -DMTK_RUNTIME_ENABLE=1
 else
-    ccflags-y += -DCFG_SUPPORT_LEAUDIO_CLK=0
+    ccflags-y += -DMTK_RUNTIME_ENABLE=0
 endif
 
 ifeq ($(CONFIG_ARCH_MEDIATEK),y)
@@ -224,6 +256,10 @@ else
 endif
 
 ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
+CFILES += btmtk_queue.c btmtk_char_dev.c
+endif
+
+ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
 ccflags-y += -DUSE_DEVICE_NODE=1
 ccflags-y += -DSLEEP_ENABLE=1
 else
@@ -233,6 +269,19 @@ endif
 
 ifeq ($(BT_CONFIG_TRACING),y)
     ccflags-y += -DBT_CONFIG_TRACING
+endif
+
+$(info [BT_Drv] MTK_PROJ_TYPE = $(MTK_PROJ_TYPE) src = $(src))
+#ifeq ($(MTK_PROJ_TYPE), sp)
+ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
+    CFILES += proj/btmtk_proj_sp.c
+#else ifeq ($(MTK_PROJ_TYPE), ce)
+else ifeq ($(MTK_CHIP_IF), uart_tty)
+    CFILES += proj/btmtk_proj_ce.c
+    ccflags-y += -DLINUX_OS
+    ccflags-y += -DCHIP_IF_UART_TTY
+else
+    ccflags-y += -DLINUX_OS
 endif
 
 ifeq ($(CONFIG_SUPPORT_UARTDBG), y)

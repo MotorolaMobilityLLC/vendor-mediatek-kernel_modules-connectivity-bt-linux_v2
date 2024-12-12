@@ -648,13 +648,6 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 	/* +1 byte for not include pkt_type */
 	btmtk_dispatch_fwlog_bluetooth_kpi(bdev, skb->data + 1, skb->len - 1, hci_skb_pkt_type(skb));
 
-	if (memcmp(skb->data, bdev->main_info.read_iso_packet_size_cmd,
-			READ_ISO_PACKET_SIZE_CMD_HDR_LEN) == 0) {
-		bdev->iso_threshold = skb->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN] +
-					(skb->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN + 1]  << 8);
-		BTMTK_INFO_DEV(bdev, "%s: Ble iso pkt size is %d", __func__, bdev->iso_threshold);
-	}
-
 	if (hci_skb_pkt_type(skb) == HCI_COMMAND_PKT) {
 #if (USE_DEVICE_NODE == 0)
 		if (bdev->get_hci_reset == 1) {

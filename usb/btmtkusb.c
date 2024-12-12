@@ -5841,13 +5841,6 @@ static int btmtk_cif_resume(struct usb_interface *intf)
 		/* Do HIF events */
 		ret = btusb_resume(intf);
 
-#if CFG_SUPPORT_LEAUDIO_CLK
-		{
-			extern int btmtk_le_audio_clk_enable(struct btmtk_dev *bdev);
-			btmtk_le_audio_clk_enable(bdev);
-		}
-#endif
-
 		/* Set End/Error state */
 		if (ret == 0)
 			btmtk_set_chip_state((void *)bdev, cif_state->ops_end);

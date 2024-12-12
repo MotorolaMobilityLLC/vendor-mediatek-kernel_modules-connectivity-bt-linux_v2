@@ -6,6 +6,7 @@
 #ifndef __BTMTK_MAIN_H__
 #define __BTMTK_MAIN_H__
 #include "btmtk_define.h"
+#include "btmtk_extern.h"
 
 extern int btmtk_dongle_num;
 extern int btmtk_mcu_num;
@@ -261,6 +262,18 @@ extern struct btmtk_dev **g_bdev;
 #else
 #define CFG_SHOW_FULL_MACADDR 0
 #define CFG_ENABLE_DEBUG_WRITE 0
+#endif
+
+#if BT_SWIP_SUPPORT
+extern struct mutex btmtk_vnd_event_cb_mutex;
+#define VND_EVENT_MUTEX_LOCK()	mutex_lock(&btmtk_vnd_event_cb_mutex)
+#define VND_EVENT_MUTEX_UNLOCK()	mutex_unlock(&btmtk_vnd_event_cb_mutex)
+#define BTMTK_VND_KO_REG 1
+#define BTMTK_VND_KO_NONE_REG 0
+extern event_callback evt_cb;
+extern atomic_t vnd_module_registered;
+extern atomic_t swip_opcode_flag;
+extern char swip_opcode[2];
 #endif
 
 #if CFG_SHOW_FULL_MACADDR
@@ -563,15 +576,6 @@ struct btmtk_stp_info {
 	unsigned char data[STP_MAX_HDR_LEN];
 };
 
-#if CFG_SUPPORT_LEAUDIO_CLK
-struct le_audio {
-	int irq;
-	u32 irq_type;
-	u32 irq_cnt;
-	u64 sysclk;
-};
-#endif
-
 #if (USE_DEVICE_NODE == 1)
 typedef void (*cif_chrdev_fw_log_state_ptr)(struct btmtk_dev *bdev, uint8_t state);
 #endif
@@ -872,7 +876,7 @@ struct btmtk_dev {
 	unsigned int	fw_version;
 
 	struct st_hw_addr		hw_addr;
-	int				dongle_index;
+	unsigned char	dongle_index;
 	unsigned char	power_state;
 	unsigned char	fops_state;
 	unsigned char	interface_state;
@@ -946,15 +950,16 @@ struct btmtk_dev {
 	unsigned int on_fail_count;
 
 #ifdef CHIP_IF_USB
-	unsigned char	chip_reset_signal;
+	unsigned char chip_reset_signal;
 #endif
 
 	struct btmtk_stp_info stp_info;
 	int dump_cnt;
-
-#if CFG_SUPPORT_LEAUDIO_CLK
-	struct le_audio le_aud;
+#if BT_SWIP_SUPPORT
+	bool support_le_audio_clk;
+	int le_audio_clk_fw_gpio;
 #endif
+	int le_audio_clk_fw_co_gpio;
 	struct mutex btmtk_chip_state_mutex;
 	struct mutex btmtk_fops_state_mutex;
 	struct mutex btmtk_handle_mutex;

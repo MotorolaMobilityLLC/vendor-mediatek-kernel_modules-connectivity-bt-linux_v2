@@ -1204,3 +1204,22 @@ void btmtk_woble_uninitialize(struct btmtk_dev *bdev)
 	vfree(bdev->bt_woble);
 	bdev->bt_woble = NULL;
 }
+
+#if BT_SWIP_SUPPORT
+void btmtk_update_woble_copin(struct btmtk_dev *bdev, int gpio)
+{
+	struct st_woble *bt_woble = bdev->bt_woble;
+	u32 length = 0, idx = 0, opcode = 0;
+
+	for (idx = 0; idx < bt_woble->woble_setting_wakeup_type.length;) {
+		length = bt_woble->woble_setting_wakeup_type.content[idx];
+		opcode = bt_woble->woble_setting_wakeup_type.content[idx + 1];
+		if (opcode == 0x10) {
+			bt_woble->woble_setting_wakeup_type.content[idx + 2] = (char)gpio;
+			break;
+		} else {
+			idx += (length + 1);
+		}
+	}
+}
+#endif

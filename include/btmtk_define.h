@@ -375,10 +375,11 @@ extern uint8_t btmtk_log_lvl;
 #define BT_DEBUG_SOP_MODE "DEBUG_SOP_MODE"
 #define DTS_SUBSYS_RST "SUPPORT_DTS_SUBSYS_RST"
 #define BT_LOG_LVL "LOG_LVL"
-#if CFG_SUPPORT_LEAUDIO_CLK
+#if BT_SWIP_SUPPORT
 #define BT_LE_AUDIO_CLK "SUPPORT_LE_AUDIO_CLK"
 #define BT_LE_AUDIO_CLK_FW_GPIO "LE_AUDIO_CLK_FW_GPIO"
 #endif
+#define BT_LE_AUDIO_CLK_FW_CO_GPIO "LE_AUDIO_CLK_FW_CO_GPIO"
 #if defined(CHIP_IF_UART_TTY) && (USE_DEVICE_NODE == 0)
 #define BT_DRV_OWN_WAKELOCK_ENABLE "DRV_OWN_WAKELOCK"
 #endif
@@ -446,10 +447,11 @@ struct st_bt_cfg  {
 	struct fw_cfg_struct audio_pinmux_mode;	/* support on set audio pinmux mode command customization */
 	int debug_sop_mode; /* debug sop mode */
 	bool	support_dts_subsys_rst;
-#if CFG_SUPPORT_LEAUDIO_CLK
+#if BT_SWIP_SUPPORT
 	bool	support_le_audio_clk;
 	int	le_audio_clk_fw_gpio;
 #endif
+	int	le_audio_clk_fw_co_gpio;
 #if defined(CHIP_IF_UART_TTY) && (USE_DEVICE_NODE == 0)
 	bool drv_own_wakelock_enable;
 #endif
@@ -545,23 +547,19 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc);
 #define DUMP_TIME_STAMP(__str)
 #endif
 
-#if CFG_SUPPORT_LEAUDIO_CLK
-#if CFG_SUPPORT_DEINT_IRQ
-extern int mtk_deint_enable(unsigned int eint_num, unsigned int spi_num, unsigned long type);
-extern int mtk_deint_ack(unsigned int irq);
-#endif
 //#include <mt-plat/mtk_secure_api.h>
 //#define MTK_SIP_BT_FIQ_REG (0x82000523 | MTK_SIP_SMC_AARCH_BIT)
 //#define MTK_SIP_BT_GET_CLK (0x82000524 | MTK_SIP_SMC_AARCH_BIT)
-#endif
 
 #ifdef CFG_SUPPORT_CHIP_RESET_KO
 void btmtk_resetko_reset(void);
 void btmtk_resetko_notify(unsigned int event, void *data);
 extern enum ReturnStatus resetko_register_module(enum ModuleType module,
 						char *name,
+#if defined(RESETKO_API_VERSION) && (RESETKO_API_VERSION != 2)
 						enum TriggerResetApiType resetApiType,
 						void *resetFunc,
+#endif
 						void *notifyFunc);
 extern enum ReturnStatus resetko_unregister_module(enum ModuleType module);
 #endif

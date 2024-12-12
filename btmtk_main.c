@@ -54,6 +54,16 @@ int btmtk_mcu_num;
 struct btmtk_dev **g_bdev;
 struct btmtk_dev *g_sbdev;
 
+#if BT_SWIP_SUPPORT
+/* LE audio swip*/
+DEFINE_MUTEX(btmtk_vnd_event_cb_mutex);
+event_callback evt_cb;
+atomic_t vnd_module_registered = ATOMIC_INIT(0);
+char swip_opcode[2];
+atomic_t swip_opcode_flag = ATOMIC_INIT(0);
+#define ENOTALLOW 511
+static void btmtk_check_copin(struct btmtk_dev *bdev);
+#endif
 /* State machine table that clarify through each HIF events,
  * To specify HIF event on
  * Entering / End / Error
@@ -123,206 +133,6 @@ void btmtk_reg_hif_chip_hook(struct btmtk_dev *bdev, struct hif_hook_chip_ptr *h
 {
 	memcpy(&(bdev->main_info.hif_hook_chip), hook, sizeof(struct hif_hook_chip_ptr));
 }
-#if CFG_SUPPORT_LEAUDIO_CLK
-void btmtk_le_audio_getrawtime(struct timeval *tv)
-{
-	struct timespec64 ts;
-
-#if (KERNEL_VERSION(4, 18, 0) > LINUX_VERSION_CODE)
-	getrawmonotonic64(&ts);
-#else
-	ktime_get_raw_ts64(&ts);
-#endif
-	tv->tv_sec = ts.tv_sec;
-	tv->tv_usec = ts.tv_nsec/1000;
-}
-
-irqreturn_t btmtk_le_audio_clk_irq_handler(int irq, void *dev)
-{
-	/* Get sys clk */
-	struct timeval tv;
-	struct btmtk_dev *bdev = (struct btmtk_dev *)dev;
-
-	if (bdev->le_aud.sysclk == 0 || bdev->le_aud.irq_cnt == 0) {
-		btmtk_le_audio_getrawtime(&tv);
-		bdev->le_aud.sysclk = (u64)tv.tv_sec * 1000000L + tv.tv_usec;
-	}
-	bdev->le_aud.irq_cnt++;
-#if CFG_SUPPORT_DEINT_IRQ
-	mtk_deint_ack(irq);
-#endif
-	return IRQ_HANDLED;
-}
-
-int btmtk_le_audio_clk_enable(struct btmtk_dev *bdev)
-{
-#define LE_AUDIO_CLK_EN_CMD_LEN 8
-#define LE_AUDIO_CLK_EN_EVT_LEN 7
-#define LE_AUDIO_CLK_EN_OFFSET_METHOD 5
-#define LE_AUDIO_CLK_EN_OFFSET_GPIO_NUM 6
-#define LE_AUDIO_CLK_EN_OFFSET_TRIGGER_TYPE 7
-	int ret = 0;
-	u8 cmd[LE_AUDIO_CLK_EN_CMD_LEN] = { 0x01, 0x03, 0xFD, 0x04, 0x00, 0x00, 0x00, 0x00 };
-	u8 event[LE_AUDIO_CLK_EN_EVT_LEN] = { 0x04, 0x0E, 0x04, 0x01, 0x03, 0xFD, 0x00 };
-
-	if (bdev->bt_cfg.support_le_audio_clk == 0) {
-		BTMTK_INFO_DEV(bdev, "%s: not support le audio clk", __func__);
-		return 0;
-	}
-
-	BTMTK_INFO_DEV(bdev, "%s enter", __func__);
-
-	if (bdev->le_aud.irq < 0) {
-		cmd[LE_AUDIO_CLK_EN_OFFSET_METHOD] = 0x03; // Get clk if event received
-	} else {
-		cmd[LE_AUDIO_CLK_EN_OFFSET_METHOD] = 0x01; // Get clk if irq triggered
-
-		if (bdev->bt_cfg.le_audio_clk_fw_gpio >= 0) {
-			cmd[LE_AUDIO_CLK_EN_OFFSET_GPIO_NUM] = bdev->bt_cfg.le_audio_clk_fw_gpio;
-		} else {
-			cmd[LE_AUDIO_CLK_EN_OFFSET_GPIO_NUM] = 0x03;
-
-			if (is_mt7902(bdev->chip_id)) {
-				cmd[LE_AUDIO_CLK_EN_OFFSET_GPIO_NUM] = 0x2B;
-			}
-		}
-
-		if (bdev->le_aud.irq_type == IRQF_TRIGGER_RISING || bdev->le_aud.irq_type == IRQF_TRIGGER_HIGH)
-			cmd[LE_AUDIO_CLK_EN_OFFSET_TRIGGER_TYPE] = 0x01; /* default low, active high */
-		else
-			cmd[LE_AUDIO_CLK_EN_OFFSET_TRIGGER_TYPE] = 0x00; /* default high, active low */
-	}
-	BTMTK_INFO_RAW(bdev, cmd, LE_AUDIO_CLK_EN_CMD_LEN, "%s: enable clk, ", __func__);
-	ret = btmtk_main_send_cmd(bdev, cmd, LE_AUDIO_CLK_EN_CMD_LEN,
-			event, LE_AUDIO_CLK_EN_EVT_LEN, 0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
-	if (ret < 0)
-		BTMTK_ERR_DEV(bdev, "%s: failed(%d)", __func__, ret);
-
-	BTMTK_INFO_DEV(bdev, "%s exit", __func__);
-	return ret;
-}
-
-static void btmtk_le_audio_clk_init(struct btmtk_dev *bdev)
-{
-	int ret = 0;
-	struct device_node *node;
-	int interrupts[2];
-#if CFG_SUPPORT_DEINT_IRQ
-	int deint[3];
-#endif
-
-	if (bdev->bt_cfg.support_le_audio_clk == 0) {
-		BTMTK_INFO_DEV(bdev, "%s: not support le audio clk", __func__);
-		return;
-	}
-
-	/* Get irq info from dts */
-	BTMTK_INFO_DEV(bdev, "%s: enter, irq=%d", __func__, bdev->le_aud.irq);
-
-	node = of_find_compatible_node(NULL, NULL, "mediatek,connectivity-combo");
-	if (!node) {
-		BTMTK_ERR_DEV(bdev, "%s: get node failed", __func__);
-		return;
-	}
-
-	ret = of_property_read_u32_array(node, "interrupts",
-				interrupts, ARRAY_SIZE(interrupts));
-	if (ret < 0) {
-		BTMTK_ERR_DEV(bdev, "%s: get interrupts fail(%d)", __func__, ret);
-		return;
-	}
-
-	if (bdev->le_aud.irq <= 0) {
-		bdev->le_aud.irq = irq_of_parse_and_map(node, 0);
-		if (bdev->le_aud.irq <= 0) {
-			BTMTK_INFO_DEV(bdev, "%s: request irq failed", __func__);
-			return;
-		}
-		BTMTK_INFO_DEV(bdev, "%s: irq_of_parse_and_map, irq=%d", __func__, bdev->le_aud.irq);
-	}
-
-#if CFG_SUPPORT_DEINT_IRQ
-	ret = request_irq(bdev->le_aud.irq, (irq_handler_t)btmtk_le_audio_clk_irq_handler,
-					IRQF_TRIGGER_NONE, "BT_LE_AUDIO_CLK_DEINT_ISR_Handler", bdev);
-	if (ret) {
-		BTMTK_ERR_DEV(bdev, "%s: request_irq DEINT fail(%d) irq_number=%d", __func__, ret, bdev->le_aud.irq);
-		bdev->le_aud.irq = -1;
-		return;
-	}
-//	ret = mt_secure_call(MTK_SIP_BT_FIQ_REG, interrupts[1], interrupts[2], 0, 0);
-//	BTMTK_INFO_DEV(bdev, "%s: SMC call ret(%d), num(%d), type(%d)", __func__, ret, interrupts[1], interrupts[2]);
-	of_property_read_u32_array(node, "deint", deint, ARRAY_SIZE(deint));
-	mtk_deint_enable(deint[0], deint[1], deint[2]);
-	bdev->le_aud.irq_type = deint[2];
-#else	/*generic EINT*/
-	ret = request_irq(bdev->le_aud.irq, (irq_handler_t)btmtk_le_audio_clk_irq_handler,
-					interrupts[1], "BT_LE_AUDIO_CLK_ISR_Handler", bdev);
-	if (ret) {
-		BTMTK_ERR_DEV(bdev, "%s: request_irq EINT fail(%d) irq_number=%d", __func__, ret, bdev->le_aud.irq);
-		bdev->le_aud.irq = -1;
-		return;
-	}
-	bdev->le_aud.irq_type = interrupts[1];
-#endif
-	btmtk_le_audio_clk_enable(bdev);
-}
-
-static void btmtk_le_audio_clk_deinit(struct btmtk_dev *bdev)
-{
-	BTMTK_INFO_DEV(bdev, "%s: enter, irq=%d", __func__, bdev->le_aud.irq);
-	if (bdev->le_aud.irq > 0) {
-		free_irq(bdev->le_aud.irq, bdev);
-	}
-}
-
-static void btmtk_le_audio_clk_evt_handler(struct btmtk_dev *bdev, struct sk_buff *skb)
-{
-#define RXCLK_SYS_TIME_POS 14
-#define RXPTS_SYS_TIME_POS 22
-	int rxclk_sys_time_pos = 0;
-	if (skb->data[1] == 0x0C) {
-			rxclk_sys_time_pos = RXCLK_SYS_TIME_POS;
-	} else if (skb->data[1] == 0x14) {
-			rxclk_sys_time_pos = RXPTS_SYS_TIME_POS;
-	} else {
-			return;
-	}
-
-	if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
-			skb->data[0] == 0x0E &&
-			skb->data[3] == 0x03 &&
-			skb->data[4] == 0xFD) {
-		skb_put(skb, 5);
-		skb->data[1] += 5;
-		if (bdev->bt_cfg.le_audio_clk_fw_gpio >= 0 &&
-			bdev->le_aud.irq > 0 &&
-			bdev->le_aud.sysclk != 0 &&
-			bdev->le_aud.irq_cnt == 1) {
-			//main_info.le_audio_sysclk =
-			//	mt_secure_call(MTK_SIP_BT_GET_CLK, 0, 0, 0, 0);
-			BTMTK_DBG_DEV(bdev, "%s: sysclk(%llu)", __func__, bdev->le_aud.sysclk);
-			skb->data[rxclk_sys_time_pos + 4] = 0; //Add NO_IRQ_FLAG, 0:trigger by IRQ
-		} else {
-			struct timeval tv;
-			btmtk_le_audio_getrawtime(&tv);
-			bdev->le_aud.sysclk = (u64)tv.tv_sec * 1000000L + tv.tv_usec;
-			skb->data[rxclk_sys_time_pos + 4] = 1; //Add NO_IRQ_FLAG, 1:not trigger by IRQ
-		}
-		/* Add SYS_CLOCK to tail
-		 * OLD format: 0E LEN(1) 01 03 FD 00 HANDLE(2) BITCNT(2) BTCLK(4)
-		 * NEW format: 0E LEN(1) 01 03 FD 00 HANDLE(2) BITCNT(2) BTCLK(4) SYSCLK(4)
-		 */
-		skb->data[rxclk_sys_time_pos] = bdev->le_aud.sysclk & 0xFF;
-		skb->data[rxclk_sys_time_pos + 1] = (bdev->le_aud.sysclk >> 8) & 0xFF;
-		skb->data[rxclk_sys_time_pos + 2] = (bdev->le_aud.sysclk >> 16) & 0xFF;
-		skb->data[rxclk_sys_time_pos + 3] = (bdev->le_aud.sysclk >> 24) & 0xFF;
-		bdev->le_aud.sysclk = 0;
-		if (bdev->le_aud.irq_cnt != 1)
-			BTMTK_ERR_DEV(bdev, "%s: le_audio_irq_cnt(%d)", __func__, bdev->le_aud.irq_cnt);
-		bdev->le_aud.irq_cnt = 0;
-	}
-}
-#endif
 
 __weak int btmtk_cif_register(void)
 {
@@ -472,7 +282,7 @@ int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value)
 	ret = btmtk_main_send_cmd(bdev,
 			efuse_r.content, efuse_r.len,
 			efuse_r_event.content, efuse_r_event.len,
-			0, 0, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 	if (ret) {
 		BTMTK_WARN_DEV(bdev, "btmtk_main_send_cmd error");
 		return ret;
@@ -533,6 +343,40 @@ int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value)
 
 	return ret;
 }
+
+#if BT_SWIP_SUPPORT
+static void btmtk_check_copin(struct btmtk_dev *bdev)
+{
+#define WOBLE_COPIN_ENABLE (0x1 << 7)
+	u16 addr = 0x49;
+	u8 value = 0;
+	int gpio = -1;
+	bool co_flag;
+
+	if (btmtk_efuse_read(bdev, addr, &value) < 0) {
+		BTMTK_INFO("%s: get copin failed", __func__);
+		co_flag = false;
+	} else if ((value & WOBLE_COPIN_ENABLE) != WOBLE_COPIN_ENABLE) {
+		BTMTK_INFO("%s: copin is 0x%02X", __func__, value);
+		co_flag = false;
+	} else {
+		co_flag = true;
+	}
+
+	if (co_flag == true) {
+		if (bdev->bt_cfg.le_audio_clk_fw_co_gpio >= 0)
+			gpio = bdev->bt_cfg.le_audio_clk_fw_co_gpio;
+		else if (is_mt7961(bdev->chip_id))
+			gpio = 13;
+		else if (is_mt7925(bdev->chip_id))
+			gpio = 5;
+		BTMTK_INFO("%s: copin gpio is %d", __func__, gpio);
+
+		if (gpio != -1)
+			btmtk_update_woble_copin(bdev, gpio);
+	}
+}
+#endif
 
 void btmtk_free_fw_cfg_struct(struct fw_cfg_struct *fw_cfg, int count)
 {
@@ -600,10 +444,12 @@ static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.vendor_cmd, VENDOR_CMD_COUNT);
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.audio_cmd, 1);
 	bdev->bt_cfg.support_dts_subsys_rst = 0;
-#if CFG_SUPPORT_LEAUDIO_CLK
-	bdev->bt_cfg.support_le_audio_clk = 0;
-	bdev->bt_cfg.le_audio_clk_fw_gpio = 0;
+#if BT_SWIP_SUPPORT
+	/* Default enable and use default gpio number */
+	bdev->bt_cfg.support_le_audio_clk = 1;
+	bdev->bt_cfg.le_audio_clk_fw_gpio = -1;
 #endif
+	bdev->bt_cfg.le_audio_clk_fw_co_gpio = -1;
 #if defined(CHIP_IF_UART_TTY) && (USE_DEVICE_NODE == 0)
 	bdev->bt_cfg.drv_own_wakelock_enable = 0;
 #endif
@@ -621,10 +467,6 @@ static void btmtk_init_memory(struct btmtk_dev *bdev)
 	bdev->isoc_altsetting = 0;
 	bdev->tx_state = 0;
 	bdev->need_compare_num = 0;
-
-#if CFG_SUPPORT_LEAUDIO_CLK
-	bdev->le_aud.irq = -1;
-#endif
 }
 
 void btmtk_assert_wake_lock(struct btmtk_dev *bdev)
@@ -3915,7 +3757,7 @@ static void btmtk_load_bt_cfg_item(struct st_bt_cfg *bt_cfg,
 	} else {
 		BTMTK_WARN_DEV(bdev, "%s: search item %s is invalid!", __func__, DTS_SUBSYS_RST);	}
 
-#if CFG_SUPPORT_LEAUDIO_CLK
+#if BT_SWIP_SUPPORT
 	ret = btmtk_parse_bt_cfg_file(bdev, BT_LE_AUDIO_CLK, text, searchcontent);
 	if (ret) {
 		btmtk_bt_cfg_item_value_to_bool(bdev, text, &bt_cfg->support_le_audio_clk);
@@ -3934,6 +3776,15 @@ static void btmtk_load_bt_cfg_item(struct st_bt_cfg *bt_cfg,
 		BTMTK_WARN_DEV(bdev, "%s: search item %s is invalid!", __func__, BT_LE_AUDIO_CLK_FW_GPIO);
 	}
 #endif
+	ret = btmtk_parse_bt_cfg_file(bdev, BT_LE_AUDIO_CLK_FW_CO_GPIO, text, searchcontent);
+	if (ret) {
+		if (kstrtoul(text, 10, &text_value) == 0)
+			bt_cfg->le_audio_clk_fw_co_gpio = text_value;
+		else
+			BTMTK_WARN("%s: kstrtoul failed %s!", __func__, BT_LE_AUDIO_CLK_FW_CO_GPIO);
+	} else {
+		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_LE_AUDIO_CLK_FW_CO_GPIO);
+	}
 #if defined(CHIP_IF_UART_TTY) && (USE_DEVICE_NODE == 0)
 	ret = btmtk_parse_bt_cfg_file(bdev, BT_DRV_OWN_WAKELOCK_ENABLE, text, searchcontent);
 	if (ret) {
@@ -4124,6 +3975,15 @@ __attribute__((unused)) static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
 	for (index = 0; index < VENDOR_CMD_COUNT; index++) {
 		if (bdev->bt_cfg.vendor_cmd[index].content &&
 			bdev->bt_cfg.vendor_cmd[index].length) {
+			/* For Ble ISO packet size */
+			if (bdev->bt_cfg.vendor_cmd[index].content[1] == 0x98 &&
+				bdev->bt_cfg.vendor_cmd[index].content[2] == 0xFD &&
+				bdev->bt_cfg.vendor_cmd[index].content[3] == 0x02) {
+				bdev->iso_threshold =
+					bdev->bt_cfg.vendor_cmd[index].content[READ_ISO_PACKET_SIZE_CMD_HDR_LEN] +
+					(bdev->bt_cfg.vendor_cmd[index].content[READ_ISO_PACKET_SIZE_CMD_HDR_LEN + 1]  << 8);
+				BTMTK_INFO_DEV(bdev, "%s: Ble iso pkt size is %d", __func__, bdev->iso_threshold);
+			}
 			BTMTK_INFO_RAW(bdev, bdev->bt_cfg.vendor_cmd[index].content,
 				bdev->bt_cfg.vendor_cmd[index].length, "send vendor cmd");
 
@@ -4131,7 +3991,7 @@ __attribute__((unused)) static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
 				bdev->bt_cfg.vendor_cmd[index].content,
 				bdev->bt_cfg.vendor_cmd[index].length,
 				event.content, event.len,
-				0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
+				0, 0, BTMTK_TX_PKT_FROM_HOST, CMD_NEED_FILTER);
 			if (ret < 0) {
 				BTMTK_ERR_DEV(bdev, "%s: Send vendor cmd failed(%d)! Index: %d",
 					__func__, ret, index);
@@ -4354,6 +4214,7 @@ exit:
 	return ret;
 }
 
+#if (CFG_GKI_SUPPORT == 0)
 static int btmtk_send_txpower_cmd(struct btmtk_dev *bdev)
 {
 	/**
@@ -4771,6 +4632,7 @@ static int btmtk_load_country_table(struct btmtk_dev *bdev)
 
 	return err;
 }
+#endif
 
 void btmtk_set_country_code_from_wifi(char *code)
 {
@@ -4998,10 +4860,6 @@ err:
 	bdev->main_info.reset_stack_flag = HW_ERR_NONE;
 	bdev->get_hci_reset = 0;
 
-#if CFG_SUPPORT_LEAUDIO_CLK
-	btmtk_le_audio_clk_deinit(bdev);
-#endif
-
 	/* clean rx queues */
 	skb_queue_purge(&bdev->rx_q);
 	if (!IS_ERR_OR_NULL(bdev->rx_skb))
@@ -5220,6 +5078,9 @@ int bt_open(struct hci_dev *hdev)
 
 		(void)btmtk_buffer_mode_send(bdev);
 #endif
+#if BT_SWIP_SUPPORT
+		btmtk_check_copin(bdev);
+#endif
 #endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
 		if (bdev->main_info.hif_hook.open_done)
@@ -5252,9 +5113,6 @@ int bt_open(struct hci_dev *hdev)
 		}
 #endif
 
-#if CFG_SUPPORT_LEAUDIO_CLK
-		btmtk_le_audio_clk_init(bdev);
-#endif
 #if BTMTK_RUNTIME_ENABLE
 		usb_autopm_put_interface(cif_dev->intf);
 #endif
@@ -5322,6 +5180,30 @@ static int bt_setup(struct hci_dev *hdev)
 	}
 	return 0;
 }
+
+#if BT_SWIP_SUPPORT
+int btmtk_vendor_module_register(event_callback cb, unsigned char *cfg_file, int file_len)
+{
+	struct btmtk_dev **pp_bdev = btmtk_get_pp_bdev();
+
+	evt_cb = cb;
+	atomic_set(&vnd_module_registered, BTMTK_VND_KO_REG);
+	memset(cfg_file, 0, file_len);
+	strncpy(cfg_file, pp_bdev[0]->bt_cfg.bt_cfg_file_name[pp_bdev[0]->bt_cfg.bt_cfg_file_idx],
+				file_len - 1);
+	return 0;
+}
+EXPORT_SYMBOL(btmtk_vendor_module_register);
+
+int btmtk_vendor_module_unregister(void)
+{
+	evt_cb = NULL;
+
+	atomic_set(&vnd_module_registered, BTMTK_VND_KO_NONE_REG);
+	return 0;
+}
+EXPORT_SYMBOL(btmtk_vendor_module_unregister);
+#endif
 
 #if (USE_DEVICE_NODE == 0)
 static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
@@ -5459,6 +5341,69 @@ exit:
 	return ret;
 }
 
+#if BT_SWIP_SUPPORT
+int btmtk_send_vendor_cmd(struct sk_buff *skb)
+{
+	int ret = 0, hci_index = 0;
+	int state = 0;
+	unsigned char fstate = 0;
+	struct sk_buff *skb_temp;
+	struct btmtk_dev *bdev = NULL;
+	u8 fw_coredump_cmd[FW_COREDUMP_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
+
+	if (skb == NULL) {
+		BTMTK_ERR("%s skb is null", __func__);
+		return -EINVAL;
+	}
+
+	bdev = g_bdev[hci_index];
+	fstate = btmtk_fops_get_state(bdev);
+	state = btmtk_get_chip_state(bdev);
+	if (fstate == BTMTK_FOPS_STATE_OPENED && state == BTMTK_STATE_WORKING) {
+		goto send;
+	} else if ((fstate == BTMTK_FOPS_STATE_OPENING && state == BTMTK_STATE_PROBE)
+		|| (fstate == BTMTK_FOPS_STATE_OPENED && state == BTMTK_STATE_PROBE)
+		|| (fstate == BTMTK_FOPS_STATE_OPENING && state == BTMTK_STATE_WORKING)
+		|| (fstate == BTMTK_FOPS_STATE_OPENED && state == BTMTK_STATE_SUSPEND)
+		|| (fstate == BTMTK_FOPS_STATE_OPENED && state == BTMTK_STATE_RESUME)) {
+		BTMTK_WARN("%s: Driver state not ready, retry", __func__);
+		return -EAGAIN;
+	} else {
+		BTMTK_ERR("%s Driver state is wrong, not allow to send", __func__);
+		return -ENOTALLOW;
+	}
+
+send:
+	bt_cb(skb)->pkt_type = 0x01;
+	skb_temp = skb_copy(skb, GFP_ATOMIC);
+	if (!skb_temp) {
+		BTMTK_ERR("%s, skb_copy event is fail!", __func__);
+		return -ENOMEM;
+	}
+	BTMTK_DBG_RAW(bdev, skb_temp->data, skb_temp->len, "%s pkt_type = %d", __func__,
+		bt_cb(skb_temp)->pkt_type);
+
+	memset(swip_opcode, 0, sizeof(swip_opcode));
+	swip_opcode[0] = skb_temp->data[1];
+	swip_opcode[1] = skb_temp->data[2];
+	atomic_set(&swip_opcode_flag, 1);
+
+	if (skb_temp->len == FW_COREDUMP_CMD_LEN &&
+		!memcmp(skb_temp->data, fw_coredump_cmd, FW_COREDUMP_CMD_LEN)) {
+		BTMTK_INFO("%s: Dongle FW Assert Triggered by BT SWIP!", __func__);
+		btmtk_reset_timer_update(bdev);
+	}
+
+	btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_CMD_STACK, skb_temp->data, skb_temp->len);
+	ret = bdev->main_info.hif_hook.send_cmd(bdev, skb_temp, 0, 0,
+			(int)BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
+	if (ret < 0)
+		BTMTK_ERR("%s send cmd fail", __func__);
+	return ret;
+}
+EXPORT_SYMBOL(btmtk_send_vendor_cmd);
+#endif
+
 void btmtk_reg_hif_hook(struct btmtk_dev *bdev, struct hif_hook_ptr *hook)
 {
 	memcpy(&bdev->main_info.hif_hook, hook, sizeof(struct hif_hook_ptr));
@@ -5489,9 +5434,6 @@ static void btmtk_rx_work(struct work_struct *work)
 				kfree_skb(skb);
 				continue;
 			}
-#if CFG_SUPPORT_LEAUDIO_CLK
-			btmtk_le_audio_clk_evt_handler(bdev, skb);
-#endif
 		}
 
 		BTMTK_DBG_RAW(bdev, skb->data, skb->len, "%s: len[%d] %02x", __func__,

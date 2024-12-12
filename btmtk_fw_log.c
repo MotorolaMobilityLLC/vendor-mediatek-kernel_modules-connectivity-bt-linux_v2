@@ -594,17 +594,6 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 
 		ptr = NULL;
 
-#if CFG_SUPPORT_LEAUDIO_CLK
-		ptr = strstr(cmd, "le_audio_clk=");
-		if (ptr != NULL) {
-			val = *(ptr + strlen("le_audio_clk=")) - '0';
-			bdev->bt_cfg.le_audio_clk_fw_gpio = val;
-			BTMTK_INFO_DEV(bdev, "%s: set %s le_audio_irq to %d",
-					__func__, bdev->hdev->name, bdev->bt_cfg.le_audio_clk_fw_gpio);
-			continue;
-		}
-#endif
-
 		ptr = strstr(cmd, "chip_reset=");
 		if (ptr != NULL) {
 			val = *(ptr + strlen("chip_reset=")) - '0';
@@ -1387,6 +1376,39 @@ int btmtk_dispatch_fwlog_bluetooth_kpi(struct btmtk_dev *bdev, u8 *buf, int len,
 	return ret;
 }
 
+#if BT_SWIP_SUPPORT
+int btmtk_recv_event_to_vendor(struct btmtk_dev *bdev, struct sk_buff *skb)
+{
+	int ret = 0;
+	struct sk_buff *skb_temp;
+
+	/* Copy LE audio event send to bt vendor ko*/
+	if (atomic_read(&vnd_module_registered) == BTMTK_VND_KO_REG) {
+		skb_temp = skb_copy(skb, GFP_ATOMIC);
+		if (!skb_temp) {
+			BTMTK_ERR_DEV(bdev, "%s, skb_copy event is fail!", __func__);
+			return -ENOMEM;
+		}
+
+		/*filter LE audio event, only complete event clear opcode value*/
+		if (atomic_read(&swip_opcode_flag) == 1 &&
+			skb->data[3] == swip_opcode[0] && skb->data[4] == swip_opcode[1]) {
+			if (skb->data[0] == 0x0E) {
+				memset(swip_opcode, 0, sizeof(swip_opcode));
+				atomic_set(&swip_opcode_flag, 0);
+			}
+			BTMTK_DBG_DEV(bdev, "%s, don't send to host! Opcode=%02x%02x", __func__,
+				skb->data[3], skb->data[4]);
+			ret = 1;
+		}
+		if (evt_cb)
+			evt_cb(skb_temp);
+		kfree_skb(skb_temp);
+	}
+	return ret;
+}
+#endif
+
 /* if modify the common part, please sync to another btmtk_dispatch_fwlog */
 #if (USE_DEVICE_NODE == 0)
 int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
@@ -1589,6 +1611,14 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		bdev->get_hci_reset = 1;
 		atomic_set(&bdev->main_info.subsys_reset_conti_count, 0);
 	}
+
+#if BT_SWIP_SUPPORT
+	if (bt_cb(skb)->pkt_type == HCI_EVENT_PKT) {
+		/* Copy LE audio event send to bt vendor ko*/
+		if (btmtk_recv_event_to_vendor(bdev, skb) != 0)
+			return 1;
+	}
+#endif
 
 	/* filter event from usr cmd */
 	if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&

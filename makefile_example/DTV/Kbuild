@@ -71,13 +71,6 @@ else
     ccflags-y += -DCFG_SUPPORT_MULTI_DEV_NODE=0
 endif
 
-ifeq ($(CONFIG_SUPPORT_LEAUDIO_CLK), y)
-    ccflags-y += -DCFG_SUPPORT_LEAUDIO_CLK=1
-    ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/
-else
-    ccflags-y += -DCFG_SUPPORT_LEAUDIO_CLK=0
-endif
-
 ccflags-y += -DCONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT
 
 ifeq ($(CONFIG_GKI_SUPPORT), y)

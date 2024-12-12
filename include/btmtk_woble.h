@@ -60,5 +60,7 @@ void btmtk_woble_wake_lock(struct btmtk_dev *bdev);
 void btmtk_sdio_irq_wake_lock_timeout(struct btmtk_dev *bdev);
 #endif
 int btmtk_send_apcf_reserved(struct btmtk_dev *bdev);
-
+#if BT_SWIP_SUPPORT
+void btmtk_update_woble_copin(struct btmtk_dev *bdev, int gpio);
+#endif
 #endif /* __BTMTK_WOBLE_H__ */
