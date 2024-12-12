@@ -544,8 +544,8 @@ int btmtk_sp_close(void)
 
 	cancel_work_sync(&g_sbdev->reset_waker);
 
-	/* Do not set tx/rx gpio PU, if BT off, wifi on keep Aux func */
-	// btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
+	/* set tx/rx gpio PU */
+	btmtk_pinctrl_exec(PRE_ON_PINCTRL_NAME);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en) {
