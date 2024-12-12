@@ -2675,9 +2675,9 @@ static bool btmtk_parse_bt_cfg_file(char *item_name,
 textdone:
 	temp_len = p - ptr;
 	*temp = '\0';
+	ret = true;
 
 out:
-	ret = true
 	return ret;
 }
 
