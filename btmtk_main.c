@@ -2378,14 +2378,14 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 		dma_flag = le2cpu32(sectionMap->bin_info_spec.u4DLModeCrcType) & 0xFF;
 
 /* dynamic dl with uart hif is too slow, stack will timeout when startup */
-#ifndef CHIP_IF_UART_TTY
+#if !defined(CHIP_IF_UART_TTY) || (USE_DEVICE_NODE == 1)
 	if (mode == DOWNLOAD_BY_INDEX) {
 		/* dynamic download need downloaded by wmt cmd */
 		dma_flag = PATCH_DOWNLOAD_USING_WMT;
 	}
 #endif
-	BTMTK_INFO("%s:bin_type[0x%08x] mode[%d] bin_info[0x%08x] section_index[%d] bin_index[%d]",
-			__func__, temp_type, mode, binInfo, loop_count, temp_index);
+	BTMTK_INFO("%s:bin_type[0x%08x] mode[%d] bin_info[0x%08x] section_index[%d] bin_index[%d] dma_flag[%d]",
+			__func__, temp_type, mode, binInfo, loop_count, temp_index, dma_flag);
 
 	if (dl_size > 0) {
 		retry = 20;
