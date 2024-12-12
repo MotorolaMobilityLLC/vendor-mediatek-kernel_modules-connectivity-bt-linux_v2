@@ -739,35 +739,38 @@ static int btusb_recv_isoc(struct btmtk_dev *bdev, void *buffer, int count)
 		}
 
 		len = min_t(uint, hci_skb_expect(skb), count);
-		skb_tmp = skb_put(skb, len);
-		if (!skb_tmp) {
-			BTMTK_ERR("%s, skb_put failed. Len = %d!", __func__, len);
-			kfree_skb(skb);
-			spin_unlock(&bdev->rxlock);
-			return -ENOMEM;
-		}
-		memcpy(skb_tmp, buffer, len);
-
-		count -= len;
-		buffer += len;
-		hci_skb_expect(skb) -= len;
-
-		if (skb->len == HCI_SCO_HDR_SIZE) {
-			/* Complete SCO header */
-			hci_skb_expect(skb) = hci_sco_hdr(skb)->dlen;
-
-			if (skb_tailroom(skb) < hci_skb_expect(skb)) {
+		if (skb_tailroom(skb) >= len) {
+			skb_tmp = skb_put(skb, len);
+			if (!skb_tmp) {
+				BTMTK_ERR("%s, skb_put failed. Len = %d!", __func__, len);
 				kfree_skb(skb);
-				skb = NULL;
-				err = -EILSEQ;
-				break;
+				spin_unlock(&bdev->rxlock);
+				return -ENOMEM;
 			}
-		}
+			memcpy(skb_tmp, buffer, len);
 
-		if (!hci_skb_expect(skb)) {
-			/* Complete frame */
-			hci_recv_frame(bdev->hdev, skb);
-			skb = NULL;
+			count -= len;
+			buffer += len;
+			hci_skb_expect(skb) -= len;
+
+			if (skb->len == HCI_SCO_HDR_SIZE) {
+				/* Complete SCO header */
+				hci_skb_expect(skb) = hci_sco_hdr(skb)->dlen;
+
+				if (skb_tailroom(skb) < hci_skb_expect(skb)) {
+					kfree_skb(skb);
+					skb = NULL;
+					err = -EILSEQ;
+					break;
+				}
+			}
+			if (!hci_skb_expect(skb)) {
+				/* Complete frame */
+				hci_recv_frame(bdev->hdev, skb);
+				skb = NULL;
+			}
+		} else {
+			BTMTK_INFO("%s: the size of skb is too small", __func__);
 		}
 	}
 
@@ -1025,17 +1028,22 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 			goto exit;
 		}
 		hci_skb_pkt_type(skb) = HCI_EVENT_PKT;
-		skb_tmp = skb_put(skb, urb->actual_length);
-		if (!skb_tmp) {
-			BTMTK_ERR("%s, skb_put failed!", __func__);
-			kfree_skb(skb);
+		if (skb_tailroom(skb) >= urb->actual_length) {
+			skb_tmp = skb_put(skb, urb->actual_length);
+			if (!skb_tmp) {
+				BTMTK_ERR("%s, skb_put failed!", __func__);
+				kfree_skb(skb);
+				return;
+			}
+			memcpy(skb_tmp, urb->transfer_buffer, urb->actual_length);
+			BTMTK_DBG_RAW(skb->data, skb->len, "%s, skb recv evt", __func__);
+
+			hci_recv_frame(hdev, skb);
+			return;
+		} else {
+			BTMTK_INFO("%s: the size of skb is too small!", __func__);
 			return;
 		}
-		memcpy(skb_tmp, urb->transfer_buffer, urb->actual_length);
-		BTMTK_DBG_RAW(skb->data, skb->len, "%s, skb recv evt", __func__);
-
-		hci_recv_frame(hdev, skb);
-		return;
 	} else if (urb->status == -ENOENT) {
 		/* it's error case, don't re-submit urb. */
 		BTMTK_INFO("%s: urb->status is ENOENT!", __func__);
@@ -2381,39 +2389,41 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					}
 					/* copy skb data into iso_skb */
 					skb_copy_bits(skb, 0, skb_put(iso_skb, skb->len), skb->len);
-					skb_tmp = skb_put(iso_skb, isoc_pkt_padding);
-					if (!skb_tmp) {
-						BTMTK_ERR("%s, skb_put failed!", __func__);
-						kfree_skb(iso_skb);
+					if (skb_tailroom(iso_skb) >= isoc_pkt_padding) {
+						skb_tmp = skb_put(iso_skb, isoc_pkt_padding);
+						if (!skb_tmp) {
+							BTMTK_ERR("%s, skb_put failed!", __func__);
+							kfree_skb(iso_skb);
+							kfree_skb(skb);
+							return -ENOMEM;
+						}
+						memset(skb_tmp, 0, isoc_pkt_padding);
+
+						/* After call back, bt drive will free iso_skb */
+						urb = alloc_intr_iso_urb(hdev, iso_skb);
+						BTMTK_DBG_RAW(iso_skb->data, iso_skb->len, "%s, it's ble iso packet",
+							__func__);
+
+						if (IS_ERR(urb)) {
+							kfree_skb(iso_skb);
+							return PTR_ERR(urb);
+						}
+
+						hdev->stat.acl_tx++;
+						ret = submit_or_queue_tx_urb(hdev, urb, HCI_ISO_PKT);
+						if (ret < 0) {
+							/* when ret < 0, skb will be free in hci_send_frame,
+							 * but need to free iso_skb, because iso_skb alloc in bt driver
+							 */
+							kfree_skb(iso_skb);
+							goto exit;
+						}
+
+						/* It's alloc by hci drver, bt driver must free it when ret >=0. */
 						kfree_skb(skb);
-						return -ENOMEM;
-					}
-					memset(skb_tmp, 0, isoc_pkt_padding);
-
-					/* After call back, bt drive will free iso_skb */
-					urb = alloc_intr_iso_urb(hdev, iso_skb);
-					BTMTK_DBG_RAW(iso_skb->data, iso_skb->len, "%s, it's ble iso packet",
-						__func__);
-
-					if (IS_ERR(urb)) {
-						kfree_skb(iso_skb);
-						return PTR_ERR(urb);
-					}
-
-					hdev->stat.acl_tx++;
-					ret = submit_or_queue_tx_urb(hdev, urb, HCI_ISO_PKT);
-					if (ret < 0) {
-						/* when ret < 0, skb will be free in hci_send_frame,
-						 * but need to free iso_skb, because iso_skb alloc in bt driver
-						 */
-						kfree_skb(iso_skb);
-						goto exit;
-					}
-
-					/* It's alloc by hci drver, bt driver must free it when ret >=0. */
-					kfree_skb(skb);
 exit:
-					return ret;
+						return ret;
+					}
 				}
 			} else {
 				BTMTK_WARN("btusb_send_frame send iso data, but iso channel not exit, %d",
