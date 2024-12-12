@@ -285,7 +285,11 @@ static int btmtk_fops_initfwlog(void)
 	if (cdevErr)
 		goto cdv_error;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
 	g_fwlog->pBTClass = class_create(THIS_MODULE, BT_FWLOG_DEV_NODE);
+#else
+	g_fwlog->pBTClass = class_create(BT_FWLOG_DEV_NODE);
+#endif
 	if (IS_ERR(g_fwlog->pBTClass)) {
 		BTMTK_ERR("%s: class create fail, error code(%ld)", __func__, PTR_ERR(g_fwlog->pBTClass));
 		goto create_node_error;
