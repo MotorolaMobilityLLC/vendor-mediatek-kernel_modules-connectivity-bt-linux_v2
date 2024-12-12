@@ -57,19 +57,15 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define BT_GDMA_DONE_7902_VALUE_W 0x00403EA9
 #define BT_GDMA_DONE_ADDR_R 0x74000A08
 #define BT_GDMA_DONE_VALUE_R 0xFFFFFFFB /* bit2: 0 - dma done, 1 - dma doing */
-
-/* CMD&Event sent by driver */
-#define NOTIFY_ALT_EVT_LEN 7
-
-#define LD_PATCH_CMD_LEN 9
-#define LD_PATCH_EVT_LEN 8
+#define BT_GDMA_DONE_6639_VALUE_W 0xC0040900
+#define BT_GDMA_DONE_6639_ADDR_W 0x18023A0C
+#define BT_GDMA_DONE_6639_ADDR_R 0x18023A10
+#define BT_GDMA_DONE_6639_VALUE_R 0xBFFFFFFF /* bit30: 0 - dma done, 1 - dma doing */
 
 #define READ_ADDRESS_EVT_HDR_LEN 7
 #define READ_ADDRESS_EVT_PAYLOAD_OFFSET 7
 #define WOBLE_DEBUG_EVT_TYPE 0xE8
 #define BLE_EVT_TYPE 0x3E
-
-#define WMT_TRIGGER_ASSERT_LEN 9
 
 struct btmtk_cif_chip_reset {
 	/* For Whole chip reset */
@@ -121,4 +117,44 @@ struct btmtk_usb_dev {
 	struct btmtk_woble	bt_woble;
 };
 
+#if BTMTK_ISOC_TEST
+/**
+ * ISOC support
+ */
+#define BT_CHR_DEV_SCO "BT_chrdev_sco"
+#define BT_DEV_NODE_SCO        "stpbt_sco"
+
+#define ISOC_IF_ALT_MSBC               4
+#define ISOC_IF_ALT_CVSD               2
+#define ISOC_IF_ALT_DEFAULT            ISOC_IF_ALT_CVSD
+#define ISOC_HCI_PKT_SIZE_MSBC         (33 * 3)
+#define ISOC_HCI_PKT_SIZE_CVSD         (17 * 3)
+#define ISOC_HCI_PKT_SIZE_DEFAULT      ISOC_HCI_PKT_SIZE_CVSD
+
+#define HCE_DIS_CONN_COMPLETE  0x05
+#define HCE_SYNC_CONN_COMPLETE 0x2C
+#define HCE_SYNC_CONN_COMPLETE_LEN 19
+#define HCE_SYNC_CONN_COMPLETE_AIR_MODE_OFFSET 18
+#define HCE_SYNC_CONN_COMPLETE_AIR_MODE_CVSD 0x02
+#define HCE_SYNC_CONN_COMPLETE_AIR_MODE_TRANSPARENT 0x03
+#define SCO_BUFFER_SIZE                (1024 * 4)      /* Size of RX Queue */
+
+
+struct btmtk_fops_sco {
+	struct btmtk_dev *bdev;
+	dev_t g_devIDsco;
+	struct cdev BT_cdevsco;
+	wait_queue_head_t inq_isoc;
+	struct sk_buff_head     isoc_in_queue;
+	struct class *pBTClass;
+	struct device *pBTDevsco;
+	spinlock_t isoc_lock;
+	atomic_t isoc_out_count;
+	struct semaphore isoc_wr_mtx;
+	struct semaphore isoc_rd_mtx;
+	unsigned char *o_sco_buf;
+	unsigned char isoc_alt_setting;
+	unsigned char isoc_urb_submitted;
+};
+#endif
 #endif

@@ -15,8 +15,10 @@
 #define _BTMTK_UART_H_
 #include "btmtk_define.h"
 #include "btmtk_main.h"
+#include "btmtk_buffer_mode.h"
 #include "btmtk_woble.h"
 #include "btmtk_chip_reset.h"
+#include "btmtk_chip_common.h"
 
 #include <linux/tty.h>
 #include <linux/tty_driver.h>
@@ -40,13 +42,6 @@ struct mtk_stp_hdr {
 #define STP_HEADER_CRC_LEN	2
 
 #define BTMTKUART_FLAG_STANDALONE_HW	 BIT(0)
-
-/* CMD&Event sent by driver */
-#define READ_REGISTER_CMD_LEN		16
-#define READ_REGISTER_EVT_HDR_LEN		11
-
-#define WRITE_REGISTER_CMD_LEN		24
-#define WRITE_REGISTER_EVT_HDR_LEN		11
 
 /* MCU address offset */
 #define MCU_ADDRESS_OFFSET_CMD 12
@@ -72,21 +67,19 @@ struct mtk_stp_hdr {
 #define BT_NONE_FC 0x00
 #define BT_HW_FC 0x40
 #define BT_SW_FC 0x80
-#define BT_MTK_SW_FC 0xC0
 
 /**
  * Send cmd dispatch evt
  */
 #define HCI_EV_VENDOR			0xff
 
-#define READ_ADDRESS_EVT_HDR_LEN 7
 #define READ_ADDRESS_EVT_PAYLOAD_OFFSET 7
 #define WOBLE_DEBUG_EVT_TYPE 0xE8
 
 #define LD_PATCH_CMD_LEN 10
 #define LD_PATCH_EVT_LEN 8
 
-#define SETBAUD_CMD_LEN 13
+#define SETBAUD_CMD_LEN 14
 #define SETBAUD_EVT_LEN 9
 
 #define GETBAUD_CMD_LEN 9
@@ -96,9 +89,15 @@ struct mtk_stp_hdr {
 #define WAKEUP_CMD_LEN 5
 #define WAKEUP_EVT_LEN 9
 
+#if (USE_DEVICE_NODE == 0)
 #define FWOWN_CMD_LEN 9
-#define DRVOWN_CMD_LEN 9
+#define DRVOWN_CMD_LEN 1
 #define OWNTYPE_EVT_LEN 9
+#else
+#define FWOWN_CMD_LEN 10
+#define DRVOWN_CMD_LEN 1
+#define OWNTYPE_EVT_LEN 10
+#endif
 
 #define BT_UART_DEFAULT_BAUD 115200
 
@@ -161,6 +160,15 @@ struct btmtk_uart_dev {
 
 	struct UART_CONFIG	uart_cfg;
 	struct btmtk_woble	bt_woble;
+
+	/* config form dts*/
+	u32			baudrate;
+
+	/* For uarthub setting */
+	u8			fw_hub_en;
+	u8			crc_en;
+	u8			rhw_en;
+	u8			fw_dl_ready;
 };
 
 #define btmtk_uart_is_standalone(bdev)	\

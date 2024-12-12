@@ -64,10 +64,27 @@ else
     ccflags-y += -DCFG_SUPPORT_DVT=0
 endif
 
+ifneq ($(TARGET_BUILD_VARIANT), user)
+    ccflags-y += -DSTPBTFWLOG_ENABLE=1
+else
+    ccflags-y += -DSTPBTFWLOG_ENABLE=0
+endif
+
 ifeq ($(CONFIG_SUPPORT_MULTI_DEV_NODE), y)
     ccflags-y += -DCFG_SUPPORT_MULTI_DEV_NODE=1
 else
     ccflags-y += -DCFG_SUPPORT_MULTI_DEV_NODE=0
+endif
+
+ccflags-y += -DDEBUG_DUMP_TIME
+ccflags-y += -DBTMTK_ISOC_TEST=0
+
+ifeq ($(CONFIG_GKI_SUPPORT), y)
+    ccflags-y += -DCFG_SUPPORT_CHIP_RESET_KO
+    ccflags-y += -I$(src)/../../mtreset_connac3.ko_intermediates/LINKED/reset/include/
+    ccflags-y += -I$(src)/../wlan_driver/gen4m_connac3/reset/include/
+
+    RESET_DIR = $(shell pwd)/../../KERNEL_MODULES/mtreset_connac3.ko_intermediates/LINKED/Module.symvers
 endif
 
 ifeq ($(CONFIG_SUPPORT_BMR_RX_CLK), y)
@@ -109,12 +126,48 @@ else
     ccflags-y += -I$(src)/include/btif
 endif
 
+MTK_PROJ_TYPE := ce
+
+ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
+CFILES += btmtk_queue.c btmtk_char_dev.c
+endif
+
+ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
+ccflags-y += -DUSE_DEVICE_NODE=1
+ccflags-y += -DSLEEP_ENABLE=1
+else
+ccflags-y += -DUSE_DEVICE_NODE=0
+ccflags-y += -DSLEEP_ENABLE=0
+endif
+
+$(info [BT_Drv] MTK_PROJ_TYPE = $(MTK_PROJ_TYPE) src = $(src))
+#ifeq ($(MTK_PROJ_TYPE), sp)
+ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
+    CFILES += proj/btmtk_proj_sp.c
+#else ifeq ($(MTK_PROJ_TYPE), ce)
+else
+#    CFILES += proj/btmtk_proj_ce.c
+endif
+
 CFILES += btmtk_main.c btmtk_fw_log.c btmtk_buffer_mode.c
 
-ccflags-y += -I$(src)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth
+CFILES += chip/btmtk_chip_7902.c chip/btmtk_chip_common.c chip/btmtk_chip_7961.c chip/btmtk_chip_7922.c chip/btmtk_chip_66xx.c chip/btmtk_chip_6639.c
+ccflags-y += -I$(src)/include/chip
+ccflags-y += -I$(src)/include/ -I$(src)/
+ccflags-y += -I$(src)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth -I$(src)/proj/include/
 
 ccflags-y += -DLINUX_OS
 ccflags-y += -Werror
+ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
+  $(info [BT_Drv] TOP = $(TOP))
+  $(info [BT_Drv] KBUILD_EXTRA_SYMBOLS = $(KBUILD_EXTRA_SYMBOLS))
+  #KBUILD_EXTRA_SYMBOLS := /mfs/mtkslt1121/mtk24223/CAS_REAL/alps-dev-s0_bsp-connac3-1210--2022_03_08_12_00/merged/out_krn/target/product/mgk_64_k510/obj/ETC/conninfra.ko_intermediates/LINKED/Module.symvers
+  CONN_INFRA_SRC := $(TOP)/vendor/mediatek/kernel_modules/connectivity/conninfra
+  ccflags-y += -I$(CONN_INFRA_SRC)/include
+  ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility
+  ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/include
+  ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/connsyslog
+endif
 
 $(MOD_NAME)-objs := $(CFILES:.c=.o)
 

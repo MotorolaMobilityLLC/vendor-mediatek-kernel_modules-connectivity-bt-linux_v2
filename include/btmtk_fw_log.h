@@ -32,10 +32,18 @@
 #endif
 
 /* Device node */
+#if (USE_DEVICE_NODE == 0)
 #if CFG_SUPPORT_MULTI_DEV_NODE
 	#define BT_FWLOG_DEV_NODE	"stpbt_multi_fwlog"
 #else
 	#define BT_FWLOG_DEV_NODE	"stpbtfwlog"
+#endif
+#else
+#if CFG_SUPPORT_MULTI_DEV_NODE
+	#define BT_FWLOG_DEV_NODE	"multi_fw_log_bt"
+#else
+	#define BT_FWLOG_DEV_NODE	"fw_log_bt"
+#endif
 #endif
 
 #define PROC_ROOT_DIR "stpbt"
@@ -46,6 +54,8 @@ struct btmtk_fops_fwlog {
 	struct cdev BT_cdevfwlog;
 	wait_queue_head_t fw_log_inq;
 	struct sk_buff_head fwlog_queue;
+	struct sk_buff_head dumplog_queue_first;
+	struct sk_buff_head dumplog_queue_latest;
 	struct class *pBTClass;
 	struct device *pBTDevfwlog;
 	spinlock_t fwlog_lock;
@@ -53,8 +63,8 @@ struct btmtk_fops_fwlog {
 	struct sk_buff_head usr_opcode_queue;
 };
 
-int btmtk_fops_initfwlog(void);
-int btmtk_fops_exitfwlog(void);
+void btmtk_init_node(void);
+void btmtk_deinit_node(void);
 void fw_log_bt_event_cb(void);
 void fw_log_bt_state_cb(uint8_t state);
 /** file_operations: stpbtfwlog */
@@ -67,5 +77,7 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 long btmtk_fops_compat_ioctlfwlog(struct file *filp, unsigned int cmd, unsigned long arg);
 int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb);
 int btmtk_dispatch_fwlog_bluetooth_kpi(struct btmtk_dev *bdev, u8 *buf, int len, u8 type);
+int btmtk_update_bt_status(u8 onoff_flag);
+void btmtk_fwdump_wake_unlock(void);
 
 #endif /* __BTMTK_FW_LOG_H__ */

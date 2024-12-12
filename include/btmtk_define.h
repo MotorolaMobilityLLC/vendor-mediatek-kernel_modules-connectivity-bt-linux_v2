@@ -42,15 +42,17 @@
 #include <linux/vmalloc.h>
 #include <linux/rtc.h>
 
-#ifdef CFG_CHIP_RESET_KO_SUPPORT
+#ifdef CFG_SUPPORT_CHIP_RESET_KO
 #include "reset.h"
+#include "reset_fsm.h"
+#include "reset_fsm_def.h"
 #endif
 
 /** Driver version */
-#define VERSION "7.0.2022082901"
-#define SUBVER ":turnkey"
+#define VERSION "8.0.2022092901"
+#define SUBVER ":connac3_dev"
 
-#if CFG_SUPPORT_WAKEUP_IRQ
+#ifdef CFG_SUPPORT_WAKEUP_IRQ
 #define WAKEUP_BT_IRQ 1
 #else
 #define WAKEUP_BT_IRQ 0
@@ -67,6 +69,25 @@
 #define BTMTKUART_RX_STATE_ACTIVE	1
 #define BTMTKUART_RX_STATE_WAKEUP	2
 #define BTMTKUART_RX_STATE_RESET	3
+
+#define BTMTK_DRV_OWN			0	/* init state is driver own for fw dl */
+#define BTMTK_DRV_OWNING		1
+#define BTMTK_FW_OWN			2
+#define BTMTK_FW_OWNING			3
+#define BTMTK_OWN_FAIL			4
+
+#define FW_OWN_TIMEOUT			30
+
+#define FW_OWN_TIMER_UKNOWN		0
+#define FW_OWN_TIMER_INIT		1
+#define FW_OWN_TIMER_RUNNING		2
+#define FW_OWN_TIMER_DONE		3
+
+#define BTMTK_THREAD_STOP		(1 << 0)
+#define BTMTK_THREAD_TX			(1 << 1)
+#define BTMTK_THREAD_RX			(1 << 2)
+#define BTMTK_THREAD_FW_OWN		(1 << 3)
+
 
 /**
  * Maximum rom patch file name length
@@ -120,9 +141,10 @@
 #define BTMTK_LOG_LVL_MAX	BTMTK_LOG_LVL_DBG
 #define BTMTK_LOG_LVL_DEF	BTMTK_LOG_LVL_INFO	/* default setting */
 
+#define SEPARATOR_LEN 2
 #define HCI_SNOOP_ENTRY_NUM	30
 #define HCI_SNOOP_BUF_SIZE	32
-#define HCI_SNOOP_MAX_BUF_SIZE	66
+#define HCI_SNOOP_MAX_BUF_SIZE	(HCI_SNOOP_BUF_SIZE * 2 + SEPARATOR_LEN)
 #define HCI_SNOOP_TS_STR_LEN	24
 #define WMT_OVER_HCI_HEADER_SIZE	3
 #define READ_ISO_PACKET_CMD_SIZE	4
@@ -138,26 +160,38 @@ extern uint8_t btmtk_log_lvl;
 #define BTMTK_DBG(fmt, ...)	 \
 	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) pr_warn("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__); } while (0)
 
+#define BTMTK_ERR_LIMITTED(fmt, ...)	\
+	do { \
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR)	\
+			printk_ratelimited(KERN_WARNING "[btmtk_err_limit] "fmt"\n", ##__VA_ARGS__);	\
+	} while (0)
+
 #define BTMTK_WARN_LIMITTED(fmt, ...)	\
 	do { \
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN)	\
 			printk_ratelimited(KERN_WARNING "[btmtk_warn_limit] "fmt"\n", ##__VA_ARGS__);	\
 	} while (0)
 
+#define BTMTK_DBG_LIMITTED(fmt, ...)	\
+	do { \
+		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG)	\
+			printk_ratelimited(KERN_WARNING "[btmtk_dbg_limit] "fmt"\n", ##__VA_ARGS__);	\
+	} while (0)
+
+extern uint8_t _raw_buf_[];
 #define BTMTK_INFO_RAW(p, l, fmt, ...)						\
 	do {	\
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) {	\
 			int cnt_ = 0;	\
 			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
-			uint8_t raw_buf[HCI_SNOOP_MAX_BUF_SIZE * 5 + 10];	\
 			const unsigned char *ptr = p;	\
 			for (cnt_ = 0; cnt_ < len_; ++cnt_)	\
-				(void)snprintf(raw_buf+5*cnt_, 6, "0x%02X ", ptr[cnt_]);	\
-			raw_buf[5*cnt_] = '\0';	\
+				(void)snprintf(_raw_buf_+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
+			_raw_buf_[3*cnt_] = '\0';	\
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-				pr_cont("[btmtk_info] "fmt"%s\n", ##__VA_ARGS__, raw_buf);	\
+				pr_cont("[btmtk_info] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
 			} else {	\
-				pr_cont("[btmtk_info] "fmt"%s (prtail)\n", ##__VA_ARGS__, raw_buf);	\
+				pr_cont("[btmtk_info] "fmt" %s (prtail)\n", ##__VA_ARGS__, _raw_buf_);	\
 			}	\
 		}	\
 	} while (0)
@@ -166,16 +200,15 @@ extern uint8_t btmtk_log_lvl;
 	do {	\
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {	\
 			int cnt_ = 0;	\
+			int pos = 0;	\
 			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
-			uint8_t raw_buf[HCI_SNOOP_MAX_BUF_SIZE * 5 + 10];	\
 			const unsigned char *ptr = p;	\
-			for (cnt_ = 0; cnt_ < len_; ++cnt_)	\
-				(void)snprintf(raw_buf+5*cnt_, 6, "0x%02X ", ptr[cnt_]);	\
-			raw_buf[5*cnt_] = '\0';	\
-			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-				pr_cont("[btmtk_debug] "fmt"%s\n", ##__VA_ARGS__, raw_buf);	\
-			} else {	\
-				pr_cont("[btmtk_debug] "fmt"%s (prtail)\n", ##__VA_ARGS__, raw_buf); \
+			for (pos = 0; pos < l; ) {	\
+				for (cnt_ = 0; cnt_ < len_ && pos < l; ++cnt_, ++pos) {	\
+					(void)snprintf(_raw_buf_+3*cnt_, 4, "%02X ", ptr[pos]);	\
+				}	\
+				_raw_buf_[3*cnt_] = '\0';	\
+				pr_cont("[btmtk_debug] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
 			}	\
 		}	\
 	} while (0)
@@ -187,12 +220,16 @@ extern uint8_t btmtk_log_lvl;
  *
  * HCI packet type
  */
-#define MTK_HCI_COMMAND_PKT		0x01
-#define MTK_HCI_ACLDATA_PKT		0x02
-#define MTK_HCI_SCODATA_PKT		0x03
-#define MTK_HCI_EVENT_PKT		0x04
-#define HCI_ISO_PKT			0x05
-#define HCI_ISO_PKT_HEADER_SIZE	4
+#define MTK_HCI_COMMAND_PKT			0x01
+#define MTK_HCI_CMD_HEAD_SIZE			4
+#define MTK_HCI_ACLDATA_PKT			0x02
+#define MTK_HCI_ACL_HEAD_SIZE			5
+#define MTK_HCI_SCODATA_PKT			0x03
+#define MTK_HCI_SCO_HEAD_SIZE			4
+#define MTK_HCI_EVENT_PKT			0x04
+#define MTK_HCI_EVENT_HEAD_SIZE			3
+#define HCI_ISO_PKT				0x05
+#define HCI_ISO_PKT_HEADER_SIZE			4
 #define HCI_ISO_PKT_WITH_ACL_HEADER_SIZE	5
 
 /**
@@ -229,6 +266,9 @@ extern uint8_t btmtk_log_lvl;
 #define SEC_MAP_NEED_SEND_SIZE	52
 #define PATCH_STATUS	7
 
+#define DOWNLOAD_BY_INDEX	0
+#define DOWNLOAD_BY_TYPE	1
+#define BT_BIN_TYP_NUM	6
 
 #define IO_BUF_SIZE		(HCI_MAX_EVENT_SIZE > 256 ? HCI_MAX_EVENT_SIZE : 256)
 #define EVENT_COMPARE_SIZE	64
@@ -257,6 +297,9 @@ extern uint8_t btmtk_log_lvl;
 #define BT_AUTO_PICUS_FILTER "PICUS_FILTER_COMMAND"
 #define BT_AUTO_PICUS_ENABLE "PICUS_ENABLE_COMMAND"
 #define BT_PICUS_TO_HOST "SUPPORT_PICUS_TO_HOST"
+#if BTMTK_ISOC_TEST
+#define BT_USB_SCO_TEST "SUPPORT_USB_SCO_TEST"
+#endif
 #define BT_PHASE1_WMT_CMD "PHASE1_WMT_CMD"
 #define BT_VENDOR_CMD "VENDOR_CMD"
 #define BT_SINGLE_SKU "SUPPORT_BT_SINGLE_SKU"
@@ -301,6 +344,9 @@ struct bt_cfg_struct {
 	struct fw_cfg_struct picus_filter;	/* support on PICUS filter command customization */
 	struct fw_cfg_struct picus_enable;	/* support on PICUS enable command customization */
 	bool	support_picus_to_host;			/* support picus log to host (boots/bluedroid) */
+#if BTMTK_ISOC_TEST
+	bool	support_usb_sco_test;			/* support usb sco test for bluedroid */
+#endif
 	int	dongle_reset_gpio_pin;		/* BT_DONGLE_RESET_GPIO_PIN number */
 	unsigned int	unify_woble_type;	/* 0: legacy. 1: waveform. 2: IR */
 	struct fw_cfg_struct phase1_wmt_cmd[PHASE1_WMT_CMD_COUNT];
@@ -364,8 +410,6 @@ struct debug_reg_struct {
 #define CHIP_ID	0x70010200
 #define FLAVOR	0x70010020
 
-#define ZB_ENABLE	0x7C00114C
-
 #ifndef DEBUG_LD_PATCH_TIME
 #define DEBUG_LD_PATCH_TIME 0
 #endif
@@ -376,8 +420,8 @@ struct debug_reg_struct {
 
 #define ERRNUM 0xFF
 
-#if DEBUG_DUMP_TIME
 void btmtk_getUTCtime(struct bt_utc_struct *utc);
+#if DEBUG_DUMP_TIME
 #define DUMP_TIME_STAMP(__str) \
 	do { \
 		struct bt_utc_struct utc; \
@@ -391,13 +435,15 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc);
 #define DUMP_TIME_STAMP(__str)
 #endif
 
-#if CFG_SUPPORT_BMR_RX_CLK
-#define ENABLE_DEINT_IRQ 1
-#include <mt-plat/mtk_secure_api.h>
-extern int mtk_deint_enable(unsigned int eint_num, unsigned int spi_num, unsigned long type);
-extern int mtk_deint_ack(unsigned int irq);
-#define MTK_SIP_BT_FIQ_REG (0x82000523 | MTK_SIP_SMC_AARCH_BIT)
-#define MTK_SIP_BT_GET_CLK (0x82000524 | MTK_SIP_SMC_AARCH_BIT)
+#ifdef CFG_SUPPORT_CHIP_RESET_KO
+void btmtk_resetko_reset(void);
+void btmtk_resetko_notify(unsigned int event, void *data);
+extern enum ReturnStatus resetko_register_module(enum ModuleType module,
+						char *name,
+						enum TriggerResetApiType resetApiType,
+						void *resetFunc,
+						void *notifyFunc);
+extern enum ReturnStatus resetko_unregister_module(enum ModuleType module);
 #endif
 
 #endif /* __BTMTK_DEFINE_H__ */

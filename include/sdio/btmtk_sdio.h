@@ -26,6 +26,7 @@
 #include "btmtk_define.h"
 #include "btmtk_main.h"
 #include "btmtk_woble.h"
+#include "btmtk_buffer_mode.h"
 #include "btmtk_chip_reset.h"
 
 #ifndef BTMTK_SDIO_DEBUG
@@ -137,10 +138,6 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define BTMTK_SDIO_THREAD_RX		(1 << 2)
 #define BTMTK_SDIO_THREAD_FW_OWN	(1 << 3)
 
-#define FW_OWN_TIMEOUT		30
-#define FW_OWN_TIMER_INIT	0
-#define FW_OWN_TIMER_RUNNING	1
-
 #define CHECK_THREAD_RETRY_TIMES 50
 
 struct btmtk_sdio_hdr {
@@ -177,6 +174,7 @@ struct btmtk_sdio_dev {
 	struct sk_buff_head tx_queue;
 	struct btmtk_sdio_thread sdio_thread;
 	struct btmtk_woble bt_woble;
+	struct btmtk_buffer_mode_struct *buffer_mode;
 
 	struct timer_list fw_own_timer;
 	atomic_t fw_own_timer_flag;
