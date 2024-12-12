@@ -246,7 +246,7 @@ exit:
 }
 
 static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
-		u8 *fwbuf, int section_dl_size, int section_offset)
+		u8 *fwbuf, int section_dl_size, int section_offset, int patch_flag)
 {
 	return 0;
 }

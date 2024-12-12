@@ -1384,7 +1384,7 @@ static void btmtk_sdio_interrupt(struct sdio_func *func)
 }
 
 static int btmtk_sdio_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
-		u8 *fwbuf, int section_dl_size, int section_offset)
+		u8 *fwbuf, int section_dl_size, int section_offset, int patch_flag)
 {
 	int cur_len = 0;
 	int ret = -1;
