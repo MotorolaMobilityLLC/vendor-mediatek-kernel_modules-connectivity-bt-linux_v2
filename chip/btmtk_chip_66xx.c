@@ -25,7 +25,7 @@ static int btmtk_cif_rx_packet_handler(struct btmtk_dev *bdev, struct sk_buff *s
 {
 	BTMTK_DBG("%s start", __func__);
 #if (USE_DEVICE_NODE == 1)
-	return rx_skb_enqueue(skb);
+	return rx_skb_enqueue(bdev, skb);
 #else
 	return 0;
 #endif

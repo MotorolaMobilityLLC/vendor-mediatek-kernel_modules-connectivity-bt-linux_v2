@@ -426,6 +426,10 @@ static ssize_t BT_read(struct file *filp, char __user *buf, size_t count, loff_t
 
 OUT:
 	up(&rd_mtx);
+	/* release the data to host wakelock early, avoid waiting 100ms in BT_event_cb */
+	if (!btmtk_rx_data_valid())
+		__pm_relax(bt_wakelock);
+
 	return retval;
 }
 

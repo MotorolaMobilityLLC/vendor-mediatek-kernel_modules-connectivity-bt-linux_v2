@@ -63,7 +63,7 @@ static u8 is_rx_queue_empty(void)
 	return FALSE;
 }
 
-static u8 is_rx_queue_res_available(u32 length)
+u8 is_rx_queue_res_available(u32 length)
 {
 	u32 room_left = 0;
 	struct bt_ring_buffer_mgmt *p_ring = &g_rx_buffer;
@@ -79,7 +79,7 @@ static u8 is_rx_queue_res_available(u32 length)
 	spin_unlock(&p_ring->lock);
 
 	if (room_left < length) {
-		BTMTK_WARN("RX queue room left (%u) < required (%u)", room_left, length);
+		BTMTK_WARN_LIMITTED("RX queue room left (%u) < required (%u)", room_left, length);
 		return FALSE;
 	}
 	return TRUE;
@@ -117,7 +117,7 @@ static s32 rx_pkt_enqueue(u8 *buffer, u32 length)
 
 }
 
-s32 rx_skb_enqueue(struct sk_buff *skb)
+s32 rx_skb_enqueue(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
 	s32 ret = 0;
 	u8 i = 0;
@@ -128,7 +128,7 @@ s32 rx_skb_enqueue(struct sk_buff *skb)
 		goto end;
 	}
 
-	#define WAIT_TIMES 40
+	#define WAIT_TIMES 20
 
 	/*
 	 * FW will block the data if it's buffer is full,
@@ -143,7 +143,9 @@ s32 rx_skb_enqueue(struct sk_buff *skb)
 	}
 
 	if (!is_rx_queue_res_available(skb->len + 1)) {
-		BTMTK_WARN("rx packet drop!!!");
+		if (bdev)
+			BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: rx packet drop!!! len[%d] %02x", __func__,
+						skb->len + 1, hci_skb_pkt_type(skb));
 		ret = -1;
 		goto end;
 	}

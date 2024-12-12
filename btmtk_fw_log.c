@@ -13,6 +13,7 @@
 #if (USE_DEVICE_NODE == 1)
 #include "btmtk_proj_sp.h"
 #include "conn_dbg.h"
+#include "btmtk_queue.h"
 #include "aee.h"
 #endif
 
@@ -1932,12 +1933,38 @@ coredump_fail_unlock:
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 				(skb->data[0] == 0xff || skb->data[0] == 0xfe) && skb->data[1] == 0x05) {
 		/* picus or syslog */
-		/* remove acl header (FF 05 LL LL)*/
-		skb_pull(skb, 4);
 		fwlog_count++;
-		BTMTK_INFO_LIMITTED("fw log counter[%d]", fwlog_count);
-		btmtk_connsys_log_handler(skb->data, skb->len);
+
+		/* send to log handler, and remove acl header (FF 05 LL LL) */
+		btmtk_connsys_log_handler(skb->data + 4, skb->len - 4);
+
+		/* host buffer is not enough, reduce payload to 8 bytes */
+		if (!is_rx_queue_res_available(RING_BUFFER_SIZE >> 2)) {
+			u8 log_lost_payload[] = {0x08, 0x00, 0x01, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+			memcpy(&skb->data[2], &log_lost_payload[0], sizeof(log_lost_payload));
+			/* Add acl header len: (FF 05) 08 00 ... */
+			skb->len = sizeof(log_lost_payload) + 2;
+			BTMTK_DBG_RAW(bdev, skb->data, skb->len, "%s: FW log lost:", __func__);
+		}
+
+		/* Drop the firmware log during the suspend flow to avoid waking up the system. */
+		if (atomic_read(&bdev->main_info.suspend_entry)) {
+			BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: drop FW log in suspend flow:", __func__);
+			return 1;
+		}
+
+#if (CFG_SUPPORT_FWLOG_TO_HOST == 1)
+		/* send fw log to host */
+		BTMTK_INFO_LIMITTED("fw log counter[%d], log_level[%d], send to hci log",
+				fwlog_count, bdev->main_info.fw_log_on);
+		return 0;
+#else
+		/* not send fw log to host */
+		BTMTK_INFO_LIMITTED("fw log counter[%d], log_level[%d], only in fw log",
+				fwlog_count, bdev->main_info.fw_log_on);
 		return 1;
+#endif // CFG_SUPPORT_FWLOG_TO_HOST
 #endif // CFG_SUPPORT_CONNSYSLOGGER_FWLOG
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&

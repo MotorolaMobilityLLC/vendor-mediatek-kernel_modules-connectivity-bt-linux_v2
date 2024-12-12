@@ -1175,7 +1175,6 @@ void btmtk_assert_wake_lock(struct btmtk_dev *bdev);
 void btmtk_assert_wake_unlock(struct btmtk_dev *bdev);
 bool btmtk_assert_wake_lock_check(struct btmtk_dev *bdev);
 #if (USE_DEVICE_NODE == 1)
-int rx_skb_enqueue(struct sk_buff *skb);
 int btmtk_chardev_init(void);
 int btmtk_met_log_handler(struct btmtk_dev *bdev, u8 *buf, u32 size);
 int32_t btmtk_intcmd_set_fw_log(struct btmtk_dev *bdev, uint8_t flag);
