@@ -98,7 +98,7 @@ CFLAGS += -I$(TOPDIR)/board/$(BOARDDIR)/include -I$(OSAI_INC)
 LIB	= lib$(THIS_COMPONENT).a
 
 
-OBJS	:= LD_btmtk_usb.o LD_usbbt.o 
+OBJS	:= LD_btmtk_usb.o LD_usbbt.o
 
 $(LIB):	$(OBJS) $(SOBJS)
 	$(AR) crv $@ $^
