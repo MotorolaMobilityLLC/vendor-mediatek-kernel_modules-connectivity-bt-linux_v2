@@ -1,15 +1,8 @@
-/**
- *  Copyright (c) 2018 MediaTek Inc.
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 as
- *  published by the Free Software Foundation.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- *  See http://www.gnu.org/licenses/gpl-2.0.html for more details.
+/* SPDX-License-Identifier: BSD-2-Clause */
+/*
+ * Copyright (c) 2021 MediaTek Inc.
  */
+
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
@@ -5153,5 +5146,5 @@ module_exit(main_driver_exit);
  */
 MODULE_DESCRIPTION("Mediatek Bluetooth Driver");
 MODULE_VERSION(VERSION SUBVER);
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("Dual BSD/GPL");
 module_param(btmtk_intf_num, int, 0444);
