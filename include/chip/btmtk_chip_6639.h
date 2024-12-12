@@ -22,6 +22,7 @@
 /* calibration backup & restore */
 #define CAL_DATA_EVNET_LEN 9
 #define CAL_DATA_CMD_LEN 10
+#define BT_RESET_REG_6639 0x70028610
 
 
 int btmtk_cif_chip_6639_register(void);

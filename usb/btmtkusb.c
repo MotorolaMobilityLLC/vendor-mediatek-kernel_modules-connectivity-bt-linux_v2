@@ -2806,10 +2806,10 @@ EXPORT_SYMBOL(btmtk_usb_toggle_rst_pin);
 
 static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 {
-	int val = 0, retry = 10;
+	int ret = 0;
 	int state = 0;
-	u32 mcu_init_done = MCU_BT0_INIT_DONE;
-	u32 bt_subsys_cr;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
 	btmtk_usb_handle_mutex_lock(bdev);
 
 	if (!bdev) {
@@ -2839,65 +2839,15 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 
 	btusb_stop_traffic((struct btmtk_usb_dev *)bdev->cif_dev);
 
-	/* For reset */
-	btmtk_cif_write_uhw_register(bdev, EP_RST_OPT, EP_RST_IN_OUT_OPT);
+	if (bmain_info->hif_hook_chip.bt_subsys_reset) {
+		ret = bmain_info->hif_hook_chip.bt_subsys_reset(bdev);
+		btmtk_usb_handle_mutex_unlock(bdev);
+		return ret;
+	}
 
-	/* read interrupt EP15 CR */
-	btmtk_cif_read_uhw_register(bdev, BT_WDT_STATUS, &val);
-
-	if (is_mt6639(bdev->chip_id))
-		bt_subsys_cr = BT_SUBSYS_RST_6639;
-	else
-		bt_subsys_cr = BT_SUBSYS_RST;
-	/* Write Reset CR to 1 */
-	btmtk_cif_read_uhw_register(bdev, bt_subsys_cr, &val);
-	BTMTK_INFO("%s: read Reset CR : 0x%08x", __func__, val);
-	val |= (1 << 0);
-	BTMTK_INFO("%s: write 1 to Reset CR : 0x%08x", __func__, val);
-	btmtk_cif_write_uhw_register(bdev, bt_subsys_cr, val);
-
-	btmtk_cif_write_uhw_register(bdev, UDMA_INT_STA_BT, 0x000000FF);
-	btmtk_cif_read_uhw_register(bdev, UDMA_INT_STA_BT, &val);
-	btmtk_cif_write_uhw_register(bdev, UDMA_INT_STA_BT1, 0x000000FF);
-	btmtk_cif_read_uhw_register(bdev, UDMA_INT_STA_BT1, &val);
-
-	/* Write Reset CR to 0 */
-	btmtk_cif_read_uhw_register(bdev, bt_subsys_cr, &val);
-	BTMTK_INFO("%s: read Reset CR : 0x%08x", __func__, val);
-	val &= ~(1 << 0);
-	BTMTK_INFO("%s: write 0 to Reset CR : 0x%08x", __func__, val);
-	btmtk_cif_write_uhw_register(bdev, bt_subsys_cr, val);
-
-	/* Read reset CR */
-	btmtk_cif_read_uhw_register(bdev, bt_subsys_cr, &val);
-
-	if (bdev->dualBT)
-		mcu_init_done |= MCU_BT1_INIT_DONE;
-
-	do {
-		/* polling re-init CR */
-		btmtk_cif_read_uhw_register(bdev, BT_MISC, &val);
-		BTMTK_INFO("%s: reg=%x, value=0x%08x", __func__, BT_MISC, val);
-		if (val == 0xffffffff) {
-			/* read init CR failed */
-			BTMTK_INFO("%s: read init CR failed, retry = %d", __func__, retry);
-		} else if ((val & mcu_init_done) == mcu_init_done) {
-			/* L0.5 reset done */
-			BTMTK_INFO("%s: Do L0.5 reset successfully.", __func__);
-			goto Finish;
-		} else {
-			BTMTK_INFO("%s: polling MCU-init done CR", __func__);
-		}
-		msleep(100);
-	} while (retry-- > 0);
-
-	/* L0.5 reset failed, do whole chip reset */
+	BTMTK_ERR("%s: subsys reset no register", __func__);
 	btmtk_usb_handle_mutex_unlock(bdev);
 	return -1;
-
-Finish:
-	btmtk_usb_handle_mutex_unlock(bdev);
-	return 0;
 }
 
 static int btmtk_usb_enter_standby(void)
@@ -3672,6 +3622,8 @@ int btmtk_cif_register(void)
 	hook.dl_dma = btmtk_usb_load_fw_patch_using_dma;
 	hook.dump_debug_sop = btmtk_usb_dump_debug_sop;
 	hook.enter_standby = btmtk_usb_enter_standby;
+	hook.write_uhw_register = btmtk_cif_write_uhw_register;
+	hook.read_uhw_register = btmtk_cif_read_uhw_register;
 	btmtk_reg_hif_hook(&hook);
 
 	retval = usb_register(&btusb_driver);
