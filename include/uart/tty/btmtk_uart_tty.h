@@ -87,15 +87,9 @@ struct btmtk_stp_hdr {
 #define WAKEUP_CMD_LEN 5
 #define WAKEUP_EVT_LEN 9
 
-#if (USE_DEVICE_NODE == 0)
-#define FWOWN_CMD_LEN 9
-#define DRVOWN_CMD_LEN 1
-#define OWNTYPE_EVT_LEN 9
-#else
 #define FWOWN_CMD_LEN 10
 #define DRVOWN_CMD_LEN 1
 #define OWNTYPE_EVT_LEN 10
-#endif
 
 #define BTMTK_MAX_SEND_RETRY 10000
 #if (USE_DEVICE_NODE == 1)

@@ -215,7 +215,7 @@ ccflags-y += -DUSE_DEVICE_NODE=1
 ccflags-y += -DSLEEP_ENABLE=1
 else
 ccflags-y += -DUSE_DEVICE_NODE=0
-ccflags-y += -DSLEEP_ENABLE=0
+ccflags-y += -DSLEEP_ENABLE=1
 endif
 
 ifeq ($(BT_CONFIG_TRACING),y)

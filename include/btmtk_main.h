@@ -692,6 +692,7 @@ typedef int (*cif_send_and_recv_ptr)(struct btmtk_dev *bdev,
 		struct sk_buff *skb,
 		const uint8_t *event, const int event_len,
 		int delay, int retry, int pkt_type, bool flag);
+typedef int (*cif_raw_filter_ptr)(struct btmtk_dev *bdev, const unsigned char *buf, int size);
 typedef int (*cif_event_filter_ptr)(struct btmtk_dev *bdev, struct sk_buff *skb);
 typedef int (*cif_subsys_reset_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_whole_reset_ptr)(struct btmtk_dev *bdev);
@@ -735,6 +736,7 @@ struct hif_hook_ptr {
 	cif_disc_hdl_ptr		disc_handler;
 	cif_send_cmd_ptr		send_cmd;
 	cif_send_and_recv_ptr		send_and_recv;
+	cif_raw_filter_ptr		raw_filter;
 	cif_event_filter_ptr		event_filter;
 	cif_subsys_reset_ptr		subsys_reset;
 	cif_whole_reset_ptr		whole_reset;

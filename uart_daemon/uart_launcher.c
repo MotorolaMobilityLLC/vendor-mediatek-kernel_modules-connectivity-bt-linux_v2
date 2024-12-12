@@ -454,6 +454,7 @@ int main(int argc, char *argv[])
     }
 #endif
 
+    ++fd_num;
 restart:
     /* Set default Baud rate */
     sUartConfig.iBaudrate = CUST_BAUDRATE_DFT;
@@ -461,7 +462,6 @@ restart:
     cmd_hdr_baud(&sUartConfig, CUST_BAUDRATE_DFT);
     fds.fd = gTtyFd;
     fds.events = POLLIN;
-    ++fd_num;
 
     err = ioctl(gTtyFd, HCIUARTINIT, NULL);
     if (err < 0) {
