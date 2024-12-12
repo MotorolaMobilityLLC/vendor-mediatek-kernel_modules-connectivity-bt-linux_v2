@@ -2782,6 +2782,9 @@ int btmtk_reset_power_on(struct btmtk_dev *bdev)
 {
 	if (bdev->power_state == BTMTK_DONGLE_STATE_POWER_OFF) {
 		bdev->power_state = BTMTK_DONGLE_STATE_ERROR;
+		if (is_mt6639(bdev->chip_id))
+			btmtk_dynamic_load_rom_patch(bdev, 1);
+
 		if (btmtk_send_wmt_power_on_cmd(bdev) < 0)
 			return -1;
 		bdev->power_state = BTMTK_DONGLE_STATE_POWER_ON;
