@@ -168,6 +168,10 @@ struct btmtk_sdio_dev {
 
 	struct timer_list fw_own_timer;
 	atomic_t fw_own_timer_flag;
+
+	struct wakeup_source *main_ws;	//for main thread
+	struct wakeup_source *irq_ws;	//for irq handler
+	struct wakeup_source *device_ws;	//for probe and disconnect procedure
 };
 
 int btmtk_sdio_read_bt_mcu_pc(u32 *val);

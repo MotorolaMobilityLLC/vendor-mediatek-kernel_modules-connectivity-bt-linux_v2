@@ -42,7 +42,7 @@
 
 /** Driver version */
 
-#define VERSION "8.0.2023092701"
+#define VERSION "8.0.2023100701"
 #define SUBVER ":connac3_dev"
 
 #if CFG_SUPPORT_WAKEUP_IRQ
@@ -449,6 +449,8 @@ struct debug_reg_struct {
 #define FW_VERSION	0x80021004
 #define CHIP_ID	0x70010200
 #define FLAVOR	0x70010020
+
+#define ZB_ENABLE	0x7C00114C
 
 #ifndef DEBUG_LD_PATCH_TIME
 #define DEBUG_LD_PATCH_TIME 0

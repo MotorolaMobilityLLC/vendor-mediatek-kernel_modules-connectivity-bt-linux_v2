@@ -29,7 +29,7 @@ static DEFINE_MUTEX(btmtk_sdio_ops_mutex);
 static DEFINE_MUTEX(btmtk_sdio_debug_mutex);
 #define SDIO_DEBUG_MUTEX_LOCK()	mutex_lock(&btmtk_sdio_debug_mutex)
 #define SDIO_DEBUG_MUTEX_UNLOCK()	mutex_unlock(&btmtk_sdio_debug_mutex)
-
+static atomic_t b_suspending = ATOMIC_INIT(0);
 static int btmtk_sdio_readl(u32 offset,  u32 *val, struct sdio_func *func);
 static int btmtk_sdio_writel(u32 offset, u32 val, struct sdio_func *func);
 
@@ -39,7 +39,7 @@ do {							\
 	btmtk_sdio_read_bt_mcu_pc(&__value);		\
 	BTMTK_INFO("%s, BT mcu pc: 0x%08X", __func__, __value);	\
 	btmtk_sdio_read_conn_infra_pc(&__value);	\
-	BTMTK_INFO("%s, conn infra pc: 0x%08X", __func__, __value);	\
+	BTMTK_INFO("%s, power status: 0x%08X", __func__, __value);	\
 } while (0)
 
 static struct btmtk_sdio_dev g_sdio_dev;
@@ -134,6 +134,32 @@ void rx_debug_save(int type, u32 value, u8 *buf)
 	}
 }
 #endif
+
+static inline void btmtk_sdio_wake_lock(struct wakeup_source *ws, unsigned int msec)
+{
+	if (ws) {
+		if ((ws == g_sdio_dev.main_ws) || (ws == g_sdio_dev.irq_ws)) {
+			/*If BT cmd is sent during suspend, main_ws or irq_ws will abort suspend.
+			It will results to suspend <--> abort dead loop.
+			Since cmd&event is syncly completed if cmd is sent in suspend() function.
+			There is no need to hold irq/trx wakelock in suspend procedure*/
+			if (atomic_read(&b_suspending) == 1) {
+				BTMTK_ERR("%s no lock in suspending", __func__);
+				return;
+			}
+		}
+		if (msec > 0)
+			__pm_wakeup_event(ws, msec);
+		else
+			__pm_stay_awake(ws);
+	}
+}
+
+static inline void btmtk_sdio_wake_unlock(struct wakeup_source *ws)
+{
+	if (ws)
+		__pm_relax(ws);
+}
 
 static void btmtk_sdio_dump_debug_register(struct btmtk_dev *bdev,
 		struct debug_reg_struct debug_reg)
@@ -334,7 +360,8 @@ retry_own:
 					__func__, u32PollNum, u32PD2HRM0RValue);
 				for (i = 0; i < 3; i++)
 					DUMP_FW_PC(cif_dev);
-
+					if (u32PollNum == 30)
+						goto unlock;
 				retry--;
 				usleep_range(5*1000, 10*1000);
 				goto retry_own;
@@ -572,6 +599,7 @@ static int btmtk_sdio_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 
 	memcpy(val, bdev->io_buf + MCU_ADDRESS_OFFSET_EVT - HCI_TYPE_SIZE, sizeof(u32));
 	*val = le32_to_cpu(*val);
+	/* make sure memcpy done before we use the register */
 	smp_wmb();
 
 	BTMTK_INFO("%s: reg=%x, value=0x%08x", __func__, reg, *val);
@@ -1086,6 +1114,7 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 				notify_alt_evt.content[6] = (crValue & 0x000000FF);
 				memcpy(evt_skb->data, &notify_alt_evt.content[1], notify_alt_evt.len - 1);
 				evt_skb->len = notify_alt_evt.len - 1;
+				/* make sure memcpy done before send to hci layer */
 				smp_wmb();
 				hci_recv_frame(bdev->hdev, evt_skb);
 				kfree_skb(skb);
@@ -1117,6 +1146,7 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 				notify_alt_evt.content[6] = (crValue & 0x000000FF);
 				memcpy(evt_skb->data, &notify_alt_evt.content[1], notify_alt_evt.len - 1);
 				evt_skb->len = notify_alt_evt.len - 1;
+				/* make sure memcpy done before send to hci layer */
 				smp_wmb();
 				hci_recv_frame(bdev->hdev, evt_skb);
 				kfree_skb(skb);
@@ -1238,6 +1268,7 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 		memset(cif_dev->transfer_buf, 0, URB_MAX_BUFFER_SIZE);
 		hci_pkt_len += 5;
 		memcpy(cif_dev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE, bdev->io_buf, hci_pkt_len);
+		/* make sure memcpy done before send to hci layer */
 		smp_wmb();
 		BTMTK_DBG_RAW(cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
 	}
@@ -1272,6 +1303,7 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 		memset(cif_dev->transfer_buf, 0, URB_MAX_BUFFER_SIZE);
 		hci_pkt_len += 5;
 		memcpy(cif_dev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE, bdev->io_buf, hci_pkt_len);
+		/* make sure memcpy done before send to hci layer */
 		smp_wmb();
 		BTMTK_DBG_RAW(cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
 		break;
@@ -1337,6 +1369,7 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			/* Such as chip_id, fw_version, etc. */
 			bdev->io_buf[0] = bt_cb(skb)->pkt_type;
 			memcpy(&bdev->io_buf[1], skb->data, skb->len);
+			/* make sure memcpy done before we compare it */
 			smp_wmb();
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 			BTMTK_DBG("%s, compare success", __func__);
@@ -1399,6 +1432,7 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 	do {
 		/* check if event_compare_success */
 		if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
+			/* make sure memcpy done before we compare it */
 			smp_rmb();
 			ret = 0;
 			break;
@@ -1442,6 +1476,10 @@ static void btmtk_sdio_interrupt(struct sdio_func *func)
 	bdev = sdio_get_drvdata(func);
 	if (!bdev)
 		return;
+
+	/*Normally, unlock it in main thread to make sure the RX data is received in milliseconds.
+	Just set timeout in case unexpected error happens*/
+	btmtk_sdio_wake_lock(g_sdio_dev.irq_ws, 1000);
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
 	btmtk_sdio_enable_interrupt(0, cif_dev->func);
@@ -1815,6 +1853,9 @@ static int btmtk_sdio_main_thread(void *data)
 	for (;;) {
 		wait_event_interruptible(cif_dev->sdio_thread.wait_q,
 			(thread_flag = btmtk_thread_wait_for_msg(cif_dev)));
+
+		btmtk_sdio_wake_lock(g_sdio_dev.main_ws, 0);
+
 		if (thread_flag & BTMTK_THREAD_STOP) {
 			BTMTK_WARN("sdio_thread: break from main thread");
 			break;
@@ -1843,6 +1884,7 @@ static int btmtk_sdio_main_thread(void *data)
 		if (thread_flag & BTMTK_THREAD_RX) {
 			BTMTK_DBG("go int");
 			atomic_set(&cif_dev->int_count, 0);
+			btmtk_sdio_wake_unlock(g_sdio_dev.irq_ws);
 			if (btmtk_sdio_interrupt_process(bdev)) {
 				btmtk_reset_trigger(bdev);
 				break;
@@ -1864,10 +1906,13 @@ static int btmtk_sdio_main_thread(void *data)
 				}
 			}
 		}
+		btmtk_sdio_wake_unlock(g_sdio_dev.main_ws);	//normal unlock
 	}
 
 	atomic_set(&cif_dev->sdio_thread.thread_status, 0);
-	BTMTK_WARN("end");
+	btmtk_sdio_wake_unlock(g_sdio_dev.main_ws);	//thread stop from break;
+	BTMTK_WARN("%s end", __func__);
+
 	return 0;
 }
 
@@ -2134,6 +2179,8 @@ static int btmtk_cif_probe(struct sdio_func *func,
 		return -ENODEV;
 	}
 
+	btmtk_sdio_wake_lock(g_sdio_dev.device_ws, 0);
+
 	cif_state = &bdev->cif_state[cif_event];
 
 	/* Set Entering state */
@@ -2148,10 +2195,13 @@ static int btmtk_cif_probe(struct sdio_func *func,
 	else
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 
+	btmtk_sdio_wake_unlock(g_sdio_dev.device_ws);
+
 #ifdef CFG_SUPPORT_CHIP_RESET_KO
 	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_PROBE_SUCCESS);
 #endif
 
+	BTMTK_INFO("%s end", __func__);
 	DUMP_TIME_STAMP("probe_end");
 	return ret;
 }
@@ -2161,6 +2211,8 @@ static void btmtk_cif_disconnect(struct sdio_func *func)
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
+
+	BTMTK_INFO("%s, start", __func__);
 
 	bdev = sdio_get_drvdata(func);
 
@@ -2172,6 +2224,7 @@ static void btmtk_cif_disconnect(struct sdio_func *func)
 		return;
 	}
 
+	btmtk_sdio_wake_lock(g_sdio_dev.device_ws, 0);
 	cif_state = &bdev->cif_state[cif_event];
 
 	/* Set Entering state */
@@ -2186,6 +2239,8 @@ static void btmtk_cif_disconnect(struct sdio_func *func)
 
 	/* Set End/Error state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	btmtk_sdio_wake_unlock(g_sdio_dev.device_ws);
+	BTMTK_INFO("%s, end", __func__);
 }
 
 #ifdef CONFIG_PM
@@ -2233,6 +2288,7 @@ static int btmtk_cif_suspend(struct device *dev)
 
 	cif_state = &bdev->cif_state[cif_event];
 
+	atomic_set(&b_suspending, 1);
 	ret = btmtk_sdio_keep_driver_own(cif_dev, 1);
 	if (ret == -ETIMEDOUT) {
 		BTMTK_ERR("%s set driver own timeout", __func__);
@@ -2250,7 +2306,6 @@ static int btmtk_cif_suspend(struct device *dev)
 		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
 #endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
-
 	pm_flags = sdio_get_host_pm_caps(func);
 	if (!(pm_flags & MMC_PM_KEEP_POWER)) {
 		BTMTK_ERR("%s, %s cannot remain alive while suspended(0x%x)", __func__,
@@ -2259,10 +2314,8 @@ static int btmtk_cif_suspend(struct device *dev)
 
 	pm_flags = MMC_PM_KEEP_POWER;
 	ret = sdio_set_host_pm_flags(func, pm_flags);
-	if (ret) {
+	if (ret)
 		BTMTK_ERR("%s, set flag 0x%x err %d", __func__, pm_flags, (int)ret);
-		ret = -ENOSYS;
-	}
 
 	ret = btmtk_sdio_keep_driver_own(cif_dev, 0);
 	if (ret == -ETIMEDOUT) {
@@ -2282,6 +2335,7 @@ suspend_end:
 			main_info->chip_reset_flag = 1;
 		btmtk_reset_trigger(bdev);
 	}
+	atomic_set(&b_suspending, 0);
 	BTMTK_INFO("%s, end. ret = %d", __func__, ret);
 	return ret;
 }
@@ -2655,6 +2709,21 @@ int btmtk_cif_register(void)
 	hook.dump_debug_sop = btmtk_sdio_dump_debug_sop;
 	btmtk_reg_hif_hook(&hook);
 
+#if defined(CONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT)
+	g_sdio_dev.main_ws = wakeup_source_register(NULL, "btmtksdio_main_ws");
+	g_sdio_dev.irq_ws = wakeup_source_register(NULL, "btmtksdio_irq_ws");
+	g_sdio_dev.device_ws = wakeup_source_register(NULL, "btmtksdio_device_ws");
+#elif (defined(LINUX_OS) && (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)) ||	\
+		(defined(ANDROID_OS) && (KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE))
+	g_sdio_dev.main_ws = wakeup_source_register("btmtksdio_main_ws");
+	g_sdio_dev.irq_ws = wakeup_source_register("btmtksdio_irq_ws");
+	g_sdio_dev.device_ws = wakeup_source_register("btmtksdio_device_ws");
+#else
+	g_sdio_dev.main_ws = wakeup_source_register(NULL, "btmtksdio_main_ws");
+	g_sdio_dev.irq_ws = wakeup_source_register(NULL, "btmtksdio_irq_ws");
+	g_sdio_dev.device_ws = wakeup_source_register(NULL, "btmtksdio_device_ws");
+#endif
+
 	btmtk_sdio_create_fw_own_timer(&g_sdio_dev);
 	retval = sdio_register();
 	if (retval)
@@ -2670,6 +2739,10 @@ int btmtk_cif_deregister(void)
 
 	sdio_deregister();
 	btmtk_sdio_delete_fw_own_timer(&g_sdio_dev);
+
+	wakeup_source_unregister(g_sdio_dev.main_ws);
+	wakeup_source_unregister(g_sdio_dev.irq_ws);
+	wakeup_source_unregister(g_sdio_dev.device_ws);
 	BTMTK_INFO("%s: Done", __func__);
 	return 0;
 }

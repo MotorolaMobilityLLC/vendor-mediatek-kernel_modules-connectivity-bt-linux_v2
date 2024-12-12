@@ -3,7 +3,28 @@
  * Copyright (c) 2021 MediaTek Inc.
  */
 
+#include <linux/device.h>
+#include <linux/pm_wakeup.h>
+
 #include "btmtk_chip_reset.h"
+
+static void btmtk_reset_wake_lock(struct btmtk_dev *bdev)
+{
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	BTMTK_INFO("%s: enter", __func__);
+	__pm_stay_awake(bmain_info->chip_reset_ws);
+	BTMTK_INFO("%s: exit", __func__);
+}
+
+static void btmtk_reset_wake_unlock(struct btmtk_dev *bdev)
+{
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	BTMTK_INFO("%s: enter", __func__);
+	__pm_relax(bmain_info->chip_reset_ws);
+	BTMTK_INFO("%s: exit", __func__);
+}
 
 #if (KERNEL_VERSION(4, 15, 0) > LINUX_VERSION_CODE)
 static void btmtk_reset_timer(unsigned long arg)
@@ -80,13 +101,15 @@ void btmtk_reset_waker(struct work_struct *work)
 	if (bmain_info->hif_hook.handle_mutex_lock)
 		bmain_info->hif_hook.handle_mutex_lock(bdev);
 
+	/*Noted, we must lock wakelock location properly to protect SDIO RW operation
+	and chip reset procedure from breaking by suspend event.*/
+	btmtk_reset_wake_lock(bdev);
+
 	/* Check chip state is ok to do reset or not */
 	state = btmtk_get_chip_state(bdev);
 	if (state == BTMTK_STATE_SUSPEND || state == BTMTK_STATE_DISCONNECT) {
-		BTMTK_INFO("%s suspend/disconnect state (%d) don't do chip reset!", __func__, state);
-		if (bmain_info->hif_hook.handle_mutex_unlock)
-			bmain_info->hif_hook.handle_mutex_unlock(bdev);
-		return;
+		BTMTK_INFO("%s suspend state don't do chip reset!", __func__);
+		goto Finish;
 	}
 
 	if (state == BTMTK_STATE_PROBE) {
@@ -98,20 +121,17 @@ void btmtk_reset_waker(struct work_struct *work)
 	fstate = btmtk_fops_get_state(bdev);
 	if (fstate == BTMTK_FOPS_STATE_CLOSED) {
 		BTMTK_WARN("%s: fops is closed(%d), not trigger reset", __func__, fstate);
-		if (bmain_info->hif_hook.handle_mutex_unlock)
-			bmain_info->hif_hook.handle_mutex_unlock(bdev);
-		return;
+		goto Finish;
 	}
 #endif
 
 	btmtk_reset_timer_del(bdev);
+
 	if (atomic_read(&bmain_info->chip_reset) ||
 		atomic_read(&bmain_info->subsys_reset)) {
 		BTMTK_INFO("%s return, chip_reset = %d, subsys_reset = %d!", __func__,
 			atomic_read(&bmain_info->chip_reset), atomic_read(&bmain_info->subsys_reset));
-		if (bmain_info->hif_hook.handle_mutex_unlock)
-			bmain_info->hif_hook.handle_mutex_unlock(bdev);
-		return;
+		goto Finish;
 	}
 
 #if (USE_DEVICE_NODE == 0)
@@ -127,18 +147,14 @@ void btmtk_reset_waker(struct work_struct *work)
 	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
 		/* Error */
 		BTMTK_WARN("%s priv setting is NULL", __func__);
-		if (bmain_info->hif_hook.handle_mutex_unlock)
-			bmain_info->hif_hook.handle_mutex_unlock(bdev);
-		return;
+		goto Finish;
 	}
 
 	cif_state = &bdev->cif_state[cif_event];
 
 	if (!bdev->bt_cfg.support_dongle_reset) {
 		BTMTK_ERR("%s chip_reset is not support", __func__);
-		if (bmain_info->hif_hook.handle_mutex_unlock)
-			bmain_info->hif_hook.handle_mutex_unlock(bdev);
-		return;
+		goto Finish;
 	}
 
 	/* Set Entering state */
@@ -157,9 +173,8 @@ void btmtk_reset_waker(struct work_struct *work)
 			cur = atomic_cmpxchg(&bmain_info->subsys_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
 			if (cur == BTMTK_RESET_DOING) {
 				BTMTK_INFO("%s: subsys reset in progress, return", __func__);
-				if (bmain_info->hif_hook.handle_mutex_unlock)
-					bmain_info->hif_hook.handle_mutex_unlock(bdev);
-				return;
+				err = 0;
+				goto Finish;
 			}
 			DUMP_TIME_STAMP("subsys_chip_reset_start");
 			/*
@@ -172,9 +187,7 @@ void btmtk_reset_waker(struct work_struct *work)
 			if (err < 0) {
 				if (err == -ENODEV) {
 					BTMTK_INFO("%s, usb disconnect, no more chip reset", __func__);
-					if (bmain_info->hif_hook.handle_mutex_unlock)
-						bmain_info->hif_hook.handle_mutex_unlock(bdev);
-					return;
+					goto Finish;
 				}
 				BTMTK_INFO("subsys reset failed, do whole chip reset!");
 				goto L0RESET;
@@ -231,9 +244,8 @@ L0RESET:
 			cur = atomic_cmpxchg(&bmain_info->chip_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
 			if (cur == BTMTK_RESET_DOING) {
 				BTMTK_INFO("%s: have chip_reset in progress, return", __func__);
-				if (bmain_info->hif_hook.handle_mutex_unlock)
-					bmain_info->hif_hook.handle_mutex_unlock(bdev);
-				return;
+				err = 0;
+				goto Finish;
 			}
 #ifdef CFG_SUPPORT_CHIP_RESET_KO
 			DUMP_TIME_STAMP("Send reset message to reset ko");
@@ -256,8 +268,7 @@ L0RESET:
 		}
 	}
 
-	DUMP_TIME_STAMP("chip_reset_end");
-
+Finish:
 #if (USE_DEVICE_NODE == 0)
 	bmain_info->chip_reset_flag = 0;
 	/* Set End/Error state */
@@ -266,8 +277,12 @@ L0RESET:
 	else
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
 #endif
+
+	btmtk_reset_wake_unlock(bdev);
 	if (bmain_info->hif_hook.handle_mutex_unlock)
 		bmain_info->hif_hook.handle_mutex_unlock(bdev);
+
+	DUMP_TIME_STAMP("chip_reset_end");
 }
 
 void btmtk_reset_trigger(struct btmtk_dev *bdev)
