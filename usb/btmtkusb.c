@@ -2617,10 +2617,17 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 				kfree_skb(skb);
 				return;
 			}
-			memcpy(skb_tmp, urb->transfer_buffer, urb->actual_length);
-			BTMTK_DBG_RAW(bdev, skb->data, skb->len, "%s, skb recv evt", __func__);
+			memset(skb_tmp, 0, HCI_MAX_EVENT_SIZE);
+			skb_tmp[0] = HCI_EVENT_PKT;
+			memcpy(skb_tmp + 1, urb->transfer_buffer, urb->actual_length);
 
-			hci_recv_frame(hdev, skb);
+			BTMTK_DBG_RAW(bdev, skb->data, skb->len, "%s, skb recv evt", __func__);
+			err = btmtk_recv(hdev, skb_tmp, urb->actual_length + 1);
+			if (err) {
+				BTMTK_ERR_DEV(bdev, "corrupted event packet");
+				hdev->stat.err_rx++;
+			}
+			kfree_skb(skb);
 			return;
 		} else {
 			BTMTK_INFO_DEV(bdev, "%s: the size of skb is too small!", __func__);
