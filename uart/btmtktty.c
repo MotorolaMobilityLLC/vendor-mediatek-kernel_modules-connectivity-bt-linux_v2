@@ -2488,7 +2488,11 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 
 	/* record data from tty */
 	btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_EVT_HIF, data, count);
+#if (KERNEL_VERSION(6, 6, 0) > LINUX_VERSION_CODE)
+	BTMTK_DBG_RAW_ALL(bdev, data, count, "%s: len[%d]", __func__, count);
+#else
 	BTMTK_DBG_RAW_ALL(bdev, data, count, "%s: len[%zu]", __func__, count);
+#endif
 
 #if (SLEEP_ENABLE == 1)
 	//BTMTK_INFO_RAW(bdev, data, count, "%s: count[%d]", __func__, count);
