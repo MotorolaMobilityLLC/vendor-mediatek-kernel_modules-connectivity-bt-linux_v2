@@ -865,12 +865,12 @@ static void btmtk_sdio_open_done(struct btmtk_dev *bdev)
 	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
 	BTMTK_INFO("%s enter!", __func__);
-#if CFG_SUPPORT_HW_DVT
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
 	/* We don't need to enable buffer mode during bring-up stage. */
 	BTMTK_INFO("SKIP buffer mode");
 #else
 	(void)btmtk_buffer_mode_send(cif_dev->buffer_mode);
-#endif /* CFG_SUPPORT_HW_DVT */
+#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 }
 
 static int btmtk_sdio_writesb(u32 offset, u8 *val, int len, struct sdio_func *func)
@@ -1817,8 +1817,6 @@ static int btmtk_sdio_interrupt_process(struct btmtk_dev *bdev)
 		 */
 		ret = btmtk_sdio_readl(CHISR, &u32ReadCRValue, cif_dev->func);
 		BTMTK_INFO("%s CHISR 0x%08x", __func__, u32ReadCRValue);
-		/* FW can't send TX_EMPTY for 0xFD5B */
-		atomic_set(&cif_dev->tx_rdy, 1);
 		DUMP_TIME_STAMP("notify_chip_reset");
 		btmtk_reset_trigger(bdev);
 		return ret;
@@ -2058,7 +2056,9 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 	}
 #endif /* CFG_SUPPORT_HW_DVT */
 
-	cif_dev->patched = 1;
+	/* It's HW workaround for mt7921 */
+	if(is_mt7961(bdev->chip_id))
+		cif_dev->patched = 1;
 
 	err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
 	if (err < 0) {
@@ -2067,6 +2067,14 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 	}
 
 	btmtk_buffer_mode_initialize(bdev, &cif_dev->buffer_mode);
+
+#if CFG_SUPPORT_BLUEZ
+	err = btmtk_send_init_cmds(bdev);
+	if (err < 0) {
+		BTMTK_ERR("%s, btmtk_send_init_cmds failed, err = %d", __func__, err);
+		goto free_setting;
+	}
+#endif /* CFG_SUPPORT_BLUEZ */
 
 	err = btmtk_register_hci_device(bdev);
 	if (err < 0) {
@@ -2398,12 +2406,15 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 	int retry = RETRY_TIMES;
 	u32 ret = 0;
 
+
 	do {
 		/* After WDT, CHLPCR maybe can't show driver/fw own status
 		 * BT SW should check PD2HRM0R bit 0
 		 * 1: Driver own. 0: FW own
 		 */
 		btmtk_sdio_keep_driver_own(cif_dev, 1);
+		if(!is_mt7961(bdev->chip_id))
+			break;
 		ret = btmtk_sdio_readl(PD2HRM0R, &u32ReadCRValue, cif_dev->func);
 		msleep(DELAY_TIMES);
 		retry--;
@@ -2412,21 +2423,12 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s read PD2HRM0R 0x%08X", __func__, u32ReadCRValue);
 
-	/* if thread stopped, we need to create a new thread before subsys reset*/
-		if (!atomic_read(&cif_dev->sdio_thread.thread_status)) {
-			skb_queue_purge(&cif_dev->tx_queue);
-			atomic_set(&cif_dev->int_count, 0);
-			atomic_set(&cif_dev->tx_rdy, 1);
-			cif_dev->sdio_thread.task = kthread_run(btmtk_sdio_main_thread,
-					bdev, "btmtk_sdio_main_thread");
-			if (IS_ERR(cif_dev->sdio_thread.task)) {
-				BTMTK_ERR("btmtk_sdio_main_thread failed to start!");
-				ret = PTR_ERR(cif_dev->sdio_thread.task);
-				goto exit;
-			}
-		}
-
 	cif_dev->patched = 0;
+	/*
+	 * If trigger subsys reset by userspace, we should clean queue before
+	 * subsys reset.
+	 */
+	skb_queue_purge(&cif_dev->tx_queue);
 
 	btmtk_sdio_set_wifi_driver_own(1);
 
@@ -2464,10 +2466,26 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 		goto free_thread;
 	}
 
+	/* if thread stopped, we need to create a new thread before subsys reset*/
+	if (!atomic_read(&cif_dev->sdio_thread.thread_status)) {
+		atomic_set(&cif_dev->tx_rdy, 1);
+		atomic_set(&cif_dev->int_count, 0);
+		cif_dev->sdio_thread.task = kthread_run(btmtk_sdio_main_thread,
+				bdev, "btmtk_sdio_main_thread");
+		if (IS_ERR(cif_dev->sdio_thread.task)) {
+			BTMTK_ERR("btmtk_sdio_main_thread failed to start!");
+			ret = PTR_ERR(cif_dev->sdio_thread.task);
+			goto exit;
+		}
+	}
+
 	/* Do-init cr */
 	/* Disable the interrupts on the card */
 	btmtk_sdio_enable_host_int(cif_dev);
 	BTMTK_DBG("call btmtk_sdio_enable_host_int done");
+
+	atomic_set(&cif_dev->tx_rdy, 1);
+	atomic_set(&cif_dev->int_count, 0);
 
 	/* Set interrupt output */
 	ret = btmtk_sdio_writel(CHIER, FIRMWARE_INT_BIT31 | FIRMWARE_INT|TX_FIFO_OVERFLOW |
@@ -2601,7 +2619,9 @@ static void btmtk_sdio_chip_reset_notify(struct btmtk_dev *bdev)
 		return;
 	}
 	btmtk_sdio_keep_driver_own(cif_dev, 0);
-	cif_dev->patched = 1;
+	/* It's HW workaround for mt7921 */
+	if(is_mt7961(bdev->chip_id))
+		cif_dev->patched = 1;
 	atomic_set(&cif_dev->tx_rdy, 1);
 
 	btmtk_sdio_set_wifi_driver_own(0);
