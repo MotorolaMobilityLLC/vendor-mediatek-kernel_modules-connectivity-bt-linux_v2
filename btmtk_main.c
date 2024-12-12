@@ -158,6 +158,11 @@ __weak int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 	return -1;
 }
 
+__weak void btmtk_fwlog_flow_ctrl_work(struct work_struct *work)
+{
+	BTMTK_WARN("weak function %s not implement", __func__);
+}
+
 void btmtk_getUTCtime(struct bt_utc_struct *utc)
 {
 	struct timespec64 ts;
@@ -647,6 +652,9 @@ static void btmtk_main_info_initialize(struct btmtk_dev *bdev)
 	bdev->main_info.read_iso_packet_size_cmd[3] = 0x02;
 	bdev->main_info.dma_dl_flag = -1;
 
+	/* fwlog flow control */
+	mutex_init(&bdev->main_info.fwlog_ctrl_lock);
+	INIT_WORK(&bdev->main_info.fwlog_flow_ctrl_work, btmtk_fwlog_flow_ctrl_work);
 }
 
 int btmtk_get_interface_num(void)

@@ -2006,6 +2006,80 @@ int btmtk_cif_send_calibration(struct btmtk_dev *bdev)
 	return 0;
 }
 
+void btmtk_fwlog_flow_ctrl_work(struct work_struct *work)
+{
+	int ret = 0;
+	struct btmtk_main_info *main_info = container_of(work, struct btmtk_main_info, fwlog_flow_ctrl_work);
+	struct btmtk_dev *bdev = container_of(main_info, struct btmtk_dev, main_info);
+	struct btmtk_uart_dev *cif_dev = NULL;
+	u8 *cmd = NULL;
+	int cmd_len = 0;
+
+	if (!bdev) {
+		BTMTK_WARN_DEV(bdev, "%s: bdev is NULL", __func__);
+		return;
+	}
+
+	if (btmtk_fops_get_state(bdev) != BTMTK_FOPS_STATE_OPENED) {
+		BTMTK_INFO_DEV(bdev, "%s: bt already closed", __func__);
+		return;
+	}
+
+	if (atomic_read(&bdev->dynamic_fwdl_start)) {
+		BTMTK_INFO_DEV(bdev, "%s: fw doing re-download, skip", __func__);
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_WARN_DEV(bdev, "%s: cif_dev is NULL", __func__);
+		return;
+	}
+
+	/* if fw own or fw owning, skip, avoid trigger driver own */
+	if (cif_dev->own_state != BTMTK_DRV_OWN && cif_dev->own_state != BTMTK_DRV_OWNING) {
+		BTMTK_INFO_DEV(bdev, "%s: not in driver own[%d], skip", __func__, cif_dev->own_state);
+		return;
+	}
+
+	mutex_lock(&bdev->main_info.fwlog_ctrl_lock);
+
+	/* payload + cmd header */
+	cmd_len = bdev->main_info.fwlog_flow_ctrl_data_len + PATCH_HCI_HEADER_SIZE;
+
+	/* allocate and format anchor cmd */
+	cmd = kmalloc(cmd_len, GFP_KERNEL);
+	if (!cmd) {
+		BTMTK_ERR_DEV(bdev, "%s: alloc memory size(%d) failed", __func__, cmd_len);
+		mutex_unlock(&bdev->main_info.fwlog_ctrl_lock);
+		return;
+	}
+
+	/* cmd header */
+	cmd[0] = 0x01;
+	cmd[1] = 0x6C;
+	cmd[2] = 0xFC;
+	cmd[3] = bdev->main_info.fwlog_flow_ctrl_data_len;
+
+	/* copy payload */
+	memcpy(&cmd[PATCH_HCI_HEADER_SIZE], &bdev->main_info.fwlog_flow_ctrl_data[0],
+			bdev->main_info.fwlog_flow_ctrl_data_len);
+
+	mutex_unlock(&bdev->main_info.fwlog_ctrl_lock);
+
+	BTMTK_DBG_RAW(bdev, cmd, cmd_len, "%s: len[%d] cmd:", __func__, cmd_len);
+
+	ret = btmtk_main_send_cmd(bdev,
+			cmd, cmd_len, NULL, 0,
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
+
+	if (ret < 0)
+		BTMTK_WARN_DEV(bdev, "%s fail", __func__);
+
+	kfree(cmd);
+	cmd = NULL;
+}
+
 #if (USE_DEVICE_NODE == 0)
 static int btmtk_uart_set_pinmux(struct btmtk_dev *bdev)
 {
@@ -2074,8 +2148,6 @@ static int btmtk_uart_init(struct btmtk_dev *bdev)
 		BTMTK_ERR("btmtk_uart_set_pinmux failed!");
 		goto deinit;
 	}
-#else
-	INIT_WORK(&bdev->hif_dump_work, btmtk_hif_dump_work);
 #endif
 
 	goto end;
@@ -2643,6 +2715,9 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		return -1;
 	}
 
+	/* ack fw log flow control before fw own */
+	flush_work(&bdev->main_info.fwlog_flow_ctrl_work);
+
 	UART_OWN_MUTEX_LOCK();
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	/* no need to compare BTMTK_FW_OWNING because the state must be fw_own/fail before leaving mutex */
@@ -2658,8 +2733,10 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 
 	BTMTK_DBG("%s: fw owning", __func__);
 	cif_dev->own_state = BTMTK_FW_OWNING;
-	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE) {
-		BTMTK_WARN("%s: during send_and_recv, keep drv own", __func__);
+	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE ||
+			!skb_queue_empty(&cif_dev->tx_queue)) {
+		BTMTK_WARN_DEV(bdev, "%s: during send_and_recv[%d] or tx queue have data[%d], keep drv own",
+				__func__, event_compare_status, !skb_queue_empty(&cif_dev->tx_queue));
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		btmtk_uart_update_fw_own_timer(cif_dev);
 		goto unlock;

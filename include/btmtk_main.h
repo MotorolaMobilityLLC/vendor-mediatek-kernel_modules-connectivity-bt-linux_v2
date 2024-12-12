@@ -231,6 +231,7 @@ extern struct btmtk_dev **g_bdev;
 #define FILTER_LIST_COMPLETE_NUM 2
 #define FILTER_LIST_STATUS_NUM 3
 #define FILTER_OPCODE_NUM 4
+#define FWLOG_FLOW_CTRL_DATA_MAX_LEN 32
 
 #define FW_PATCH_SIZE_MAX (2*1024*1024)
 
@@ -766,9 +767,13 @@ struct btmtk_main_info {
 	struct proc_dir_entry *proc_dir;
 	char fw_version_str[FW_VERSION_BUF_SIZE];
 
-	/* fw log */
+	/* fw log related */
 	u8	fw_log_on;
 	atomic_t fwlog_ref_cnt;
+	struct mutex fwlog_ctrl_lock;
+	struct work_struct  fwlog_flow_ctrl_work;
+	char	fwlog_flow_ctrl_data[FWLOG_FLOW_CTRL_DATA_MAX_LEN];
+	u8	fwlog_flow_ctrl_data_len;
 
 	u32 find_my_phone_mode;
 	u32 find_my_phone_mode_extend;

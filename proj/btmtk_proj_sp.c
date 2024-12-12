@@ -1694,7 +1694,8 @@ void btmtk_sp_worker_init(struct btmtk_dev *bdev)
 
 	INIT_WORK(&bdev->async_trx_work, btmtk_async_trx_work);
 	INIT_WORK(&bdev->pwr_on_uds_work, btmtk_pwr_on_uds_work);
-	INIT_WORK(&g_sbdev->system_state_work, btmtk_system_state_work);
+	INIT_WORK(&bdev->system_state_work, btmtk_system_state_work);
+	INIT_WORK(&bdev->hif_dump_work, btmtk_hif_dump_work);
 }
 
 int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)

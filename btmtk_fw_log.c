@@ -2045,6 +2045,38 @@ coredump_fail_unlock:
 					skb->len + 1, hci_skb_pkt_type(skb));
 		bdev->main_info.hif_hook.fw_sleep_handler(bdev);
 		return 1;
+	} else if (bt_cb(skb)->pkt_type == HCI_EVENT_PKT && skb->data[0] == 0xE3 && skb->data[2] == 0x01) {
+		/* fw log flow control feature */
+		BTMTK_DBG_RAW(bdev, skb->data, skb->len, "%s: fwlog_flow_ctrl evt len[%d] %02x ",
+				__func__, skb->len + 1, hci_skb_pkt_type(skb));
+
+		mutex_lock(&bdev->main_info.fwlog_ctrl_lock);
+		/* parse payload length */
+		bdev->main_info.fwlog_flow_ctrl_data_len = skb->data[1];
+
+		/* error handle */
+		if (bdev->main_info.fwlog_flow_ctrl_data_len > FWLOG_FLOW_CTRL_DATA_MAX_LEN) {
+			BTMTK_WARN_DEV(bdev, "%s: fwlog_flow_ctrl_data_len(%d) more than %d, skip",
+					__func__, bdev->main_info.fwlog_flow_ctrl_data_len, FWLOG_FLOW_CTRL_DATA_MAX_LEN);
+			mutex_unlock(&bdev->main_info.fwlog_ctrl_lock);
+			return 1;
+		}
+
+		/* record packet data and send ack cmd to fw */
+		memcpy(&bdev->main_info.fwlog_flow_ctrl_data[0], &skb->data[2],
+				bdev->main_info.fwlog_flow_ctrl_data_len);
+		mutex_unlock(&bdev->main_info.fwlog_ctrl_lock);
+
+		/* ack cmd to fw */
+		ret = schedule_work(&bdev->main_info.fwlog_flow_ctrl_work);
+
+		if (!ret)
+			BTMTK_DBG_DEV(bdev, "%s: schedule_work already in the queue or executing", __func__);
+
+		return 1;
+	} else if (bt_cb(skb)->pkt_type == HCI_EVENT_PKT && skb->data[0] == 0xE3) {
+		BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: get E3 event, len[%d] %02x",
+				__func__, skb->len + 1, hci_skb_pkt_type(skb));
 	}
 
 	return 0;
