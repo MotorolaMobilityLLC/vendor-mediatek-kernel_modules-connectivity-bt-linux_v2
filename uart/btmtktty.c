@@ -2000,6 +2000,8 @@ static int btmtk_uart_init(struct btmtk_dev *bdev)
 {
 	int err = 0;
 
+	INIT_WORK(&bdev->reset_waker, btmtk_reset_waker);
+
 #if (USE_DEVICE_NODE == 0)
 	err = btmtk_ce_gpio_init(bdev->cif_dev);
 	if (err < 0) {
@@ -2029,7 +2031,6 @@ static int btmtk_uart_init(struct btmtk_dev *bdev)
 	INIT_WORK(&bdev->hif_dump_work, btmtk_hif_dump_work);
 #endif
 
-	INIT_WORK(&bdev->reset_waker, btmtk_reset_waker);
 	goto end;
 
 #if (USE_DEVICE_NODE == 0)

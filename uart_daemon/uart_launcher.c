@@ -587,7 +587,12 @@ exit:
         close(gTtyFd);
         gTtyFd = -1;
     }
-    BPRINT_I("uart_launcher stop");
+    if (cont == 0) {
+        BPRINT_I("uart_launcher stop");
+    } else {
+        BPRINT_I("uart_launcher paused");
+        pause();
+    }
     return 0;
 }
 //---------------------------------------------------------------------------
