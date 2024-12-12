@@ -921,12 +921,19 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			}
 		}
 		return 1;
-	} else if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
-					skb->data[0] == 0x0E) {
+	} else if (memcmp(skb->data, &hci_reset_event[1], HCI_RESET_EVT_LEN - 1) == 0) {
+		BTMTK_INFO("%s: Get RESET_EVENT", __func__);
+		bdev->get_hci_reset = 1;
+		atomic_set(&bmain_info->subsys_reset_conti_count, 0);
+	}
+
+	/* filter event from usr cmd */
+	if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
+			skb->data[0] == 0x0E) {
 		if (skb_queue_len(&g_fwlog->usr_opcode_queue)) {
 			BTMTK_INFO("%s: opcode queue len is %d", __func__,
 					skb_queue_len(&g_fwlog->usr_opcode_queue));
-			skb_opcode= skb_dequeue(&g_fwlog->usr_opcode_queue);
+			skb_opcode = skb_dequeue(&g_fwlog->usr_opcode_queue);
 		}
 
 		if (skb_opcode == NULL)
@@ -949,11 +956,8 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			skb_queue_head(&g_fwlog->usr_opcode_queue, skb_opcode);
 			return 0;
 		}
-	} else if (memcmp(skb->data, &hci_reset_event[1], HCI_RESET_EVT_LEN - 1) == 0) {
-		BTMTK_INFO("%s: Get RESET_EVENT", __func__);
-		bdev->get_hci_reset = 1;
-		atomic_set(&bmain_info->subsys_reset_conti_count, 0);
 	}
+
 	return 0;
 }
 
