@@ -2447,7 +2447,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->own_state == BTMTK_FW_OWN &&
 	    !atomic_read(&cif_dev->fw_wake) &&
-	    data != NULL && count > 0 && data[0] != 0xFF) {
+	    data != NULL && count > 0 && data[0] != 0xFF && cif_dev->sleep_en) {
 		unsigned int index = 0, _count = count;
 		u8 *buf = (u8 *)data;
 
@@ -2627,7 +2627,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		atomic_set(&cif_dev->fw_wake, 0);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-		if (cif_dev->sleep_flow_hw_mech_en) {
+		if (cif_dev->sleep_flow_hw_mech_en && cif_dev->sleep_en) {
 			/*
 				12 Clear DEVx_HOST_AWAKE = 0
 				14 Clear TX/RX REQ
