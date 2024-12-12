@@ -172,7 +172,10 @@ static int btmtk_uart_close(struct hci_dev *hdev)
 #else
 	btmtk_sp_close();
 
-	__pm_relax(bt_trx_wakelock);
+#if (USE_DEVICE_NODE == 0)
+	if (bdev->bt_cfg.drv_own_wakelock_enable)
+#endif
+		__pm_relax(bt_trx_wakelock);
 
 	if (!cif_dev->is_pre_cal) {
 		int ret = 0;
@@ -1363,7 +1366,10 @@ static int btmtk_uart_pre_open(struct btmtk_dev *bdev)
 	BTMTK_DBG("%s init to driver own state", __func__);
 	/* not start fw_own_timer until bt open done */
 	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
-	__pm_stay_awake(bt_trx_wakelock);
+#if (USE_DEVICE_NODE == 0)
+	if (bdev->bt_cfg.drv_own_wakelock_enable)
+#endif
+		__pm_stay_awake(bt_trx_wakelock);
 	cif_dev->own_state = BTMTK_DRV_OWN;
 #endif
 
@@ -2489,9 +2495,18 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	}
 #endif
 	if (data != NULL && (count > 1 || data[0] != 0x00) && cif_dev->own_state != BTMTK_FW_OWNING) {
+#if (USE_DEVICE_NODE == 0)
+		/* Drop driver own request from FW when enter suspend */
+		if (btmtk_get_chip_state(bdev) != BTMTK_STATE_SUSPEND) {
+#endif
 		atomic_set(&cif_dev->need_drv_own, 1);
 		atomic_set(&cif_dev->fw_wake, 1);
 		wake_up_interruptible(&tx_wait_q);
+#if (USE_DEVICE_NODE == 0)
+		} else {
+			BTMTK_INFO_RAW(data, count, "%s: drop driver own request when suspend,", __func__);
+		}
+#endif
 	}
 #endif
 
@@ -2663,10 +2678,10 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		}
 #endif
 #if (USE_DEVICE_NODE == 0)
-		if (btmtk_get_chip_state(bdev) != BTMTK_STATE_SUSPEND)
+		if (bdev->bt_cfg.drv_own_wakelock_enable)
 #endif
 			__pm_relax(bt_trx_wakelock);
-		BTMTK_INFO("%s success, cmd[9] = 0x%02x", __func__, cmd[9]);
+		BTMTK_DBG("%s success, cmd[9] = 0x%02x", __func__, cmd[9]);
 	}
 unlock:
 	UART_OWN_MUTEX_UNLOCK();
@@ -2696,7 +2711,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 	cif_dev->own_state = BTMTK_DRV_OWNING;
 #if (USE_DEVICE_NODE == 0)
-	if (btmtk_get_chip_state(bdev) != BTMTK_STATE_SUSPEND)
+	if (bdev->bt_cfg.drv_own_wakelock_enable)
 #endif
 		__pm_stay_awake(bt_trx_wakelock);
 	while (bdev->suspend_state && --wait_uart_resume_cnt) {
@@ -2790,7 +2805,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	} else {
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		btmtk_uart_update_fw_own_timer(cif_dev);
-		BTMTK_INFO("%s success", __func__);
+		BTMTK_DBG("%s success", __func__);
 	}
 
 unlock:
@@ -2799,23 +2814,23 @@ unlock:
 }
 #endif
 
+#if (USE_DEVICE_NODE == 0)
 static int btmtk_cif_suspend(void)
 {
-#if (USE_DEVICE_NODE == 0)
 	int ret = 0;
+#if 0
 	int cif_event = 0, state;
 	struct btmtk_cif_state *cif_state = NULL;
+#endif
 	struct tty_struct *tty = g_tty;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct btmtk_woble *bt_woble = NULL;
-#endif
 
 	BTMTK_INFO("%s", __func__);
 
-#if (USE_DEVICE_NODE == 0)
 	if (tty == NULL) {
 		BTMTK_ERR("%s: tty is NULL, maybe not run btmtk_cif_probe yet", __func__);
 		return -EAGAIN;
@@ -2848,7 +2863,7 @@ static int btmtk_cif_suspend(void)
 		BTMTK_WARN("Has suspended. suspend_count: %d, end", bdev->suspend_count);
 		return 0;
 	}
-
+#if 0
 	state = btmtk_get_chip_state(bdev);
 	/* Retrieve current HIF event state */
 	if (state == BTMTK_STATE_FW_DUMP) {
@@ -2865,7 +2880,7 @@ static int btmtk_cif_suspend(void)
 
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
-
+#endif
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	if (cif_dev) {
 		bt_woble = &cif_dev->bt_woble;
@@ -2873,13 +2888,10 @@ static int btmtk_cif_suspend(void)
 		if (ret < 0)
 			BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
 	}
-#if (SLEEP_ENABLE == 0)
-	if (fstate == BTMTK_FOPS_STATE_OPENED) {
-		ret = btmtk_uart_fw_own(bdev);
-		if (ret < 0)
-			BTMTK_ERR("%s: set fw own return fail %d", __func__, ret);
-	}
-#endif
+
+	ret = btmtk_uart_fw_own(bdev);
+	BTMTK_WARN("%s: set fw own %d", __func__, ret);
+#if 0
 	/* Set End/Error state */
 	if (ret == 0)
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
@@ -2892,7 +2904,7 @@ static int btmtk_cif_suspend(void)
 
 static int btmtk_cif_resume(void)
 {
-#if (USE_DEVICE_NODE == 0)
+
 	struct tty_struct *tty = g_tty;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_cif_state *cif_state = NULL;
@@ -2900,11 +2912,9 @@ static int btmtk_cif_resume(void)
 	int ret = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct btmtk_woble *bt_woble = NULL;
-#endif
 
 	BTMTK_INFO("%s start", __func__);
 
-#if (USE_DEVICE_NODE == 0)
 	if (tty == NULL) {
 		BTMTK_ERR("%s: tty is NULL, maybe not run btmtk_cif_probe yet", __func__);
 		return -EAGAIN;
@@ -2951,16 +2961,20 @@ static int btmtk_cif_resume(void)
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
 	else
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
-#endif
 
 	BTMTK_DBG("%s end", __func__);
 	return 0;
 }
+#endif
 
 static int btmtk_pm_notification(struct notifier_block *this, unsigned long event, void *ptr)
 {
-	int retry = 40;
 	int ret = NOTIFY_DONE;
+#if (USE_DEVICE_NODE == 0)
+	int cif_event = 0, state;
+	struct btmtk_cif_state *cif_state = NULL;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+#endif
 
 	BTMTK_DBG("event = %ld", event);
 
@@ -2970,25 +2984,43 @@ static int btmtk_pm_notification(struct notifier_block *this, unsigned long even
 	 */
 	switch (event) {
 	case PM_SUSPEND_PREPARE:
-		do {
-			ret = btmtk_cif_suspend();
-			if (ret == 0) {
-				break;
-			} else if (retry <= 0) {
-				BTMTK_ERR("not ready to suspend");
 #if (USE_DEVICE_NODE == 0)
-				return NOTIFY_STOP;
-#else
-				return NOTIFY_BAD;
+		state = btmtk_get_chip_state(g_sbdev);
+		/* Retrieve current HIF event state */
+		if (state == BTMTK_STATE_FW_DUMP) {
+			BTMTK_WARN("%s: FW dumping ongoing, don't do suspend flow!!!", __func__);
+			cif_event = HIF_EVENT_FW_DUMP;
+			return -EAGAIN;
+		} else if (state == BTMTK_STATE_DISCONNECT) {
+			BTMTK_ERR("%s: BTMTK_STATE_DISCONNECT", __func__);
+			return 0;
+		} else
+			cif_event = HIF_EVENT_SUSPEND;
+
+		cif_state = &g_sbdev->cif_state[cif_event];
+		/* Set Entering state */
+		btmtk_set_chip_state((void *)g_sbdev, cif_state->ops_enter);
+
+		if (g_sbdev->bt_cfg.support_auto_picus == true &&
+			(g_sbdev->bt_cfg.support_picus_to_host == true || atomic_read(&bmain_info->fwlog_ref_cnt) != 0)) {
+			btmtk_picus_disable(g_sbdev);
+		}
+
+		ret = btmtk_uart_fw_own(g_sbdev);
+		BTMTK_WARN("%s: set fw own %d", __func__, ret);
 #endif
-			}
-			msleep(50);
-		} while (retry-- > 0);
 		break;
 	case PM_POST_SUSPEND:
-		btmtk_cif_resume();
-#if (USE_DEVICE_NODE == 1)
-		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_WORKING) {
+#if (USE_DEVICE_NODE == 0)
+		cif_state = &g_sbdev->cif_state[HIF_EVENT_RESUME];
+		/* Set Entering state */
+		btmtk_set_chip_state((void *)g_sbdev, cif_state->ops_end);
+		if (g_sbdev->bt_cfg.support_auto_picus == true &&
+			(g_sbdev->bt_cfg.support_picus_to_host == true || atomic_read(&bmain_info->fwlog_ref_cnt) != 0)) {
+			btmtk_picus_enable(g_sbdev, 0);
+		}
+#else
+		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_WORKING)
 			bthost_debug_print();
 			btmtk_query_fw_schedule_info(g_sbdev);
 		}
@@ -3231,6 +3263,98 @@ static int uart_deregister(void)
 	return 0;
 }
 
+static int __maybe_unused btmtk_uart_suspend(struct device *dev)
+{
+	BTMTK_DBG("%s", __func__);
+#if (USE_DEVICE_NODE == 0)
+	btmtk_cif_suspend();
+#else
+	g_sbdev->suspend_state = TRUE;
+#endif
+	return 0;
+}
+
+static int __maybe_unused btmtk_uart_resume(struct device *dev)
+{
+	BTMTK_DBG("%s", __func__);
+#if (USE_DEVICE_NODE == 0)
+	btmtk_cif_resume();
+#else
+	g_sbdev->suspend_state = FALSE;
+#endif
+	return 0;
+}
+
+static int __maybe_unused btmtk_uart_runtime_suspend(struct device *dev)
+{
+	BTMTK_DBG("%s", __func__);
+	return 0;
+}
+
+static int __maybe_unused btmtk_uart_runtime_resume(struct device *dev)
+{
+	BTMTK_DBG("%s", __func__);
+	return 0;
+}
+
+static const struct dev_pm_ops btmtk_uart_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(btmtk_uart_suspend, btmtk_uart_resume)
+	SET_RUNTIME_PM_OPS(btmtk_uart_runtime_suspend, btmtk_uart_runtime_resume, NULL)
+};
+
+static struct platform_device *btmtk_uart_device;
+
+static int btmtk_uart_driver_probe(struct platform_device *pdev) {
+	BTMTK_DBG("%s", __func__);
+#if (USE_DEVICE_NODE == 1)
+	btmtk_uart_device = pdev;
+#endif
+	return 0;
+}
+
+static int btmtk_uart_driver_remove(struct platform_device *pdev) {
+	BTMTK_DBG("%s", __func__);
+	return 0;
+}
+
+#define BTMTK_UART_NAME			("btmtk_uart")
+static struct platform_driver btmtk_uart_driver = {
+	.driver = {
+		.name	= BTMTK_UART_NAME,
+		.owner	= THIS_MODULE,
+		.pm		= &btmtk_uart_pm_ops,
+	},
+	.probe = btmtk_uart_driver_probe,
+	.remove = btmtk_uart_driver_remove,
+};
+
+void btmtk_platform_driver_init(void) {
+	int ret = 0;
+
+	BTMTK_DBG("%s", __func__);
+	ret = platform_driver_register(&btmtk_uart_driver);
+	BTMTK_INFO("%s: platform_driver_register ret = %d", __func__, ret);
+	btmtk_uart_device = platform_device_alloc(BTMTK_UART_NAME, 0);
+	if (btmtk_uart_device == NULL) {
+		platform_driver_unregister(&btmtk_uart_driver);
+		BTMTK_ERR("%s: platform_device_alloc device fail", __func__);
+		return;
+	}
+	ret = platform_device_add(btmtk_uart_device);
+	if (ret) {
+		platform_driver_unregister(&btmtk_uart_driver);
+		BTMTK_ERR("%s: platform_device_add fail", __func__);
+		return;
+	}
+
+}
+
+void btmtk_platform_driver_deinit(void) {
+	BTMTK_INFO("%s", __func__);
+	platform_driver_unregister(&btmtk_uart_driver);
+}
+
+
 int btmtk_cif_register(void)
 {
 	int ret = -1;
@@ -3257,6 +3381,7 @@ int btmtk_cif_register(void)
 	hook.set_xonv = btmtk_uart_set_xonv;
 #else
 	hook.init = btmtk_ce_init;
+	hook.enter_standby = btmtk_cif_suspend;
 #endif
 	hook.open = btmtk_uart_open;
 	hook.close = btmtk_uart_close;
@@ -3273,7 +3398,6 @@ int btmtk_cif_register(void)
 	hook.cif_mutex_unlock = btmtk_uart_cif_mutex_unlock;
 	hook.dl_dma = btmtk_uart_load_fw_patch_using_dma;
 	hook.waker_notify = btmtk_uart_waker_notify;
-	hook.enter_standby = btmtk_cif_suspend;
 	hook.set_para = btmtk_uart_set_para;
 	btmtk_reg_hif_hook(&hook);
 
@@ -3283,9 +3407,8 @@ int btmtk_cif_register(void)
 		return ret;
 	}
 
-#if (USE_DEVICE_NODE == 1)
 	btmtk_platform_driver_init();
-#endif
+
 	BTMTK_DBG("%s: Done", __func__);
 	return 0;
 }
@@ -3295,9 +3418,9 @@ int btmtk_cif_deregister(void)
 	int ret = -1;
 
 	BTMTK_INFO("%s", __func__);
-#if (USE_DEVICE_NODE == 1)
+
 	btmtk_platform_driver_deinit();
-#endif
+
 	ret = uart_deregister();
 	if (ret < 0) {
 		BTMTK_ERR("*** UART deregistration fail(%d)! ***", ret);

@@ -8,6 +8,7 @@
 #include <linux/serdev.h>
 #include "btmtk_define.h"
 #include "btmtk_main.h"
+#include "btmtk_woble.h"
 
 #ifndef UART_DEBUG
 #define UART_DEBUG 0

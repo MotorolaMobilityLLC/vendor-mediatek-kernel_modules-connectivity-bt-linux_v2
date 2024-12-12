@@ -886,6 +886,7 @@ int btmtk_woble_resume(struct btmtk_woble *bt_woble)
 
 	if (bdev->power_state == BTMTK_DONGLE_STATE_ERROR) {
 		BTMTK_INFO("%s: In BTMTK_DONGLE_STATE_ERROR(Could suspend caused), do assert", __func__);
+		btmtk_hci_snoop_print_to_log();
 		btmtk_send_assert_cmd(bdev);
 		ret = -EBADFD;
 		goto exit;

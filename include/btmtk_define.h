@@ -47,7 +47,7 @@
 
 /** Driver version */
 
-#define VERSION "8.0.2024012501"
+#define VERSION "8.0.2024030301"
 #define SUBVER ":connac3_dev"
 
 #if CFG_SUPPORT_WAKEUP_IRQ
@@ -346,6 +346,9 @@ extern uint8_t _raw_buf_[];
 #define BT_LE_AUDIO_CLK "SUPPORT_LE_AUDIO_CLK"
 #define BT_LE_AUDIO_CLK_FW_GPIO "LE_AUDIO_CLK_FW_GPIO"
 #endif
+#if defined(CHIP_IF_UART_TTY) && (USE_DEVICE_NODE == 0)
+#define BT_DRV_OWN_WAKELOCK_ENABLE "DRV_OWN_WAKELOCK"
+#endif
 #define BT_WMT_CMD "WMT_CMD"
 
 #define PM_KEY_BTW (0x0015) /* Notify PM the unify woble type */
@@ -402,6 +405,9 @@ struct bt_cfg_struct {
 #if CFG_SUPPORT_LEAUDIO_CLK
 	bool	support_le_audio_clk;
 	int	le_audio_clk_fw_gpio;
+#endif
+#if defined(CHIP_IF_UART_TTY) && (USE_DEVICE_NODE == 0)
+	bool drv_own_wakelock_enable;
 #endif
 	struct fw_cfg_struct wmt_cmd[WMT_CMD_COUNT];
 };

@@ -134,7 +134,9 @@ void fw_log_bt_state_cb(uint8_t state)
 		// changed
 		if (on_off == BT_FWLOG_OFF) { // should turn off
 			g_bt_on = BT_FWLOG_OFF;
+#if (STPBTFWLOG_ENABLE == 1)
 			g_log_current = g_log_on & g_log_level;
+#endif
 			BTMTK_INFO("BT in off state, no need to send close fw log cmd");
 		} else {
 			g_bt_on = BT_FWLOG_ON;

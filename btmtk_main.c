@@ -606,6 +606,9 @@ static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	bdev->bt_cfg.support_le_audio_clk = 0;
 	bdev->bt_cfg.le_audio_clk_fw_gpio = 0;
 #endif
+#if defined(CHIP_IF_UART_TTY) && (USE_DEVICE_NODE == 0)
+	bdev->bt_cfg.drv_own_wakelock_enable = 0;
+#endif
 
 	BTMTK_DBG("%s end", __func__);
 }
@@ -3722,7 +3725,16 @@ static void btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_LE_AUDIO_CLK_FW_GPIO);
 	}
 #endif
-
+#if defined(CHIP_IF_UART_TTY) && (USE_DEVICE_NODE == 0)
+	ret = btmtk_parse_bt_cfg_file(BT_DRV_OWN_WAKELOCK_ENABLE, text, searchcontent);
+	if (ret) {
+		btmtk_bt_cfg_item_value_to_bool(text, &bt_cfg_content->drv_own_wakelock_enable);
+		BTMTK_INFO("%s: bt_cfg_content->drv_own_wakelock_enable = %d", __func__,
+				bt_cfg_content->drv_own_wakelock_enable);
+	} else {
+		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_DRV_OWN_WAKELOCK_ENABLE);
+	}
+#endif
 	/* release setting file memory */
 	if (bdev) {
 		kfree(bdev->setting_file);
