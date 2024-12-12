@@ -3146,7 +3146,11 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	btmtk_cif_read_uhw_register(bdev, BT_WDT_STATUS, &val);
 
 	/* Write Reset CR to 1 */
-	btmtk_cif_write_uhw_register(bdev, BT_SUBSYS_RST, 1);
+	btmtk_cif_read_uhw_register(bdev, BT_SUBSYS_RST, &val);
+	BTMTK_INFO("%s: read Reset CR : 0x%08x", __func__, val);
+	val |= (1 << 0);
+	BTMTK_INFO("%s: write 1 to Reset CR : 0x%08x", __func__, val);
+	btmtk_cif_write_uhw_register(bdev, BT_SUBSYS_RST, val);
 
 	btmtk_cif_write_uhw_register(bdev, UDMA_INT_STA_BT, 0x000000FF);
 	btmtk_cif_read_uhw_register(bdev, UDMA_INT_STA_BT, &val);
@@ -3154,7 +3158,11 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	btmtk_cif_read_uhw_register(bdev, UDMA_INT_STA_BT1, &val);
 
 	/* Write Reset CR to 0 */
-	btmtk_cif_write_uhw_register(bdev, BT_SUBSYS_RST, 0);
+	btmtk_cif_read_uhw_register(bdev, BT_SUBSYS_RST, &val);
+	BTMTK_INFO("%s: read Reset CR : 0x%08x", __func__, val);
+	val &= ~(1 << 0);
+	BTMTK_INFO("%s: write 0 to Reset CR : 0x%08x", __func__, val);
+	btmtk_cif_write_uhw_register(bdev, BT_SUBSYS_RST, val);
 
 	/* Read reset CR */
 	btmtk_cif_read_uhw_register(bdev, BT_SUBSYS_RST, &val);
