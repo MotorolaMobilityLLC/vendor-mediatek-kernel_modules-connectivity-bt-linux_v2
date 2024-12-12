@@ -360,8 +360,10 @@ retry_own:
 					__func__, u32PollNum, u32PD2HRM0RValue);
 				for (i = 0; i < 3; i++)
 					DUMP_FW_PC(cif_dev);
-					if (u32PollNum == 30)
-						goto unlock;
+
+				if (u32PollNum == 30)
+					goto unlock;
+
 				retry--;
 				usleep_range(5*1000, 10*1000);
 				goto retry_own;

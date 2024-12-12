@@ -280,7 +280,6 @@ err:
 	if (pos)
 		kfree(pos);
 
-exit:
 	return ret;
 }
 
