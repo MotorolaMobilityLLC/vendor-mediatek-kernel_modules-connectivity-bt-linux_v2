@@ -319,6 +319,7 @@ static int btmtk_fops_initfwlog(void)
 		skb_queue_head_init(&g_fwlog->fwlog_queue);
 		skb_queue_head_init(&g_fwlog->dumplog_queue_first);
 		skb_queue_head_init(&g_fwlog->dumplog_queue_latest);
+		skb_queue_head_init(&g_fwlog->dumplog_queue_wf);
 		skb_queue_head_init(&g_fwlog->usr_opcode_queue);//opcode
 		init_waitqueue_head(&(g_fwlog->fw_log_inq));
 	}
@@ -433,6 +434,11 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 	/* picus read a queue, it may occur performace issue */
 	if (skb == NULL && skb_queue_len(&g_fwlog->fwlog_queue)) {
 		skb = skb_dequeue(&g_fwlog->fwlog_queue);
+	}
+
+	/* picus read wifi coredump */
+	if (skb == NULL && skb_queue_len(&g_fwlog->dumplog_queue_wf)) {
+		skb = skb_dequeue(&g_fwlog->dumplog_queue_wf);
 	}
 	spin_unlock_irqrestore(&g_fwlog->fwlog_lock, flags);
 
@@ -1004,7 +1010,8 @@ unsigned int btmtk_fops_pollfwlog(struct file *file, poll_table *wait)
 		poll_wait(file, &g_fwlog->fw_log_inq, wait);
 		if (skb_queue_len(&g_fwlog->fwlog_queue) > 0 ||
 				skb_queue_len(&g_fwlog->dumplog_queue_first) > 0 ||
-				skb_queue_len(&g_fwlog->dumplog_queue_latest) > 0)
+				skb_queue_len(&g_fwlog->dumplog_queue_latest) > 0 ||
+				skb_queue_len(&g_fwlog->dumplog_queue_wf) > 0)
 			mask |= POLLIN | POLLRDNORM;			/* readable */
 	}
 	return mask;
@@ -1153,11 +1160,12 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
 	static u8 fwlog_picus_blocking_warn;
 	static u8 fwlog_fwdump_blocking_warn;
+	static u8 wf_fwlog_fwdump_blocking_warn;
 	int state = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	struct sk_buff *skb_opcode = NULL;
 	struct data_struct hci_reset_event = {0};
-	static struct sk_buff_head *dumplog_queue = NULL;
+	static struct sk_buff_head *dumplog_queue = NULL, *wf_dumplog_queue = NULL;
 
 	BTMTK_DBG("%s enter", __func__);
 
@@ -1291,6 +1299,24 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		}
 
 		/* change coredump's ACL handle to FF F0 */
+		skb->data[0] = 0xFF;
+		skb->data[1] = 0xF0;
+	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
+			skb->data[0] == 0x6e &&
+			skb->data[1] == 0xfc) {
+		BTMTK_INFO("get WF coredump");
+
+		wf_dumplog_queue = &g_fwlog->dumplog_queue_wf;
+		if (btmtk_skb_enq_fwlog(bdev, skb->data, skb->len, 0, wf_dumplog_queue) == 0) {
+			wf_fwlog_fwdump_blocking_warn = 0;
+		} else {
+			if (wf_fwlog_fwdump_blocking_warn == 0) {
+				wf_fwlog_fwdump_blocking_warn = 1;
+				BTMTK_WARN("btmtk wf fwlog queue size is full(coredump)");
+			}
+		}
+
+		/* change coredump's ACL handle to FF F1 */
 		skb->data[0] = 0xFF;
 		skb->data[1] = 0xF0;
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&

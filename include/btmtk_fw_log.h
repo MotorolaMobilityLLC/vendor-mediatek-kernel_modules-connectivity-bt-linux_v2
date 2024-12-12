@@ -51,6 +51,7 @@ struct btmtk_fops_fwlog {
 	struct sk_buff_head fwlog_queue;
 	struct sk_buff_head dumplog_queue_first;
 	struct sk_buff_head dumplog_queue_latest;
+	struct sk_buff_head dumplog_queue_wf;
 	struct class *pBTClass;
 	struct device *pBTDevfwlog;
 	spinlock_t fwlog_lock;
