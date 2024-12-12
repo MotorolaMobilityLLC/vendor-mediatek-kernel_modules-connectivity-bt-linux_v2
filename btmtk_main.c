@@ -801,6 +801,7 @@ static void btmtk_main_info_initialize(void)
 	main_info.read_iso_packet_size_cmd[1] = 0x98;
 	main_info.read_iso_packet_size_cmd[2] = 0xFD;
 	main_info.read_iso_packet_size_cmd[3] = 0x02;
+	main_info.dma_dl_flag = -1;
 
 }
 
@@ -2540,6 +2541,11 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 		}
 		BTMTK_INFO("%s: loop_count = %d, section_offset = 0x%08x, download patch_len = 0x%08x, dl mode = %d",
 						__func__, loop_count, section_offset, dl_size, dma_flag);
+
+		if (main_info.dma_dl_flag != -1) {
+			dma_flag = main_info.dma_dl_flag;
+		}
+
 		if (dl_size > 0) {
 			retry = 20;
 			do {
@@ -3742,7 +3748,7 @@ static void btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 	}
 }
 
-static void btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_dev *bdev)
+void btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	u32 code_len = 0;

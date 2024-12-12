@@ -837,6 +837,7 @@ struct hci_snoop {
 
 struct btmtk_main_info {
 	int chip_reset_flag;
+	int dma_dl_flag;
 	atomic_t subsys_reset;
 	atomic_t chip_reset;
 	atomic_t subsys_reset_count;
@@ -1031,6 +1032,7 @@ void btmtk_reg_hif_hook(struct hif_hook_ptr *hook);
 int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus);
 void btmtk_main_cif_uninitialize(struct btmtk_dev *bdev, int hci_bus);
 int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus);
+void btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_dev *bdev);
 int btmtk_load_code_from_bin(u8 **image, char *bin_name,
 					 struct device *dev, u32 *code_len, u8 retry);
 int btmtk_data_length_check(u8 *data, u16 length, u8 type);

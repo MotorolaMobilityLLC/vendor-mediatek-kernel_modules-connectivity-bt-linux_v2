@@ -578,6 +578,22 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
+	if (strncmp(i_fwlog_buf, "dma_dl=", strlen("dma_dl=")) == 0) {
+		u8 val = *(i_fwlog_buf + strlen("le_audio_clk=")) - '0';
+		bmain_info->dma_dl_flag = val;
+		BTMTK_INFO("%s: set dma dl to %d", __func__, bmain_info->dma_dl_flag);
+		ret = count;
+		goto exit;
+	}
+
+	if (strncmp(i_fwlog_buf, "cfg reload", strlen("cfg reload")) == 0) {
+
+		btmtk_load_bt_cfg(pp_bdev[hci_idx]->bt_cfg_file_name, pp_bdev[hci_idx]->intf_dev, pp_bdev[hci_idx]);
+		BTMTK_INFO("%s: reload bt cfg", __func__);
+		ret = count;
+		goto exit;
+	}
+
 	if (strncmp(i_fwlog_buf, "set_para=", strlen("set_para=")) == 0) {
 		u8 val = *(i_fwlog_buf + strlen("set_para=")) - '0';
 
