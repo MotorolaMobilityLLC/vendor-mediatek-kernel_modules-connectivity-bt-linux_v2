@@ -870,7 +870,7 @@ static inline int is_mt7961(u32 chip_id)
 static inline int is_mt66xx(u32 chip_id)
 {
 	chip_id &= 0xFFFF;
-	if (chip_id == 0x6631 || chip_id == 0x6635)
+	if (chip_id == 0x6631 || chip_id == 0x6635 || chip_id == 0x6653)
 		return 1;
 	return 0;
 }
