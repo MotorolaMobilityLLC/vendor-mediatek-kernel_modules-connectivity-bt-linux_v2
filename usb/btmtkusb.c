@@ -3871,8 +3871,8 @@ static int submit_or_queue_tx_urb(struct hci_dev *hdev, struct urb *urb, int typ
 static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb, bool flag)
 {
 	struct urb *urb = NULL;
-	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
-	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
+	struct btmtk_dev *bdev = NULL;
+	struct btmtk_usb_dev *cif_dev = NULL;
 	unsigned int ifnum_base;
 	int ret = 0;
 	struct sk_buff *iso_skb = NULL;
@@ -3883,9 +3883,17 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb, bool flag
 
 	BTMTK_DBG_DEV(bdev, "%s enter", __func__);
 
+	if (hdev == NULL) {
+		BTMTK_ERR("%s: no hdev", __func__);
+		return -ENODEV;
+	}
+
+	bdev = hci_get_drvdata(hdev);
+	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
+
 	if (skb->len <= 0) {
-		ret = -EFAULT;
 		BTMTK_ERR_DEV(bdev, "%s: target packet length:%zu is not allowed", __func__, (size_t)skb->len);
+		return -EFAULT;
 	}
 
 	ifnum_base = cif_dev->intf->cur_altsetting->desc.bInterfaceNumber;
