@@ -203,6 +203,7 @@ static int btusb_recv_isoc(struct btmtk_dev *bdev, void *buffer, int count)
 {
 	struct sk_buff *skb;
 	int err = 0;
+	unsigned char *skb_tmp = NULL;
 
 	spin_lock(&bdev->rxlock);
 	skb = bdev->sco_skb;
@@ -222,7 +223,13 @@ static int btusb_recv_isoc(struct btmtk_dev *bdev, void *buffer, int count)
 		}
 
 		len = min_t(uint, hci_skb_expect(skb), count);
-		memcpy(skb_put(skb, len), buffer, len);
+		skb_tmp = skb_put(skb, len);
+		if (!skb_tmp) {
+			BTMTK_ERR("%s, skb_put failed. Len = %d!", __func__, len);
+			kfree_skb(skb);
+			return -ENOMEM;
+		}
+		memcpy(skb_tmp, buffer, len);
 
 		count -= len;
 		buffer += len;
@@ -439,6 +446,7 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	struct btmtk_usb_dev *cif_dev = NULL;
 	struct sk_buff *skb;
+	unsigned char *skb_tmp = NULL;
 	int err;
 
 	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
@@ -466,7 +474,13 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 			goto exit;
 		}
 		hci_skb_pkt_type(skb) = HCI_EVENT_PKT;
-		memcpy(skb_put(skb, urb->actual_length), urb->transfer_buffer, urb->actual_length);
+		skb_tmp = skb_put(skb, urb->actual_length);
+		if (!skb_tmp) {
+			BTMTK_ERR("%s, skb_put failed!", __func__);
+			kfree_skb(skb);
+			return;
+		}
+		memcpy(skb_tmp, urb->transfer_buffer, urb->actual_length);
 		BTMTK_DBG_RAW(skb->data, skb->len, "%s, skb recv evt", __func__);
 
 		hci_recv_frame(hdev, skb);
@@ -1554,6 +1568,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	struct sk_buff *evt_skb;
 	uint8_t notify_alt_evt[NOTIFY_ALT_EVT_LEN] = {0x04, 0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00};
 	u16 crBaseAddr = 0, crRegOffset = 0;
+	unsigned char *skb_tmp = NULL;
 
 	if (skb->len <= 0) {
 		ret = -EFAULT;
@@ -1735,7 +1750,13 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 				isoc_pkt_padding = bdev->iso_threshold - isoc_pkt_len;
 
 				if (skb_tailroom(skb) >= isoc_pkt_padding) {
-					memset(skb_put(skb, isoc_pkt_padding), 0, isoc_pkt_padding);
+					skb_tmp = skb_put(skb, isoc_pkt_padding);
+					if (!skb_tmp) {
+						BTMTK_ERR("%s, skb_put failed!", __func__);
+						kfree_skb(skb);
+						return -ENOMEM;
+					}
+					memset(skb_tmp, 0, isoc_pkt_padding);
 					urb = alloc_intr_iso_urb(hdev, skb);
 					BTMTK_DBG_RAW(skb->data, skb->len, "%s, it's ble iso packet",
 						__func__);
@@ -1750,7 +1771,13 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					}
 					/* copy skb data into iso_skb */
 					skb_copy_bits(skb, 0, skb_put(iso_skb, skb->len), skb->len);
-					memset(skb_put(iso_skb, isoc_pkt_padding), 0, isoc_pkt_padding);
+					skb_tmp = skb_put(iso_skb, isoc_pkt_padding);
+					if (!skb_tmp) {
+						BTMTK_ERR("%s, skb_put failed!", __func__);
+						kfree_skb(skb);
+						return -ENOMEM;
+					}
+					memset(skb_tmp, 0, isoc_pkt_padding);
 
 					/* After call back, bt drive will free iso_skb */
 					urb = alloc_intr_iso_urb(hdev, iso_skb);
