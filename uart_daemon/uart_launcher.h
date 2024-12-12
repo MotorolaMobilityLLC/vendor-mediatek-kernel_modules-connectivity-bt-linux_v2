@@ -33,7 +33,7 @@
 #ifndef __UART_LAUNCHER_H__
 #define __UART_LAUNCHER_H__
 
-#define VERSION                 "1.0.2021032901"
+#define VERSION                 "1.0.2021052201"
 
 #ifndef N_MTKSTP
 #define N_MTKSTP    (15 + 1)  /* MediaTek WCN Serial Transport Protocol */
