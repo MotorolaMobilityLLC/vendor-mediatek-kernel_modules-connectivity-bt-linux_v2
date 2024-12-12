@@ -19,7 +19,11 @@
 #include <linux/spinlock.h>
 #include <linux/kallsyms.h>
 #include <linux/device.h>
+#if (KERNEL_VERSION(6, 12, 0) > LINUX_VERSION_CODE)
 #include <asm/unaligned.h>
+#else
+#include <linux/unaligned.h>
+#endif
 
 /* Define for proce node */
 #include <linux/proc_fs.h>
