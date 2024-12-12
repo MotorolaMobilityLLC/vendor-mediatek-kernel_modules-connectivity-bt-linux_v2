@@ -65,10 +65,13 @@ ifndef TOP
     TOP := $(srctree)/..
 endif
 
-ifneq ($(TARGET_BUILD_VARIANT), user)
+ifneq ($(filter $(TARGET_BUILD_VARIANT), userdebug eng),)
     ccflags-y += -DBUILD_QA_DBG=1
+    ccflags-y += -DSTPBTFWLOG_ENABLE=1
+    ccflags-y += -DBTMTK_DEBUG_SOP
 else
     ccflags-y += -DBUILD_QA_DBG=0
+    ccflags-y += -DSTPBTFWLOG_ENABLE=0
 endif
 
 ifeq ($(CONFIG_SUPPORT_BT_DL_WIFI_PATCH), y)
@@ -112,12 +115,6 @@ ifeq ($(CONFIG_SUPPORT_DVT), y)
     ccflags-y += -DCFG_SUPPORT_DVT=1
 else
     ccflags-y += -DCFG_SUPPORT_DVT=0
-endif
-
-ifneq ($(TARGET_BUILD_VARIANT), user)
-    ccflags-y += -DSTPBTFWLOG_ENABLE=1
-else
-    ccflags-y += -DSTPBTFWLOG_ENABLE=0
 endif
 
 ifeq ($(CONFIG_GKI_SUPPORT), y)
@@ -255,10 +252,6 @@ ccflags-y += -Werror
 $(MOD_NAME)-objs := $(CFILES:.c=.o)
 
 obj-m += $(MOD_NAME).o
-
-ifneq ($(TARGET_BUILD_VARIANT), user)
-ccflags-y += -DBTMTK_DEBUG_SOP
-endif
 
 #VPATH = /opt/toolchains/gcc-linaro-aarch64-linux-gnu-4.9-2014.09_linux
 #UART_MOD_NAME = btmtk_uart
