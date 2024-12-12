@@ -924,10 +924,14 @@ static void hif_dump_utility(const struct bt_dump_list *dump_list)
 	pCmdList = dump_list->cmd_list;
 	for (i = 0; i < dump_list->dump_size; i++) {
 		if (pCmdList[i].write) {
-			if (pCmdList[i].mask == 0)
+			if (pCmdList[i].mask == 0) {
 				HIF_WRITE(pCmdList[i].w_addr, (pCmdList[i].value));
-			else
-				HIF_WRITE(pCmdList[i].w_addr, (pCmdList[i].value & pCmdList[i].mask));
+			} else {
+				HIF_READ(pCmdList[i].w_addr, &readVal);
+				readVal &= ~(pCmdList[i].mask);
+				readVal |= pCmdList[i].value;
+				HIF_WRITE(pCmdList[i].w_addr, readVal);
+			}
 		}
 
 		if (pCmdList[i].read) {
