@@ -1600,7 +1600,7 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwb
 	patchHdr = (struct _PATCH_HEADER *)fwbuf;
 	fw_version = btmtk_memstr(fwbuf, fwbuf_len, FW_VERSION_KEY_WORDS);
 
-	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
+	if (is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		globalDesrc = (struct _Global_Descr *)(fwbuf + FW_ROM_PATCH_HEADER_SIZE);
 
 	BTMTK_INFO("[btmtk] =============== Patch Info ==============");
@@ -1646,7 +1646,7 @@ static void btmtk_print_wifi_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
 
 	patchHdr = (struct _PATCH_HEADER *)fwbuf;
 
-	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
+	if (is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		globalDesrc = (struct _Global_Descr *)(fwbuf + FW_ROM_PATCH_HEADER_SIZE);
 
 	BTMTK_INFO("[btmtk] =============== Wifi Patch Info ==============");
@@ -2122,7 +2122,7 @@ int btmtk_load_rom_patch(struct btmtk_dev *bdev)
 		return err;
 	}
 
-	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
+	if (is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
 		err = btmtk_load_rom_patch_79xx(bdev, BT_DOWNLOAD);
 		if (err < 0) {
 			BTMTK_ERR("%s: btmtk_load_rom_patch_79xx bt patch failed!", __func__);
@@ -2380,7 +2380,7 @@ int btmtk_picus_enable(struct btmtk_dev *bdev)
 	}
 	BTMTK_INFO_RAW(enable_cmd, enable_len, "%s: Send CMD:", __func__);
 
-	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
+	if (is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		ret = btmtk_main_send_cmd(bdev,
 			enable_cmd, enable_len,
 			enable_event, PICUS_ENABLE_EVT_HDR_LEN,
@@ -2401,7 +2401,7 @@ int btmtk_picus_disable(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s\n", __func__);
 
-	if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
+	if (is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id))
 		ret = btmtk_main_send_cmd(bdev,
 			dft_disable_cmd, PICUS_DISABLE_CMD_LEN,
 			dft_disable_event, PICUS_DISABLE_EVT_HDR_LEN,
@@ -2922,7 +2922,7 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 		ret = -EIO;
 		goto exit;
 	} else {
-		if (is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
+		if (is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
 			ret = main_info.hif_hook.reg_read(bdev, FLAVOR, &bdev->flavor);
 			if (ret < 0) {
 				BTMTK_ERR("read flavor id failed");
