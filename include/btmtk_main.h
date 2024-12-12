@@ -7,15 +7,20 @@
 #define __BTMTK_MAIN_H__
 #include "btmtk_define.h"
 
+extern int btmtk_dongle_num;
+extern int btmtk_mcu_num;
+/* To allow g_bdev being sized from btmtk_dongle_num setting */
+extern struct btmtk_dev **g_bdev;
+
 #define DEFAULT_COUNTRY_TABLE_NAME "btPowerTable.dat"
 
-#ifdef CHIP_IF_USB
-#define DEFAULT_DEBUG_SOP_NAME "usb_debug"
-#elif defined(CHIP_IF_SDIO)
-#define DEFAULT_DEBUG_SOP_NAME "sdio_debug"
-#elif defined(CHIP_IF_UART_TTY)
-#define DEFAULT_DEBUG_SOP_NAME "uart_debug"
-#endif
+//#ifdef CHIP_IF_USB
+//#define DEFAULT_DEBUG_SOP_NAME "usb_debug"
+//#elif defined(CHIP_IF_SDIO)
+//#define DEFAULT_DEBUG_SOP_NAME "sdio_debug"
+//#elif defined(CHIP_IF_UART_TTY)
+//#define DEFAULT_DEBUG_SOP_NAME "uart_debug"
+//#endif
 
 //static inline struct sk_buff *mtk_add_stp(struct btmtk_dev *bdev, struct sk_buff *skb);
 
@@ -100,7 +105,9 @@
 #define BT_OPEN_MAX_RETRY	160
 
 /* Expected minimum supported interface */
-#define BT_MCU_MINIMUM_INTERFACE_NUM	4
+#define BT_MULTI_DONGLE_NUM_MAX		4
+
+#define BT_MULTI_MCU_NUM_MAX 2
 
 /* Bus event */
 #define HIF_EVENT_PROBE		0
@@ -132,7 +139,7 @@
 #define RESET_PIN_SET_LOW_TIME		100
 
 /* stpbtfwlog setting */
-#define FWLOG_QUEUE_COUNT			(400 * BT_MCU_MINIMUM_INTERFACE_NUM)
+#define FWLOG_QUEUE_COUNT			(400 * BT_MULTI_DONGLE_NUM_MAX)
 #define FWLOG_ASSERT_QUEUE_COUNT		45000
 #define FWLOG_BLUETOOTH_KPI_QUEUE_COUNT		400
 #define HCI_MAX_COMMAND_SIZE			255
@@ -143,6 +150,27 @@
 #endif
 
 /* fwlog information define */
+/* Picus -> Driver
+ * F0 XX XX 00 01 AA 10 BB CC CC CC ...
+ * F0 : specific header between picus and driver
+ * XX XX total command length
+ * 00 : hci interface setting type
+ * 01 AA length of this segment is 1, AA is dongle index
+ * 10 : raw data type, FWLOG_TX
+ * BB CC CC ... : BB is raw data's length (<256)
+ *              : CC CC ... is raw data
+ */
+/* Driver -> Picus
+ * F0 XX XX 01 01 AA 10 BB BB CC CC CC ...
+ * F0 : specific header between picus and driver
+ * XX XX total command length
+ * 01 : FW dongle interface setting type
+ * 01 AA length of this segment is 1, AA is dongle index
+ * 11 : raw data type, FWLOG_RX
+ * BB BB CC CC ... : BB BB is raw data's length
+ *                 : CC CC ... is raw data, include HCI type
+ */
+
 #define FWLOG_TYPE		0xF0
 #define FWLOG_LEN_SIZE		2
 #define FWLOG_TL_SIZE		(HCI_TYPE_SIZE + FWLOG_LEN_SIZE)
@@ -210,6 +238,22 @@
 #define READ_PINMUX_EVT_REAL_LEN 11
 #define FW_COREDUMP_CMD_LEN 4
 #define READ_ISO_PACKET_SIZE_CMD_HDR_LEN 4
+
+#define MAIN_MUTEX_INIT(bdev) \
+	do { \
+		mutex_init(&bdev->btmtk_chip_state_mutex); \
+		mutex_init(&bdev->btmtk_fops_state_mutex); \
+		mutex_init(&bdev->btmtk_handle_mutex); \
+		mutex_init(&bdev->btmtk_filter_cmd_num_mutex); \
+	} while (0)
+
+#define MAIN_MUTEX_DESTROY(bdev) \
+	do { \
+		mutex_destroy(&bdev->btmtk_chip_state_mutex); \
+		mutex_destroy(&bdev->btmtk_fops_state_mutex); \
+		mutex_destroy(&bdev->btmtk_handle_mutex); \
+		mutex_destroy(&bdev->btmtk_filter_cmd_num_mutex); \
+	} while (0)
 
 #if BUILD_QA_DBG
 #define CFG_SHOW_FULL_MACADDR 1
@@ -527,156 +571,11 @@ struct le_audio {
 	u64 sysclk;
 };
 #endif
-#if 0
-struct btmtk_dev {
-	struct hci_dev	*hdev;
-	unsigned long	hdev_flags;
-	unsigned long	flags;
-	void *intf_dev;
-	void *cif_dev;
-	void *buffer_mode;
-
-	struct work_struct	work;
-	struct work_struct	waker;
-	struct work_struct	reset_waker;
-	struct work_struct	hif_dump_work;
-
-	struct timer_list chip_reset_timer;
-
-	int	recv_evt_len;
-	int	tx_in_flight;
-	spinlock_t	txlock;
-	spinlock_t	rxlock;
-
-	struct sk_buff	*evt_skb;
-	struct sk_buff	*sco_skb;
-
-	/* For ble iso packet size */
-	int iso_threshold;
-
-	unsigned int	sco_num;
-	int	isoc_altsetting;
-
-	int	suspend_count;
-	bool	suspend_state;
-	int	need_compare_num;
-
-	/* pre-cal flag */
-	bool	is_pre_cal_done;
-	bool	is_whole_chip_reset;
-
-	/* For tx queue */
-	unsigned long	tx_state;
-
-	/* For rx queue */
-	struct workqueue_struct	*workqueue;
-	struct sk_buff_head	rx_q;
-	struct work_struct	rx_work;
-	struct sk_buff		*rx_skb;
-
-	wait_queue_head_t	p_wait_event_q;
-	wait_queue_head_t	p_woble_fail_q;
-	wait_queue_head_t	probe_fail_wq;
-	wait_queue_head_t	compare_event_wq;
-
-	/* assert */
-	char	assert_reason[ASSERT_REASON_SIZE];
-	unsigned int	subsys_reset;
-	unsigned int	chip_reset;
-	atomic_t	assert_state;
-
-	unsigned char	*rom_patch_bin_file_name;
-	unsigned int	chip_id;
-	unsigned int	flavor;
-	const char	*flavor_bin;
-	bool		is_eap;
-	unsigned int	dualBT;
-	unsigned int	proj;
-	unsigned int	fw_version;
-	unsigned char	dongle_index;
-	unsigned char	power_state;
-	unsigned char	fops_state;
-	unsigned char	interface_state;
-	unsigned char	blank_state;
-	struct btmtk_cif_state *cif_state;
-
-	/* io buffer for usb control transfer */
-	unsigned char	*io_buf;
-
-	unsigned char	*setting_file;
-	unsigned char	bdaddr[BD_ADDRESS_SIZE];
-
-	unsigned char		*bt_cfg_file_name;
-	struct bt_cfg_struct	bt_cfg;
-
-	/* single sku */
-	unsigned char		*country_file_name;
-
-	int get_hci_reset;
-
-	bool	collect_fwdump;
-
-	/* debug sop */
-	struct debug_reg_struct debug_sop_reg_dump;
-	unsigned char		debug_sop_file_name[MAX_BIN_FILE_NAME_LEN];
-
-	struct _Section_Map	*sectionMap_table;
-
-	/* raw data cmd & event */
-	unsigned char		chip_data_file_name[MAX_BIN_FILE_NAME_LEN];
-	void *bt_raw_data;
-
-	/* dynamic fw download */
-	struct work_struct  dynamic_fwdl_work;
-	unsigned int		fw_bin_info;
-        bool dynamic_fwdl_start;
-	struct cali_data_s cali_backup;
 
 #if (USE_DEVICE_NODE == 1)
-	/* asynchronize tx/rx */
-	struct work_struct  async_trx_work;
-
-	/* UDS work for only wifi on*/
-	struct work_struct  pwr_on_uds_work;
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
-	struct gpio_desc *gpio_cs;
-#else
-	/* fw wakeup host irq */
-	int	wakeup_irq;
+typedef void (*cif_chrdev_fw_log_state_ptr)(struct btmtk_dev *bdev, uint8_t state);
 #endif
 
-	/* DFD reset_type */
-	unsigned int reset_type;
-	void __iomem *dfd_value_addr_remap_base;
-	bool is_dfd_done;
-	u64	dfd_value_addr;
-	u32	dfd_value_size;
-	char temp_buf[DFD_EMI_DUMP_SIZE];
-	u8 dfd_pstd[DFD_EMI_DUMP_SIZE];
-#endif
-	/* completion */
-	struct completion	dump_comp;
-	struct completion	dump_dfd_comp;
-
-	unsigned int on_fail_count;
-
-#ifdef CHIP_IF_USB
-	unsigned char	chip_reset_signal;
-#endif
-
-	struct btmtk_stp_info stp_info;
-	int dump_cnt;
-
-#if CFG_SUPPORT_LEAUDIO_CLK
-	struct le_audio le_aud;
-#endif
-};
-#endif
-#if (USE_DEVICE_NODE == 1)
-typedef void (*cif_chrdev_fw_log_state_ptr)(uint8_t state);
-#endif
-struct btmtk_dev;
 typedef int (*cif_bt_init_ptr)(void);
 typedef void (*cif_bt_exit_ptr)(void);
 typedef int (*cif_pre_open_ptr)(struct btmtk_dev *bdev);
@@ -713,13 +612,14 @@ typedef int (*cif_dl_dma_ptr)(struct btmtk_dev *bdev, u8 *image,
 typedef void (*cif_dump_debug_sop_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_dump_hif_debug_sop_ptr)(struct btmtk_dev *bdev);
 typedef void (*cif_waker_notify_ptr)(struct btmtk_dev *bdev);
-typedef int (*cif_enter_standby_ptr)(void);
+typedef int (*cif_enter_standby_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_set_para_ptr)(struct btmtk_dev *bdev, int val);
 typedef void (*cif_trigger_assert_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_write_uhw_register)(struct btmtk_dev *bdev, u32 reg, u32 val);
 typedef int (*cif_read_uhw_register)(struct btmtk_dev *bdev, u32 reg, u32 *val);
 typedef void (*cif_wakeup_host_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_set_xonv_ptr)(struct btmtk_dev *bdev, u8 *connxo, int nvsz);
+typedef int (*cif_get_cif_info)(struct btmtk_dev *bdev, char *str, u8 len);
 
 struct hif_hook_ptr {
 #if (USE_DEVICE_NODE == 1)
@@ -764,6 +664,7 @@ struct hif_hook_ptr {
 	cif_write_uhw_register		write_uhw_register;
 	cif_read_uhw_register		read_uhw_register;
 	cif_set_xonv_ptr		set_xonv;
+	cif_get_cif_info		get_cif_info;
 };
 
 /* for calibration */
@@ -959,7 +860,7 @@ struct btmtk_dev {
 	unsigned int	proj;
 	unsigned int	fw_version;
 	unsigned int	match_data;
-	unsigned char	dongle_index;
+	int				dongle_index;
 	unsigned char	power_state;
 	unsigned char	fops_state;
 	unsigned char	interface_state;
@@ -973,9 +874,7 @@ struct btmtk_dev {
 	unsigned char	bdaddr[BD_ADDRESS_SIZE];
 
 	/* bt.cfg */
-	unsigned char		*bt_cfg_file_name;
-	struct bt_cfg_struct	bt_cfg;
-//	struct st_bt_cfg bt_cfg;
+	struct st_bt_cfg bt_cfg;
 
 	/* single sku */
 	unsigned char		*country_file_name;
@@ -985,16 +884,13 @@ struct btmtk_dev {
 	bool	collect_fwdump;
 
 	/* debug sop */
-//	struct st_debug_sop debug_sop;
-	struct debug_reg_struct debug_sop_reg_dump;
-	unsigned char		debug_sop_file_name[MAX_BIN_FILE_NAME_LEN];
+	struct st_debug_sop debug_sop;
 
 	/* woble */
 	struct st_woble *bt_woble;
 
 	/* buffer mode */
-//	struct st_buffer_mode *buffer_mode;
-	struct btmtk_buffer_mode_struct *buffer_mode;
+	struct st_buffer_mode *buffer_mode;
 
 	struct _Section_Map	*sectionMap_table;
 
@@ -1194,7 +1090,6 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *hdev);
 int btmtk_load_rom_patch(struct btmtk_dev *bdev);
 struct btmtk_dev *btmtk_get_dev(void);
 int btmtk_cap_init(struct btmtk_dev *bdev);
-struct btmtk_main_info *btmtk_get_main_info(void);
 int btmtk_get_interface_num(void);
 int btmtk_reset_power_on(struct btmtk_dev *bdev);
 
@@ -1213,13 +1108,14 @@ void btmtk_hci_snoop_print_to_log(struct btmtk_dev *bdev);
 #if (CFG_GKI_SUPPORT == 0)
 void *btmtk_kallsyms_lookup_name(const char *name);
 #endif
+int btmtk_get_dongle_index(unsigned int match_data, unsigned int ifnum_base);
 void btmtk_get_UTC_time_str(char *ts_str);
-void btmtk_reg_hif_hook(struct hif_hook_ptr *hook);
+void btmtk_reg_hif_hook(struct btmtk_dev *bdev, struct hif_hook_ptr *hook);
 int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus);
 void btmtk_main_cif_uninitialize(struct btmtk_dev *bdev, int hci_bus);
 int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus);
-void btmtk_load_bt_cfg(char *cfg_name, struct device *dev, struct btmtk_dev *bdev);
-int btmtk_load_code_from_bin(u8 **image, char *bin_name,
+void btmtk_load_bt_cfg(struct btmtk_dev *bdev);
+int btmtk_load_code_from_bin(struct btmtk_dev *bdev, u8 **image, char *bin_name,
 					 struct device *dev, u32 *code_len, u8 retry);
 int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		const int cmd_len, const uint8_t *event, const int event_len, int delay,
@@ -1233,10 +1129,12 @@ void btmtk_free_fw_cfg_struct(struct fw_cfg_struct *fw_cfg, int count);
 void btmtk_handle_mutex_lock(struct btmtk_dev *bdev);
 void btmtk_handle_mutex_unlock(struct btmtk_dev *bdev);
 struct btmtk_dev **btmtk_get_pp_bdev(void);
-void btmtk_load_debug_sop_register(char *debug_sop_name, struct device *dev, struct btmtk_dev *bdev);
+#ifdef BTMTK_DEBUG_SOP
+void btmtk_load_debug_sop_register(struct btmtk_dev *bdev);
+#endif
 void btmtk_clean_debug_reg_file(struct btmtk_dev *bdev);
 int btmtk_dynamic_load_rom_patch(struct btmtk_dev *bdev, u32 binInfo);
-void btmtk_reg_hif_chip_hook(struct hif_hook_chip_ptr *hook);
+void btmtk_reg_hif_chip_hook(struct btmtk_dev *bdev, struct hif_hook_chip_ptr *hook);
 
 int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag);
 int btmtk_picus_enable(struct btmtk_dev *bdev, int via_uart);
@@ -1245,12 +1143,12 @@ int btmtk_picus_filter(struct btmtk_dev *bdev);
 int btmtk_set_audio_setting(struct btmtk_dev *bdev);
 
 int32_t btmtk_set_sleep(struct hci_dev *hdev, u_int8_t need_wait);
-int32_t bgfsys_bt_patch_dl(void);
+int32_t bgfsys_bt_patch_dl(struct btmtk_dev *bdev);
 int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value);
 void btmtk_set_country_code_from_wifi(char *code);
-void btmtk_assert_wake_lock(void);
-void btmtk_assert_wake_unlock(void);
-bool btmtk_assert_wake_lock_check(void);
+void btmtk_assert_wake_lock(struct btmtk_dev *bdev);
+void btmtk_assert_wake_unlock(struct btmtk_dev *bdev);
+bool btmtk_assert_wake_lock_check(struct btmtk_dev *bdev);
 #if (USE_DEVICE_NODE == 1)
 int rx_skb_enqueue(struct sk_buff *skb);
 int btmtk_chardev_init(void);
@@ -1260,7 +1158,7 @@ int btmtk_connsys_log_handler(u8 *buf, u32 size);
 ssize_t btmtk_connsys_log_read_to_user(char __user *buf, size_t count);
 unsigned int btmtk_connsys_log_get_buf_size(void);
 int btmtk_met_log_handler(struct btmtk_dev *bdev, u8 *buf, u32 size);
-int32_t btmtk_intcmd_set_fw_log(uint8_t flag);
+int32_t btmtk_intcmd_set_fw_log(struct btmtk_dev *bdev, uint8_t flag);
 int btmtk_send_connfem_cmd(struct btmtk_dev *bdev);
 int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb);
 int bt_open(struct hci_dev *hdev);

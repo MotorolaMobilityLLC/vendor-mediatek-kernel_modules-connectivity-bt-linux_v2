@@ -3,11 +3,10 @@
  * Copyright (c) 2021 MediaTek Inc.
  */
 
+#include "include/btmtk_main.h"
 #include "btmtk_buffer_mode.h"
 
-static struct btmtk_buffer_mode_struct btmtk_buffer_mode;
-
-static int btmtk_buffer_mode_check_auto_mode(struct btmtk_dev *bdev, struct btmtk_buffer_mode_struct *buffer_mode)
+static int btmtk_buffer_mode_check_auto_mode(struct btmtk_dev *bdev, struct st_buffer_mode *buffer_mode)
 {
 	u16 addr = 1;
 	u8 value = 0;
@@ -15,14 +14,14 @@ static int btmtk_buffer_mode_check_auto_mode(struct btmtk_dev *bdev, struct btmt
 	if (buffer_mode->efuse_mode != AUTO_MODE)
 		return 0;
 
-	if (btmtk_efuse_read(buffer_mode->bdev, addr, &value)) {
+	if (btmtk_efuse_read(bdev, addr, &value)) {
 		BTMTK_WARN_DEV(bdev, "read fail");
 		BTMTK_WARN_DEV(bdev, "Use EEPROM Bin file mode");
 		buffer_mode->efuse_mode = BIN_FILE_MODE;
-		return -EIO;
+		return 0;
 	}
 
-	if (value == ((buffer_mode->bdev->chip_id & 0xFF00) >> 8)) {
+	if (value == ((bdev->chip_id & 0xFF00) >> 8)) {
 		BTMTK_WARN_DEV(bdev, "get efuse[1]: 0x%02x", value);
 		BTMTK_WARN_DEV(bdev, "use efuse mode");
 		buffer_mode->efuse_mode = EFUSE_MODE;
@@ -83,7 +82,7 @@ out:
 	return efuse_mode;
 }
 
-static int btmtk_buffer_mode_set_addr(struct btmtk_dev *bdev, struct btmtk_buffer_mode_struct *buffer_mode)
+static int btmtk_buffer_mode_set_addr(struct btmtk_dev *bdev, struct st_buffer_mode *buffer_mode)
 {
 	int ret = 0;
 	struct data_struct cmd = {0}, event = {0};
@@ -116,7 +115,7 @@ static int btmtk_buffer_mode_set_addr(struct btmtk_dev *bdev, struct btmtk_buffe
 	return ret;
 }
 
-static int btmtk_buffer_mode_set_radio(struct btmtk_dev *bdev, struct btmtk_buffer_mode_struct *buffer_mode)
+static int btmtk_buffer_mode_set_radio(struct btmtk_dev *bdev, struct st_buffer_mode *buffer_mode)
 {
 	struct data_struct cmd = {0}, event = {0};
 	int ret = 0, i = 0;
@@ -150,7 +149,7 @@ static int btmtk_buffer_mode_set_radio(struct btmtk_dev *bdev, struct btmtk_buff
 	return ret;
 }
 
-static int btmtk_buffer_mode_set_group_boundary(struct btmtk_dev *bdev, struct btmtk_buffer_mode_struct *buffer_mode)
+static int btmtk_buffer_mode_set_group_boundary(struct btmtk_dev *bdev, struct st_buffer_mode *buffer_mode)
 {
 	struct data_struct cmd = {0}, event = {0};
 	int ret = 0;
@@ -172,7 +171,7 @@ static int btmtk_buffer_mode_set_group_boundary(struct btmtk_dev *bdev, struct b
 	return ret;
 }
 
-static int btmtk_buffer_mode_set_power_offset(struct btmtk_dev *bdev, struct btmtk_buffer_mode_struct *buffer_mode)
+static int btmtk_buffer_mode_set_power_offset(struct btmtk_dev *bdev, struct st_buffer_mode *buffer_mode)
 {
 	struct data_struct cmd = {0}, event = {0};
 	int ret = 0;
@@ -195,7 +194,7 @@ static int btmtk_buffer_mode_set_power_offset(struct btmtk_dev *bdev, struct btm
 	return ret;
 }
 
-static int btmtk_buffer_mode_set_compensation(struct btmtk_dev *bdev, struct btmtk_buffer_mode_struct *buffer_mode)
+static int btmtk_buffer_mode_set_compensation(struct btmtk_dev *bdev, struct st_buffer_mode *buffer_mode)
 {
 	struct data_struct cmd = {0}, event = {0};
 	int ret = 0;
@@ -230,7 +229,7 @@ static int btmtk_buffer_mode_set_compensation(struct btmtk_dev *bdev, struct btm
 	return ret;
 }
 
-static int btmtk_buffer_mode_set_compensation_by_channel(struct btmtk_dev *bdev, struct btmtk_buffer_mode_struct *buffer_mode)
+static int btmtk_buffer_mode_set_compensation_by_channel(struct btmtk_dev *bdev, struct st_buffer_mode *buffer_mode)
 {
 	struct data_struct cmd = {0}, event = {0};
 	int ret = 0;
@@ -252,7 +251,7 @@ static int btmtk_buffer_mode_set_compensation_by_channel(struct btmtk_dev *bdev,
 	return ret;
 }
 
-static int btmtk_buffer_mode_set_bt_loss(struct btmtk_dev *bdev, struct btmtk_buffer_mode_struct *buffer_mode)
+static int btmtk_buffer_mode_set_bt_loss(struct btmtk_dev *bdev, struct st_buffer_mode *buffer_mode)
 {
 	struct data_struct cmd = {0}, event = {0};
 	int ret = 0;
@@ -277,9 +276,13 @@ static int btmtk_buffer_mode_set_bt_loss(struct btmtk_dev *bdev, struct btmtk_bu
 int btmtk_buffer_mode_send(struct btmtk_dev *bdev)
 {
 	int ret = 0;
-	struct btmtk_buffer_mode_struct *buffer_mode = NULL;
+	struct st_buffer_mode *buffer_mode = NULL;
 
-	buffer_mode = (struct btmtk_buffer_mode_struct *)bdev->buffer_mode;
+	if (bdev == NULL) {
+		BTMTK_ERR_DEV(bdev, "%s, bdev is NULL!", __func__);
+		return -EIO;
+	}
+	buffer_mode = bdev->buffer_mode;
 
 	if (buffer_mode == NULL) {
 		BTMTK_INFO_DEV(bdev, "buffer_mode is NULL, not support");
@@ -292,9 +295,11 @@ int btmtk_buffer_mode_send(struct btmtk_dev *bdev)
 	}
 
 	if (buffer_mode->efuse_mode == BIN_FILE_MODE) {
-		ret = btmtk_buffer_mode_set_addr(bdev, buffer_mode);
-		if (ret < 0)
-			BTMTK_ERR_DEV(bdev, "set addr failed");
+		if (DONGLE_FILE_IS_VALID(bdev, buffer_mode->buffer_mode_file_idx)) {
+			ret = btmtk_buffer_mode_set_addr(bdev, buffer_mode);
+			if (ret < 0)
+				BTMTK_ERR_DEV(bdev, "set addr failed");
+		}
 
 		ret = btmtk_buffer_mode_set_radio(bdev, buffer_mode);
 		if (ret < 0)
@@ -337,12 +342,26 @@ int btmtk_buffer_mode_send(struct btmtk_dev *bdev)
 
 void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev)
 {
-	int ret = 0;
+	int ret = 0, idx;
 	u32 code_len = 0;
-	char buffer_mode_switch_file_name[MAX_BIN_FILE_NAME_LEN] = {0};
+	char buffer_mode_switch_file_name[BTMTK_DONGLE_TYPE_MAX][MAX_BIN_FILE_NAME_LEN] = {0};
 	unsigned int chip_id = 0;
+	char flavor[4] = {0};
+	struct st_buffer_mode *btmtk_buffer_mode;
 
-	btmtk_buffer_mode.bdev = bdev;
+	if (bdev == NULL) {
+		BTMTK_ERR_DEV(bdev, "%s, bdev is NULL!", __func__);
+		return;
+	}
+
+	btmtk_buffer_mode = vmalloc(sizeof(struct st_buffer_mode));
+	if (btmtk_buffer_mode == NULL) {
+		BTMTK_ERR_DEV(bdev, "vmalloc failed");
+		return;
+	}
+	memset(btmtk_buffer_mode, 0, sizeof(struct st_buffer_mode));
+
+	btmtk_buffer_mode->bdev = bdev;
 
 	if (bdev->chip_id == 0x7920) {
 		chip_id = 0x7961;
@@ -350,91 +369,130 @@ void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev)
 		chip_id = bdev->chip_id;
 	}
 
-	(void)snprintf(buffer_mode_switch_file_name, MAX_BIN_FILE_NAME_LEN, "%s%x.%s",
-		WIFI_CFG_NAME_PREFIX, chip_id & 0xffff, WIFI_CFG_NAME_SUFFIX);
-	BTMTK_INFO_DEV(bdev, "%s: buffer mode file name is %s", __func__, buffer_mode_switch_file_name);
+	/* only one wifi.cfg now */
+	(void)snprintf(buffer_mode_switch_file_name[BTMTK_DONGLE_TYPE_DONGLE_DEFAULT],
+		MAX_BIN_FILE_NAME_LEN, "%s%x.%s", WIFI_CFG_NAME_PREFIX, chip_id & 0xffff, WIFI_CFG_NAME_SUFFIX);
+	(void)snprintf(buffer_mode_switch_file_name[BTMTK_DONGLE_TYPE_DEFAULT],
+			MAX_BIN_FILE_NAME_LEN, BUFFER_MODE_SWITCH_FILE);
 
-	ret = btmtk_load_code_from_setting_files(buffer_mode_switch_file_name, bdev->intf_dev, &code_len, bdev);
-	if (ret < 0) {
-		BTMTK_ERR_DEV(bdev, "%s: btmtk_load_code_from_setting_files %s failed!",
-					__func__, buffer_mode_switch_file_name);
-		if (ret != -ENOENT) {
-			return;
-		}
+	idx = BTMTK_DONGLE_TYPE_DONGLE_DEFAULT;
+	while (idx < BTMTK_DONGLE_TYPE_MAX) {
+		ret = btmtk_load_code_from_setting_files(buffer_mode_switch_file_name[idx],
+				bdev->intf_dev, &code_len, bdev);
+		if (ret == 0)
+			break;
 
-		if (btmtk_load_code_from_setting_files(BUFFER_MODE_SWITCH_FILE, bdev->intf_dev, &code_len, bdev) != 0) {
-			BTMTK_ERR_DEV(bdev, "%s: btmtk_load_code_from_setting_files %s failed!",
-						__func__, BUFFER_MODE_SWITCH_FILE);
-			return;
-		}
+		BTMTK_ERR_DEV(bdev, "%s: load file %s failed!", __func__, buffer_mode_switch_file_name[idx]);
+		idx++;
 	}
 
-	btmtk_buffer_mode.efuse_mode = btmtk_buffer_mode_parse_mode(bdev, bdev->setting_file, code_len);
-	if (btmtk_buffer_mode.efuse_mode == EFUSE_MODE)
+	if (idx == BTMTK_DONGLE_TYPE_MAX) {
+		vfree(btmtk_buffer_mode);
 		return;
+	}
+
+	btmtk_buffer_mode->efuse_mode = btmtk_buffer_mode_parse_mode(bdev, bdev->setting_file, code_len);
+	if (btmtk_buffer_mode->efuse_mode == EFUSE_MODE) {
+		vfree(btmtk_buffer_mode);
+		return;
+	}
+
+	if (!is_connac3(bdev->chip_id)) {
+		if (bdev->flavor)
+			(void)snprintf(flavor, sizeof(flavor), "1a");
+		else
+			(void)snprintf(flavor, sizeof(flavor), "1");
+	}
 
 	if (is_connac3(bdev->chip_id)) {
-		(void)snprintf(btmtk_buffer_mode.file_name, MAX_BIN_FILE_NAME_LEN, "EEPROM_MT%04x.bin",
-					bdev->chip_id & 0xffff);
+		BTMTK_INFO_DEV(bdev, "%s: is connac3", __func__);
+
+		(void)snprintf(btmtk_buffer_mode->buffer_mode_file_name[BTMTK_DONGLE_TYPE_DONGLE_INDEX],
+				MAX_BIN_FILE_NAME_LEN, "EEPROM_MT%04x_idx_%d.bin",
+				bdev->chip_id & 0xffff, bdev->dongle_index);
+		(void)snprintf(btmtk_buffer_mode->buffer_mode_file_name[BTMTK_DONGLE_TYPE_DONGLE_DEFAULT],
+				MAX_BIN_FILE_NAME_LEN, "EEPROM_MT%04x.bin",
+				bdev->chip_id & 0xffff);
+		(void)snprintf(btmtk_buffer_mode->buffer_mode_file_name[BTMTK_DONGLE_TYPE_DEFAULT],
+				MAX_BIN_FILE_NAME_LEN, "EEPROM_MT%04x.bin",
+				bdev->chip_id & 0xffff);
 	} else {
-		if (bdev->flavor)
-			(void)snprintf(btmtk_buffer_mode.file_name, MAX_BIN_FILE_NAME_LEN, "EEPROM_MT%04x_1a.bin",
-					bdev->chip_id & 0xffff);
-		else
-			(void)snprintf(btmtk_buffer_mode.file_name, MAX_BIN_FILE_NAME_LEN, "EEPROM_MT%04x_1.bin",
-					bdev->chip_id & 0xffff);
+		(void)snprintf(btmtk_buffer_mode->buffer_mode_file_name[BTMTK_DONGLE_TYPE_DONGLE_INDEX],
+				MAX_BIN_FILE_NAME_LEN, "EEPROM_MT%04x_%s_idx_%d.bin",
+				bdev->chip_id & 0xffff, flavor, bdev->dongle_index);
+		(void)snprintf(btmtk_buffer_mode->buffer_mode_file_name[BTMTK_DONGLE_TYPE_DONGLE_DEFAULT],
+				MAX_BIN_FILE_NAME_LEN, "EEPROM_MT%04x_%s.bin",
+				bdev->chip_id & 0xffff, flavor);
+		(void)snprintf(btmtk_buffer_mode->buffer_mode_file_name[BTMTK_DONGLE_TYPE_DEFAULT],
+				MAX_BIN_FILE_NAME_LEN, "EEPROM_MT%04x_%s.bin",
+				bdev->chip_id & 0xffff, flavor);
 	}
 
-	ret = btmtk_load_code_from_setting_files(btmtk_buffer_mode.file_name, bdev->intf_dev, &code_len, bdev);
-	if (ret < 0) {
-		BTMTK_ERR_DEV(bdev, "set load %s failed", btmtk_buffer_mode.file_name);
+	btmtk_buffer_mode->buffer_mode_file_idx = BTMTK_DONGLE_TYPE_DONGLE_INDEX;
+	while (btmtk_buffer_mode->buffer_mode_file_idx < BTMTK_DONGLE_TYPE_MAX) {
+		ret = btmtk_load_code_from_setting_files(
+				btmtk_buffer_mode->buffer_mode_file_name[btmtk_buffer_mode->buffer_mode_file_idx],
+				bdev->intf_dev, &code_len, bdev);
+		if (ret == 0)
+			break;
+
+		BTMTK_ERR_DEV(bdev, "load file %s failed",
+				btmtk_buffer_mode->buffer_mode_file_name[btmtk_buffer_mode->buffer_mode_file_idx]);
+		btmtk_buffer_mode->buffer_mode_file_idx++;
+	}
+
+	if (btmtk_buffer_mode->buffer_mode_file_idx == BTMTK_DONGLE_TYPE_MAX) {
+		vfree(btmtk_buffer_mode);
 		return;
 	}
 
 	if (is_mt6639(bdev->chip_id)) {
 		if (BT_MAC_OFFSET_6639 + BUFFER_MODE_MAC_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt0_mac, &bdev->setting_file[BT_MAC_OFFSET_6639],
+			memcpy(btmtk_buffer_mode->bt0_mac, &bdev->setting_file[BT_MAC_OFFSET_6639],
 					BUFFER_MODE_MAC_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT_MAC_OFFSET_6639);
 
 		if (BT_RADIO_OFFSET_6639 + BUFFER_MODE_RADIO_LENGTH_6639 <= code_len)
-			memcpy(btmtk_buffer_mode.bt_radio_6639, &bdev->setting_file[BT_RADIO_OFFSET_6639],
+			memcpy(btmtk_buffer_mode->bt_radio_6639, &bdev->setting_file[BT_RADIO_OFFSET_6639],
 					BUFFER_MODE_RADIO_LENGTH_6639);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT_RADIO_OFFSET_6639);
 
 		if (BT_POWER_COMPENSATION_LV9_OFFSET_6639 + BUFFER_MODE_COMPENSATION_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt_compensation_lv9_6639, &bdev->setting_file[BT_POWER_COMPENSATION_LV9_OFFSET_6639],
+			memcpy(btmtk_buffer_mode->bt_compensation_lv9_6639,
+					&bdev->setting_file[BT_POWER_COMPENSATION_LV9_OFFSET_6639],
 					BUFFER_MODE_COMPENSATION_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT_POWER_COMPENSATION_LV9_OFFSET_6639);
 
 		if (BT_POWER_COMPENSATION_LV8_OFFSET_6639 + BUFFER_MODE_COMPENSATION_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt_compensation_lv8_6639, &bdev->setting_file[BT_POWER_COMPENSATION_LV8_OFFSET_6639],
+			memcpy(btmtk_buffer_mode->bt_compensation_lv8_6639,
+					&bdev->setting_file[BT_POWER_COMPENSATION_LV8_OFFSET_6639],
 					BUFFER_MODE_COMPENSATION_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT_POWER_COMPENSATION_LV8_OFFSET_6639);
 
 		if (BT_POWER_COMPENSATION_LV7_OFFSET_6639 + BUFFER_MODE_COMPENSATION_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt_compensation_lv7_6639, &bdev->setting_file[BT_POWER_COMPENSATION_LV7_OFFSET_6639],
+			memcpy(btmtk_buffer_mode->bt_compensation_lv7_6639,
+					&bdev->setting_file[BT_POWER_COMPENSATION_LV7_OFFSET_6639],
 					BUFFER_MODE_COMPENSATION_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT_POWER_COMPENSATION_LV7_OFFSET_6639);
 
 		if (BT_LOSS_OFFSET_6639 + BUFFER_MODE_BT_LOSS_LENGTH <= code_len)
-			btmtk_buffer_mode.bt_loss = bdev->setting_file[BT_LOSS_OFFSET_6639];
+			btmtk_buffer_mode->bt_loss = bdev->setting_file[BT_LOSS_OFFSET_6639];
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT_LOSS_OFFSET_6639);
 	} else if (is_mt7925(bdev->chip_id)) {
 		if (BT_MAC_OFFSET_7925 + BUFFER_MODE_MAC_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt0_mac, &bdev->setting_file[BT_MAC_OFFSET_7925],
+			memcpy(btmtk_buffer_mode->bt0_mac, &bdev->setting_file[BT_MAC_OFFSET_7925],
 					BUFFER_MODE_MAC_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT_MAC_OFFSET_7925);
 
 		if (BT_RADIO_OFFSET_7925 + BUFFER_MODE_RADIO_LENGTH_6639 <= code_len)
-			memcpy(&btmtk_buffer_mode.bt_radio_6639, &bdev->setting_file[BT_RADIO_OFFSET_7925],
+			memcpy(&btmtk_buffer_mode->bt_radio_6639, &bdev->setting_file[BT_RADIO_OFFSET_7925],
 					BUFFER_MODE_RADIO_LENGTH_6639);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT_RADIO_OFFSET_7925);
@@ -442,7 +500,8 @@ void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev)
 		if (BT0_GROUP_ANT0_ENABLE_OFFSET_7925 + 1 <= code_len) {
 			if (bdev->setting_file[BT0_GROUP_ANT0_ENABLE_OFFSET_7925] == 1) {
 				if (BT0_GROUP_ANT0_OFFSET_7925 + BUFFER_MODE_GROUP_LENGTH <= code_len)
-					memcpy(btmtk_buffer_mode.bt0_ant0_grp_boundary, &bdev->setting_file[BT0_GROUP_ANT0_OFFSET_7925],
+					memcpy(btmtk_buffer_mode->bt0_ant0_grp_boundary,
+						&bdev->setting_file[BT0_GROUP_ANT0_OFFSET_7925],
 						BUFFER_MODE_GROUP_LENGTH);
 				else
 					BTMTK_ERR_DEV(bdev, "%s: error address, %x",
@@ -457,7 +516,8 @@ void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev)
 		if (BT0_CAL_ANT0_ENABLE_OFFSET_7925 + 1 <= code_len) {
 			if (bdev->setting_file[BT0_CAL_ANT0_ENABLE_OFFSET_7925] == 1) {
 				if (BT0_CAL_ANT0_OFFSET_7925 + BUFFER_MODE_COMPENSATION_BY_CHANNEL <= code_len)
-					memcpy(btmtk_buffer_mode.bt_compensation_by_channel, &bdev->setting_file[BT0_CAL_ANT0_OFFSET_7925],
+					memcpy(btmtk_buffer_mode->bt_compensation_by_channel,
+						&bdev->setting_file[BT0_CAL_ANT0_OFFSET_7925],
 						BUFFER_MODE_COMPENSATION_BY_CHANNEL);
 				else
 					BTMTK_ERR_DEV(bdev, "%s: error address, %x",
@@ -472,7 +532,7 @@ void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev)
 		if (BT_LOSS_ENABLE_OFFSET_7925 + 1 <= code_len) {
 			if (bdev->setting_file[BT_LOSS_ENABLE_OFFSET_7925] == 1) {
 				if (BT_LOSS_OFFSET_7925 + BUFFER_MODE_BT_LOSS_LENGTH <= code_len)
-					btmtk_buffer_mode.bt_loss = bdev->setting_file[BT_LOSS_OFFSET_7925];
+					btmtk_buffer_mode->bt_loss = bdev->setting_file[BT_LOSS_OFFSET_7925];
 				else
 					BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT_LOSS_OFFSET_7925);
 			} else {
@@ -483,84 +543,98 @@ void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev)
 		}
 	} else {
 		if (BT0_MAC_OFFSET + BUFFER_MODE_MAC_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt0_mac, &bdev->setting_file[BT0_MAC_OFFSET],
+			memcpy(btmtk_buffer_mode->bt0_mac, &bdev->setting_file[BT0_MAC_OFFSET],
 					BUFFER_MODE_MAC_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT0_MAC_OFFSET);
 
 		if (BT1_MAC_OFFSET + BUFFER_MODE_MAC_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt1_mac, &bdev->setting_file[BT1_MAC_OFFSET],
+			memcpy(btmtk_buffer_mode->bt1_mac, &bdev->setting_file[BT1_MAC_OFFSET],
 					BUFFER_MODE_MAC_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT1_MAC_OFFSET);
 
 		if (BT0_RADIO_OFFSET + BUFFER_MODE_RADIO_LENGTH <= code_len)
-			memcpy(&btmtk_buffer_mode.bt0_radio, &bdev->setting_file[BT0_RADIO_OFFSET],
+			memcpy(&btmtk_buffer_mode->bt0_radio, &bdev->setting_file[BT0_RADIO_OFFSET],
 					BUFFER_MODE_RADIO_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT0_RADIO_OFFSET);
 
 		if (BT1_RADIO_OFFSET + BUFFER_MODE_RADIO_LENGTH <= code_len)
-			memcpy(&btmtk_buffer_mode.bt1_radio, &bdev->setting_file[BT1_RADIO_OFFSET],
+			memcpy(&btmtk_buffer_mode->bt1_radio, &bdev->setting_file[BT1_RADIO_OFFSET],
 					BUFFER_MODE_RADIO_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT1_RADIO_OFFSET);
 
 		if (BT0_GROUP_ANT0_OFFSET + BUFFER_MODE_GROUP_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt0_ant0_grp_boundary, &bdev->setting_file[BT0_GROUP_ANT0_OFFSET],
+			memcpy(btmtk_buffer_mode->bt0_ant0_grp_boundary, &bdev->setting_file[BT0_GROUP_ANT0_OFFSET],
 					BUFFER_MODE_GROUP_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT0_GROUP_ANT0_OFFSET);
 
 		if (BT0_GROUP_ANT1_OFFSET + BUFFER_MODE_GROUP_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt0_ant1_grp_boundary, &bdev->setting_file[BT0_GROUP_ANT1_OFFSET],
+			memcpy(btmtk_buffer_mode->bt0_ant1_grp_boundary, &bdev->setting_file[BT0_GROUP_ANT1_OFFSET],
 					BUFFER_MODE_GROUP_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT0_GROUP_ANT1_OFFSET);
 
 		if (BT1_GROUP_ANT0_OFFSET + BUFFER_MODE_GROUP_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt1_ant0_grp_boundary, &bdev->setting_file[BT1_GROUP_ANT0_OFFSET],
+			memcpy(btmtk_buffer_mode->bt1_ant0_grp_boundary, &bdev->setting_file[BT1_GROUP_ANT0_OFFSET],
 					BUFFER_MODE_GROUP_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT1_GROUP_ANT0_OFFSET);
 
 		if (BT1_GROUP_ANT1_OFFSET + BUFFER_MODE_GROUP_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt1_ant1_grp_boundary, &bdev->setting_file[BT1_GROUP_ANT1_OFFSET],
+			memcpy(btmtk_buffer_mode->bt1_ant1_grp_boundary, &bdev->setting_file[BT1_GROUP_ANT1_OFFSET],
 					BUFFER_MODE_GROUP_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT1_GROUP_ANT1_OFFSET);
 
 		if (BT0_CAL_ANT0_OFFSET + BUFFER_MODE_CAL_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt0_ant0_pwr_offset, &bdev->setting_file[BT0_CAL_ANT0_OFFSET],
+			memcpy(btmtk_buffer_mode->bt0_ant0_pwr_offset, &bdev->setting_file[BT0_CAL_ANT0_OFFSET],
 					BUFFER_MODE_CAL_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT0_CAL_ANT0_OFFSET);
 
 		if (BT0_CAL_ANT1_OFFSET + BUFFER_MODE_CAL_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt0_ant1_pwr_offset, &bdev->setting_file[BT0_CAL_ANT1_OFFSET],
+			memcpy(btmtk_buffer_mode->bt0_ant1_pwr_offset, &bdev->setting_file[BT0_CAL_ANT1_OFFSET],
 					BUFFER_MODE_CAL_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT0_CAL_ANT1_OFFSET);
 
 		if (BT1_CAL_ANT0_OFFSET + BUFFER_MODE_CAL_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt1_ant0_pwr_offset, &bdev->setting_file[BT1_CAL_ANT0_OFFSET],
+			memcpy(btmtk_buffer_mode->bt1_ant0_pwr_offset, &bdev->setting_file[BT1_CAL_ANT0_OFFSET],
 					BUFFER_MODE_CAL_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT1_CAL_ANT0_OFFSET);
 
 		if (BT1_CAL_ANT1_OFFSET + BUFFER_MODE_CAL_LENGTH <= code_len)
-			memcpy(btmtk_buffer_mode.bt1_ant1_pwr_offset, &bdev->setting_file[BT1_CAL_ANT1_OFFSET],
+			memcpy(btmtk_buffer_mode->bt1_ant1_pwr_offset, &bdev->setting_file[BT1_CAL_ANT1_OFFSET],
 					BUFFER_MODE_CAL_LENGTH);
 		else
 			BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT1_CAL_ANT1_OFFSET);
 
 		if (is_mt7961(bdev->chip_id) && bdev->flavor) {
 			if (BT0_COMPENSATION_OFFSET + BUFFER_MODE_COMPENSATION_LENGTH <= code_len)
-				memcpy(btmtk_buffer_mode.bt0_ant0_compensation, &bdev->setting_file[BT0_COMPENSATION_OFFSET],
+				memcpy(btmtk_buffer_mode->bt0_ant0_compensation,
+						&bdev->setting_file[BT0_COMPENSATION_OFFSET],
 						BUFFER_MODE_COMPENSATION_LENGTH);
 			else
 				BTMTK_ERR_DEV(bdev, "%s: error address, %x", __func__, BT0_COMPENSATION_OFFSET);
 		}
 	}
-	bdev->buffer_mode = &btmtk_buffer_mode;
+	bdev->buffer_mode = btmtk_buffer_mode;
+}
+
+void btmtk_buffer_mode_uninitialize(struct btmtk_dev *bdev)
+{
+	if (bdev == NULL) {
+		BTMTK_ERR_DEV(bdev, "%s, bdev is NULL!", __func__);
+		return;
+	}
+
+	if (bdev->buffer_mode) {
+		vfree(bdev->buffer_mode);
+		bdev->buffer_mode = NULL;
+	}
 }

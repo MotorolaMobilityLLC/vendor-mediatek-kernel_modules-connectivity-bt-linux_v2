@@ -168,7 +168,7 @@ struct btmtk_uart_dev {
 	u16	stp_dlen;
 
 	struct UART_CONFIG	uart_cfg;
-	struct btmtk_woble	bt_woble;
+	struct st_woble	bt_woble;
 
 	/* config form dts*/
 	u32			baudrate;

@@ -9,6 +9,7 @@
 #include <linux/input.h>
 #include <linux/pm_wakeup.h>
 #include <linux/interrupt.h>
+#include "include/btmtk_main.h"
 
 #include "btmtk_woble.h"
 #include "btmtk_chip_reset.h"
@@ -21,32 +22,33 @@
 
 static int is_support_unify_woble(struct btmtk_dev *bdev)
 {
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	if (!DONGLE_FILE_IS_VALID(bdev, bdev->bt_woble->woble_setting_file_idx)) {
+		BTMTK_INFO_DEV(bdev, "%s: file is valid RETURN", __func__);
+		return 0;
+	}
 
 	if (bdev->bt_cfg.support_unify_woble)
-		return bmain_info->hif_hook_chip.support_woble;
+		return bdev->main_info.hif_hook_chip.support_woble;
 	else
 		return 0;
 }
 
 void btmtk_woble_wake_lock(struct btmtk_dev *bdev)
 {
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (bdev->bt_cfg.support_woble_wakelock) {
 		BTMTK_INFO_DEV(bdev, "%s: enter", __func__);
-		__pm_stay_awake(bmain_info->woble_ws);
+		__pm_stay_awake(bdev->main_info.woble_ws);
 		BTMTK_INFO_DEV(bdev, "%s: exit", __func__);
 	}
 }
 
 void btmtk_woble_wake_unlock(struct btmtk_dev *bdev)
 {
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (bdev->bt_cfg.support_woble_wakelock) {
 		BTMTK_INFO_DEV(bdev, "%s: enter", __func__);
-		__pm_relax(bmain_info->woble_ws);
+		__pm_relax(bdev->main_info.woble_ws);
 		BTMTK_INFO_DEV(bdev, "%s: exit", __func__);
 	}
 }
@@ -74,8 +76,9 @@ exit:
 }
 
 static int btmtk_load_woble_setting(char *bin_name,
-		struct device *dev, u32 *code_len, struct btmtk_woble *bt_woble)
+		struct device *dev, struct st_woble *bt_woble)
 {
+	int code_len = 0;
 	int err;
 	struct btmtk_dev *bdev = NULL;
 
@@ -85,9 +88,7 @@ static int btmtk_load_woble_setting(char *bin_name,
 	}
 	bdev = bt_woble->bdev;
 
-	*code_len = 0;
-
-	err = btmtk_load_code_from_setting_files(bin_name, dev, code_len, bdev);
+	err = btmtk_load_code_from_setting_files(bin_name, dev, &code_len, bdev);
 	if (err) {
 		BTMTK_ERR_DEV(bdev, "woble_setting btmtk_load_code_from_setting_files failed!!");
 		goto LOAD_END;
@@ -178,10 +179,8 @@ LOAD_END:
 #if WAKEUP_BT_IRQ
 void btmtk_sdio_irq_wake_lock_timeout(struct btmtk_dev *bdev)
 {
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-
 	BTMTK_INFO_DEV(bdev, "%s: enter", __func__);
-	__pm_wakeup_event(bmain_info->irq_ws, WAIT_POWERKEY_TIMEOUT);
+	__pm_wakeup_event(bdev->main_info.irq_ws, WAIT_POWERKEY_TIMEOUT);
 	BTMTK_INFO_DEV(bdev, "%s: exit", __func__);
 }
 #else
@@ -191,6 +190,13 @@ static int btmtk_send_woble_read_BDADDR_cmd(struct btmtk_dev *bdev)
 	int ret = -1;
 
 	BTMTK_INFO_DEV(bdev, "%s: begin", __func__);
+
+	/* if (!DONGLE_FILE_IS_VALID(bdev, bdev->bt_woble->woble_setting_file_idx)) {
+	 *	BTMTK_INFO_DEV(bdev, "%s: is valid file return ", __func__);
+	 *	return 0;
+	 * } cc_temp
+	 */
+
 	if (bdev == NULL || bdev->io_buf == NULL) {
 		BTMTK_ERR_DEV(bdev, "%s: Incorrect bdev", __func__);
 		return ret;
@@ -298,7 +304,7 @@ static int btmtk_set_Woble_APCF_filter_parameter(struct btmtk_dev *bdev)
 /**
  * Set APCF manufacturer data and filter parameter
  */
-static int btmtk_set_Woble_APCF(struct btmtk_woble *bt_woble)
+static int btmtk_set_Woble_APCF(struct st_woble *bt_woble)
 {
 	int ret = 0;
 	u8 i = 0;
@@ -363,7 +369,7 @@ static int btmtk_set_Woble_APCF(struct btmtk_woble *bt_woble)
 }
 
 static void btmtk_remove_APCF_Filter_Index(char *radio_off, int length,
-	struct btmtk_woble *bt_woble)
+	struct st_woble *bt_woble)
 {
 	u8 i = 0;
 	u8 j = 0;
@@ -398,7 +404,7 @@ static void btmtk_remove_APCF_Filter_Index(char *radio_off, int length,
 }
 
 
-static int btmtk_set_Woble_Radio_Off(struct btmtk_woble *bt_woble)
+static int btmtk_set_Woble_Radio_Off(struct st_woble *bt_woble)
 {
 	int ret = 0;
 	int length = 0;
@@ -470,7 +476,7 @@ Finish:
 	return ret;
 }
 
-static int btmtk_set_Woble_Radio_On(struct btmtk_woble *bt_woble)
+static int btmtk_set_Woble_Radio_On(struct st_woble *bt_woble)
 {
 	int ret = 0;
 	struct btmtk_dev *bdev = bt_woble->bdev;
@@ -517,7 +523,7 @@ static int btmtk_del_Woble_APCF_index(struct btmtk_dev *bdev)
 }
 
 
-static int btmtk_set_Woble_APCF_Resume(struct btmtk_woble *bt_woble)
+static int btmtk_set_Woble_APCF_Resume(struct st_woble *bt_woble)
 {
 	struct data_struct event = {0};
 	u8 i = 0;
@@ -576,13 +582,12 @@ static void btmtk_check_wobx_debug_log(struct btmtk_dev *bdev)
 }
 #endif
 
-static int btmtk_handle_leaving_WoBLE_state(struct btmtk_woble *bt_woble)
+static int btmtk_handle_leaving_WoBLE_state(struct st_woble *bt_woble)
 {
 #if !WAKEUP_BT_IRQ
 	int ret = 0;
 	unsigned char fstate = 0;
 	struct btmtk_dev *bdev = bt_woble->bdev;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 #endif
 
 	if (bdev == NULL) {
@@ -609,7 +614,7 @@ static int btmtk_handle_leaving_WoBLE_state(struct btmtk_woble *bt_woble)
 		BTMTK_WARN_DEV(bdev, "%s: fops is not open yet(%d), need to start traffic before leaving woble",
 				__func__, fstate);
 		/* start traffic to recv event*/
-		ret = bmain_info->hif_hook.open(bdev->hdev);
+		ret = bdev->main_info.hif_hook.open(bdev->hdev);
 		if (ret < 0) {
 			BTMTK_ERR_DEV(bdev, "%s, cif_open failed", __func__);
 			goto Finish;
@@ -646,7 +651,7 @@ Finish:
 			BTMTK_WARN_DEV(bdev, "%s: fops is not open(%d), need to stop traffic after leaving woble",
 					__func__, fstate);
 			/* stop traffic to stop recv data from fw*/
-			ret = bmain_info->hif_hook.close(bdev->hdev);
+			ret = bdev->main_info.hif_hook.close(bdev->hdev);
 			if (ret < 0) {
 				BTMTK_ERR_DEV(bdev, "%s, cif_close failed", __func__);
 				goto exit;
@@ -662,7 +667,7 @@ exit:
 #endif
 }
 
-static int ATTRIBUTE_NO_KCFI btmtk_handle_entering_WoBLE_state(struct btmtk_woble *bt_woble)
+static int ATTRIBUTE_NO_KCFI btmtk_handle_entering_WoBLE_state(struct st_woble *bt_woble)
 {
 #if !WAKEUP_BT_IRQ
 	int ret = 0;
@@ -671,7 +676,6 @@ static int ATTRIBUTE_NO_KCFI btmtk_handle_entering_WoBLE_state(struct btmtk_wobl
 	int send_fail = 0;
 	int retry = 3;
 	struct btmtk_dev *bdev = bt_woble->bdev;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 #endif
 
 	if (bdev == NULL) {
@@ -699,9 +703,9 @@ static int ATTRIBUTE_NO_KCFI btmtk_handle_entering_WoBLE_state(struct btmtk_wobl
 		goto Finish;
 	}
 
-	if (atomic_read(&bmain_info->chip_reset) || atomic_read(&bmain_info->subsys_reset)) {
+	if (atomic_read(&bdev->main_info.chip_reset) || atomic_read(&bdev->main_info.subsys_reset)) {
 		BTMTK_ERR_DEV(bdev, "%s chip_reset is %d, subsys_reset is %d", __func__,
-			atomic_read(&bmain_info->chip_reset), atomic_read(&bmain_info->subsys_reset));
+			atomic_read(&bdev->main_info.chip_reset), atomic_read(&bdev->main_info.subsys_reset));
 		goto Finish;
 	}
 
@@ -717,7 +721,7 @@ SEND_CMD_RETRY:
 		BTMTK_WARN_DEV(bdev, "%s: fops is not open yet(%d), need to start traffic before enter woble",
 				__func__, fstate);
 		/* start traffic to recv event*/
-		ret = bmain_info->hif_hook.open(bdev->hdev);
+		ret = bdev->main_info.hif_hook.open(bdev->hdev);
 		if (ret < 0 && ret != -EBUSY) {
 			BTMTK_ERR_DEV(bdev, "%s, cif_open failed", __func__);
 			goto Finish;
@@ -773,7 +777,7 @@ STOP_TRAFFIC:
 		btmtk_handle_mutex_unlock(bdev);
 
 		set_bit(BT_WOBLE_FAIL_FOR_SUBSYS_RESET, &bdev->flags);
-		bmain_info->chip_reset_flag = 0;
+		bdev->main_info.chip_reset_flag = 0;
 		send_fail = 0;
 		retry --;
 		btmtk_reset_trigger(bdev);
@@ -801,7 +805,7 @@ STOP_TRAFFIC:
 		BTMTK_WARN_DEV(bdev, "%s: fops is not open(%d), need to stop traffic after enter woble",
 				__func__, fstate);
 		/* stop traffic to stop recv data from fw*/
-		ret = bmain_info->hif_hook.close(bdev->hdev);
+		ret = bdev->main_info.hif_hook.close(bdev->hdev);
 		if (ret < 0) {
 			BTMTK_ERR_DEV(bdev, "%s, cif_close failed", __func__);
 			goto Finish;
@@ -819,32 +823,30 @@ Finish:
 #endif
 }
 
-int btmtk_woble_suspend(struct btmtk_woble *bt_woble)
+int btmtk_woble_suspend(struct st_woble *bt_woble)
 {
 	int ret = 0;
 	unsigned char fstate = 0;
 	struct btmtk_dev *bdev = NULL;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	struct irq_desc *desc = NULL;
 
-	UNUSED(bmain_info);
-	BTMTK_INFO_DEV(bdev, "%s: enter", __func__);
+	BTMTK_INFO("%s: enter", __func__);
 
 	if (!bt_woble) {
-		BTMTK_WARN_DEV(bdev, "%s: invalid parameters!", __func__);
+		BTMTK_WARN("%s: invalid parameters!", __func__);
 		goto exit;
 	}
 
 	bdev = bt_woble->bdev;
 	if (!bdev) {
-		BTMTK_INFO_DEV(bdev, "%s: bdev is NULL", __func__);
+		BTMTK_INFO("%s: bdev is NULL", __func__);
 		return 0;
 	}
 	fstate = btmtk_fops_get_state(bdev);
 
 #if 0 // (USE_DEVICE_NODE == 0)
 	if (bdev->bt_cfg.support_auto_picus == true &&
-		(bdev->bt_cfg.support_picus_to_host == true || atomic_read(&bmain_info->fwlog_ref_cnt) != 0)) {
+		(bdev->bt_cfg.support_picus_to_host == true || atomic_read(&bdev->main_info.fwlog_ref_cnt) != 0)) {
 		btmtk_picus_enable(bdev, 1);
 	}
 #endif
@@ -890,17 +892,16 @@ exit:
 	return ret;
 }
 
-int btmtk_woble_resume(struct btmtk_woble *bt_woble)
+int btmtk_woble_resume(struct st_woble *bt_woble)
 {
 	int ret = 0;
 	unsigned char fstate = 0;
 	struct btmtk_dev *bdev = NULL;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	BTMTK_INFO_DEV(bdev, "%s: enter", __func__);
+	BTMTK_INFO("%s: enter", __func__);
 
 	if (!bt_woble) {
-		BTMTK_ERR_DEV(bdev, "%s: invalid parameters!", __func__);
+		BTMTK_ERR("%s: invalid parameters!", __func__);
 		goto exit;
 	}
 
@@ -935,85 +936,118 @@ int btmtk_woble_resume(struct btmtk_woble *bt_woble)
 
 #if 0 //(USE_DEVICE_NODE == 0)
 	if (bdev->bt_cfg.support_auto_picus == true &&
-		(bdev->bt_cfg.support_picus_to_host == true || atomic_read(&bmain_info->fwlog_ref_cnt) != 0)) {
+		(bdev->bt_cfg.support_picus_to_host == true || atomic_read(&bdev->main_info.fwlog_ref_cnt) != 0)) {
 		btmtk_picus_enable(bdev, 0);
 	}
 #endif
 
 	if (bdev->bt_cfg.reset_stack_after_woble
-		&& bmain_info->reset_stack_flag == HW_ERR_NONE
+		&& bdev->main_info.reset_stack_flag == HW_ERR_NONE
 		&& fstate == BTMTK_FOPS_STATE_OPENED)
-		bmain_info->reset_stack_flag = HW_ERR_CODE_RESET_STACK_AFTER_WOBLE;
+		bdev->main_info.reset_stack_flag = HW_ERR_CODE_RESET_STACK_AFTER_WOBLE;
 
 	(void)btmtk_send_hw_err_to_host(bdev);
 	BTMTK_INFO_DEV(bdev, "%s: end(%d), reset_stack_flag = %d, fstate = %d", __func__, ret,
-			bmain_info->reset_stack_flag, fstate);
+			bdev->main_info.reset_stack_flag, fstate);
 
 exit:
 	BTMTK_INFO_DEV(bdev, "%s: end", __func__);
 	return ret;
 }
 
-static irqreturn_t btmtk_woble_isr(int irq, struct btmtk_woble *bt_woble)
+static irqreturn_t btmtk_woble_isr(int irq, struct st_woble *bt_woble)
 {
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	struct btmtk_dev *bdev = NULL;
 
-	BTMTK_DBG("%s begin", __func__);
+	BTMTK_INFO("%s: enter", __func__);
+
+	if (!bt_woble) {
+		BTMTK_ERR("%s: invalid parameters!", __func__);
+		return -1;
+	}
+
+	bdev = bt_woble->bdev;
+	if (!bdev) {
+		BTMTK_ERR("%s, bdev is NULL!", __func__);
+		return -1;
+	}
+
+	BTMTK_DBG_DEV(bdev, "%s begin", __func__);
 	disable_irq_nosync(bt_woble->wobt_irq);
 	atomic_dec(&(bt_woble->irq_enable_count));
-	BTMTK_INFO("disable BT IRQ, call wake lock");
-	__pm_wakeup_event(bmain_info->eint_ws, WAIT_POWERKEY_TIMEOUT);
+	BTMTK_INFO_DEV(bdev, "disable BT IRQ, call wake lock");
+	__pm_wakeup_event(bdev->main_info.eint_ws, WAIT_POWERKEY_TIMEOUT);
 
 	input_report_key(bt_woble->WoBLEInputDev, KEY_WAKEUP, 1);
 	input_sync(bt_woble->WoBLEInputDev);
 	input_report_key(bt_woble->WoBLEInputDev, KEY_WAKEUP, 0);
 	input_sync(bt_woble->WoBLEInputDev);
-	BTMTK_DBG("%s end", __func__);
+	BTMTK_DBG_DEV(bdev, "%s end", __func__);
 	return IRQ_HANDLED;
 }
 
-static int btmtk_RegisterBTIrq(struct btmtk_woble *bt_woble)
+static int btmtk_RegisterBTIrq(struct st_woble *bt_woble)
 {
+	struct btmtk_dev *bdev = bt_woble->bdev;
 	struct device_node *eint_node = NULL;
 	int interrupts[2];
+	char of_node[BTMTK_DONGLE_TYPE_MAX][32] = {0};
+	int idx;
+	enum btmtk_dongle_type dongle_type;
 
-	BTMTK_DBG("%s begin", __func__);
-	eint_node = of_find_compatible_node(NULL, NULL, "mediatek,woble_eint");
-	if (eint_node) {
-		BTMTK_INFO("Get woble_eint compatible node");
-		bt_woble->wobt_irq = irq_of_parse_and_map(eint_node, 0);
-		BTMTK_INFO("woble_irq number:%d", bt_woble->wobt_irq);
-		if (bt_woble->wobt_irq) {
-			(void)of_property_read_u32_array(eint_node, "interrupts",
-						   interrupts, ARRAY_SIZE(interrupts));
-			bt_woble->wobt_irqlevel = interrupts[1];
-			if (request_irq(bt_woble->wobt_irq, (void *)btmtk_woble_isr,
-					bt_woble->wobt_irqlevel, "woble-eint", bt_woble))
-				BTMTK_INFO("WOBTIRQ LINE NOT AVAILABLE!!");
-			else {
-				BTMTK_INFO("disable BT IRQ");
-				disable_irq_nosync(bt_woble->wobt_irq);
-			}
+	if (bdev->dongle_index == 0)
+		dongle_type = BTMTK_DONGLE_TYPE_DEFAULT;
+	else
+		dongle_type = BTMTK_DONGLE_TYPE_DONGLE_DEFAULT;
 
-		} else
-			BTMTK_INFO("can't find woble_eint irq");
+	(void)snprintf(of_node[BTMTK_DONGLE_TYPE_DONGLE_INDEX], sizeof(of_node),
+			"mediatek,woble_eint_%d", bdev->dongle_index);
+	//snprintf(of_node[BTMTK_DONGLE_TYPE_DONGLE_DEFAULT], sizeof(of_node), "mediatek,woble_eint");
 
-	} else {
+	BTMTK_DBG_DEV(bdev, "%s begin", __func__);
+	idx = BTMTK_DONGLE_TYPE_DONGLE_INDEX;
+	while (idx < dongle_type) {
+		eint_node = of_find_compatible_node(NULL, NULL, of_node[idx]);
+		if (eint_node)
+			break;
+		idx++;
+	}
+	if (idx == dongle_type) {
 		bt_woble->wobt_irq = 0;
-		BTMTK_INFO("can't find woble_eint compatible node");
+		BTMTK_INFO_DEV(bdev, "can't find woble_eint compatible node");
+		return -1;
 	}
 
-	BTMTK_DBG("%s end", __func__);
+	BTMTK_INFO_DEV(bdev, "Get woble_eint compatible node");
+	bt_woble->wobt_irq = irq_of_parse_and_map(eint_node, 0);
+	BTMTK_INFO_DEV(bdev, "woble_irq number:%d", bt_woble->wobt_irq);
+	if (bt_woble->wobt_irq) {
+		(void)of_property_read_u32_array(eint_node, "interrupts",
+						interrupts, ARRAY_SIZE(interrupts));
+		bt_woble->wobt_irqlevel = interrupts[1];
+		if (request_irq(bt_woble->wobt_irq, (void *)btmtk_woble_isr,
+				bt_woble->wobt_irqlevel, "woble-eint", bt_woble))
+			BTMTK_INFO_DEV(bdev, "WOBTIRQ LINE NOT AVAILABLE!!");
+		else {
+			BTMTK_INFO_DEV(bdev, "disable BT IRQ");
+			disable_irq_nosync(bt_woble->wobt_irq);
+		}
+
+	} else
+		BTMTK_INFO_DEV(bdev, "can't find woble_eint irq");
+
+	BTMTK_DBG_DEV(bdev, "%s end", __func__);
 	return 0;
 }
 
-static int btmtk_woble_input_init(struct btmtk_woble *bt_woble)
+static int btmtk_woble_input_init(struct st_woble *bt_woble)
 {
 	int ret = 0;
+	struct btmtk_dev *bdev = bt_woble->bdev;
 
 	bt_woble->WoBLEInputDev = input_allocate_device();
 	if (!bt_woble->WoBLEInputDev || IS_ERR(bt_woble->WoBLEInputDev)) {
-		BTMTK_ERR("input_allocate_device error");
+		BTMTK_ERR_DEV(bdev, "input_allocate_device error");
 		return -ENOMEM;
 	}
 
@@ -1029,14 +1063,14 @@ static int btmtk_woble_input_init(struct btmtk_woble *bt_woble)
 	ret = input_register_device(bt_woble->WoBLEInputDev);
 	if (ret < 0) {
 		input_free_device(bt_woble->WoBLEInputDev);
-		BTMTK_ERR("input_register_device %d", ret);
+		BTMTK_ERR_DEV(bdev, "input_register_device %d", ret);
 		return ret;
 	}
 
 	return ret;
 }
 
-static void btmtk_woble_input_deinit(struct btmtk_woble *bt_woble)
+static void btmtk_woble_input_deinit(struct st_woble *bt_woble)
 {
 	if (bt_woble->WoBLEInputDev) {
 		input_unregister_device(bt_woble->WoBLEInputDev);
@@ -1048,7 +1082,7 @@ static void btmtk_woble_input_deinit(struct btmtk_woble *bt_woble)
 	}
 }
 
-static void btmtk_free_woble_setting_file(struct btmtk_woble *bt_woble)
+static void btmtk_free_woble_setting_file(struct st_woble *bt_woble)
 {
 	btmtk_free_fw_cfg_struct(bt_woble->woble_setting_apcf, WOBLE_SETTING_COUNT);
 	btmtk_free_fw_cfg_struct(bt_woble->woble_setting_apcf_fill_mac, WOBLE_SETTING_COUNT);
@@ -1061,45 +1095,60 @@ static void btmtk_free_woble_setting_file(struct btmtk_woble *bt_woble)
 	btmtk_free_fw_cfg_struct(&bt_woble->woble_setting_radio_on_status_event, 1);
 	btmtk_free_fw_cfg_struct(&bt_woble->woble_setting_radio_on_comp_event, 1);
 	btmtk_free_fw_cfg_struct(&bt_woble->woble_setting_wakeup_type, 1);
-
-	bt_woble->woble_setting_len = 0;
-
-	kfree(bt_woble->woble_setting_file_name);
-	bt_woble->woble_setting_file_name = NULL;
 }
 
-int btmtk_woble_initialize(struct btmtk_dev *bdev, struct btmtk_woble *bt_woble)
+int btmtk_woble_initialize(struct btmtk_dev *bdev)
 {
 	int err = 0;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	struct st_woble *bt_woble;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s, bdev is NULL!", __func__);
+		return -1;
+	}
+
+	bt_woble = vmalloc(sizeof(struct st_woble));
+	if (bt_woble == NULL) {
+		BTMTK_ERR_DEV(bdev, "vmalloc failed");
+		return -1;
+	}
+	memset(bt_woble, 0, sizeof(struct st_woble));
 
 	bt_woble->bdev = bdev;
+	bdev->bt_woble = bt_woble;
+	bt_woble->woble_setting_file_idx = BTMTK_DONGLE_TYPE_DONGLE_INDEX;
 	/* Need to add Woble flow */
 	if (is_support_unify_woble(bdev)) {
-		if (bt_woble->woble_setting_file_name == NULL) {
-			bt_woble->woble_setting_file_name = kzalloc(MAX_BIN_FILE_NAME_LEN, GFP_KERNEL);
-			if (!bt_woble->woble_setting_file_name) {
-				BTMTK_ERR_DEV(bdev, "%s: alloc memory fail (bt_woble->woble_setting_file_name)",
-							__func__);
-				err = -1;
-				goto end;
-			}
+		(void)snprintf(bt_woble->woble_setting_file_name[BTMTK_DONGLE_TYPE_DONGLE_INDEX],
+				MAX_BIN_FILE_NAME_LEN, "%s_%x_idx_%d.%s",
+				WOBLE_CFG_NAME_PREFIX, bdev->chip_id & 0xffff,
+				bdev->dongle_index, WOBLE_CFG_NAME_SUFFIX);
+		(void)snprintf(bt_woble->woble_setting_file_name[BTMTK_DONGLE_TYPE_DONGLE_DEFAULT],
+				MAX_BIN_FILE_NAME_LEN, "%s_%x.%s",
+				WOBLE_CFG_NAME_PREFIX, bdev->chip_id & 0xffff, WOBLE_CFG_NAME_SUFFIX);
+		(void)snprintf(bt_woble->woble_setting_file_name[BTMTK_DONGLE_TYPE_DEFAULT],
+				MAX_BIN_FILE_NAME_LEN, "%s.%s",
+				WOBLE_CFG_NAME_PREFIX, WOBLE_CFG_NAME_SUFFIX);
+
+		while (bt_woble->woble_setting_file_idx < BTMTK_DONGLE_TYPE_MAX) {
+			err = btmtk_load_woble_setting(
+					bt_woble->woble_setting_file_name[bt_woble->woble_setting_file_idx],
+					bdev->intf_dev, bt_woble);
+			if (err == 0)
+				break;
+			BTMTK_ERR_DEV(bdev, "load file %s failed",
+					bt_woble->woble_setting_file_name[bt_woble->woble_setting_file_idx]);
+			bt_woble->woble_setting_file_idx++;
 		}
 
-		(void)snprintf(bt_woble->woble_setting_file_name, MAX_BIN_FILE_NAME_LEN,
-				"%s_%x.%s", WOBLE_CFG_NAME_PREFIX, bdev->chip_id & 0xffff,
-				WOBLE_CFG_NAME_SUFFIX);
+		if (bt_woble->woble_setting_file_idx == BTMTK_DONGLE_TYPE_MAX) {
+			return err;
+		}
 
-		BTMTK_INFO_DEV(bdev, "%s: woble setting file name is %s", __func__, bt_woble->woble_setting_file_name);
-
-		btmtk_load_woble_setting(bt_woble->woble_setting_file_name,
-			bdev->intf_dev,
-			&bt_woble->woble_setting_len,
-			bt_woble);
 		/* if reset_stack is true, when chip reset is done, we need to power on chip to do
 		 * reset stack
 		 */
-		if (bmain_info->reset_stack_flag) {
+		if (bdev->main_info.reset_stack_flag) {
 			err = btmtk_reset_power_on(bdev);
 			if (err < 0) {
 				BTMTK_ERR_DEV(bdev, "reset power on failed!");
@@ -1116,17 +1165,22 @@ int btmtk_woble_initialize(struct btmtk_dev *bdev, struct btmtk_woble *bt_woble)
 	return 0;
 
 err:
-	btmtk_free_woble_setting_file(bt_woble);
-end:
+	btmtk_woble_uninitialize(bdev);
 	return err;
 }
 
-void btmtk_woble_uninitialize(struct btmtk_woble *bt_woble)
+void btmtk_woble_uninitialize(struct btmtk_dev *bdev)
 {
-	struct btmtk_dev *bdev = bt_woble->bdev;
+	struct st_woble *bt_woble = NULL;
 
 	if (bdev == NULL) {
-		BTMTK_ERR_DEV(bdev, "%s: bdev == NULL", __func__);
+		BTMTK_ERR("%s, bdev is NULL!", __func__);
+		return;
+	}
+
+	bt_woble = bdev->bt_woble;
+	if (bt_woble == NULL) {
+		BTMTK_ERR_DEV(bdev, "%s: bt_woble == NULL", __func__);
 		return;
 	}
 
@@ -1147,5 +1201,6 @@ void btmtk_woble_uninitialize(struct btmtk_woble *bt_woble)
 	}
 
 	btmtk_free_woble_setting_file(bt_woble);
-	bt_woble->bdev = NULL;
+	vfree(bdev->bt_woble);
+	bdev->bt_woble = NULL;
 }

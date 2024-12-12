@@ -14,6 +14,6 @@
 //#include "btmtk_proj_sp.h"
 #endif
 
-int btmtk_cif_chip_66xx_register(void);
+int btmtk_cif_chip_66xx_register(struct btmtk_dev *bdev);
 
 #endif /* __BTMTK_CHIP_66xx_H__ */

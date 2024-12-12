@@ -151,7 +151,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			 * by driver, don't send to stack
 			 */
 			if (skb->data[0] == WOBLE_DEBUG_EVT_TYPE)
-				BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: wobx debug log:", __func__);
+				BTMTK_INFO_RAW(skb->data, skb->len, "%s: wobx debug log:", __func__);
 
 			/* If driver need to check result from skb, it can get from io_buf */
 			/* Such as chip_id, fw_version, etc. */
@@ -161,9 +161,9 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			BTMTK_DBG("%s, compare success", __func__);
 		} else {
 			BTMTK_INFO("%s compare fail", __func__);
-			BTMTK_INFO_RAW(bdev, event_need_compare, event_need_compare_len,
+			BTMTK_INFO_RAW(event_need_compare, event_need_compare_len,
 				"%s: event_need_compare:", __func__);
-			BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: skb->data:", __func__);
+			BTMTK_INFO_RAW(skb->data, skb->len, "%s: skb->data:", __func__);
 
 			if (btmtk_vendor_cmd_filter(bdev, skb))
 				return 1;
@@ -210,7 +210,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 	}
 
-	BTMTK_DBG_RAW(bdev, skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
+	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
 
 	ret = btmtk_uart_send_cmd(bdev, skb, delay, retry, pkt_type, flag);
 	if (ret < 0) {
@@ -609,3 +609,4 @@ int btmtk_cif_deregister(void)
 	BTMTK_INFO("%s: Done", __func__);
 	return 0;
 }
+

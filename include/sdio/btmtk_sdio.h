@@ -164,7 +164,7 @@ struct btmtk_sdio_dev {
 
 	struct sk_buff_head tx_queue;
 	struct btmtk_sdio_thread sdio_thread;
-	struct btmtk_woble bt_woble;
+	struct st_woble bt_woble;
 
 	struct timer_list fw_own_timer;
 	atomic_t fw_own_timer_flag;

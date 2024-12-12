@@ -90,10 +90,12 @@ struct btmtk_buffer_mode_radio_struct {
 	u8 radio_3;	/* reserved */
 };
 
-struct btmtk_buffer_mode_struct {
+struct st_buffer_mode  {
 	struct btmtk_dev *bdev;
 
-	unsigned char		file_name[MAX_BIN_FILE_NAME_LEN];
+	unsigned char		buffer_mode_file_name[BTMTK_DONGLE_TYPE_MAX][MAX_BIN_FILE_NAME_LEN];
+	int			buffer_mode_file_idx;
+
 	int			efuse_mode;
 
 	u8 bt0_mac[BUFFER_MODE_MAC_LENGTH];
@@ -119,5 +121,6 @@ struct btmtk_buffer_mode_struct {
 
 int btmtk_buffer_mode_send(struct btmtk_dev *bdev);
 void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev);
+void btmtk_buffer_mode_uninitialize(struct btmtk_dev *bdev);
 #endif /* __BTMTK_BUFFER_MODE_H__ */
 

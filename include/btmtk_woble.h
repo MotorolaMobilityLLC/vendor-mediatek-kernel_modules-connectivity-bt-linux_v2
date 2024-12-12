@@ -21,9 +21,9 @@
 #define WOBX_TRIGGER_INFO_SCAN_LOG_TYPE		4
 #define WOBX_TRIGGER_INFO_TRIGGER_CNT_TYPE	5
 
-struct btmtk_woble {
-	unsigned char	*woble_setting_file_name;
-	unsigned int	woble_setting_len;
+struct st_woble {
+	unsigned char	woble_setting_file_name[BTMTK_DONGLE_TYPE_MAX][MAX_BIN_FILE_NAME_LEN];
+	int woble_setting_file_idx;
 
 	struct fw_cfg_struct	woble_setting_apcf[WOBLE_SETTING_COUNT];
 	struct fw_cfg_struct	woble_setting_apcf_fill_mac[WOBLE_SETTING_COUNT];
@@ -50,10 +50,10 @@ struct btmtk_woble {
 	void *bdev;
 };
 
-int btmtk_woble_suspend(struct btmtk_woble *bt_woble);
-int btmtk_woble_resume(struct btmtk_woble *bt_woble);
-int btmtk_woble_initialize(struct btmtk_dev *bdev, struct btmtk_woble *bt_woble);
-void btmtk_woble_uninitialize(struct btmtk_woble *bt_woble);
+int btmtk_woble_suspend(struct st_woble *bt_woble);
+int btmtk_woble_resume(struct st_woble *bt_woble);
+int btmtk_woble_initialize(struct btmtk_dev *bdev);
+void btmtk_woble_uninitialize(struct btmtk_dev *bdev);
 void btmtk_woble_wake_unlock(struct btmtk_dev *bdev);
 void btmtk_woble_wake_lock(struct btmtk_dev *bdev);
 #if WAKEUP_BT_IRQ

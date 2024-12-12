@@ -16,8 +16,12 @@
 
 #define BT0_MCU_INTERFACE_NUM 0
 #define BT1_MCU_INTERFACE_NUM 3
-#define BT_MCU_INTERFACE_NUM_MAX 4
-#define BT_MCU_NUM_MAX 2
+
+#define BTMTK_IS_BT_0_INTF(ifnum_base) \
+	(ifnum_base == BT0_MCU_INTERFACE_NUM)
+
+#define BTMTK_IS_BT_1_INTF(ifnum_base) \
+	(ifnum_base == BT1_MCU_INTERFACE_NUM)
 
 typedef int (*pdwnc_func) (u8 fgReset);
 typedef int (*reset_func_ptr2) (unsigned int gpio, int init_value);
@@ -30,6 +34,7 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define HCI_EV_VENDOR			0xff
 #define HCI_USB_IO_BUF_SIZE		256
 
+#define DEFAULT_DEBUG_SOP_NAME "usb_debug"
 /**
  * For DTS sub system reset
  */
@@ -140,7 +145,10 @@ struct btmtk_usb_dev {
 	unsigned char	*urb_intr_buf;
 	unsigned char	*urb_bulk_buf;
 	unsigned char	*urb_ble_isoc_buf;
-	struct btmtk_woble	bt_woble;
+
+	struct st_woble	bt_woble;
+
+	struct mutex btmtk_usb_ops_mutex;
 };
 
 #if BTMTK_ISOC_TEST

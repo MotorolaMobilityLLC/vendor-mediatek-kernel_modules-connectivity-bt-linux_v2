@@ -20,8 +20,6 @@ static struct usb_driver btusb_driver;
 static struct btmtk_cif_chip_reset reset_func;
 #endif
 #endif
-static int intf_to_idx[BT_MCU_INTERFACE_NUM_MAX] = {0, -1, -1, 1};
-static struct btmtk_usb_dev g_usb_dev[BT_MCU_MINIMUM_INTERFACE_NUM][BT_MCU_NUM_MAX];
 
 static const struct usb_device_id btusb_table[] = {
 	/* Mediatek MT7663 */
@@ -41,13 +39,8 @@ static const struct usb_device_id btusb_table[] = {
 	{ }	/* Terminating entry */
 };
 
-static char event_need_compare[EVENT_COMPARE_SIZE] = {0};
-static char event_need_compare_len;
-static char event_compare_status;
-
-static DEFINE_MUTEX(btmtk_usb_ops_mutex);
-#define USB_OPS_MUTEX_LOCK()	mutex_lock(&btmtk_usb_ops_mutex)
-#define USB_OPS_MUTEX_UNLOCK()	mutex_unlock(&btmtk_usb_ops_mutex)
+#define USB_OPS_MUTEX_LOCK(cif_dev)	mutex_lock(&cif_dev->btmtk_usb_ops_mutex)
+#define USB_OPS_MUTEX_UNLOCK(cif_dev) mutex_unlock(&cif_dev->btmtk_usb_ops_mutex)
 
 MODULE_DEVICE_TABLE(usb, btusb_table);
 
@@ -86,8 +79,6 @@ MODULE_DEVICE_TABLE(usb, btusb_table);
 		ifnum_base = intf->cur_altsetting->desc.bInterfaceNumber; \
 	} while (0)
 
-static int btmtk_cif_allocate_memory(struct btmtk_usb_dev *cif_dev);
-static void btmtk_cif_free_memory(struct btmtk_usb_dev *cif_dev);
 static int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val);
 static int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val);
 
@@ -2234,19 +2225,34 @@ static void btmtk_usb_dump_debug_sop(struct btmtk_dev *bdev)
 	if (is_connac3(bdev->chip_id))
 		btmtk_usb_get_dump_mode(bdev);
 	else
-		btmtk_usb_dump_debug_register(bdev, bdev->debug_sop_reg_dump);
+		btmtk_usb_dump_debug_register(bdev, bdev->debug_sop.debug_sop_reg_dump);
 
 	BTMTK_INFO_DEV(bdev, "%s -debug sop dump end", __func__);
 }
 
 static void btmtk_usb_cif_mutex_lock(struct btmtk_dev *bdev)
 {
-	USB_OPS_MUTEX_LOCK();
+	struct btmtk_usb_dev *cif_dev = NULL;
+
+	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
+	if (cif_dev == NULL) {
+		BTMTK_ERR_DEV(bdev, "%s: ERROR, cif_dev is NULL!", __func__);
+		return;
+	}
+	USB_OPS_MUTEX_LOCK(cif_dev);
+
 }
 
 static void btmtk_usb_cif_mutex_unlock(struct btmtk_dev *bdev)
 {
-	USB_OPS_MUTEX_UNLOCK();
+	struct btmtk_usb_dev *cif_dev = NULL;
+
+	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
+	if (cif_dev == NULL) {
+		BTMTK_ERR_DEV(bdev, "%s: ERROR, cif_dev is NULL!", __func__);
+		return;
+	}
+	USB_OPS_MUTEX_UNLOCK(cif_dev);
 }
 
 static inline void btusb_free_frags(struct btmtk_dev *bdev)
@@ -3259,11 +3265,11 @@ static void btusb_isoc_complete(struct urb *urb)
 	}
 }
 
-static inline void __fill_isoc_descriptor(struct urb *urb, int len, int mtu)
+static inline void __fill_isoc_descriptor(struct btmtk_dev *bdev, struct urb *urb, int len, int mtu)
 {
 	int i, offset = 0;
 
-	BTMTK_DBG("len %d mtu %d", len, mtu);
+	BTMTK_DBG_DEV(bdev, "len %d mtu %d", len, mtu);
 
 	for (i = 0; i < BTUSB_MAX_ISOC_FRAMES && len >= mtu;
 					i++, offset += mtu, len -= mtu) {
@@ -3334,7 +3340,7 @@ static int btusb_submit_isoc_urb(struct hci_dev *hdev, gfp_t mem_flags)
 
 	urb->transfer_flags = URB_FREE_BUFFER | URB_ISO_ASAP;
 
-	__fill_isoc_descriptor(urb, size,
+	__fill_isoc_descriptor(bdev, urb, size,
 				   le16_to_cpu(cif_dev->isoc_rx_ep->wMaxPacketSize));
 
 	usb_anchor_urb(urb, &cif_dev->isoc_anchor);
@@ -3782,7 +3788,7 @@ static struct urb *alloc_isoc_urb(struct hci_dev *hdev, struct sk_buff *skb)
 
 	urb->transfer_flags  = URB_ISO_ASAP;
 
-	__fill_isoc_descriptor(urb, skb->len,
+	__fill_isoc_descriptor(bdev, urb, skb->len,
 				   le16_to_cpu(cif_dev->isoc_tx_ep->wMaxPacketSize));
 
 	skb->dev = (void *)hdev;
@@ -3870,7 +3876,6 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb, bool flag
 	unsigned int ifnum_base;
 	int ret = 0;
 	struct sk_buff *iso_skb = NULL;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	struct sk_buff *evt_skb;
 	u16 crBaseAddr = 0, crRegOffset = 0;
 	unsigned char *skb_tmp = NULL;
@@ -4017,7 +4022,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb, bool flag
 		}
 
 		/* For wmt cmd/evt */
-		if (!memcmp(skb->data, &bmain_info->wmt_over_hci_header[1], WMT_OVER_HCI_HEADER_SIZE - 1)) {
+		if (!memcmp(skb->data, &bdev->main_info.wmt_over_hci_header[1], WMT_OVER_HCI_HEADER_SIZE - 1)) {
 			skb_push(skb, 1);
 			skb->data[0] = MTK_HCI_COMMAND_PKT;
 			BTMTK_DBG_RAW(bdev, skb->data, skb->len, "%s, 6ffc send_frame", __func__);
@@ -4602,7 +4607,6 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	int state = 0;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	struct device_node *node;
 	int status;
 	uint32_t gpio_num = 0;
@@ -4694,8 +4698,8 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 		gpio_free(gpio_num);
 		btmtk_usb_open(bdev->hdev);
 	} else {
-		if (bmain_info->hif_hook_chip.bt_subsys_reset) {
-			ret = bmain_info->hif_hook_chip.bt_subsys_reset(bdev);
+		if (bdev->main_info.hif_hook_chip.bt_subsys_reset) {
+			ret = bdev->main_info.hif_hook_chip.bt_subsys_reset(bdev);
 			btmtk_usb_open(bdev->hdev);
 			return ret;
 		}
@@ -4733,98 +4737,85 @@ exit:
 	return ret;
 }
 
-static int btmtk_usb_enter_standby(void)
+static int btmtk_usb_enter_standby(struct btmtk_dev *bdev)
 {
 	int ret = 0;
-	int i = 0;
 	int cif_event = 0;
 	int state = 0;
 	struct btmtk_cif_state *cif_state = NULL;
-	struct btmtk_dev *bdev = NULL;
 	struct btmtk_usb_dev *cif_dev = NULL;
-	struct btmtk_woble *bt_woble = NULL;
-	int intf_num = btmtk_get_interface_num();
-	struct btmtk_dev **pp_bdev = btmtk_get_pp_bdev();
+	struct st_woble *bt_woble = NULL;
 	int val = 0;
 	unsigned long radio_off_cr = 0;
 
 	BTMTK_INFO_DEV(bdev, "%s: enter", __func__);
 	btmtk_handle_mutex_lock(bdev);
 
-	for (i = 0; i < intf_num; i++) {
-		/* Find valid dev for already probe interface. */
-		if (pp_bdev[i]->hdev != NULL) {
-			bdev = pp_bdev[i];
-			state = btmtk_get_chip_state(bdev);
-			if (state != BTMTK_STATE_WORKING) {
-				BTMTK_WARN_DEV(bdev, "%s: not in working(%d).", __func__, state);
-				break;
+	state = btmtk_get_chip_state(bdev);
+	if (state != BTMTK_STATE_WORKING) {
+		BTMTK_WARN_DEV(bdev, "%s: not in working(%d).", __func__, state);
+		return -ENODEV;
+	}
+
+	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
+	bt_woble = bdev->bt_woble;
+
+	/* Retrieve current HIF event state */
+	cif_event = HIF_EVENT_STANDBY;
+	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
+		/* Error */
+		BTMTK_WARN_DEV(bdev, "%s parameter is NULL", __func__);
+		btmtk_handle_mutex_unlock(bdev);
+		return -ENODEV;
+	}
+
+	cif_state = &bdev->cif_state[cif_event];
+
+	btmtk_usb_cif_mutex_lock(bdev);
+	/* Set Entering state */
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+	/* Do HIF events */
+	ret = btmtk_woble_suspend(bt_woble);
+
+	/* If usb2.0(USB_SPEED_HIGH) not need write cr */
+	if (cif_dev->udev->speed > USB_SPEED_HIGH && ret == 0) {
+		if (is_mt6639(bdev->chip_id) || is_mt7925(bdev->chip_id)) {
+			if (is_mt6639(bdev->chip_id))
+				radio_off_cr = BT_RADIO_OFF_DONE_6639;
+			else if (is_mt7925(bdev->chip_id))
+				radio_off_cr = BT_RADIO_OFF_DONE_7925;
+
+			btmtk_handle_mutex_unlock(bdev);
+
+			ret = btmtk_usb_read_register(bdev, radio_off_cr, &val);
+			if (ret < 0)
+				BTMTK_INFO_DEV(bdev, "%s: read radio off  CR fail", __func__);
+			else {
+				BTMTK_INFO_DEV(bdev, "%s: read radio off CR : 0x%08x", __func__, val);
+				if (is_mt6639(bdev->chip_id))
+					val |= (1 << 15);
+				else if (is_mt7925(bdev->chip_id))
+					val |= (1 << 14);
+
+				BTMTK_INFO_DEV(bdev, "%s: write 1 to radio off CR : 0x%08x", __func__, val);
+				ret = btmtk_usb_write_register(bdev, radio_off_cr, val);
+				if (ret < 0)
+					BTMTK_INFO_DEV(bdev, "%s: write radio off  CR fail", __func__);
+				else
+					btmtk_usb_send_shutdown_cmd(bdev);
 			}
-
-			cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
-			bt_woble = &cif_dev->bt_woble;
-
-			/* Retrieve current HIF event state */
-			cif_event = HIF_EVENT_STANDBY;
-			if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
-				/* Error */
-				BTMTK_WARN_DEV(bdev, "%s parameter is NULL", __func__);
-				btmtk_handle_mutex_unlock(bdev);
-				return -ENODEV;
-			}
-
-			cif_state = &bdev->cif_state[cif_event];
-
-			btmtk_usb_cif_mutex_lock(bdev);
-			/* Set Entering state */
-			btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
-
-			/* Do HIF events */
-			ret = btmtk_woble_suspend(bt_woble);
-
-			/* If usb2.0(USB_SPEED_HIGH) not need write cr */
-			if(cif_dev->udev->speed > USB_SPEED_HIGH && ret == 0){
-				if (is_mt6639(bdev->chip_id) || is_mt7925(bdev->chip_id)) {
-					if (is_mt6639(bdev->chip_id))
-						radio_off_cr = BT_RADIO_OFF_DONE_6639;
-					else if (is_mt7925(bdev->chip_id))
-						radio_off_cr = BT_RADIO_OFF_DONE_7925;
-
-					btmtk_handle_mutex_unlock(bdev);
-					ret = btmtk_usb_read_register(bdev, radio_off_cr, &val);
-					if(ret < 0)
-						BTMTK_INFO_DEV(bdev, "%s: read radio off  CR fail", __func__);
-					else {
-						BTMTK_INFO_DEV(bdev, "%s: read radio off CR : 0x%08x", __func__, val);
-						if (is_mt6639(bdev->chip_id))
-							val |= (1 << 15);
-						else if (is_mt7925(bdev->chip_id))
-							val |= (1 << 14);
-
-						BTMTK_INFO_DEV(bdev, "%s: write 1 to radio off CR : 0x%08x",
-								__func__, val);
-						ret = btmtk_usb_write_register(bdev, radio_off_cr, val);
-						if(ret < 0){
-							BTMTK_INFO_DEV(bdev, "%s: write radio off  CR fail", __func__);
-						} else
-							btmtk_usb_send_shutdown_cmd(bdev);
-					}
-					btmtk_handle_mutex_lock(bdev);
-				}
-			}
-
-			/* Set End/Error state */
-			if (ret == 0)
-				btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
-			else
-				btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
-
-			btmtk_usb_cif_mutex_unlock(bdev);
-
-			if (ret)
-				break;
+			btmtk_handle_mutex_lock(bdev);
 		}
 	}
+
+	/* Set End/Error state */
+	if (ret == 0)
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	else
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+
+	btmtk_usb_cif_mutex_unlock(bdev);
 
 	BTMTK_INFO_DEV(bdev, "%s: end", __func__);
 	btmtk_handle_mutex_unlock(bdev);
@@ -4878,7 +4869,6 @@ static int btusb_set_pinmux(struct btmtk_dev *bdev)
 #if ((CFG_SUPPORT_HW_DVT == 0) || CFG_SUPPORT_BLUEZ)
 static int btmtk_probe_retry(struct btmtk_dev *bdev)
 {
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	int ret = 0;
 
 	if (bdev == NULL) {
@@ -4886,7 +4876,7 @@ static int btmtk_probe_retry(struct btmtk_dev *bdev)
 		return -1;
 	}
 
-	bmain_info->chip_reset_flag = 0;
+	bdev->main_info.chip_reset_flag = 0;
 	set_bit(BT_PROBE_FAIL_FOR_SUBSYS_RESET, &bdev->flags);
 	btmtk_handle_mutex_unlock(bdev);
 
@@ -4921,7 +4911,6 @@ static int btusb_probe(struct usb_interface *intf,
 	struct btmtk_usb_dev *cif_dev = NULL;
 	unsigned int ifnum_base;
 	int i, err = 0;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 #if (CFG_SUPPORT_HW_DVT == 0)
 	u8 load_patch_fail = 0;
 #endif
@@ -4937,13 +4926,13 @@ static int btusb_probe(struct usb_interface *intf,
 
 	ifnum_base = intf->cur_altsetting->desc.bInterfaceNumber;
 	BTMTK_INFO_DEV(bdev, "intf %p id %p, interfacenum = %d", intf, id, ifnum_base);
-	bmain_info->chip_reset_flag = 0;
 
 	bdev = usb_get_intfdata(intf);
 	if (!bdev) {
 		BTMTK_ERR_DEV(bdev, "[ERR] bdev is NULL");
 		goto end;
 	}
+	bdev->main_info.chip_reset_flag = 0;
 	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 
 	for (i = 0; i < intf->cur_altsetting->desc.bNumEndpoints; i++) {
@@ -5024,11 +5013,14 @@ static int btusb_probe(struct usb_interface *intf,
 	init_waitqueue_head(&bdev->probe_fail_wq);
 	init_waitqueue_head(&bdev->compare_event_wq);
 
-	err = btmtk_cif_allocate_memory(cif_dev);
-	if (err < 0) {
-		BTMTK_ERR_DEV(bdev, "[ERR] btmtk_cif_allocate_memory failed!");
+	bdev->match_data = (cif_dev->udev->bus->busnum << 8) | (cif_dev->udev->portnum - 1);
+	bdev->dongle_index = btmtk_get_dongle_index(bdev->match_data, ifnum_base);
+	if (bdev->dongle_index < 0) {
+		BTMTK_ERR_DEV(bdev, "get dongle index failed");
+		err = -ENODEV;
 		goto end;
 	}
+	BTMTK_INFO_DEV(bdev, "%s: bdev->dongle_index = %d, ", __func__, bdev->dongle_index);
 
 	err = btmtk_main_cif_initialize(bdev, HCI_USB);
 	if (err < 0) {
@@ -5038,7 +5030,7 @@ static int btusb_probe(struct usb_interface *intf,
 			goto end;
 		} else {
 			BTMTK_ERR_DEV(bdev, "[ERR] btmtk_main_cif_initialize failed!");
-			goto free_mem;
+			goto end;
 		}
 	}
 
@@ -5137,19 +5129,19 @@ LOAD_PATCH_RETRY:
 
 	usb_set_intfdata(intf, bdev);
 
-	err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
+	err = btmtk_woble_initialize(bdev);
 	if (err < 0) {
 		BTMTK_ERR_DEV(bdev, "btmtk_main_woble_initialize failed, do chip reset!!!");
 		goto end;
 	}
 
 	btmtk_woble_wake_unlock(bdev);
-	btmtk_assert_wake_unlock();
+	btmtk_assert_wake_unlock(bdev);
 
 #if CFG_SUPPORT_BLUEZ
 SEND_INIT_RETRY:
-	if (bmain_info->hif_hook_chip.bt_open_handler) {
-		err = bmain_info->hif_hook_chip.bt_open_handler(bdev);
+	if (bdev->main_info.hif_hook_chip.bt_open_handler) {
+		err = bdev->main_info.hif_hook_chip.bt_open_handler(bdev);
 		if (err < 0) {
 			BTMTK_ERR_DEV(bdev, "bt_open_handler fail");
 			goto free_setting;
@@ -5189,22 +5181,20 @@ SEND_INIT_RETRY:
 	goto end;
 
 free_setting:
-	btmtk_woble_uninitialize(&cif_dev->bt_woble);
+	btmtk_woble_uninitialize(bdev);
 deinit1:
 	btmtk_main_cif_uninitialize(bdev, HCI_USB);
-free_mem:
-	btmtk_cif_free_memory(cif_dev);
 end:
 #if BTMTK_RUNTIME_ENABLE
 	usb_enable_autosuspend(cif_dev->udev);
 	device_set_wakeup_enable(&cif_dev->udev->dev, TRUE);
 #endif
 	if (cap_init_fail == 1) {
-		bmain_info->chip_reset_flag = 1;
+		bdev->main_info.chip_reset_flag = 1;
 		cap_init_fail = 0;
 		set_bit(BT_PROBE_FAIL_FOR_WHOLE_RESET, &bdev->flags);
 		btmtk_reset_trigger(bdev);
-		atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+		atomic_set(&bdev->main_info.chip_reset, BTMTK_RESET_DONE);
 		return 0;
 	}
 #if (CFG_SUPPORT_HW_DVT == 0)
@@ -5212,13 +5202,13 @@ end:
 		load_patch_fail = 0;
 		err = btmtk_probe_retry(bdev);
 		if (err < 0) {
-			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+			atomic_set(&bdev->main_info.chip_reset, BTMTK_RESET_DONE);
 			BTMTK_INFO_DEV(bdev, "%s: load patch fail, retry fail", __func__);
 			return -1;
 		}
 		if (test_bit(BT_PROBE_DO_WHOLE_CHIP_RESET, &bdev->flags)) {
 			clear_bit(BT_PROBE_DO_WHOLE_CHIP_RESET, &bdev->flags);
-			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+			atomic_set(&bdev->main_info.chip_reset, BTMTK_RESET_DONE);
 			BTMTK_INFO_DEV(bdev, "%s: load patch fail, retry do L0", __func__);
 			return -1;
 		}
@@ -5230,12 +5220,12 @@ end:
 		send_init_fail = 0;
 		err = btmtk_probe_retry(bdev);
 		if (err < 0) {
-			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+			atomic_set(&bdev->main_info.chip_reset, BTMTK_RESET_DONE);
 			return -1;
 		}
 		if (test_bit(BT_PROBE_DO_WHOLE_CHIP_RESET, &bdev->flags)) {
 			clear_bit(BT_PROBE_DO_WHOLE_CHIP_RESET, &bdev->flags);
-			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+			atomic_set(&bdev->main_info.chip_reset, BTMTK_RESET_DONE);
 			return -1;
 		}
 
@@ -5243,8 +5233,8 @@ end:
 
 	}
 #endif
-
-	atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+	if (bdev)
+		atomic_set(&bdev->main_info.chip_reset, BTMTK_RESET_DONE);
 	return err;
 }
 
@@ -5288,8 +5278,7 @@ static void btusb_disconnect(struct usb_interface *intf)
 	}
 
 	btmtk_main_cif_disconnect_notify(bdev, HCI_USB);
-	btmtk_woble_uninitialize(&cif_dev->bt_woble);
-	btmtk_cif_free_memory(cif_dev);
+	btmtk_woble_uninitialize(bdev);
 
 }
 
@@ -5300,7 +5289,7 @@ static int btusb_suspend(struct usb_interface *intf, pm_message_t message)
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 #if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
 #else
-	struct btmtk_woble *bt_woble = &cif_dev->bt_woble;
+	struct st_woble *bt_woble = bdev->bt_woble;
 #endif
 	int ret = 0;
 
@@ -5346,7 +5335,7 @@ static int btusb_resume(struct usb_interface *intf)
 	struct hci_dev *hdev = bdev->hdev;
 #if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
 #else
-	struct btmtk_woble *bt_woble = &cif_dev->bt_woble;
+	struct st_woble *bt_woble = bdev->bt_woble;
 #endif
 	int err = 0;
 	unsigned int ifnum_base = intf->cur_altsetting->desc.bInterfaceNumber;
@@ -5447,6 +5436,128 @@ done:
 }
 #endif
 
+static int btmtk_usb_get_cif_info(struct btmtk_dev *bdev, char *str, u8 len)
+{
+	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
+
+	return snprintf(str, len, "usb bus:%d, port:%d", cif_dev->udev->bus->busnum, cif_dev->udev->portnum - 1);
+}
+
+static void btmtk_cif_hook_register(struct btmtk_dev *bdev)
+{
+	struct hif_hook_ptr hook;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("Error: bdev is NULL\n");
+		return;
+	}
+
+	BTMTK_INFO_DEV(bdev, "%s", __func__);
+
+	/* register system power off callback function. */
+	memset(&hook, 0, sizeof(struct hif_hook_ptr));
+	hook.open = btmtk_usb_open;
+	hook.close = btmtk_usb_close;
+	hook.reg_read = btmtk_usb_read_register;
+	hook.reg_write = btmtk_usb_write_register;
+	hook.send_cmd = btmtk_usb_send_cmd;
+	hook.send_and_recv = btmtk_usb_send_and_recv;
+	hook.event_filter = btmtk_usb_event_filter;
+	hook.subsys_reset = btmtk_usb_subsys_reset;
+	hook.whole_reset = btmtk_usb_toggle_rst_pin;
+	hook.chip_reset_notify = btmtk_usb_chip_reset_notify;
+	hook.cif_mutex_lock = btmtk_usb_cif_mutex_lock;
+	hook.cif_mutex_unlock = btmtk_usb_cif_mutex_unlock;
+	hook.dl_dma = btmtk_usb_load_fw_patch_using_dma;
+	hook.dump_debug_sop = btmtk_usb_dump_debug_sop;
+	hook.enter_standby = btmtk_usb_enter_standby;
+	hook.write_uhw_register = btmtk_cif_write_uhw_register;
+	hook.read_uhw_register = btmtk_cif_read_uhw_register;
+	hook.get_cif_info = btmtk_usb_get_cif_info;
+	btmtk_reg_hif_hook(bdev, &hook);
+}
+
+int btmtk_cif_register(void)
+{
+	int ret = 0;
+
+	ret = usb_register(&btusb_driver);
+	if (ret)
+		BTMTK_ERR("*** USB registration fail(%d)! ***", ret);
+	else
+		BTMTK_INFO("%s, usb registration success!", __func__);
+	return ret;
+}
+
+
+int btmtk_cif_deregister(void)
+{
+	BTMTK_INFO("%s", __func__);
+	usb_deregister(&btusb_driver);
+	BTMTK_INFO("%s: Done", __func__);
+	return 0;
+}
+
+static struct btmtk_usb_dev *btmtk_usb_cif_dev_init(struct btmtk_dev *bdev)
+{
+	struct btmtk_usb_dev *cif_dev = NULL;
+
+	BTMTK_INFO_DEV(bdev, "%s Begin", __func__);
+
+	cif_dev = kzalloc(sizeof(*cif_dev), GFP_KERNEL);
+	if (!cif_dev)
+		return NULL;
+
+	cif_dev->o_usb_buf = kzalloc(HCI_MAX_COMMAND_SIZE, GFP_KERNEL);
+	if (!cif_dev->o_usb_buf) {
+		BTMTK_ERR_DEV(bdev, "%s: alloc memory fail (bdev->o_usb_buf)", __func__);
+		goto err;
+	}
+
+	cif_dev->urb_intr_buf = kzalloc(URB_MAX_BUFFER_SIZE, GFP_KERNEL);
+	if (!cif_dev->urb_intr_buf) {
+		BTMTK_ERR_DEV(bdev, "%s: alloc memory fail (bdev->urb_intr_buf)", __func__);
+		goto err;
+	}
+
+	cif_dev->urb_bulk_buf = kzalloc(URB_MAX_BUFFER_SIZE, GFP_KERNEL);
+	if (!cif_dev->urb_bulk_buf) {
+		BTMTK_ERR_DEV(bdev, "%s: alloc memory fail (bdev->urb_bulk_buf)", __func__);
+		goto err;
+	}
+
+	cif_dev->urb_ble_isoc_buf = kzalloc(URB_MAX_BUFFER_SIZE, GFP_KERNEL);
+	if (!cif_dev->urb_ble_isoc_buf) {
+		BTMTK_ERR_DEV(bdev, "%s: alloc memory fail (bdev->urb_ble_isoc_buf)", __func__);
+		goto err;
+	}
+
+	mutex_init(&cif_dev->btmtk_usb_ops_mutex);
+	BTMTK_INFO_DEV(bdev, "%s End", __func__);
+	return cif_dev;
+
+err:
+	kfree(cif_dev->urb_bulk_buf);
+	kfree(cif_dev->urb_intr_buf);
+	kfree(cif_dev->o_usb_buf);
+	kfree(cif_dev);
+	return NULL;
+}
+
+static void btmtk_usb_cif_dev_deinit(struct btmtk_dev *bdev)
+{
+	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
+
+	mutex_destroy(&cif_dev->btmtk_usb_ops_mutex);
+	kfree(cif_dev->o_usb_buf);
+	kfree(cif_dev->urb_intr_buf);
+	kfree(cif_dev->urb_bulk_buf);
+	kfree(cif_dev->urb_ble_isoc_buf);
+	kfree(cif_dev);
+
+	BTMTK_INFO_DEV(bdev, "%s: End", __func__);
+}
+
 static int btmtk_cif_probe(struct usb_interface *intf,
 			   const struct usb_device_id *id)
 {
@@ -5460,8 +5571,6 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 	BTMTK_INFO("%s: MTK BT Driver Version : %s", __func__, VERSION);
 
 	DUMP_TIME_STAMP("probe_start");
-	btmtk_handle_mutex_lock(bdev);
-
 #ifdef CFG_SUPPORT_CHIP_RESET_KO
 	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_PROBE_START);
 #endif
@@ -5475,7 +5584,6 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 	/* interface numbers are hardcoded in the spec */
 	if (ifnum_base != BT0_MCU_INTERFACE_NUM &&
 		ifnum_base != BT1_MCU_INTERFACE_NUM) {
-		btmtk_handle_mutex_unlock(bdev);
 		return -ENODEV;
 	}
 
@@ -5483,11 +5591,12 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 	bdev = btmtk_get_dev();
 	if (!bdev) {
 		BTMTK_WARN("%s: bdev is NULL!", __func__);
-		btmtk_handle_mutex_unlock(bdev);
 		return -ENODEV;
 	}
+
+	MAIN_MUTEX_INIT(bdev);
+	btmtk_handle_mutex_lock(bdev);
 	usb_set_intfdata(intf, bdev);
-	bdev->cif_dev = &g_usb_dev[bdev->dongle_index][intf_to_idx[ifnum_base]];
 
 	/* Retrieve current HIF event state */
 	cif_event = HIF_EVENT_PROBE;
@@ -5504,7 +5613,16 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
 
 	/* Do HIF events */
-	ret = btusb_probe(intf, id);
+	bdev->cif_dev = btmtk_usb_cif_dev_init(bdev);
+	if (bdev->cif_dev == NULL) {
+		BTMTK_WARN_DEV(bdev, "%s: cif dev init failed!", __func__);
+		btmtk_handle_mutex_unlock(bdev);
+		ret = -ENODEV;
+	} else {
+		btmtk_cif_hook_register(bdev);
+		/* Do HIF events */
+		ret = btusb_probe(intf, id);
+	}
 
 	/* Set End/Error state */
 	if (ret == 0)
@@ -5584,6 +5702,7 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 	/* Do HIF events */
 	btusb_disconnect(intf);
 
+	btmtk_usb_cif_dev_deinit(bdev);
 #ifdef CFG_SUPPORT_CHIP_RESET_KO
 	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_REMOVE);
 #endif
@@ -5591,6 +5710,7 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 	/* Set End/Error state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
 	btmtk_handle_mutex_unlock(bdev);
+	MAIN_MUTEX_DESTROY(bdev);
 }
 
 #ifdef CONFIG_PM
@@ -5711,7 +5831,6 @@ static int btmtk_cif_resume(struct usb_interface *intf)
 static int btmtk_cif_reset_resume(struct usb_interface *intf)
 {
 	struct btmtk_dev *bdev = usb_get_intfdata(intf);
-
 	BTMTK_INFO_DEV(bdev, "%s: Call resume directly", __func__);
 	return btmtk_cif_resume(intf);
 }
@@ -5732,139 +5851,6 @@ static struct usb_driver btusb_driver = {
 	.supports_autosuspend = 1,
 	.disable_hub_initiated_lpm = 1,
 };
-
-int btmtk_cif_register(void)
-{
-	int retval = 0;
-	struct hif_hook_ptr hook;
-
-	BTMTK_INFO("%s", __func__);
-
-	/* register system power off callback function. */
-#if (CFG_GKI_SUPPORT == 0)
-	do {
-		typedef void (*func_ptr) (int (*f) (void));
-		char *func_name = "RegisterPdwncCallback";
-		func_ptr pFunc = (func_ptr) btmtk_kallsyms_lookup_name(func_name);
-
-		if (pFunc) {
-			BTMTK_INFO("%s: Register Pdwnc callback success.", __func__);
-			pFunc(&btmtk_usb_enter_standby);
-		} else
-			BTMTK_WARN("%s: No Exported Func Found [%s], just skip!", __func__, func_name);
-	} while (0);
-#endif
-	memset(&hook, 0, sizeof(struct hif_hook_ptr));
-	hook.open = btmtk_usb_open;
-	hook.close = btmtk_usb_close;
-	hook.reg_read = btmtk_usb_read_register;
-	hook.reg_write = btmtk_usb_write_register;
-	hook.send_cmd = btmtk_usb_send_cmd;
-	hook.send_and_recv = btmtk_usb_send_and_recv;
-	hook.event_filter = btmtk_usb_event_filter;
-	hook.subsys_reset = btmtk_usb_subsys_reset;
-	hook.whole_reset = btmtk_usb_toggle_rst_pin;
-	hook.chip_reset_notify = btmtk_usb_chip_reset_notify;
-	hook.cif_mutex_lock = btmtk_usb_cif_mutex_lock;
-	hook.cif_mutex_unlock = btmtk_usb_cif_mutex_unlock;
-	hook.dl_dma = btmtk_usb_load_fw_patch_using_dma;
-	hook.dump_debug_sop = btmtk_usb_dump_debug_sop;
-	hook.enter_standby = btmtk_usb_enter_standby;
-	hook.write_uhw_register = btmtk_cif_write_uhw_register;
-	hook.read_uhw_register = btmtk_cif_read_uhw_register;
-	btmtk_reg_hif_hook(&hook);
-
-	retval = usb_register(&btusb_driver);
-	if (retval)
-		BTMTK_ERR("*** USB registration fail(%d)! ***", retval);
-	else
-		BTMTK_INFO("%s, usb registration success!", __func__);
-	return retval;
-}
-
-int btmtk_cif_deregister(void)
-{
-	BTMTK_INFO("%s", __func__);
-	usb_deregister(&btusb_driver);
-	BTMTK_INFO("%s: Done", __func__);
-	return 0;
-}
-
-static int btmtk_cif_allocate_memory(struct btmtk_usb_dev *cif_dev)
-{
-	int err = -1;
-
-	BTMTK_INFO("%s Begin", __func__);
-
-	if (cif_dev->o_usb_buf == NULL) {
-		cif_dev->o_usb_buf = kzalloc(HCI_MAX_COMMAND_SIZE, GFP_KERNEL);
-		if (!cif_dev->o_usb_buf) {
-			BTMTK_ERR("%s: alloc memory fail (bdev->o_usb_buf)", __func__);
-			goto end;
-		}
-	}
-
-	if (cif_dev->urb_intr_buf == NULL) {
-		cif_dev->urb_intr_buf = kzalloc(URB_MAX_BUFFER_SIZE, GFP_KERNEL);
-		if (!cif_dev->urb_intr_buf) {
-			BTMTK_ERR("%s: alloc memory fail (bdev->urb_intr_buf)", __func__);
-			goto err2;
-		}
-	}
-	if (cif_dev->urb_bulk_buf == NULL) {
-		cif_dev->urb_bulk_buf = kzalloc(URB_MAX_BUFFER_SIZE, GFP_KERNEL);
-		if (!cif_dev->urb_bulk_buf) {
-			BTMTK_ERR("%s: alloc memory fail (bdev->urb_bulk_buf)", __func__);
-			goto err1;
-		}
-	}
-	if (cif_dev->urb_ble_isoc_buf == NULL) {
-		cif_dev->urb_ble_isoc_buf = kzalloc(URB_MAX_BUFFER_SIZE, GFP_KERNEL);
-		if (!cif_dev->urb_ble_isoc_buf) {
-			BTMTK_ERR("%s: alloc memory fail (bdev->urb_ble_isoc_buf)", __func__);
-			goto err0;
-		}
-	}
-
-	BTMTK_INFO("%s End", __func__);
-	return 0;
-
-err0:
-	kfree(cif_dev->urb_bulk_buf);
-	cif_dev->urb_bulk_buf = NULL;
-err1:
-	kfree(cif_dev->urb_intr_buf);
-	cif_dev->urb_intr_buf = NULL;
-err2:
-	kfree(cif_dev->o_usb_buf);
-	cif_dev->o_usb_buf = NULL;
-end:
-	return err;
-}
-
-static void btmtk_cif_free_memory(struct btmtk_usb_dev *cif_dev)
-{
-	if (!cif_dev) {
-		BTMTK_ERR("%s: bdev is NULL!", __func__);
-		return;
-	}
-
-	kfree(cif_dev->o_usb_buf);
-	cif_dev->o_usb_buf = NULL;
-
-	kfree(cif_dev->urb_intr_buf);
-	cif_dev->urb_intr_buf = NULL;
-
-	kfree(cif_dev->urb_bulk_buf);
-	cif_dev->urb_bulk_buf = NULL;
-
-	kfree(cif_dev->urb_ble_isoc_buf);
-	cif_dev->urb_ble_isoc_buf = NULL;
-
-	memset(cif_dev, 0, sizeof(struct btmtk_usb_dev));
-
-	BTMTK_INFO("%s: Success", __func__);
-}
 
 static int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 {
@@ -5992,7 +5978,6 @@ static int btmtk_usb_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 	if (ret < 0) {
 		*val = 0xffffffff;
 		BTMTK_ERR_DEV(bdev, "%s: error(%d), reg=%x, value=%x", __func__, ret, reg, *val);
-		btmtk_handle_mutex_unlock(bdev);
 		if (btmtk_get_chip_state(bdev) != BTMTK_STATE_FW_DUMP)
 			btmtk_reset_trigger(bdev);
 		return ret;
@@ -6001,7 +5986,6 @@ static int btmtk_usb_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 	memmove(val, bdev->io_buf, sizeof(u32));
 	*val = le32_to_cpu(*val);
 
-	btmtk_handle_mutex_unlock(bdev);
 	return 0;
 }
 
@@ -6014,11 +5998,9 @@ static int btmtk_usb_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 	u8 buf[4];
 	int state = 0;
 
-	btmtk_handle_mutex_lock(bdev);
 	state = btmtk_get_chip_state(bdev);
 	if (state == BTMTK_STATE_DISCONNECT) {
 		BTMTK_ERR_DEV(bdev, "%s: state is disconnect, return", __func__);
-		btmtk_handle_mutex_unlock(bdev);
 		return -1;
 	}
 
@@ -6052,11 +6034,9 @@ static int btmtk_usb_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 	if (ret < 0) {
 		val = 0xffffffff;
 		BTMTK_ERR_DEV(bdev, "%s: error(%d), reg=%x, value=%x", __func__, ret, reg, val);
-		btmtk_handle_mutex_unlock(bdev);
 		return ret;
 	}
 
-	btmtk_handle_mutex_unlock(bdev);
 	return 0;
 }
 
@@ -6349,18 +6329,18 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 				ret = -1;
 				goto exit;
 			}
-			event_compare_status = BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE;
-			memcpy(event_need_compare, event + 1, event_len - 1);
-			event_need_compare_len = event_len - 1;
+			bdev->event_compare_status = BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE;
+			memcpy(bdev->event_need_compare, event + 1, event_len - 1);
+			bdev->event_need_compare_len = event_len - 1;
 
 			start_time = jiffies;
 			/* check hci event /wmt event for SDIO/UART interface, check hci
 			 * event for USB interface
 			 */
 			BTMTK_INFO_DEV(bdev, "event_need_compare_len %d, event_compare_status %d",
-				event_need_compare_len, event_compare_status);
+				bdev->event_need_compare_len, bdev->event_compare_status);
 		} else {
-			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+			bdev->event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 		}
 
 		BTMTK_DBG_RAW(bdev, skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
@@ -6372,24 +6352,24 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 		}
 
 
-		if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
+		if (bdev->event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
 			ret = 0;
 		} else {
 			BTMTK_INFO_DEV(bdev, "%s: begin wait event interruptible", __func__);
-			wait_event_timeout(bdev->compare_event_wq, (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS),
+			wait_event_timeout(bdev->compare_event_wq,
+					(bdev->event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS),
 					msecs_to_jiffies(WOBLE_COMP_EVENT_TIMO));
-			if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
+			if (bdev->event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS)
 				ret = 0;
-			}
 		}
 
-		if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE) {
+		if (bdev->event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE) {
 			BTMTK_ERR_DEV(bdev, "%s wait expect event timeout!!", __func__);
 			ret = -ERRNUM;
 			goto fw_assert;
 		}
 
-		event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
+		bdev->event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
 	}
 	goto exit;
 fw_assert:
@@ -6415,8 +6395,8 @@ int btmtk_usb_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 	BTMTK_DBG_DEV(bdev, "%s enter", __func__);
 
-	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
-		skb->len >= event_need_compare_len) {
+	if (bdev->event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
+		skb->len >= bdev->event_need_compare_len) {
 		BTMTK_GET_CMD_OR_EVENT_DATA(bdev, READ_ADDRESS_EVT, read_address_event);
 		if (read_address_event.len < MTK_HCI_EVENT_HEAD_SIZE || read_address_event.len > HCI_MAX_FRAME_SIZE) {
 			BTMTK_INFO_RAW(bdev, read_address_event.content, read_address_event.len,
@@ -6428,10 +6408,10 @@ int btmtk_usb_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			memcpy(bdev->bdaddr, &skb->data[READ_ADDRESS_EVT_PAYLOAD_OFFSET - 1], BD_ADDRESS_SIZE);
 			BTMTK_INFO_DEV(bdev, "%s: GET BDADDR = "MACSTR, __func__, MAC2STR(bdev->bdaddr));
 
-			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+			bdev->event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 			wake_up(&bdev->compare_event_wq);
-		} else if (memcmp(skb->data, event_need_compare,
-					event_need_compare_len) == 0) {
+		} else if (memcmp(skb->data, bdev->event_need_compare,
+					bdev->event_need_compare_len) == 0) {
 			/* if it is wobx debug event, just print in kernel log, drop it
 			 * by driver, don't send to stack
 			 */
@@ -6444,14 +6424,14 @@ int btmtk_usb_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			bdev->io_buf[0] = bt_cb(skb)->pkt_type;
 			memcpy(&bdev->io_buf[1], skb->data, skb->len);
 
-			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+			bdev->event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 			wake_up(&bdev->compare_event_wq);
 			BTMTK_INFO_DEV(bdev, "%s, compare success", __func__);
 		} else {
 			if (skb->data[0] != BLE_EVT_TYPE) {
 				/* Don't care BLE event */
 				BTMTK_INFO_DEV(bdev, "%s compare fail", __func__);
-				BTMTK_INFO_RAW(bdev, event_need_compare, event_need_compare_len,
+				BTMTK_INFO_RAW(bdev, bdev->event_need_compare, bdev->event_need_compare_len,
 					"%s: event_need_compare:", __func__);
 				BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: skb->data:", __func__);
 			}

@@ -424,7 +424,7 @@ int btmtk_load_chip_data_item(struct btmtk_dev *bdev, struct bt_cmds_s *raw_cmds
 			search_result = strstr(search_result, "0x");
 
 			BTMTK_INFO_DEV(bdev, "%s: search is %zu", __func__, strlen(search));
-			BTMTK_INFO_DEV(bdev, "%s: len is %ld", __func__, (search_result - search_end));
+			BTMTK_INFO_DEV(bdev, "%s: len is %d", __func__, (int)(search_result - search_end));
 			if (search_result == NULL ||
 					(search_result - search_end) != strlen(search)) {
 				BTMTK_ERR_DEV(bdev, "%s: search_result is NULL", __func__);
@@ -639,7 +639,6 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 	int ret = 0;
 	/* parsing commands */
 	struct data_struct reset_cmd = {0}, fw_coredump_cmd = {0};
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	BTMTK_DBG_DEV(bdev, "%s enter", __func__);
 
@@ -649,7 +648,7 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 	/* +1 byte for not include pkt_type */
 	btmtk_dispatch_fwlog_bluetooth_kpi(bdev, skb->data + 1, skb->len - 1, hci_skb_pkt_type(skb));
 
-	if (memcmp(skb->data, bmain_info->read_iso_packet_size_cmd,
+	if (memcmp(skb->data, bdev->main_info.read_iso_packet_size_cmd,
 			READ_ISO_PACKET_SIZE_CMD_HDR_LEN) == 0) {
 		bdev->iso_threshold = skb->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN] +
 					(skb->data[READ_ISO_PACKET_SIZE_CMD_HDR_LEN + 1]  << 8);
@@ -672,7 +671,7 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 		if (skb->len == FD5B_ASSERT_CMD_LEN &&
 			!memcmp(skb->data, fw_coredump_cmd.content, fw_coredump_cmd.len)) {
 			BTMTK_INFO_DEV(bdev, "%s: Dongle FW Assert Triggered by BT Stack!", __func__);
-			btmtk_assert_wake_lock();
+			btmtk_assert_wake_lock(bdev);
 			*fw_dump = 1;
 			btmtk_reset_timer_update(bdev);
 			btmtk_hci_snoop_print_to_log(bdev);
@@ -683,8 +682,8 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 						strlen("[BT_DRV assert] host trigger") + 1);
 				BTMTK_ERR_DEV(bdev, "%s: [assert_reason] %s", __func__, bdev->assert_reason);
 			}
-			if(bmain_info->hif_hook.trigger_assert) {
-				bmain_info->hif_hook.trigger_assert(bdev);
+			if (bdev->main_info.hif_hook.trigger_assert) {
+				bdev->main_info.hif_hook.trigger_assert(bdev);
 				/* return 1 means data already handled */
 				return 1;
 			}
@@ -698,7 +697,7 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 				BTMTK_INFO_DEV(bdev, "%s: got command: 0x03 0x0C 0x00 (HCI_RESET)", __func__);
 
 				do {
-					ret = bmain_info->hif_hook.send_and_recv(bdev, skb, skb->data, 3,
+					ret = bdev->main_info.hif_hook.send_and_recv(bdev, skb, skb->data, 3,
 							DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST, CMD_NEED_FILTER);
 				} while (ret == -EAGAIN && drv_own_retry--);
 
@@ -755,9 +754,8 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 int btmtk_cif_check_power_status_common(struct btmtk_dev *bdev, const uint8_t *cmd, int pkt_type)
 {
 	int ret = 0;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	if (memcmp(cmd, bmain_info->wmt_over_hci_header, WMT_OVER_HCI_HEADER_SIZE) &&
+	if (memcmp(cmd, bdev->main_info.wmt_over_hci_header, WMT_OVER_HCI_HEADER_SIZE) &&
 			pkt_type == BTMTK_TX_PKT_FROM_HOST &&
 			bdev->power_state != BTMTK_DONGLE_STATE_POWER_ON) {
 		BTMTK_WARN_DEV(bdev, "%s: chip power isn't on, ignore this command, state is %d",
@@ -862,20 +860,19 @@ exit:
 static int btmtk_get_fw_info_common(struct btmtk_dev *bdev)
 {
 	int ret = 0;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return -1;
 	}
 
-	ret = bmain_info->hif_hook.reg_read(bdev, FLAVOR, &bdev->flavor);
+	ret = bdev->main_info.hif_hook.reg_read(bdev, FLAVOR, &bdev->flavor);
 	if (ret < 0) {
 		BTMTK_ERR_DEV(bdev, "read flavor id failed");
 		ret = -EIO;
 		return ret;
 	}
-	ret = bmain_info->hif_hook.reg_read(bdev, FW_VERSION, &bdev->fw_version);
+	ret = bdev->main_info.hif_hook.reg_read(bdev, FW_VERSION, &bdev->fw_version);
 	if (ret < 0) {
 		BTMTK_ERR_DEV(bdev, "read fw version failed");
 		ret = -EIO;
@@ -922,12 +919,17 @@ int btmtk_sdio_read_conn_infra_pc_common(void *func, u32 *val)
 #endif
 #endif
 
-int btmtk_cif_chip_common_register(void)
+int btmtk_cif_chip_common_register(struct btmtk_dev *bdev)
 {
 	int retval = 0;
 	struct hif_hook_chip_ptr hook_chip;
 
-	BTMTK_INFO("%s", __func__);
+	if (bdev == NULL) {
+		BTMTK_ERR("Error: bdev is NULL\n");
+		return -1;
+	}
+
+	BTMTK_INFO_DEV(bdev, "%s", __func__);
 
 	memset(&hook_chip, 0, sizeof(hook_chip));
 	hook_chip.get_fw_info = btmtk_get_fw_info_common;
@@ -948,7 +950,7 @@ int btmtk_cif_chip_common_register(void)
 	hook_chip.support_woble = 1;
 	hook_chip.patched = 0;
 
-	btmtk_reg_hif_chip_hook(&hook_chip);
+	btmtk_reg_hif_chip_hook(bdev, &hook_chip);
 
 	return retval;
 }
@@ -960,13 +962,13 @@ int btmtk_cif_chip_register(struct btmtk_dev *bdev)
 
 	switch (chip_id) {
 	case 0x7922:
-		btmtk_cif_chip_7922_register();
+		btmtk_cif_chip_7922_register(bdev);
 		break;
 	case 0x7902:
-		btmtk_cif_chip_7902_register();
+		btmtk_cif_chip_7902_register(bdev);
 		break;
 	case 0x7961:
-		btmtk_cif_chip_7961_register();
+		btmtk_cif_chip_7961_register(bdev);
 		break;
 	case 0x6639:
 		(void)snprintf(bdev->chip_data_file_name, MAX_BIN_FILE_NAME_LEN, "bt_mt%x_data.bin",
@@ -977,7 +979,7 @@ int btmtk_cif_chip_register(struct btmtk_dev *bdev)
 			goto register_end;
 		}
 
-		btmtk_cif_chip_6639_register();
+		btmtk_cif_chip_6639_register(bdev);
 		break;
 	case 0x7925:
 		(void)snprintf(bdev->chip_data_file_name, MAX_BIN_FILE_NAME_LEN, "bt_mt%x_data.bin",
@@ -991,7 +993,7 @@ int btmtk_cif_chip_register(struct btmtk_dev *bdev)
 		break;
 	case 0x6631:
 	case 0x6635:
-		btmtk_cif_chip_66xx_register();
+		btmtk_cif_chip_66xx_register(bdev);
 		break;
 	case 0x7663:
 		(void)snprintf(bdev->chip_data_file_name, MAX_BIN_FILE_NAME_LEN, "bt_mt%x_data.bin",
@@ -1002,7 +1004,7 @@ int btmtk_cif_chip_register(struct btmtk_dev *bdev)
 			goto register_end;
 		}
 
-		btmtk_cif_chip_7663_register();
+		btmtk_cif_chip_7663_register(bdev);
 		break;
 	default:
 		BTMTK_ERR_DEV(bdev, "Unknown Mediatek device(%04X)", bdev->chip_id);

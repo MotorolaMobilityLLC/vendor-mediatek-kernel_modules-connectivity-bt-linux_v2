@@ -5,24 +5,31 @@
 
 #include <linux/device.h>
 #include <linux/pm_wakeup.h>
+#include "include/btmtk_main.h"
 
 #include "btmtk_chip_reset.h"
 
 static void btmtk_reset_wake_lock(struct btmtk_dev *bdev)
 {
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	if (bdev == NULL) {
+		BTMTK_ERR("Error: bdev is NULL\n");
+		return;
+	}
 
 	BTMTK_INFO_DEV(bdev, "%s: enter", __func__);
-	__pm_stay_awake(bmain_info->chip_reset_ws);
+	__pm_stay_awake(bdev->main_info.chip_reset_ws);
 	BTMTK_INFO_DEV(bdev, "%s: exit", __func__);
 }
 
 static void btmtk_reset_wake_unlock(struct btmtk_dev *bdev)
 {
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	if (bdev == NULL) {
+		BTMTK_ERR("Error: bdev is NULL\n");
+		return;
+	}
 
 	BTMTK_INFO_DEV(bdev, "%s: enter", __func__);
-	__pm_relax(bmain_info->chip_reset_ws);
+	__pm_relax(bdev->main_info.chip_reset_ws);
 	BTMTK_INFO_DEV(bdev, "%s: exit", __func__);
 }
 
@@ -88,10 +95,10 @@ bool btmtk_reset_timer_check(struct btmtk_dev *bdev)
 void btmtk_reset_waker(struct work_struct *work)
 {
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, reset_waker);
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	int state = 0;
 	int err = 0;
 	int cur = 0;
+	int subsys_reset_flag = 0;
 #if (USE_DEVICE_NODE == 0)
 	int set_chip_state_flag = 0;
 	int cif_event = 0;
@@ -120,7 +127,7 @@ void btmtk_reset_waker(struct work_struct *work)
 
 	if (state == BTMTK_STATE_PROBE) {
 		if (!test_bit(BT_PROBE_FAIL_FOR_SUBSYS_RESET, &bdev->flags)) {
-			bmain_info->chip_reset_flag = 1;
+			bdev->main_info.chip_reset_flag = 1;
 			BTMTK_INFO_DEV(bdev, "%s just do whole chip reset in probe stage!", __func__);
 		}
 	}
@@ -134,29 +141,29 @@ void btmtk_reset_waker(struct work_struct *work)
 #endif
 
 	if (is_mt7663(bdev->chip_id)) {
-		bmain_info->chip_reset_flag = 1;
+		bdev->main_info.chip_reset_flag = 1;
 		BTMTK_WARN_DEV(bdev, "%s: 7663 not support L0.5 reset, do whole chip reset", __func__);
 	}
 
 	btmtk_reset_timer_del(bdev);
 
-	if (atomic_read(&bmain_info->chip_reset) ||
-		atomic_read(&bmain_info->subsys_reset)) {
+	if (atomic_read(&bdev->main_info.chip_reset) ||
+		atomic_read(&bdev->main_info.subsys_reset)) {
 		BTMTK_INFO_DEV(bdev, "%s return, chip_reset = %d, subsys_reset = %d!", __func__,
-			atomic_read(&bmain_info->chip_reset), atomic_read(&bmain_info->subsys_reset));
+			atomic_read(&bdev->main_info.chip_reset), atomic_read(&bdev->main_info.subsys_reset));
 		goto Finish;
 	}
 
 #if (USE_DEVICE_NODE == 0)
-	if (bmain_info->hif_hook.dump_debug_sop)
-		bmain_info->hif_hook.dump_debug_sop(bdev);
+	if (bdev->main_info.hif_hook.dump_debug_sop)
+		bdev->main_info.hif_hook.dump_debug_sop(bdev);
 
 #ifdef CFG_SUPPORT_CHIP_RESET_KO
 	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_L0_RESET_READY);
 #endif
 	if (!bdev->bt_cfg.support_dongle_subsys_reset) {
 		BTMTK_WARN_DEV(bdev, "%s subsys reset is not support", __func__);
-		bmain_info->chip_reset_flag = 1;
+		bdev->main_info.chip_reset_flag = 1;
 	}
 
 	DUMP_TIME_STAMP("chip_reset_start");
@@ -180,15 +187,15 @@ void btmtk_reset_waker(struct work_struct *work)
 #endif
 
 	BTMTK_INFO_DEV(bdev, "%s: Receive WDT interrupt subsys_reset_state[%d] chip_reset_flag[%d]", __func__,
-					atomic_read(&bmain_info->subsys_reset), bmain_info->chip_reset_flag);
+					atomic_read(&bdev->main_info.subsys_reset), bdev->main_info.chip_reset_flag);
 	/* read interrupt EP15 CR */
 
 	bdev->sco_num = 0;
 
-	if (bmain_info->chip_reset_flag == 0 &&
-			atomic_read(&bmain_info->subsys_reset_conti_count) < BTMTK_MAX_SUBSYS_RESET_COUNT) {
-		if (bmain_info->hif_hook.subsys_reset) {
-			cur = atomic_cmpxchg(&bmain_info->subsys_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
+	if (bdev->main_info.chip_reset_flag == 0 &&
+			atomic_read(&bdev->main_info.subsys_reset_conti_count) < BTMTK_MAX_SUBSYS_RESET_COUNT) {
+		if (bdev->main_info.hif_hook.subsys_reset) {
+			cur = atomic_cmpxchg(&bdev->main_info.subsys_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
 			if (cur == BTMTK_RESET_DOING) {
 				BTMTK_INFO_DEV(bdev, "%s: subsys reset in progress, return", __func__);
 				err = 0;
@@ -200,8 +207,8 @@ void btmtk_reset_waker(struct work_struct *work)
 			 * Nothing is remain on memory after BT off, so leave do this at BT on
 			 * for SP platform
 			 */
-			err = bmain_info->hif_hook.subsys_reset(bdev);
-			atomic_set(&bmain_info->subsys_reset, BTMTK_RESET_DONE);
+			err = bdev->main_info.hif_hook.subsys_reset(bdev);
+			atomic_set(&bdev->main_info.subsys_reset, BTMTK_RESET_DONE);
 			if (err < 0) {
 				if (err == -ENODEV) {
 					BTMTK_INFO_DEV(bdev, "%s, usb disconnect, no more chip reset", __func__);
@@ -210,12 +217,12 @@ void btmtk_reset_waker(struct work_struct *work)
 				BTMTK_INFO_DEV(bdev, "subsys reset failed, do whole chip reset!");
 				goto L0RESET;
 			}
-			atomic_inc(&bmain_info->subsys_reset_count);
-			atomic_inc(&bmain_info->subsys_reset_conti_count);
+			atomic_inc(&bdev->main_info.subsys_reset_count);
+			atomic_inc(&bdev->main_info.subsys_reset_conti_count);
 			DUMP_TIME_STAMP("subsys_chip_reset_end");
 
 			if (!test_bit(BT_PROBE_FAIL_FOR_SUBSYS_RESET, &bdev->flags)) {
-				bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
+				bdev->main_info.reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 			}
 #if (USE_DEVICE_NODE == 1) || !defined(CHIP_IF_UART_TTY)
 			err = btmtk_cap_init(bdev);
@@ -231,11 +238,11 @@ void btmtk_reset_waker(struct work_struct *work)
 			}
 #endif
 #endif
-			(void)btmtk_send_hw_err_to_host(bdev);
 			btmtk_woble_wake_unlock(bdev);
-			btmtk_assert_wake_unlock();
-			if (bmain_info->hif_hook.chip_reset_notify)
-				bmain_info->hif_hook.chip_reset_notify(bdev);
+			btmtk_assert_wake_unlock(bdev);
+			if (bdev->main_info.hif_hook.chip_reset_notify)
+				bdev->main_info.hif_hook.chip_reset_notify(bdev);
+			subsys_reset_flag = 1;
 		} else {
 			err = -1;
 			BTMTK_INFO_DEV(bdev, "%s: Not support subsys chip reset", __func__);
@@ -245,14 +252,13 @@ void btmtk_reset_waker(struct work_struct *work)
 		err = -1;
 		BTMTK_INFO_DEV(bdev, "%s: chip_reset_flag[%d], subsys_reset_count[%d], whole_reset_count[%d]",
 			__func__,
-			bmain_info->chip_reset_flag,
-			atomic_read(&bmain_info->subsys_reset_conti_count),
-			atomic_read(&bmain_info->whole_reset_count));
+			bdev->main_info.chip_reset_flag,
+			atomic_read(&bdev->main_info.subsys_reset_conti_count),
+			atomic_read(&bdev->main_info.whole_reset_count));
 	}
 
 	if (err < 0 && test_bit(BT_WOBLE_FAIL_FOR_SUBSYS_RESET, &bdev->flags)) {
-		BTMTK_WARN_DEV(bdev, "%s: L0.5 fail when Woble fail, L0 may have an impact on wifi, skip L0, return",
-					__func__);
+		BTMTK_WARN_DEV(bdev, "%s: L0.5 fail when Woble fail, skip L0, return", __func__);
 		goto Finish;
 	}
 
@@ -267,10 +273,11 @@ L0RESET:
 		 */
 		/* msleep(2000); */
 #if (USE_DEVICE_NODE == 0)
-		if (bdev->bt_cfg.support_dongle_whole_reset) {
+		if (bdev->bt_cfg.support_dongle_whole_reset
+				&& DONGLE_FILE_IS_VALID(bdev, bdev->bt_cfg.bt_cfg_file_idx)) {
 #endif
-			if (bmain_info->hif_hook.whole_reset) {
-				cur = atomic_cmpxchg(&bmain_info->chip_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
+			if (bdev->main_info.hif_hook.whole_reset) {
+				cur = atomic_cmpxchg(&bdev->main_info.chip_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
 				if (cur == BTMTK_RESET_DOING) {
 					err = 0;
 					BTMTK_INFO_DEV(bdev, "%s: have chip_reset in progress, return", __func__);
@@ -279,19 +286,19 @@ L0RESET:
 #ifdef CFG_SUPPORT_CHIP_RESET_KO
 				DUMP_TIME_STAMP("Send reset message to reset ko");
 				send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_TRIGGER_RESET);
-				atomic_inc(&bmain_info->whole_reset_count);
+				atomic_inc(&bdev->main_info.whole_reset_count);
 #else
 				DUMP_TIME_STAMP("whole_chip_reset_start");
-				err = bmain_info->hif_hook.whole_reset(bdev);
-				atomic_inc(&bmain_info->whole_reset_count);
+				err = bdev->main_info.hif_hook.whole_reset(bdev);
+				atomic_inc(&bdev->main_info.whole_reset_count);
 				/* trigger whole chip reset every three subsys resets*/
-				atomic_set(&bmain_info->subsys_reset_conti_count, 0);
+				atomic_set(&bdev->main_info.subsys_reset_conti_count, 0);
 				DUMP_TIME_STAMP("whole_chip_reset_end");
 #endif
 			} else {
-				BTMTK_INFO_DEV(bdev, "%s: Not support whole chip reset, reset reset_conti_count to 0",
-							 __func__);
-				atomic_set(&bmain_info->subsys_reset_conti_count, 0);
+				BTMTK_INFO_DEV(bdev, "%s: Not support whole chip reset, reset_conti_count to 0",
+						__func__);
+				atomic_set(&bdev->main_info.subsys_reset_conti_count, 0);
 #if (USE_DEVICE_NODE == 1)
 				btmtk_send_hw_err_to_host(bdev);
 #endif
@@ -305,7 +312,7 @@ L0RESET:
 
 Finish:
 #if (USE_DEVICE_NODE == 0)
-	bmain_info->chip_reset_flag = 0;
+	bdev->main_info.chip_reset_flag = 0;
 	/* Set End/Error state */
 	if (set_chip_state_flag) {
 		if (err < 0)
@@ -314,6 +321,11 @@ Finish:
 			btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
 	}
 #endif
+	/* HW ERR event must be sent to host for L0.5 after set chip state.
+	 * Otherwise bt close maybe return directly because the chip state is not working
+	 */
+	if (subsys_reset_flag == 1)
+		btmtk_send_hw_err_to_host(bdev);
 
 	if (test_bit(BT_WOBLE_FAIL_FOR_SUBSYS_RESET, &bdev->flags)) {
 		set_bit(BT_WOBLE_RESET_DONE, &bdev->flags);
@@ -345,12 +357,11 @@ Finish:
 
 void btmtk_reset_trigger(struct btmtk_dev *bdev)
 {
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	if (atomic_read(&bmain_info->chip_reset) ||
-		atomic_read(&bmain_info->subsys_reset)) {
+	if (atomic_read(&bdev->main_info.chip_reset) ||
+		atomic_read(&bdev->main_info.subsys_reset)) {
 		BTMTK_INFO_DEV(bdev, "%s return, chip_reset = %d, subsys_reset = %d!", __func__,
-			atomic_read(&bmain_info->chip_reset), atomic_read(&bmain_info->subsys_reset));
+			atomic_read(&bdev->main_info.chip_reset), atomic_read(&bdev->main_info.subsys_reset));
 		return;
 	}
 

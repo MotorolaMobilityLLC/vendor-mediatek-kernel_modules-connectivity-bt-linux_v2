@@ -9,20 +9,19 @@
 static int btmtk_get_fw_info(struct btmtk_dev *bdev)
 {
 	int ret = 0;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return -1;
 	}
 
-	ret = bmain_info->hif_hook.reg_read(bdev, FLAVOR, &bdev->flavor);
+	ret = bdev->main_info.hif_hook.reg_read(bdev, FLAVOR, &bdev->flavor);
 	if (ret < 0) {
 		BTMTK_ERR_DEV(bdev, "read flavor id failed");
 		ret = -EIO;
 		return ret;
 	}
-	ret = bmain_info->hif_hook.reg_read(bdev, FW_VERSION, &bdev->fw_version);
+	ret = bdev->main_info.hif_hook.reg_read(bdev, FW_VERSION, &bdev->fw_version);
 	if (ret < 0) {
 		BTMTK_ERR_DEV(bdev, "read fw version failed");
 		ret = -EIO;
@@ -200,7 +199,6 @@ static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 	int retry = 20;
 	unsigned int rom_patch_len = 0;
 	char *tmp_str;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -212,7 +210,7 @@ static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 	(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 			"mt7663_patch_e2_hdr.bin");
 
-	btmtk_load_code_from_bin(&rom_patch, bdev->rom_patch_bin_file_name, NULL,
+	btmtk_load_code_from_bin(bdev, &rom_patch, bdev->rom_patch_bin_file_name, NULL,
 							&rom_patch_len, 10);
 	if (!rom_patch) {
 		BTMTK_ERR_DEV(bdev, "%s: please assign a rom patch(/etc/firmware/%s)or(/lib/firmware/%s)",
@@ -221,7 +219,7 @@ static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 		goto err;
 	}
 
-	memcpy(bmain_info->fw_version_str, rom_patch, 14);
+	memcpy(bdev->main_info.fw_version_str, rom_patch, 14);
 	pos = kmalloc(UPLOAD_PATCH_UNIT, GFP_ATOMIC);
 	if (!pos) {
 		BTMTK_ERR_DEV(bdev, "%s: alloc memory failed", __func__);
@@ -294,17 +292,21 @@ err:
 }
 
 
-int btmtk_cif_chip_7663_register(void)
+int btmtk_cif_chip_7663_register(struct btmtk_dev *bdev)
 {
 	int retval = 0;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	BTMTK_INFO("%s", __func__);
+	if (bdev == NULL) {
+		BTMTK_ERR("Error: bdev is NULL\n");
+		return -1;
+	}
 
-	bmain_info->hif_hook_chip.get_fw_info  = btmtk_get_fw_info;
-	bmain_info->hif_hook_chip.bt_subsys_reset = NULL;
-	bmain_info->hif_hook_chip.load_patch = btmtk_load_fw_patch;
-	bmain_info->hif_hook_chip.bt_set_pinmux = NULL;
+	BTMTK_INFO_DEV(bdev, "%s", __func__);
+
+	bdev->main_info.hif_hook_chip.get_fw_info  = btmtk_get_fw_info;
+	bdev->main_info.hif_hook_chip.bt_subsys_reset = NULL;
+	bdev->main_info.hif_hook_chip.load_patch = btmtk_load_fw_patch;
+	bdev->main_info.hif_hook_chip.bt_set_pinmux = NULL;
 
 	return retval;
 }

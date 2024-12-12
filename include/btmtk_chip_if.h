@@ -10,8 +10,10 @@
 #include "btmtk_usb.h"
 #elif defined(CHIP_IF_SDIO)
 #include "btmtk_sdio.h"
-#elif defined(CHIP_IF_UART)
-#include "btmtk_uart.h"
+#elif defined(CHIP_IF_UART_TTY)
+#include "btmtk_uart_tty.h"
+#elif defined(CHIP_IF_UART_SERDEV)
+#include "btmtk_uart_serdev.h"
 #elif defined(CHIP_IF_BTIF)
 #include "btmtk_btif.h"
 #endif

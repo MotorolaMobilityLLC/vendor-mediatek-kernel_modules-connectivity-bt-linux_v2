@@ -11,8 +11,8 @@
 
 #define ZB_ENABLE	0x7C00114C
 
-#define BT_BACKDOOR_RET_7902 0x74013EC8
+#define BT_BDR_RET_7902 0x74013EC8
 
-int btmtk_cif_chip_7902_register(void);
+int btmtk_cif_chip_7902_register(struct btmtk_dev *bdev);
 
 #endif /* __BTMTK_CHIP_7902_H__ */

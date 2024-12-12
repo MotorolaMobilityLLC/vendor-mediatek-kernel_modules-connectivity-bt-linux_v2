@@ -9,20 +9,19 @@
 static int btmtk_get_fw_info_7961(struct btmtk_dev *bdev)
 {
 	int ret = 0;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return -1;
 	}
 
-	ret = bmain_info->hif_hook.reg_read(bdev, FLAVOR, &bdev->flavor);
+	ret = bdev->main_info.hif_hook.reg_read(bdev, FLAVOR, &bdev->flavor);
 	if (ret < 0) {
 		BTMTK_ERR_DEV(bdev, "read flavor id failed");
 		ret = -EIO;
 		return ret;
 	}
-	ret = bmain_info->hif_hook.reg_read(bdev, FW_VERSION, &bdev->fw_version);
+	ret = bdev->main_info.hif_hook.reg_read(bdev, FW_VERSION, &bdev->fw_version);
 	if (ret < 0) {
 		BTMTK_ERR_DEV(bdev, "read fw version failed");
 		ret = -EIO;
@@ -164,7 +163,6 @@ static int btmtk_subsys_reset(struct btmtk_dev *bdev)
 {
 	int val = 0, retry = 10;
 	u32 mcu_init_done = MCU_BT0_INIT_DONE;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -172,49 +170,49 @@ static int btmtk_subsys_reset(struct btmtk_dev *bdev)
 	}
 
 	/* For reset */
-	bmain_info->hif_hook.write_uhw_register(bdev, BT_EP_RST_OPT, EP_RST_IN_OUT_OPT);
+	bdev->main_info.hif_hook.write_uhw_register(bdev, BT_EP_RST_OPT, EP_RST_IN_OUT_OPT);
 
 	/* Write Reset CR to 1 */
-	bmain_info->hif_hook.read_uhw_register(bdev, BT_SUBSYS_RST, &val);
+	bdev->main_info.hif_hook.read_uhw_register(bdev, BT_SUBSYS_RST, &val);
 	BTMTK_INFO_DEV(bdev, "%s: read Reset CR : 0x%08x", __func__, val);
 	val |= (1 << 0);
 	BTMTK_INFO_DEV(bdev, "%s: write 1 to Reset CR : 0x%08x", __func__, val);
-	bmain_info->hif_hook.write_uhw_register(bdev, BT_SUBSYS_RST, val);
+	bdev->main_info.hif_hook.write_uhw_register(bdev, BT_SUBSYS_RST, val);
 
-	bmain_info->hif_hook.write_uhw_register(bdev, UDMA_INT_STA_BT, 0x000000FF);
-	bmain_info->hif_hook.read_uhw_register(bdev, UDMA_INT_STA_BT, &val);
-	bmain_info->hif_hook.write_uhw_register(bdev, UDMA_INT_STA_BT1, 0x000000FF);
-	bmain_info->hif_hook.read_uhw_register(bdev, UDMA_INT_STA_BT1, &val);
+	bdev->main_info.hif_hook.write_uhw_register(bdev, UDMA_INT_STA_BT, 0x000000FF);
+	bdev->main_info.hif_hook.read_uhw_register(bdev, UDMA_INT_STA_BT, &val);
+	bdev->main_info.hif_hook.write_uhw_register(bdev, UDMA_INT_STA_BT1, 0x000000FF);
+	bdev->main_info.hif_hook.read_uhw_register(bdev, UDMA_INT_STA_BT1, &val);
 
-	bmain_info->hif_hook.read_uhw_register(bdev, BT_BACKDOOR_RET_7961, &val);
+	bdev->main_info.hif_hook.read_uhw_register(bdev, BT_BDR_RET_7961, &val);
 	BTMTK_INFO_DEV(bdev, "%s: read 1 BT_BDR_RET_7961 CR : 0x%08x", __func__, val);
 	val |= 0x30000;
 	BTMTK_INFO_DEV(bdev, "%s: write 1 BT_BDR_RET_7961 CR : 0x%08x", __func__, val);
-	bmain_info->hif_hook.write_uhw_register(bdev, BT_BACKDOOR_RET_7961,val);
+	bdev->main_info.hif_hook.write_uhw_register(bdev, BT_BDR_RET_7961, val);
 
 	msleep(20);
-	bmain_info->hif_hook.read_uhw_register(bdev, BT_BACKDOOR_RET_7961, &val);
+	bdev->main_info.hif_hook.read_uhw_register(bdev, BT_BDR_RET_7961, &val);
 	BTMTK_INFO_DEV(bdev, "%s: read 2 BT_BDR_RET_7961 CR : 0x%08x", __func__, val);
 	val &= 0xFFFCFFFF;
 	BTMTK_INFO_DEV(bdev, "%s: write 2 BT_BDR_RET_7961 CR : 0x%08x", __func__, val);
-	bmain_info->hif_hook.write_uhw_register(bdev, BT_BACKDOOR_RET_7961,val);
+	bdev->main_info.hif_hook.write_uhw_register(bdev, BT_BDR_RET_7961, val);
 
 	/* Write Reset CR to 0 */
-	bmain_info->hif_hook.read_uhw_register(bdev, BT_SUBSYS_RST, &val);
+	bdev->main_info.hif_hook.read_uhw_register(bdev, BT_SUBSYS_RST, &val);
 	BTMTK_INFO_DEV(bdev, "%s: read Reset CR : 0x%08x", __func__, val);
 	val &= ~(1 << 0);
 	BTMTK_INFO_DEV(bdev, "%s: write 1 to Reset CR : 0x%08x", __func__, val);
-	bmain_info->hif_hook.write_uhw_register(bdev, BT_SUBSYS_RST, val);
+	bdev->main_info.hif_hook.write_uhw_register(bdev, BT_SUBSYS_RST, val);
 
 	/* Read Reset CR */
-	bmain_info->hif_hook.read_uhw_register(bdev, BT_SUBSYS_RST, &val);
+	bdev->main_info.hif_hook.read_uhw_register(bdev, BT_SUBSYS_RST, &val);
 
 	if (bdev->dualBT)
 		mcu_init_done |= MCU_BT1_INIT_DONE;
 
 	do {
 		/* polling re-init CR */
-		bmain_info->hif_hook.read_uhw_register(bdev, BT_MISC, &val);
+		bdev->main_info.hif_hook.read_uhw_register(bdev, BT_MISC, &val);
 		BTMTK_INFO_DEV(bdev, "%s: reg=%x, value=0x%08x", __func__, BT_MISC, val);
 		if (val == 0xffffffff) {
 			/* read init CR failed */
@@ -237,17 +235,21 @@ Finish:
 }
 
 
-int btmtk_cif_chip_7961_register(void)
+int btmtk_cif_chip_7961_register(struct btmtk_dev *bdev)
 {
 	int retval = 0;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	BTMTK_INFO("%s", __func__);
+	if (bdev == NULL) {
+		BTMTK_ERR("Error: bdev is NULL\n");
+		return -1;
+	}
 
-	bmain_info->hif_hook_chip.bt_set_pinmux = btmtk_set_audio_pin_mux_7961;
-	bmain_info->hif_hook_chip.get_fw_info = btmtk_get_fw_info_7961;
-	bmain_info->hif_hook_chip.patched = 1;
-	bmain_info->hif_hook_chip.bt_subsys_reset = btmtk_subsys_reset;
+	BTMTK_INFO_DEV(bdev, "%s", __func__);
+
+	bdev->main_info.hif_hook_chip.bt_set_pinmux = btmtk_set_audio_pin_mux_7961;
+	bdev->main_info.hif_hook_chip.get_fw_info = btmtk_get_fw_info_7961;
+	bdev->main_info.hif_hook_chip.patched = 1;
+	bdev->main_info.hif_hook_chip.bt_subsys_reset = btmtk_subsys_reset;
 
 	return retval;
 }

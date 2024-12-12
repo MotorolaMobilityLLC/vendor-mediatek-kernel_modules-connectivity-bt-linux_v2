@@ -19,6 +19,6 @@
 #define USB_IO_BUF_SIZE (HCI_MAX_EVENT_SIZE > 256 ? HCI_MAX_EVENT_SIZE : 256)
 
 
-int btmtk_cif_chip_7663_register(void);
+int btmtk_cif_chip_7663_register(struct btmtk_dev *bdev);
 
 #endif /* __BTMTK_CHIP_7663_H__ */

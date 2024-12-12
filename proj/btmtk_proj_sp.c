@@ -1171,7 +1171,7 @@ static int btmtk_send_connfem_new(struct btmtk_dev *bdev)
 	cmd_len = offset - 9;
 	memcpy(&cmd[7], &cmd_len, 2);
 
-	BTMTK_DBG_RAW(bdev, cmd, offset, "%s: Send: ", __func__);
+	BTMTK_DBG_RAW(cmd, offset, "%s: Send: ", __func__);
 
 	ret = btmtk_main_send_cmd(bdev, cmd, offset,
 			event, sizeof(event), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
@@ -1274,7 +1274,7 @@ int btmtk_send_connfem_legacy(struct btmtk_dev *bdev)
 	memcpy(&cmd[offset], &bt_fem_info.id, sizeof(bt_fem_info.id));
 	offset += sizeof(bt_fem_info.id);
 
-	BTMTK_DBG_RAW(bdev, cmd, offset, "%s: Send: ", __func__);
+	BTMTK_DBG_RAW(cmd, offset, "%s: Send: ", __func__);
 
 	ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
 			event, sizeof(event), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);

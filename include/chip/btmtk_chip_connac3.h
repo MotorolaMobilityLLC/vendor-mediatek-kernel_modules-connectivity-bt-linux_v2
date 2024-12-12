@@ -11,6 +11,6 @@
 
 #define BT_RESET_REG_CONNAC3 0x70028610
 
-int btmtk_cif_chip_commonv3_register(void);
+int btmtk_cif_chip_commonv3_register(struct btmtk_dev *bdev);
 
 #endif /* __BTMTK_CHIP_COMMON_CONNAC3_H__ */

@@ -245,7 +245,7 @@ static void btmtk_sdio_dump_debug_sop(struct btmtk_dev *bdev)
 	}
 
 	BTMTK_INFO("%s -debug sop dump start", __func__);
-	btmtk_sdio_dump_debug_register(bdev, bdev->debug_sop_reg_dump);
+	btmtk_sdio_dump_debug_register(bdev, bdev->debug_sop.debug_sop_reg_dump);
 	BTMTK_INFO("%s -debug sop dump end", __func__);
 }
 
@@ -1272,7 +1272,7 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 		memcpy(cif_dev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE, bdev->io_buf, hci_pkt_len);
 		/* make sure memcpy done before send to hci layer */
 		smp_wmb();
-		BTMTK_DBG_RAW(bdev, cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
+		BTMTK_DBG_RAW(cif_dev->bdev, cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
 	}
 #if 0
 	switch (hci_type) {
@@ -1307,7 +1307,7 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 		memcpy(cif_dev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE, bdev->io_buf, hci_pkt_len);
 		/* make sure memcpy done before send to hci layer */
 		smp_wmb();
-		BTMTK_DBG_RAW(bdev, cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
+		BTMTK_DBG_RAW(cif_dev->bdev, cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
 		break;
 	}
 #endif
@@ -1432,7 +1432,7 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 		event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 	}
 
-	BTMTK_DBG_RAW(bdev, skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
+	BTMTK_DBG_RAW(cif_dev->bdev, skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
 
 	ret = btmtk_sdio_send_cmd(bdev, skb, delay, retry, pkt_type, flag);
 	if (ret < 0) {
@@ -1955,10 +1955,9 @@ static void btmtk_sdio_stop_main_thread(struct btmtk_sdio_dev *cif_dev)
 #if ((CFG_SUPPORT_HW_DVT == 0) || CFG_SUPPORT_BLUEZ)
 static int btmtk_probe_retry(struct btmtk_dev *bdev)
 {
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	int ret = 0;
 
-	bmain_info->chip_reset_flag = 0;
+	bdev->main_info.chip_reset_flag = 0;
 	set_bit(BT_PROBE_FAIL_FOR_SUBSYS_RESET, &bdev->flags);
 	btmtk_reset_trigger(bdev);
 
@@ -1989,7 +1988,6 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 	int err = -1;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_sdio_dev *cif_dev = NULL;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	u8 i = 0;
 #if (CFG_SUPPORT_HW_DVT == 0)
 	u8 load_patch_fail = 0;
@@ -2007,7 +2005,7 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 		BTMTK_ERR("[ERR] bdev is NULL");
 		return -ENOMEM;
 	}
-	bmain_info->chip_reset_flag = 0;
+	bdev->main_info.chip_reset_flag = 0;
 
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
@@ -2095,7 +2093,7 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 		if (i == RETRY_TIMES - 1) {
 			BTMTK_WARN("wait btmtk_sdio_main_thread start failed, do chip reset!!!");
 			bdev->bt_cfg.support_dongle_whole_reset = 1;
-			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+			atomic_set(&bdev->main_info.chip_reset, BTMTK_RESET_DONE);
 			btmtk_reset_trigger(bdev);
 			goto exit;
 		}
@@ -2132,9 +2130,9 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 LOAD_PATCH_RETRY:
 #endif
 	/* It's HW workaround for mt7921 */
-	cif_dev->patched = bmain_info->hif_hook_chip.patched;
+	cif_dev->patched = bdev->main_info.hif_hook_chip.patched;
 
-	err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
+	err = btmtk_woble_initialize(bdev);
 	if (err < 0) {
 		BTMTK_ERR("btmtk_main_woble_initialize failed, do chip reset!!!");
 		goto exit;
@@ -2165,7 +2163,7 @@ SEND_INIT_RETRY:
 	goto end;
 
 free_setting:
-	btmtk_woble_uninitialize(&cif_dev->bt_woble);
+	btmtk_woble_uninitialize(bdev);
 	btmtk_main_cif_uninitialize(bdev, HCI_SDIO);
 free_mem:
 	btmtk_cif_free_memory(cif_dev);
@@ -2182,15 +2180,15 @@ end:
 	btmtk_sdio_keep_driver_own(cif_dev, 0);
 #endif /* CFG_SUPPORT_HW_DVT */
 	btmtk_woble_wake_unlock(bdev);
-	btmtk_assert_wake_unlock();
+	btmtk_assert_wake_unlock(bdev);
 
 exit:
 	if (cap_init_fail == 1) {
-		bmain_info->chip_reset_flag = 1;
+		bdev->main_info.chip_reset_flag = 1;
 		cap_init_fail = 0;
 		set_bit(BT_PROBE_FAIL_FOR_WHOLE_RESET, &bdev->flags);
 		btmtk_reset_trigger(bdev);
-		atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+		atomic_set(&bdev->main_info.chip_reset, BTMTK_RESET_DONE);
 		return err;
 	}
 #if (CFG_SUPPORT_HW_DVT == 0)
@@ -2198,12 +2196,12 @@ exit:
 		load_patch_fail = 0;
 		err = btmtk_probe_retry(bdev);
 		if (err < 0) {
-			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+			atomic_set(&bdev->main_info.chip_reset, BTMTK_RESET_DONE);
 			return -1;
 		}
 		if (test_bit(BT_PROBE_DO_WHOLE_CHIP_RESET, &bdev->flags)) {
 			clear_bit(BT_PROBE_DO_WHOLE_CHIP_RESET, &bdev->flags);
-			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+			atomic_set(&bdev->main_info.chip_reset, BTMTK_RESET_DONE);
 			return -1;
 		}
 		goto LOAD_PATCH_RETRY;
@@ -2214,18 +2212,18 @@ exit:
 		send_init_fail = 0;
 		err = btmtk_probe_retry(bdev);
 		if (err < 0) {
-			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+			atomic_set(&bdev->main_info.chip_reset, BTMTK_RESET_DONE);
 			return -1;
 		}
 		if (test_bit(BT_PROBE_DO_WHOLE_CHIP_RESET, &bdev->flags)) {
 			clear_bit(BT_PROBE_DO_WHOLE_CHIP_RESET, &bdev->flags);
-			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+			atomic_set(&bdev->main_info.chip_reset, BTMTK_RESET_DONE);
 			return -1;
 		}
 		goto SEND_INIT_RETRY;
 	}
 #endif
-	atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+	atomic_set(&bdev->main_info.chip_reset, BTMTK_RESET_DONE);
 	return 0;
 }
 
@@ -2240,293 +2238,30 @@ static void btmtk_sdio_disconnect(struct sdio_func *func)
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 	btmtk_sdio_stop_main_thread(cif_dev);
 	btmtk_main_cif_disconnect_notify(bdev, HCI_SDIO);
-	btmtk_woble_uninitialize(&cif_dev->bt_woble);
+	btmtk_woble_uninitialize(bdev);
 	btmtk_cif_free_memory(cif_dev);
 	btmtk_sdio_unregister_dev(cif_dev);
 	skb_queue_purge(&cif_dev->tx_queue);
 
 }
 
-static int btmtk_cif_probe(struct sdio_func *func,
-					const struct sdio_device_id *id)
+
+static void btmtk_sdio_chip_reset_notify(struct btmtk_dev *bdev)
 {
-	int ret = -1;
-	int cif_event = 0;
-	struct btmtk_cif_state *cif_state = NULL;
-	struct btmtk_dev *bdev = NULL;
+	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
-	/* Mediatek Driver Version */
-	BTMTK_INFO("%s: MTK BT Driver Version: %s", __func__, VERSION);
-
-	BTMTK_DBG("vendor=0x%x, device=0x%x, class=%d, fn=%d",
-			id->vendor, id->device, id->class,
-			func->num);
-	DUMP_TIME_STAMP("probe_start");
-
-#ifdef CFG_SUPPORT_CHIP_RESET_KO
-	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_PROBE_START);
-#endif
-
-	/* sdio interface numbers  */
-	if (func->num != BTMTK_SDIO_FUNC) {
-		BTMTK_INFO("%s: func num is not match, func_num = %d", __func__, func->num);
-		return -ENODEV;
-	}
-
-	/* Retrieve priv data and set to interface structure */
-	bdev = btmtk_get_dev();
-	if (!bdev) {
-		BTMTK_INFO("%s: bdev is NULL", __func__);
-		return -ENODEV;
-	}
-
-	bdev->intf_dev = &func->dev;
-	bdev->cif_dev = &g_sdio_dev;
-	sdio_set_drvdata(func, bdev);
-
-	/* Retrieve current HIF event state */
-	cif_event = HIF_EVENT_PROBE;
-	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
-		/* Error */
-		BTMTK_WARN("%s priv setting is NULL", __func__);
-		return -ENODEV;
-	}
-
-	btmtk_sdio_wake_lock(g_sdio_dev.device_ws, 0);
-
-	cif_state = &bdev->cif_state[cif_event];
-
-	/* Set Entering state */
-	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
-
-	/* Do HIF events */
-	ret = btmtk_sdio_probe(func, id);
-
-	/* Set End/Error state */
-	if (ret == 0)
-		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
-	else
-		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
-
-	btmtk_sdio_wake_unlock(g_sdio_dev.device_ws);
-
-#ifdef CFG_SUPPORT_CHIP_RESET_KO
-	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_PROBE_SUCCESS);
-#endif
-
-	BTMTK_INFO("%s end", __func__);
-	DUMP_TIME_STAMP("probe_end");
-	return ret;
-}
-
-static void btmtk_cif_disconnect(struct sdio_func *func)
-{
-	int cif_event = 0;
-	struct btmtk_cif_state *cif_state = NULL;
-	struct btmtk_dev *bdev = NULL;
-
-	BTMTK_INFO("%s, start", __func__);
-
-	bdev = sdio_get_drvdata(func);
-
-	/* Retrieve current HIF event state */
-	cif_event = HIF_EVENT_DISCONNECT;
-	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
-		/* Error */
-		BTMTK_WARN("%s priv setting is NULL", __func__);
+	if (cif_dev == NULL) {
+		BTMTK_INFO("%s, cif_dev is NULL", __func__);
 		return;
 	}
-	btmtk_handle_mutex_lock(bdev);
+	btmtk_sdio_keep_driver_own(cif_dev, 0);
+	/* It's HW workaround for mt7921 */
+	cif_dev->patched = bdev->main_info.hif_hook_chip.patched;
+	atomic_set(&cif_dev->tx_rdy, 1);
 
-	btmtk_sdio_wake_lock(g_sdio_dev.device_ws, 0);
-	cif_state = &bdev->cif_state[cif_event];
-
-	/* Set Entering state */
-	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
-
-	/* Do HIF events */
-	btmtk_sdio_disconnect(func);
-
-#ifdef CFG_SUPPORT_CHIP_RESET_KO
-	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_REMOVE);
-#endif
-
-	/* Set End/Error state */
-	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
-	btmtk_sdio_wake_unlock(g_sdio_dev.device_ws);
-	btmtk_handle_mutex_unlock(bdev);
-	BTMTK_INFO("%s, end", __func__);
+	btmtk_sdio_set_wifi_driver_own(0);
 }
 
-#ifdef CONFIG_PM
-static int btmtk_cif_suspend(struct device *dev)
-{
-	int ret = 0;
-	int cif_event = 0;
-	struct btmtk_cif_state *cif_state = NULL;
-	int state = BTMTK_STATE_UNKNOWN;
-	struct sdio_func *func = NULL;
-	struct btmtk_dev *bdev = NULL;
-	struct btmtk_sdio_dev *cif_dev = NULL;
-	struct btmtk_woble *bt_woble = NULL;
-	mmc_pm_flag_t pm_flags;
-	struct btmtk_main_info *main_info = btmtk_get_main_info();
-
-	BTMTK_INFO("%s, enter", __func__);
-
-	if (!dev) {
-		BTMTK_ERR("%s: dev is null", __func__);
-		return 0;
-	}
-	func = dev_to_sdio_func(dev);
-	bdev = sdio_get_drvdata(func);
-	if (!bdev) {
-		BTMTK_ERR("%s: bdev is null", __func__);
-		return 0;
-	}
-	btmtk_handle_mutex_lock(bdev);
-
-	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
-	bt_woble = &cif_dev->bt_woble;
-
-	if (bdev->suspend_count++) {
-		BTMTK_WARN("Has suspended. suspend_count: %d, end", bdev->suspend_count);
-		btmtk_handle_mutex_unlock(bdev);
-		return 0;
-	}
-
-	state = btmtk_get_chip_state(bdev);
-	/* Retrieve current HIF event state */
-	if (state == BTMTK_STATE_FW_DUMP) {
-		BTMTK_WARN("%s: FW dumping ongoing, don't dos suspend flow!!!", __func__);
-		cif_event = HIF_EVENT_FW_DUMP;
-	} else
-		cif_event = HIF_EVENT_SUSPEND;
-
-	cif_state = &bdev->cif_state[cif_event];
-
-	atomic_set(&b_suspending, 1);
-	ret = btmtk_sdio_keep_driver_own(cif_dev, 1);
-	if (ret == -ETIMEDOUT) {
-		BTMTK_ERR("%s set driver own timeout", __func__);
-		goto suspend_end;
-	}
-
-	/* Set Entering state */
-	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
-
-#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
-	BTMTK_INFO("%s: SKIP Driver woble_suspend flow", __func__);
-#else
-	ret = btmtk_woble_suspend(bt_woble);
-	if (ret < 0)
-		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
-#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
-
-	pm_flags = sdio_get_host_pm_caps(func);
-	if (!(pm_flags & MMC_PM_KEEP_POWER)) {
-		BTMTK_ERR("%s, %s cannot remain alive while suspended(0x%x)", __func__,
-			sdio_func_id(func), pm_flags);
-	}
-
-	pm_flags = MMC_PM_KEEP_POWER;
-	ret = sdio_set_host_pm_flags(func, pm_flags);
-	if (ret)
-		BTMTK_ERR("%s, set flag 0x%x err %d", __func__, pm_flags, (int)ret);
-
-	ret = btmtk_sdio_keep_driver_own(cif_dev, 0);
-	if (ret == -ETIMEDOUT) {
-		BTMTK_ERR("%s set fw own timeout", __func__);
-		goto suspend_end;
-	}
-suspend_end:
-	btmtk_sdio_delete_fw_own_timer(cif_dev);
-	/* Set End/Error state */
-	if (ret == 0)
-		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
-	else {
-		bdev->suspend_count--; //When return failure, suspend will abort without calling the resume callback. should decrease the count.
-		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
-		BTMTK_ERR("%s suspend fail ret=%d, trigger reset", __func__, ret);
-		if (ret == -ETIMEDOUT)
-			main_info->chip_reset_flag = 1;
-		btmtk_handle_mutex_unlock(bdev);
-		btmtk_reset_trigger(bdev);
-		btmtk_handle_mutex_lock(bdev);
-	}
-	atomic_set(&b_suspending, 0);
-	BTMTK_INFO("%s, end. ret = %d", __func__, ret);
-	btmtk_handle_mutex_unlock(bdev);
-	return ret;
-}
-
-static int btmtk_cif_resume(struct device *dev)
-{
-	int ret = 0;
-	struct sdio_func *func = NULL;
-	struct btmtk_dev *bdev = NULL;
-	struct btmtk_sdio_dev *cif_dev = NULL;
-	struct btmtk_cif_state *cif_state = NULL;
-	struct btmtk_woble *bt_woble = NULL;
-
-	BTMTK_INFO("%s, enter", __func__);
-
-#if WAKEUP_BT_IRQ
-	btmtk_sdio_irq_wake_lock_timeout(NULL);
-#endif
-
-	if (!dev)
-		return 0;
-	func = dev_to_sdio_func(dev);
-	bdev = sdio_get_drvdata(func);
-	if (!bdev)
-		return 0;
-
-	btmtk_handle_mutex_lock(bdev);
-
-	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
-	bt_woble = &cif_dev->bt_woble;
-
-	bdev->suspend_count--;
-	if (bdev->suspend_count) {
-		BTMTK_INFO("data->suspend_count %d, return 0", bdev->suspend_count);
-		btmtk_handle_mutex_unlock(bdev);
-		return 0;
-	}
-
-	if (bdev->bt_cfg.support_woble_by_eint) {
-		if (bt_woble->wobt_irq != 0 && atomic_read(&(bt_woble->irq_enable_count)) == 1) {
-			BTMTK_INFO("disable BT IRQ:%d", bt_woble->wobt_irq);
-			atomic_dec(&(bt_woble->irq_enable_count));
-			disable_irq_nosync(bt_woble->wobt_irq);
-		} else
-			BTMTK_INFO("irq_enable count:%d", atomic_read(&(bt_woble->irq_enable_count)));
-	}
-
-	cif_state = &bdev->cif_state[HIF_EVENT_RESUME];
-
-	/* Set Entering state */
-	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
-
-#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
-	BTMTK_INFO("%s: SKIP Driver woble_resume flow", __func__);
-#else
-	ret = btmtk_woble_resume(bt_woble);
-	if (ret < 0)
-		BTMTK_ERR("%s: btmtk_woble_resume return fail %d", __func__, ret);
-#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
-
-	/* Set End/Error state */
-	if (ret == 0)
-		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
-	else
-		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
-
-	BTMTK_INFO("end");
-	btmtk_handle_mutex_unlock(bdev);
-	return 0;
-}
-#endif	/* CONFIG_PM */
 
 static int btmtk_sdio_poll_subsys_done(struct btmtk_sdio_dev *cif_dev)
 {
@@ -2561,7 +2296,6 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 	int retry = RETRY_TIMES;
 	int ret = 0;
 	atomic_t subreset_retry;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	atomic_set(&subreset_retry, 0);
 reset_retry:
@@ -2577,7 +2311,7 @@ reset_retry:
 		 * 1: Driver own. 0: FW own
 		 */
 		btmtk_sdio_keep_driver_own(cif_dev, 1);
-		if (!bmain_info->hif_hook_chip.patched)
+		if (!bdev->main_info.hif_hook_chip.patched)
 			break;
 		(void)btmtk_sdio_readl(PD2HRM0R, &u32ReadCRValue, cif_dev->func);
 		msleep(DELAY_TIMES);
@@ -2754,6 +2488,332 @@ int btmtk_sdio_whole_reset(struct btmtk_dev *bdev)
 }
 EXPORT_SYMBOL(btmtk_sdio_whole_reset);
 
+static void btmtk_cif_hook_register(struct btmtk_dev *bdev)
+{
+	struct hif_hook_ptr hook;
+
+	BTMTK_INFO("%s", __func__);
+
+	memset(&hook, 0, sizeof(hook));
+	hook.open = btmtk_sdio_open;
+	hook.close = btmtk_sdio_close;
+	hook.reg_read = btmtk_sdio_read_register;
+	hook.reg_write = btmtk_sdio_write_register;
+	hook.send_cmd = btmtk_sdio_send_cmd;
+	hook.send_and_recv = btmtk_sdio_send_and_recv;
+	hook.event_filter = btmtk_sdio_event_filter;
+	hook.subsys_reset = btmtk_sdio_subsys_reset;
+	hook.whole_reset = btmtk_sdio_whole_reset;
+	hook.chip_reset_notify = btmtk_sdio_chip_reset_notify;
+	hook.cif_mutex_lock = btmtk_sdio_cif_mutex_lock;
+	hook.cif_mutex_unlock = btmtk_sdio_cif_mutex_unlock;
+	hook.open_done = btmtk_sdio_open_done;
+	hook.dl_dma = btmtk_sdio_load_fw_patch_using_dma;
+	hook.dump_debug_sop = btmtk_sdio_dump_debug_sop;
+	btmtk_reg_hif_hook(bdev, &hook);
+
+#if defined(CONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT)
+	g_sdio_dev.main_ws = wakeup_source_register(NULL, "btmtksdio_main_ws");
+	g_sdio_dev.irq_ws = wakeup_source_register(NULL, "btmtksdio_irq_ws");
+	g_sdio_dev.device_ws = wakeup_source_register(NULL, "btmtksdio_device_ws");
+#elif (defined(LINUX_OS) && (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)) ||	\
+		(defined(ANDROID_OS) && (KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE))
+	g_sdio_dev.main_ws = wakeup_source_register("btmtksdio_main_ws");
+	g_sdio_dev.irq_ws = wakeup_source_register("btmtksdio_irq_ws");
+	g_sdio_dev.device_ws = wakeup_source_register("btmtksdio_device_ws");
+#else
+	g_sdio_dev.main_ws = wakeup_source_register(NULL, "btmtksdio_main_ws");
+	g_sdio_dev.irq_ws = wakeup_source_register(NULL, "btmtksdio_irq_ws");
+	g_sdio_dev.device_ws = wakeup_source_register(NULL, "btmtksdio_device_ws");
+#endif
+
+	btmtk_sdio_create_fw_own_timer(&g_sdio_dev);
+}
+
+static int btmtk_cif_probe(struct sdio_func *func,
+					const struct sdio_device_id *id)
+{
+	int ret = -1;
+	int cif_event = 0;
+	struct btmtk_cif_state *cif_state = NULL;
+	struct btmtk_dev *bdev = NULL;
+
+	/* Mediatek Driver Version */
+	BTMTK_INFO("%s: MTK BT Driver Version: %s", __func__, VERSION);
+
+	BTMTK_DBG("vendor=0x%x, device=0x%x, class=%d, fn=%d",
+			id->vendor, id->device, id->class,
+			func->num);
+	DUMP_TIME_STAMP("probe_start");
+
+#ifdef CFG_SUPPORT_CHIP_RESET_KO
+	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_PROBE_START);
+#endif
+
+	/* sdio interface numbers  */
+	if (func->num != BTMTK_SDIO_FUNC) {
+		BTMTK_INFO("%s: func num is not match, func_num = %d", __func__, func->num);
+		return -ENODEV;
+	}
+
+	/* Retrieve priv data and set to interface structure */
+	bdev = btmtk_get_dev();
+	if (!bdev) {
+		BTMTK_INFO("%s: bdev is NULL", __func__);
+		return -ENODEV;
+	}
+
+	bdev->intf_dev = &func->dev;
+	bdev->cif_dev = &g_sdio_dev;
+	sdio_set_drvdata(func, bdev);
+
+	/* Retrieve current HIF event state */
+	cif_event = HIF_EVENT_PROBE;
+	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
+		/* Error */
+		BTMTK_WARN("%s priv setting is NULL", __func__);
+		return -ENODEV;
+	}
+
+	btmtk_sdio_wake_lock(g_sdio_dev.device_ws, 0);
+
+	cif_state = &bdev->cif_state[cif_event];
+
+	/* Set Entering state */
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+	/* Do HIF events */
+	btmtk_cif_hook_register(bdev);
+	ret = btmtk_sdio_probe(func, id);
+
+	/* Set End/Error state */
+	if (ret == 0)
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	else
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+
+	btmtk_sdio_wake_unlock(g_sdio_dev.device_ws);
+
+#ifdef CFG_SUPPORT_CHIP_RESET_KO
+	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_PROBE_SUCCESS);
+#endif
+
+	BTMTK_INFO("%s end", __func__);
+	DUMP_TIME_STAMP("probe_end");
+	return ret;
+}
+
+static void btmtk_cif_disconnect(struct sdio_func *func)
+{
+	int cif_event = 0;
+	struct btmtk_cif_state *cif_state = NULL;
+	struct btmtk_dev *bdev = NULL;
+
+	BTMTK_INFO("%s, start", __func__);
+
+	bdev = sdio_get_drvdata(func);
+
+	/* Retrieve current HIF event state */
+	cif_event = HIF_EVENT_DISCONNECT;
+	if (BTMTK_CIF_IS_NULL(bdev, cif_event)) {
+		/* Error */
+		BTMTK_WARN("%s priv setting is NULL", __func__);
+		return;
+	}
+	btmtk_handle_mutex_lock(bdev);
+
+	btmtk_sdio_wake_lock(g_sdio_dev.device_ws, 0);
+	cif_state = &bdev->cif_state[cif_event];
+
+	/* Set Entering state */
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+	/* Do HIF events */
+	btmtk_sdio_disconnect(func);
+
+#ifdef CFG_SUPPORT_CHIP_RESET_KO
+	send_reset_event(RESET_MODULE_TYPE_BT, RFSM_EVENT_REMOVE);
+#endif
+
+	/* Set End/Error state */
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	btmtk_sdio_wake_unlock(g_sdio_dev.device_ws);
+	btmtk_handle_mutex_unlock(bdev);
+	BTMTK_INFO("%s, end", __func__);
+}
+
+#ifdef CONFIG_PM
+static int btmtk_cif_suspend(struct device *dev)
+{
+	int ret = 0;
+	int cif_event = 0;
+	struct btmtk_cif_state *cif_state = NULL;
+	int state = BTMTK_STATE_UNKNOWN;
+	struct sdio_func *func = NULL;
+	struct btmtk_dev *bdev = NULL;
+	struct btmtk_sdio_dev *cif_dev = NULL;
+	struct st_woble *bt_woble = NULL;
+	mmc_pm_flag_t pm_flags;
+
+	BTMTK_INFO("%s, enter", __func__);
+
+	if (!dev) {
+		BTMTK_ERR("%s: dev is null", __func__);
+		return 0;
+	}
+	func = dev_to_sdio_func(dev);
+	bdev = sdio_get_drvdata(func);
+	if (!bdev) {
+		BTMTK_ERR("%s: bdev is null", __func__);
+		return 0;
+	}
+	btmtk_handle_mutex_lock(bdev);
+
+	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
+	bt_woble = &cif_dev->bt_woble;
+
+	if (bdev->suspend_count++) {
+		BTMTK_WARN("Has suspended. suspend_count: %d, end", bdev->suspend_count);
+		btmtk_handle_mutex_unlock(bdev);
+		return 0;
+	}
+
+	state = btmtk_get_chip_state(bdev);
+	/* Retrieve current HIF event state */
+	if (state == BTMTK_STATE_FW_DUMP) {
+		BTMTK_WARN("%s: FW dumping ongoing, don't dos suspend flow!!!", __func__);
+		cif_event = HIF_EVENT_FW_DUMP;
+	} else
+		cif_event = HIF_EVENT_SUSPEND;
+
+	cif_state = &bdev->cif_state[cif_event];
+
+	atomic_set(&b_suspending, 1);
+	ret = btmtk_sdio_keep_driver_own(cif_dev, 1);
+	if (ret == -ETIMEDOUT) {
+		BTMTK_ERR("%s set driver own timeout", __func__);
+		goto suspend_end;
+	}
+
+	/* Set Entering state */
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
+	BTMTK_INFO("%s: SKIP Driver woble_suspend flow", __func__);
+#else
+	ret = btmtk_woble_suspend(bt_woble);
+	if (ret < 0)
+		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
+#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
+
+	pm_flags = sdio_get_host_pm_caps(func);
+	if (!(pm_flags & MMC_PM_KEEP_POWER)) {
+		BTMTK_ERR("%s, %s cannot remain alive while suspended(0x%x)", __func__,
+			sdio_func_id(func), pm_flags);
+	}
+
+	pm_flags = MMC_PM_KEEP_POWER;
+	ret = sdio_set_host_pm_flags(func, pm_flags);
+	if (ret)
+		BTMTK_ERR("%s, set flag 0x%x err %d", __func__, pm_flags, (int)ret);
+
+	ret = btmtk_sdio_keep_driver_own(cif_dev, 0);
+	if (ret == -ETIMEDOUT) {
+		BTMTK_ERR("%s set fw own timeout", __func__);
+		goto suspend_end;
+	}
+suspend_end:
+	btmtk_sdio_delete_fw_own_timer(cif_dev);
+	/* Set End/Error state */
+	if (ret == 0)
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	else {
+		/* When return failure, suspend will abort without calling the resume callback.
+		 * should decrease the count.
+		 */
+		bdev->suspend_count--;
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+		BTMTK_ERR("%s suspend fail ret=%d, trigger reset", __func__, ret);
+		if (ret == -ETIMEDOUT)
+			bdev->main_info.chip_reset_flag = 1;
+		btmtk_handle_mutex_unlock(bdev);
+		btmtk_reset_trigger(bdev);
+		btmtk_handle_mutex_lock(bdev);
+	}
+	atomic_set(&b_suspending, 0);
+	BTMTK_INFO("%s, end. ret = %d", __func__, ret);
+	btmtk_handle_mutex_unlock(bdev);
+	return ret;
+}
+
+static int btmtk_cif_resume(struct device *dev)
+{
+	int ret = 0;
+	struct sdio_func *func = NULL;
+	struct btmtk_dev *bdev = NULL;
+	struct btmtk_sdio_dev *cif_dev = NULL;
+	struct btmtk_cif_state *cif_state = NULL;
+	struct st_woble *bt_woble = NULL;
+
+	BTMTK_INFO("%s, enter", __func__);
+
+#if WAKEUP_BT_IRQ
+	btmtk_sdio_irq_wake_lock_timeout(NULL);
+#endif
+
+	if (!dev)
+		return 0;
+	func = dev_to_sdio_func(dev);
+	bdev = sdio_get_drvdata(func);
+	if (!bdev)
+		return 0;
+
+	btmtk_handle_mutex_lock(bdev);
+
+	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
+	bt_woble = &cif_dev->bt_woble;
+
+	bdev->suspend_count--;
+	if (bdev->suspend_count) {
+		BTMTK_INFO("data->suspend_count %d, return 0", bdev->suspend_count);
+		btmtk_handle_mutex_unlock(bdev);
+		return 0;
+	}
+
+	if (bdev->bt_cfg.support_woble_by_eint) {
+		if (bt_woble->wobt_irq != 0 && atomic_read(&(bt_woble->irq_enable_count)) == 1) {
+			BTMTK_INFO("disable BT IRQ:%d", bt_woble->wobt_irq);
+			atomic_dec(&(bt_woble->irq_enable_count));
+			disable_irq_nosync(bt_woble->wobt_irq);
+		} else
+			BTMTK_INFO("irq_enable count:%d", atomic_read(&(bt_woble->irq_enable_count)));
+	}
+
+	cif_state = &bdev->cif_state[HIF_EVENT_RESUME];
+
+	/* Set Entering state */
+	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
+	BTMTK_INFO("%s: SKIP Driver woble_resume flow", __func__);
+#else
+	ret = btmtk_woble_resume(bt_woble);
+	if (ret < 0)
+		BTMTK_ERR("%s: btmtk_woble_resume return fail %d", __func__, ret);
+#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
+
+	/* Set End/Error state */
+	if (ret == 0)
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	else
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+
+	BTMTK_INFO("end");
+	btmtk_handle_mutex_unlock(bdev);
+	return 0;
+}
+#endif	/* CONFIG_PM */
+
 #ifdef CONFIG_PM
 static const struct dev_pm_ops btmtk_sdio_pm_ops = {
 	.suspend = btmtk_cif_suspend,
@@ -2791,70 +2851,16 @@ static int sdio_deregister(void)
 	return 0;
 }
 
-static void btmtk_sdio_chip_reset_notify(struct btmtk_dev *bdev)
-{
-	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-
-	if (cif_dev == NULL) {
-		BTMTK_INFO("%s, cif_dev is NULL", __func__);
-		return;
-	}
-	btmtk_sdio_keep_driver_own(cif_dev, 0);
-	/* It's HW workaround for mt7921 */
-	cif_dev->patched = bmain_info->hif_hook_chip.patched;
-	atomic_set(&cif_dev->tx_rdy, 1);
-
-	btmtk_sdio_set_wifi_driver_own(0);
-}
-
 int btmtk_cif_register(void)
 {
-	int retval = 0;
-	struct hif_hook_ptr hook;
+	int ret = 0;
 
-	BTMTK_INFO("%s", __func__);
-
-	memset(&hook, 0, sizeof(hook));
-	hook.open = btmtk_sdio_open;
-	hook.close = btmtk_sdio_close;
-	hook.reg_read = btmtk_sdio_read_register;
-	hook.reg_write = btmtk_sdio_write_register;
-	hook.send_cmd = btmtk_sdio_send_cmd;
-	hook.send_and_recv = btmtk_sdio_send_and_recv;
-	hook.event_filter = btmtk_sdio_event_filter;
-	hook.subsys_reset = btmtk_sdio_subsys_reset;
-	hook.whole_reset = btmtk_sdio_whole_reset;
-	hook.chip_reset_notify = btmtk_sdio_chip_reset_notify;
-	hook.cif_mutex_lock = btmtk_sdio_cif_mutex_lock;
-	hook.cif_mutex_unlock = btmtk_sdio_cif_mutex_unlock;
-	hook.open_done = btmtk_sdio_open_done;
-	hook.dl_dma = btmtk_sdio_load_fw_patch_using_dma;
-	hook.dump_debug_sop = btmtk_sdio_dump_debug_sop;
-	btmtk_reg_hif_hook(&hook);
-
-#if defined(CONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT)
-	g_sdio_dev.main_ws = wakeup_source_register(NULL, "btmtksdio_main_ws");
-	g_sdio_dev.irq_ws = wakeup_source_register(NULL, "btmtksdio_irq_ws");
-	g_sdio_dev.device_ws = wakeup_source_register(NULL, "btmtksdio_device_ws");
-#elif (defined(LINUX_OS) && (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)) ||	\
-		(defined(ANDROID_OS) && (KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE))
-	g_sdio_dev.main_ws = wakeup_source_register("btmtksdio_main_ws");
-	g_sdio_dev.irq_ws = wakeup_source_register("btmtksdio_irq_ws");
-	g_sdio_dev.device_ws = wakeup_source_register("btmtksdio_device_ws");
-#else
-	g_sdio_dev.main_ws = wakeup_source_register(NULL, "btmtksdio_main_ws");
-	g_sdio_dev.irq_ws = wakeup_source_register(NULL, "btmtksdio_irq_ws");
-	g_sdio_dev.device_ws = wakeup_source_register(NULL, "btmtksdio_device_ws");
-#endif
-
-	btmtk_sdio_create_fw_own_timer(&g_sdio_dev);
-	retval = sdio_register();
-	if (retval)
-		BTMTK_ERR("*** SDIO registration fail(%d)! ***", retval);
+	ret = sdio_register();
+	if (ret)
+		BTMTK_ERR("%s, *** SDIO registration fail(%d)! ***", __func__, ret);
 	else
 		BTMTK_INFO("%s, SDIO registration success!", __func__);
-	return retval;
+	return ret;
 }
 
 int btmtk_cif_deregister(void)

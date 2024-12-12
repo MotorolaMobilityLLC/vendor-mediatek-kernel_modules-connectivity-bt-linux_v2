@@ -9,6 +9,6 @@
 #include "btmtk_define.h"
 #include "btmtk_main.h"
 
-int btmtk_cif_chip_7922_register(void);
+int btmtk_cif_chip_7922_register(struct btmtk_dev *bdev);
 
 #endif /* __BTMTK_CHIP_7922_H__ */

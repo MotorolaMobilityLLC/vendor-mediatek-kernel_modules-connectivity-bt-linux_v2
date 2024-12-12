@@ -18,6 +18,6 @@
 #define CAL_DATA_CMD_LEN 10
 
 
-int btmtk_cif_chip_6639_register(void);
+int btmtk_cif_chip_6639_register(struct btmtk_dev *bdev);
 
 #endif /* __BTMTK_CHIP_COMMON_6639_H__ */

@@ -46,7 +46,7 @@
 #endif
 
 /** Driver version */
-#define VERSION "8.0.2024042501"
+#define VERSION "8.0.2024071701"
 #define SUBVER ":connac3_dev"
 
 #if CFG_SUPPORT_WAKEUP_IRQ
@@ -392,6 +392,14 @@ extern uint8_t _raw_buf_[];
 #define BT_DISABLE_RESET_RESUME 0
 #endif
 
+enum btmtk_dongle_type {
+	BTMTK_DONGLE_TYPE_DONGLE_INDEX = 0,
+	BTMTK_DONGLE_TYPE_DONGLE_DEFAULT,
+	BTMTK_DONGLE_TYPE_DEFAULT,
+
+	BTMTK_DONGLE_TYPE_MAX
+};
+
 enum fw_cfg_index_len {
 	FW_CFG_INX_LEN_NONE = 0,
 	FW_CFG_INX_LEN_2 = 2,
@@ -403,7 +411,10 @@ struct fw_cfg_struct {
 	u32	length;		/* APCF content or radio off content of length */
 };
 
-struct bt_cfg_struct {
+struct st_bt_cfg  {
+	unsigned char	*bt_cfg_file_name[BTMTK_DONGLE_TYPE_MAX];
+	unsigned int	bt_cfg_file_idx;
+
 	bool	support_unify_woble;	/* support unify woble or not */
 	bool	support_woble_by_eint;		/* support woble by eint or not */
 	bool	support_dongle_subsys_reset;	/*support subsys reset or not*/
@@ -440,18 +451,6 @@ struct bt_cfg_struct {
 	struct fw_cfg_struct wmt_cmd[WMT_CMD_COUNT];
 };
 
-struct bt_utc_struct {
-	struct rtc_time tm;
-	u32 usec;
-	u32 sec;
-	unsigned long ksec;
-	unsigned long knsec;
-};
-
-#define BT_DOWNLOAD	1
-#define WIFI_DOWNLOAD	2
-#define ZB_DOWNLOAD	3
-
 enum debug_reg_index_len {
 	DEBUG_REG_INX_LEN_NONE = 0,
 	DEBUG_REG_INX_LEN_2 = 2,
@@ -470,6 +469,24 @@ struct debug_reg_struct {
 	struct debug_reg	*reg;
 	u32	num;
 };
+
+struct st_debug_sop {
+	unsigned char		debug_sop_file_name[BTMTK_DONGLE_TYPE_MAX][MAX_BIN_FILE_NAME_LEN];
+	unsigned int		debug_sop_file_idx;
+	struct debug_reg_struct debug_sop_reg_dump;
+};
+
+struct bt_utc_struct {
+	struct rtc_time tm;
+	u32 usec;
+	u32 sec;
+	unsigned long ksec;
+	unsigned long knsec;
+};
+
+#define BT_DOWNLOAD	1
+#define WIFI_DOWNLOAD	2
+#define ZB_DOWNLOAD	3
 
 #define SWAP32(x) \
 	((u32) (\
@@ -514,7 +531,7 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc);
 	do { \
 		struct bt_utc_struct utc; \
 		btmtk_getUTCtime(&utc); \
-		BTMTK_INFO("%s: %d, %s - DUMP_TIME_STAMP UTC: %d-%02d-%02d %02d:%02d:%02d.%06u", \
+		BTMTK_INFO_DEV(bdev, "%s: %d, %s - DUMP_TIME_STAMP UTC: %d-%02d-%02d %02d:%02d:%02d.%06u", \
 			__func__, __LINE__, __str, \
 			utc.tm.tm_year, utc.tm.tm_mon, utc.tm.tm_mday, \
 			utc.tm.tm_hour, utc.tm.tm_min, utc.tm.tm_sec, utc.usec); \

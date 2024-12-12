@@ -254,19 +254,22 @@ exit:
 
 }
 
-int btmtk_cif_chip_6639_register(void)
+int btmtk_cif_chip_6639_register(struct btmtk_dev *bdev)
 {
 	int retval = 0;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	BTMTK_INFO("%s", __func__);
+	if (bdev == NULL) {
+		BTMTK_ERR("Error: bdev is NULL\n");
+		return -1;
+	}
 
+	BTMTK_INFO_DEV(bdev, "%s", __func__);
 
-	bmain_info->hif_hook_chip.restore = btmtk_cif_connac3_calibration_restore;
-	bmain_info->hif_hook_chip.backup_send = btmtk_cif_connac3_calibration_backup_send;
-	bmain_info->hif_hook_chip.backup_save = btmtk_cif_connac3_calibration_backup_save;
-	bmain_info->hif_hook_chip.backup_free = btmtk_cif_connac3_calibration_backup_free;
-	bmain_info->hif_hook_chip.bt_open_handler = btmtk_bt_open;
+	bdev->main_info.hif_hook_chip.restore = btmtk_cif_connac3_calibration_restore;
+	bdev->main_info.hif_hook_chip.backup_send = btmtk_cif_connac3_calibration_backup_send;
+	bdev->main_info.hif_hook_chip.backup_save = btmtk_cif_connac3_calibration_backup_save;
+	bdev->main_info.hif_hook_chip.backup_free = btmtk_cif_connac3_calibration_backup_free;
+	bdev->main_info.hif_hook_chip.bt_open_handler = btmtk_bt_open;
 
 	return retval;
 }
