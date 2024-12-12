@@ -267,6 +267,7 @@ else ifeq ($(MTK_CHIP_IF), uart_tty)
         ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2/
         ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/connectivity/common
         ccflags-y += -I$(DEVICE_MODULES_PATH)/drivers/misc/mediatek/include/mt-plat
+        ccflags-y += -DCFG_UART_WAKEUP_SUPPORT
     endif
     ccflags-y += -DCHIP_IF_UART_TTY
     ccflags-y += -I$(KO_CODE_PATH)/include/uart/tty

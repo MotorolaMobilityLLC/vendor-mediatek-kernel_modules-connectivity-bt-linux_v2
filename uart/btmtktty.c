@@ -2976,7 +2976,11 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	} else {
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		btmtk_uart_update_fw_own_timer(cif_dev);
+#if (USE_DEVICE_NODE == 1)
+		BTMTK_INFO("%s success", __func__);
+#else
 		BTMTK_DBG("%s success", __func__);
+#endif
 	}
 
 unlock:

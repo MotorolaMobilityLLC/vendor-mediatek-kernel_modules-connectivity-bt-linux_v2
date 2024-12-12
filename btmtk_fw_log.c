@@ -1961,7 +1961,7 @@ coredump_fail_unlock:
 		return 0;
 #else
 		/* not send fw log to host */
-		BTMTK_INFO_LIMITTED("fw log counter[%d], log_level[%d], only in fw log",
+		BTMTK_INFO_LIMITTED("fw log counter[%d], log_level[%d], store in fw log",
 				fwlog_count, bdev->main_info.fw_log_on);
 		return 1;
 #endif // CFG_SUPPORT_FWLOG_TO_HOST

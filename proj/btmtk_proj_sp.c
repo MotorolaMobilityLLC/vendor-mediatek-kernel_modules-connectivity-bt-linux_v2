@@ -1424,6 +1424,22 @@ exit:
 
 }
 
+void btmtk_uart_wakeup_cb(void *para)
+{
+	struct btmtk_dev *bdev = (struct btmtk_dev *)para;
+
+	BTMTK_INFO("%s start", __func__);
+
+	if (!bdev) {
+		BTMTK_WARN("%s: bdev is NULL", __func__);
+		return;
+	}
+
+	if (bdev->main_info.hif_hook.wakeup_host)
+		bdev->main_info.hif_hook.wakeup_host(bdev);
+	else
+		BTMTK_WARN_DEV(bdev, "%s: main_info.hif_hook.wakeup_host is NULL", __func__);
+}
 
 /*
  *******************************************************************************
@@ -1831,8 +1847,12 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	if (cif_dev->hub_en) {
 		ret = mtk8250_uart_hub_register_cb(btmtk_uarthub_err_cb);
 		BTMTK_DBG("%s mtk8250_uart_hub_register_cb ret[%d]", __func__, ret);
+#if defined(CFG_UART_WAKEUP_SUPPORT)
+		ret = mtk8250_wakeup_callback_register(btmtk_uart_wakeup_cb, bdev);
+		BTMTK_INFO("%s mtk8250_wakeup_callback_register ret[%d]", __func__, ret);
+#endif // CFG_UART_WAKEUP_SUPPORT
 	}
-#endif
+#endif // CONFIG_MTK_UARTHUB
 	BTMTK_INFO("%s end, baudrate[%d] hub_en[%d] sleep_en[%d]", __func__, cif_dev->baudrate, cif_dev->hub_en, cif_dev->sleep_en);
 	return 0;
 }

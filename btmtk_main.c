@@ -1176,7 +1176,11 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 			if (!skb) {
 				if (bdev->main_info.hif_hook.raw_filter
 						&& bdev->main_info.hif_hook.raw_filter(bdev, buf, size)) {
+#if (USE_DEVICE_NODE == 0)
 					BTMTK_DBG_DEV(bdev, "%s: skip 0x%02X pkt", __func__, *buf);
+#else
+					BTMTK_INFO_DEV(bdev, "%s: skip 0x%02X pkt", __func__, *buf);
+#endif
 					return NULL;
 				}
 
