@@ -20,7 +20,7 @@
 #define KPI_WITHOUT_TYPE		0	/* bluetooth kpi */
 
 #ifdef STATIC_REGISTER_FWLOG_NODE
-#define FIXED_STPBT_MAJOR_DEV_ID
+#define FIXED_STPBT_MAJOR_DEV_ID	111
 #endif
 
 /* Device node */

@@ -82,8 +82,8 @@ void btmtk_reset_waker(struct work_struct *work)
 
 	/* Check chip state is ok to do reset or not */
 	state = btmtk_get_chip_state(bdev);
-	if (state == BTMTK_STATE_SUSPEND) {
-		BTMTK_INFO("%s suspend state don't do chip reset!", __func__);
+	if (state == BTMTK_STATE_SUSPEND || state == BTMTK_STATE_DISCONNECT) {
+		BTMTK_INFO("%s suspend/disconnect state (%d) don't do chip reset!", __func__, state);
 		if (bmain_info->hif_hook.handle_mutex_unlock)
 			bmain_info->hif_hook.handle_mutex_unlock(bdev);
 		return;
@@ -259,6 +259,7 @@ L0RESET:
 	DUMP_TIME_STAMP("chip_reset_end");
 
 #if (USE_DEVICE_NODE == 0)
+	bmain_info->chip_reset_flag = 0;
 	/* Set End/Error state */
 	if (err < 0)
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);

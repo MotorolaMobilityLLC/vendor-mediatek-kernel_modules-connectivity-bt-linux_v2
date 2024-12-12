@@ -666,6 +666,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 				(val == 0) ? "SLEEP" :
 				((val == 1) ? "WAKEUP" :
 				((val == 2) ? "NO_RESPONSE" : "ERROR")));
+			pp_bdev[hci_idx]->bt_cfg.debug_sop_mode = val;
 			if (fstate != BTMTK_FOPS_STATE_OPENED) {
 				ret = bmain_info->hif_hook.open(pp_bdev[hci_idx]->hdev);
 				if (ret < 0) {
@@ -1044,7 +1045,6 @@ static int btmtk_skb_enq_fwlog(struct btmtk_dev *bdev, void *src, u32 len, u8 ty
 		skb_tmp->len = len;
 	}
 
-
 	spin_lock_irqsave(&g_fwlog->fwlog_lock, flags);
 	skb_queue_tail(queue, skb_tmp);
 	spin_unlock_irqrestore(&g_fwlog->fwlog_lock, flags);
@@ -1230,7 +1230,6 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 					bdev->chip_reset_signal |= (1 << 2);
 					BTMTK_INFO("%s, BT1 FW dump end, chip_reset_signal = %02x",
 							__func__, bdev->chip_reset_signal);
-
 					if (bdev->chip_reset_signal == 0x07) {
 						bdev->chip_reset_signal = 0x00;
 						DUMP_TIME_STAMP("notify_chip_reset");

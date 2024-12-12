@@ -2200,6 +2200,7 @@ static void btmtk_usb_dump_debug_sop(struct btmtk_dev *bdev)
 		btmtk_usb_get_dump_mode(bdev);
 	else
 		btmtk_usb_dump_debug_register(bdev, bdev->debug_sop_reg_dump);
+
 	BTMTK_INFO("%s -debug sop dump end", __func__);
 }
 
@@ -4685,6 +4686,7 @@ static int btusb_probe(struct usb_interface *intf,
 
 	ifnum_base = intf->cur_altsetting->desc.bInterfaceNumber;
 	BTMTK_INFO("intf %p id %p, interfacenum = %d", intf, id, ifnum_base);
+	bmain_info->chip_reset_flag = 0;
 
 	bdev = usb_get_intfdata(intf);
 	if (!bdev) {
