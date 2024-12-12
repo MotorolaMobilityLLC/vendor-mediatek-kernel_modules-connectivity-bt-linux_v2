@@ -74,7 +74,6 @@ $(info [BT_Drv] MTK_BT_CHIP = $(MTK_BT_CHIP))
 $(info [BT_Drv] WIFI_CONSYS_PRODUCT_SUPPORT = $(WIFI_CONSYS_PRODUCT_SUPPORT))
 
 ifeq ($(MTK_BT_SUPPORT),yes)
-ifneq ($(filter MTK_MT79%, $(MTK_BT_CHIP)),)
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := btmtk_uart_unify.ko
@@ -87,7 +86,6 @@ LOCAL_SRC_FILES := $(patsubst $(LOCAL_PATH)/%,%,$(shell find $(LOCAL_PATH) -type
 
 include $(MTK_KERNEL_MODULE)
 include $(LOCAL_PATH)/uart_daemon/Android.mk
-endif
 endif
 
 ifeq ($(WIFI_CONSYS_PRODUCT_SUPPORT), CE_TV)
