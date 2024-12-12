@@ -2423,7 +2423,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 			BTMTK_INFO("%s: btmtk_load_fw_patch_using_wmt_cmd!", __func__);
 			/* using legacy wmt cmd to download fw patch */
 			ret = btmtk_load_fw_patch_using_wmt_cmd(bdev, pos, fwbuf, event,
-					LD_PATCH_EVT_LEN - 1, dl_size, section_offset, BT_DOWNLOAD);
+					LD_PATCH_EVT_LEN, dl_size, section_offset, BT_DOWNLOAD);
 			if (ret < 0) {
 				BTMTK_ERR("%s: btmtk_load_fw_patch_using_wmt_cmd failed!", __func__);
 				goto err;
