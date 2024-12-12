@@ -73,7 +73,7 @@
 /* Local Configuration */
 /*============================================================================*/
 
-#define LD_VERSION "4.0.21060701"
+#define LD_VERSION "4.0.22010701"
 
 #define BUFFER_SIZE  (1024 * 4)	/* Size of RX Queue */
 #define BT_SEND_HCI_CMD_BEFORE_SUSPEND 1
@@ -1935,7 +1935,7 @@ static int btmtk_usb_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct 
 		int counter, u8 *searchcontent, enum fw_cfg_index_len index_length)
 {
 	int ret = 0, i = 0;
-	int temp_len = 0;
+	unsigned int temp_len = 0;
 	u8 temp[260]; /* save for total hex number */
 	char *search_result = NULL;
 	char *search_end = NULL;
@@ -1962,11 +1962,21 @@ static int btmtk_usb_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct 
 		if (search_result) {
 			memset(temp, 0, sizeof(temp));
 			search_result = strstr(search_result, "0x");
+			if (search_result == NULL) {
+				usb_debug("%s: search_result is NULL", __func__);
+				return -1;
+			}
+
 			/* find next line as end of this command line, if NULL means last line */
 			next_block = strstr(search_result, ":");
 
 			do {
 				search_end = strstr(search_result, ",");
+				if (search_end == NULL) {
+					usb_debug("%s: search_end is NULL", __func__);
+					break;
+				}
+
 				if (search_end - search_result != CHAR2HEX_SIZE) {
 					usb_debug("Incorrect Format in %s\n", search);
 					break;
@@ -1977,6 +1987,10 @@ static int btmtk_usb_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct 
 
 				temp[temp_len++] = strtol(number, &number, 0);
 				search_result = strstr(search_end, "0x");
+				if (search_result == NULL) {
+					usb_debug("%s: search_result is NULL", __func__);
+					break;
+				}
 			} while (search_result < next_block || (search_result && next_block == NULL));
 		}
 
