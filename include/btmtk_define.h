@@ -76,7 +76,10 @@
 #define BTMTK_FW_OWNING			3
 #define BTMTK_OWN_FAIL			4
 
-#define FW_OWN_TIMEOUT			30
+/* Extend to 60ms to prohibit set fw own while iso streaming.
+ * Or iso TX/RX may pass anchor interval as set FW own takes long time.
+ * And also FW may assert due to queue full since driver cannot read data in time*/
+#define FW_OWN_TIMEOUT			60
 
 #define FW_OWN_TIMER_UKNOWN		0
 #define FW_OWN_TIMER_INIT		1
