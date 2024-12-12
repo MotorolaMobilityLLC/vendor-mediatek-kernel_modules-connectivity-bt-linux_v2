@@ -86,8 +86,8 @@ void btmtk_reset_waker(struct work_struct *work)
 	int state = 0;
 	int err = 0;
 	int cur = 0;
-	int set_chip_state_flag = 0;
 #if (USE_DEVICE_NODE == 0)
+	int set_chip_state_flag = 0;
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
 #else
