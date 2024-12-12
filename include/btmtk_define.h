@@ -49,7 +49,7 @@
 #endif
 
 /** Driver version */
-#define VERSION "8.0.2023032001"
+#define VERSION "8.0.2023032101"
 #define SUBVER ":connac3_dev"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ

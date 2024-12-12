@@ -615,11 +615,8 @@ static int btmtk_usb_fops_sco_exit(struct btmtk_dev *bdev)
 static void btmtk_usb_dump_debug_register(struct btmtk_dev *bdev,
 		struct debug_reg_struct debug_reg)
 {
-	struct btmtk_sdio_dev *cif_dev = NULL;
 	u32 value = 0, i = 0, count = 0;
 	static u32 reg_page[] = {0, 0};
-
-	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
 	count = debug_reg.num;
 	for (i = 0; i < count; i++) {
@@ -4130,7 +4127,7 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 
 		ret = btmtk_usb_send_cmd(bdev, skb, delay, retry, pkt_type);
 		if (ret < 0) {
-			BTMTK_ERR("%s btmtk_sdio_send_cmd failed!!", __func__);
+			BTMTK_ERR("%s btmtk_usb_send_cmd failed!!", __func__);
 			goto fw_assert;
 		}
 

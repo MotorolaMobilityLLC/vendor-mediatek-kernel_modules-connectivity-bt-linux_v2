@@ -1,6 +1,6 @@
 /*
  *
- *  Generic Bluetooth USB driver
+ *  Generic Bluetooth SDIO driver
  *
  *  Copyright (C) 2005-2008  Marcel Holtmann <marcel@holtmann.org>
  *
