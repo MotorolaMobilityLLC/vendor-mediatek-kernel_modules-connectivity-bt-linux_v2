@@ -2094,6 +2094,7 @@ end:
 	btmtk_sdio_keep_driver_own(cif_dev, 0);
 #endif /* CFG_SUPPORT_HW_DVT */
 	btmtk_woble_wake_unlock(bdev);
+	btmtk_assert_wake_unlock();
 
 exit:
 	atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);

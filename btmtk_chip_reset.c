@@ -58,6 +58,14 @@ void btmtk_reset_timer_del(struct btmtk_dev *bdev)
 	}
 }
 
+bool btmtk_reset_timer_check(struct btmtk_dev *bdev)
+{
+	if (timer_pending(&bdev->chip_reset_timer))
+		return true;
+	else
+		return false;
+}
+
 void btmtk_reset_waker(struct work_struct *work)
 {
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, reset_waker);
@@ -172,6 +180,7 @@ void btmtk_reset_waker(struct work_struct *work)
 #endif
 			(void)btmtk_send_hw_err_to_host(bdev);
 			btmtk_woble_wake_unlock(bdev);
+			btmtk_assert_wake_unlock();
 			if (bmain_info->hif_hook.chip_reset_notify)
 				bmain_info->hif_hook.chip_reset_notify(bdev);
 		} else {

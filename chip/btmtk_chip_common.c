@@ -651,6 +651,7 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 		if (skb->len == FD5B_ASSERT_CMD_LEN &&
 			!memcmp(skb->data, fw_coredump_cmd.content, fw_coredump_cmd.len)) {
 			BTMTK_INFO("%s: Dongle FW Assert Triggered by BT Stack!", __func__);
+			btmtk_assert_wake_lock();
 			*fw_dump = 1;
 			btmtk_reset_timer_update(bdev);
 			btmtk_hci_snoop_print_to_log();

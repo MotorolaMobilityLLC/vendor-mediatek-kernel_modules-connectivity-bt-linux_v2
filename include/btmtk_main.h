@@ -746,7 +746,7 @@ struct btmtk_main_info {
 	atomic_t subsys_reset_conti_count;
 
 	u8 reset_stack_flag;
-	struct wakeup_source *fwdump_ws;
+	struct wakeup_source *assert_ws;
 	struct wakeup_source *woble_ws;
 	struct wakeup_source *eint_ws;
 #if WAKEUP_BT_IRQ
@@ -932,6 +932,9 @@ int32_t btmtk_set_sleep(struct hci_dev *hdev, u_int8_t need_wait);
 int32_t bgfsys_bt_patch_dl(void);
 int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value);
 void btmtk_set_country_code_from_wifi(char *code);
+void btmtk_assert_wake_lock(void);
+void btmtk_assert_wake_unlock(void);
+bool btmtk_assert_wake_lock_check(void);
 #if (USE_DEVICE_NODE == 1)
 int rx_skb_enqueue(struct sk_buff *skb);
 int btmtk_chardev_init(void);

@@ -78,6 +78,5 @@ long btmtk_fops_compat_ioctlfwlog(struct file *filp, unsigned int cmd, unsigned 
 int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb);
 int btmtk_dispatch_fwlog_bluetooth_kpi(struct btmtk_dev *bdev, u8 *buf, int len, u8 type);
 int btmtk_update_bt_status(u8 onoff_flag);
-void btmtk_fwdump_wake_unlock(void);
 
 #endif /* __BTMTK_FW_LOG_H__ */
