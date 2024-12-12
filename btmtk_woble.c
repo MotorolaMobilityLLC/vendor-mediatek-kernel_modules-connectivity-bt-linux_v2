@@ -738,10 +738,18 @@ int btmtk_woble_suspend(struct btmtk_woble *bt_woble)
 {
 	int ret = 0;
 	unsigned char fstate = 0;
-	struct btmtk_dev *bdev = bt_woble->bdev;
+	struct btmtk_dev *bdev = NULL;
 	struct irq_desc *desc;
 
 	BTMTK_INFO("%s: enter", __func__);
+
+	if (!bt_woble) {
+		BTMTK_WARN("%s: invalid parameters!", __func__);
+		goto exit;
+	}
+
+	bdev = bt_woble->bdev;
+
 	if (bdev == NULL) {
 		BTMTK_WARN("%s: bdev is NULL", __func__);
 		goto exit;
@@ -785,10 +793,23 @@ int btmtk_woble_resume(struct btmtk_woble *bt_woble)
 {
 	int ret = 0;
 	unsigned char fstate = BTMTK_FOPS_STATE_UNKNOWN;
-	struct btmtk_dev *bdev = bt_woble->bdev;
+	struct btmtk_dev *bdev = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	BTMTK_INFO("%s: enter", __func__);
+
+	if (!bt_woble) {
+		BTMTK_ERR("%s: invalid parameters!", __func__);
+		goto exit;
+	}
+
+	bdev = bt_woble->bdev;
+
+	if (!bdev) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		goto exit;
+	}
+
 	fstate = btmtk_fops_get_state(bdev);
 
 	if (!is_support_unify_woble(bdev) && (fstate != BTMTK_FOPS_STATE_OPENED)) {

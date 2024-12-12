@@ -509,6 +509,11 @@ u8 btmtk_get_chip_state(struct btmtk_dev *bdev)
 {
 	u8 state = 0;
 
+	if (!bdev) {
+		BTMTK_ERR("%s, invalid parameters!", __func__);
+		return state;
+	}
+
 	CHIP_STATE_MUTEX_LOCK();
 	state = bdev->interface_state;
 	CHIP_STATE_MUTEX_UNLOCK();
@@ -522,6 +527,11 @@ void btmtk_set_chip_state(struct btmtk_dev *bdev, u8 new_state)
 		"UNKNOWN", "INIT", "DISCONNECT", "PROBE", "WORKING", "SUSPEND", "RESUME",
 		"FW_DUMP", "STANDBY", "SUBSYS_RESET", "SEND_ASSERT",
 	};
+
+	if (!bdev) {
+		BTMTK_ERR("%s, invalid parameters!", __func__);
+		return;
+	}
 
 	if (new_state >= BTMTK_STATE_MSG_NUM) {
 		BTMTK_INFO("%s: new_state invalid(%d)", __func__, new_state);
@@ -540,6 +550,11 @@ u8 btmtk_fops_get_state(struct btmtk_dev *bdev)
 {
 	u8 state = 0;
 
+	if (!bdev) {
+		BTMTK_ERR("%s, invalid parameters!", __func__);
+		return state;
+	}
+
 	FOPS_MUTEX_LOCK();
 	state = bdev->fops_state;
 	FOPS_MUTEX_UNLOCK();
@@ -552,6 +567,11 @@ static void btmtk_fops_set_state(struct btmtk_dev *bdev, u8 new_state)
 	static const char * const fstate_msg[BTMTK_FOPS_STATE_MSG_NUM] = {
 		"UNKNOWN", "INIT", "OPENING", "OPENED", "CLOSING", "CLOSED",
 	};
+
+	if (!bdev) {
+		BTMTK_ERR("%s, invalid parameters!", __func__);
+		return;
+	}
 
 	if (new_state >= BTMTK_FOPS_STATE_MSG_NUM) {
 		BTMTK_INFO("%s: new_state invalid(%d)", __func__, new_state);
