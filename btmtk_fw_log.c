@@ -1202,7 +1202,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 	static u8 fwlog_picus_blocking_warn;
 	static u8 fwlog_fwdump_blocking_warn;
 	static u8 wf_fwlog_fwdump_blocking_warn;
-	int state = 0;
+	int state = 0, header_len;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	struct sk_buff *skb_opcode = NULL;
 	struct data_struct hci_reset_event = {0};
@@ -1278,9 +1278,14 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		/* In the new generation, we will check the keyword of coredump (; coredump end)
 		 * Such as : 79xx
 		 */
-		if (skb->data[skb->len - 4] == 'e' &&
-			skb->data[skb->len - 3] == 'n' &&
-			skb->data[skb->len - 2] == 'd') {
+		if (is_mt7663(bdev->chip_id))
+			header_len = 5;
+		else
+			header_len = 4;
+
+		if (skb->data[skb->len - header_len] == 'e' &&
+			skb->data[skb->len - header_len + 1] == 'n' &&
+			skb->data[skb->len - header_len + 2] == 'd') {
 			/* This is the latest coredump packet. */
 			BTMTK_INFO("%s: FW dump end, dump_data_counter = %d, total_length = %d",
 					__func__, dump_data_counter, dump_data_length);
@@ -1316,7 +1321,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			} else {
 				bdev->chip_reset_signal |= (1 << 1);
 				BTMTK_INFO("%s ,chip_reset_signal = %02x", __func__, bdev->chip_reset_signal);
-				if (bdev->chip_reset_signal == 0x03) {
+				if (bdev->chip_reset_signal == 0x03 || is_mt7663(bdev->chip_id)) {
 					bdev->chip_reset_signal = 0x00;
 					DUMP_TIME_STAMP("notify_chip_reset");
 					btmtk_reset_trigger(bdev);

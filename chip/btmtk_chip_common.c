@@ -201,6 +201,11 @@ char set_compensation_cmd_6639[SET_COMPENSATION_CMD_LEN_6639] = {0x01, 0x93, 0xF
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 char set_compensation_evt_6639[SET_COMPENSATION_EVT_LEN_6639] = {0x04, 0x0E, 0x04, 0x01, 0x93, 0xFC, 0x00};
 
+char picus_filter_cmd[PICUS_FILTER_CMD_LEN] = {0x01, 0x5F, 0xFC, 0x2E, 0x50, 0x01, 0x0A, 0x00, 0x00, 0x00,
+		0x01, 0x00, 0x00, 0xE0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+		0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00,
+		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+char picus_filter_event[PICUS_FILTER_EVT_LEN] = {0x04, 0x0E, 0x04, 0x01, 0x5F, 0xFC, 0x00};
 
 struct bt_cmds_s commands[] = {
 	{"UNKNOWN", {{0, NULL}, {0, NULL}}, 0},
@@ -301,7 +306,9 @@ struct bt_cmds_s commands[] = {
 	{"SET_COMPENSATION_EVT", {{SET_COMPENSATION_EVT_LEN, set_compensation_evt}, {0, NULL}}, DEFAULT},
 	{"SET_COMPENSATION_CMD_6639", {{SET_COMPENSATION_CMD_LEN_6639, set_compensation_cmd_6639}, {0, NULL}}, DEFAULT},
 	{"SET_COMPENSATION_EVT_6639", {{SET_COMPENSATION_EVT_LEN_6639, set_compensation_evt_6639}, {0, NULL}}, DEFAULT},
-	{"RHW_ASSERT_CMD", {{RHW_ASSERT_CMD_LEN, rhw_assert_cmd}, {0, NULL}}, DEFAULT}
+	{"RHW_ASSERT_CMD", {{RHW_ASSERT_CMD_LEN, rhw_assert_cmd}, {0, NULL}}, DEFAULT},
+	{"PICUS_FILTER_CMD", {{PICUS_FILTER_CMD_LEN, picus_filter_cmd}, {0, NULL}}, DEFAULT},
+	{"PICUS_FILTER_EVT", {{PICUS_FILTER_EVT_LEN, picus_filter_event}, {0, NULL}}, DEFAULT}
 };
 
 struct bt_cmds_s command_raw_data[4][BTMTK_CMD_NUM];
@@ -893,6 +900,17 @@ int btmtk_cif_chip_register(struct btmtk_dev *bdev)
 	case 0x6631:
 	case 0x6635:
 		btmtk_cif_chip_66xx_register();
+		break;
+	case 0x7663:
+		(void)snprintf(bdev->chip_data_file_name, MAX_BIN_FILE_NAME_LEN, "bt_mt%x_data.bin",
+				bdev->chip_id & 0xffff);
+		ret = btmtk_load_raw_data(bdev->chip_data_file_name, bdev);
+		if (ret) {
+			BTMTK_ERR("%s: load raw data from %s failed", __func__, bdev->chip_data_file_name);
+			goto register_end;
+		}
+
+		btmtk_cif_chip_7663_register();
 		break;
 	default:
 		BTMTK_ERR("Unknown Mediatek device(%04X)", bdev->chip_id);

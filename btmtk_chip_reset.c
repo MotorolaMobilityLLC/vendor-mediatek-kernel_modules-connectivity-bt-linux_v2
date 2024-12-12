@@ -133,6 +133,11 @@ void btmtk_reset_waker(struct work_struct *work)
 	}
 #endif
 
+	if (is_mt7663(bdev->chip_id)) {
+		bmain_info->chip_reset_flag = 1;
+		BTMTK_WARN("%s: 7663 not support L0.5 reset, do whole chip reset", __func__);
+	}
+
 	btmtk_reset_timer_del(bdev);
 
 	if (atomic_read(&bmain_info->chip_reset) ||

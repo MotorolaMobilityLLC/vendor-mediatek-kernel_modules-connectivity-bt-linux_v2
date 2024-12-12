@@ -1009,7 +1009,7 @@ void btmtk_load_debug_sop_register(char *debug_sop_name, struct device *dev, str
 	int err;
 	u32 code_len = 0;
 
-	if (is_connac3(bdev->chip_id)) {
+	if (is_connac3(bdev->chip_id) || is_mt7663(bdev->chip_id)) {
 		BTMTK_WARN("%s: connac3 chip not supported", __func__);
 		return;
 	}
@@ -3069,6 +3069,27 @@ int btmtk_reset_power_on(struct btmtk_dev *bdev)
 	return 0;
 }
 #if (STPBTFWLOG_ENABLE == 1)
+int btmtk_picus_filter(struct btmtk_dev *bdev)
+{
+	int ret = 0;	/* if successful, 0 */
+	struct data_struct cmd = {0}, event = {0};
+
+	BTMTK_INFO("%s", __func__);
+
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, PICUS_FILTER_CMD, cmd);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, PICUS_FILTER_EVT, event);
+
+	BTMTK_INFO_RAW(cmd.content,
+			cmd.len, "%s: ", __func__);
+
+	ret = btmtk_main_send_cmd(bdev,
+			cmd.content, cmd.len,
+			event.content, event.len,
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
+
+	return ret;
+}
+
 int btmtk_picus_enable(struct btmtk_dev *bdev, int via_uart)
 {
 	int ret = 0;	/* if successful, 0 */
@@ -3079,12 +3100,20 @@ int btmtk_picus_enable(struct btmtk_dev *bdev, int via_uart)
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, PICUS_ENABLE_CMD, cmd);
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, PICUS_ENABLE_EVT, event);
 
-	if (via_uart) {
-		cmd.content[cmd.len - 1] = 0x03;
-		cmd.content[cmd.len - 2] = 0x03;
+	if (is_mt7663(bdev->chip_id)) {
+		ret = btmtk_picus_filter(bdev);
+		if (ret) {
+			BTMTK_ERR("send picus filter param failed");
+			return ret;
+		}
 	} else {
-		cmd.content[cmd.len - 1] = 0x02;
-		cmd.content[cmd.len - 2] = 0x02;
+		if (via_uart) {
+			cmd.content[cmd.len - 1] = 0x03;
+			cmd.content[cmd.len - 2] = 0x03;
+		} else {
+			cmd.content[cmd.len - 1] = 0x02;
+			cmd.content[cmd.len - 2] = 0x02;
+		}
 	}
 
 	BTMTK_INFO_RAW(cmd.content,
@@ -3245,7 +3274,8 @@ int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_conte
 				!memcmp(block_name, "RADIOON", sizeof("RADIOON")) ||
 				!memcmp(block_name, "APCF_RESUME", sizeof("APCF_RESUME")) ||
 				!memcmp(block_name, "VENDOR_CMD", sizeof("VENDOR_CMD")) ||
-				!memcmp(block_name, "PHASE1_WMT_CMD", sizeof("PHASE1_WMT_CMD"))) {
+				!memcmp(block_name, "PHASE1_WMT_CMD", sizeof("PHASE1_WMT_CMD")) ||
+				!memcmp(block_name, "WMT_CMD", sizeof("WMT_CMD"))) {
 				temp[0] = 0x01;
 				temp_len++;
 			} else if (!memcmp(block_name, "RADIOOFF_STATUS_EVENT", sizeof("RADIOOFF_STATUS_EVENT")) ||
@@ -3635,6 +3665,11 @@ static void btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 	if (ret)
 		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_FILTER_VENDOR_CMD);
 
+	ret = btmtk_load_fw_cfg_setting(BT_WMT_CMD, bt_cfg_content->wmt_cmd,
+		WMT_CMD_COUNT, searchcontent, FW_CFG_INX_LEN_3);
+	if (ret)
+		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_WMT_CMD);
+
 	ret = btmtk_parse_bt_cfg_file(BT_DEBUG_SOP_MODE, text, searchcontent);
 	if (ret) {
 		if (kstrtoul(text, 10, &text_value) == 0)
@@ -3780,6 +3815,15 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 		goto exit;
 	}
 
+	if (!is_mtk_chip(bdev->chip_id)) {
+		ret = main_info.hif_hook.reg_read(bdev, 0x80000008, &bdev->chip_id);
+		if (ret < 0) {
+			BTMTK_ERR("read chip id failed");
+			ret = -EIO;
+			goto exit;
+		}
+	}
+
 	if (is_connac3(bdev->chip_id))
 		btmtk_cif_chip_commonv3_register(); /* load connac3 default hook func */
 
@@ -3820,6 +3864,9 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 		(void)snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s%x_%x_%x.%s",
 				BT_CFG_NAME_PREFIX, bdev->chip_id & 0xffff,
 				(bdev->proj & 0xff) + 1, (bdev->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
+	} else if (is_mt7663(bdev->chip_id)) {
+		(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "mt7663_patch_e2_hdr.bin");
+		(void)snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "bt_mt7663.cfg");
 	}
 
 	BTMTK_INFO("%s: rom patch file name is %s, bt_cfg_file_name is %s", __func__,

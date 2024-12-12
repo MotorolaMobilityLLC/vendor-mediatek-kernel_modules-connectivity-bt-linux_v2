@@ -24,6 +24,8 @@ static int intf_to_idx[BT_MCU_INTERFACE_NUM_MAX] = {0, -1, -1, 1};
 static struct btmtk_usb_dev g_usb_dev[BT_MCU_MINIMUM_INTERFACE_NUM][BT_MCU_NUM_MAX];
 
 static const struct usb_device_id btusb_table[] = {
+	/* Mediatek MT7663 */
+	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x7663, 0xe0, 0x01, 0x01) },
 	/* Mediatek MT7961 */
 	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x7961, 0xe0, 0x01, 0x01) },
 	/* Mediatek MT7915 */
@@ -3417,7 +3419,7 @@ static int btmtk_usb_open(struct hci_dev *hdev)
 
 	if (is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id)
 			|| is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)
-			|| is_mt7925(bdev->chip_id)) {
+			|| is_mt7925(bdev->chip_id) || is_mt7663(bdev->chip_id)) {
 		BTMTK_INFO("%s 79xx submit urb", __func__);
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
 			if (cif_dev->reset_intr_ep) {
@@ -3976,7 +3978,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb, bool flag
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
 			if ((is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id)
 					|| is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)
-					|| is_mt7925(bdev->chip_id)) &&
+					|| is_mt7925(bdev->chip_id) || is_mt7663(bdev->chip_id)) &&
 					cif_dev->bulk_cmd_tx_ep)
 				urb = alloc_bulk_cmd_urb(hdev, skb);
 			else
@@ -4844,6 +4846,8 @@ static int btusb_probe(struct usb_interface *intf,
 #endif
 #if CFG_SUPPORT_BLUEZ
 	u8 send_init_fail = 0;
+	int cif_event = 0;
+	struct btmtk_cif_state *cif_state = NULL;
 #endif
 	u8 cap_init_fail = 0;
 #if ((CFG_SUPPORT_HW_DVT == 0) || CFG_SUPPORT_BLUEZ)
@@ -4988,7 +4992,8 @@ LOAD_PATCH_RETRY:
 #endif
 
 	/* For reset */
-	btmtk_cif_write_uhw_register(bdev, EP_RST_OPT, 0x00010001);
+	if (!is_mt7663(bdev->chip_id))
+		btmtk_cif_write_uhw_register(bdev, EP_RST_OPT, 0x00010001);
 
 	if (bdev->bt_cfg.support_dts_subsys_rst) {
 		err = btusb_set_pinmux(bdev);
@@ -4998,7 +5003,7 @@ LOAD_PATCH_RETRY:
 	}
 
 	/* Interface numbers are hardcoded in the specification */
-	if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
+	if (!is_mt7663(bdev->chip_id) && BTMTK_IS_BT_0_INTF(ifnum_base)) {
 		cif_dev->isoc = usb_ifnum_to_if(cif_dev->udev, 1);
 
 		BTMTK_INFO("set interface number 2 for iso ");
@@ -5080,6 +5085,17 @@ SEND_INIT_RETRY:
 		} else
 			goto free_setting;
 	}
+
+	cif_event = HIF_EVENT_PROBE;
+	cif_state = &bdev->cif_state[cif_event];
+
+	/* For Bluez, set to WORKING state first to avoid hci open fail */
+	/* Set End/Error state */
+	if (err == 0)
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	else
+		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+
 #endif /* CFG_SUPPORT_BLUEZ */
 
 	err = btmtk_register_hci_device(bdev);
@@ -6199,6 +6215,7 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 {
 	unsigned long start_time = 0;
 	int ret = 0;
+	int rcv_retry = retry;
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev == NULL!", __func__);
@@ -6216,24 +6233,27 @@ int btmtk_usb_send_and_recv(struct btmtk_dev *bdev,
 		}
 
 		if (event && event_len > 0) {
-			bdev->recv_evt_len = btmtk_cif_recv_evt(bdev, delay, retry);
-			if (bdev->recv_evt_len < 0) {
-				BTMTK_ERR("%s btmtk_cif_recv_evt failed!!", __func__);
-				ret = -ERRNUM;
-				goto fw_assert;
+			while (rcv_retry--) {
+				bdev->recv_evt_len = btmtk_cif_recv_evt(bdev, delay, retry);
+				if (bdev->recv_evt_len < 0) {
+					BTMTK_ERR("%s btmtk_cif_recv_evt failed!!", __func__);
+					ret = -ERRNUM;
+					goto fw_assert;
+				}
+
+				if (bdev->io_buf && bdev->recv_evt_len >= event_len) {
+					if (memcmp(bdev->io_buf, event, event_len) == 0) {
+						ret = 0;
+						goto exit;
+					}
+				}
+				BTMTK_INFO("%s compare fail", __func__);
+				BTMTK_INFO_RAW(event, event_len, "%s: event_need_compare:", __func__);
+				if (bdev->io_buf)
+					BTMTK_INFO_RAW(bdev->io_buf, bdev->recv_evt_len,
+						"%s: RCV:", __func__);
 			}
 
-			if (bdev->io_buf && bdev->recv_evt_len >= event_len) {
-				if (memcmp(bdev->io_buf, event, event_len) == 0) {
-					ret = 0;
-					goto exit;
-				}
-			}
-			BTMTK_INFO("%s compare fail", __func__);
-			BTMTK_INFO_RAW(event, event_len, "%s: event_need_compare:", __func__);
-			if (bdev->io_buf)
-				BTMTK_INFO_RAW(bdev->io_buf, bdev->recv_evt_len,
-					"%s: RCV:", __func__);
 			ret = -ERRNUM;
 		} else {
 			ret = 0;

@@ -47,7 +47,7 @@
 
 /** Driver version */
 
-#define VERSION "8.0.2024011201"
+#define VERSION "8.0.2024012501"
 #define SUBVER ":connac3_dev"
 
 #if CFG_SUPPORT_WAKEUP_IRQ
@@ -308,6 +308,7 @@ extern uint8_t _raw_buf_[];
 #define PHASE1_WMT_CMD_COUNT 255
 #define VENDOR_CMD_COUNT 255
 #define FILTER_VENDOR_CMD_COUNT 255
+#define WMT_CMD_COUNT 255
 
 #define BT_CFG_NAME "bt.cfg"
 #define BT_CFG_NAME_PREFIX "bt_mt"
@@ -345,6 +346,7 @@ extern uint8_t _raw_buf_[];
 #define BT_LE_AUDIO_CLK "SUPPORT_LE_AUDIO_CLK"
 #define BT_LE_AUDIO_CLK_FW_GPIO "LE_AUDIO_CLK_FW_GPIO"
 #endif
+#define BT_WMT_CMD "WMT_CMD"
 
 #define PM_KEY_BTW (0x0015) /* Notify PM the unify woble type */
 
@@ -401,6 +403,7 @@ struct bt_cfg_struct {
 	bool	support_le_audio_clk;
 	int	le_audio_clk_fw_gpio;
 #endif
+	struct fw_cfg_struct wmt_cmd[WMT_CMD_COUNT];
 };
 
 struct bt_utc_struct {

@@ -868,6 +868,14 @@ struct btmtk_main_info {
 	int bk_rs_flag;
 };
 
+static inline int is_mt7663(u32 chip_id)
+{
+	chip_id &= 0xFFFF;
+	if (chip_id == 0x7663)
+		return 1;
+	return 0;
+}
+
 static inline int is_mt7925(u32 chip_id)
 {
 	chip_id &= 0xFFFF;
@@ -930,6 +938,13 @@ static inline int is_connac3(u32 chip_id)
 	return 0;
 }
 
+static inline int is_mtk_chip(u32 chip_id)
+{
+	if (is_mt7663(chip_id) || is_mt7961(chip_id) || is_mt7922(chip_id) || is_mt66xx(chip_id) ||
+		is_mt7902(chip_id) || is_mt6639(chip_id) || is_mt7925(chip_id))
+		return 1;
+	return 0;
+}
 
 /* Get BT whole packet length except hci type */
 static inline unsigned int get_pkt_len(unsigned char type, unsigned char *buf)
@@ -1033,6 +1048,7 @@ void btmtk_reg_hif_chip_hook(struct hif_hook_chip_ptr *hook);
 int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag);
 int btmtk_picus_enable(struct btmtk_dev *bdev, int via_uart);
 int btmtk_picus_disable(struct btmtk_dev *bdev);
+int btmtk_picus_filter(struct btmtk_dev *bdev);
 int btmtk_set_audio_setting(struct btmtk_dev *bdev);
 
 int32_t btmtk_set_sleep(struct hci_dev *hdev, u_int8_t need_wait);

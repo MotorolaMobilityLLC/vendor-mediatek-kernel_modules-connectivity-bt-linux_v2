@@ -9,6 +9,7 @@
 #include "btmtk_define.h"
 #include "btmtk_main.h"
 #include "btmtk_fw_log.h"
+#include "btmtk_chip_7663.h"
 #include "btmtk_chip_7902.h"
 #include "btmtk_chip_7922.h"
 #include "btmtk_chip_7961.h"
@@ -124,6 +125,9 @@
 #define SET_COMPENSATION_CMD_LEN_6639 53
 #define SET_COMPENSATION_EVT_LEN_6639 7
 
+#define PICUS_FILTER_CMD_LEN 50
+#define PICUS_FILTER_EVT_LEN 7
+
 #define BT_MISC 0x70002510
 #define MCU_BT0_INIT_DONE (0x1 << 8)
 #define MCU_BT1_INIT_DONE (0x1 << 9)
@@ -237,6 +241,8 @@ enum cmd_index_s {
 	SET_COMPENSATION_CMD_6639,
 	SET_COMPENSATION_EVT_6639,
 	RHW_ASSERT_CMD,
+	PICUS_FILTER_CMD,
+	PICUS_FILTER_EVT,		/* 100 */
 
 	BTMTK_CMD_NUM
 };
