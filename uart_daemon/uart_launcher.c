@@ -67,7 +67,6 @@
 #include "CFG_BT_File.h"
 #include "CFG_file_lid.h"
 #include "libnvram.h"
-#include "CFG_CONNXO_File.h"
 #endif
 
 //---------------------------------------------------------------------------
