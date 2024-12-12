@@ -3143,6 +3143,7 @@ static int btusb_probe(struct usb_interface *intf,
 		goto free_setting;
 	}
 
+	err = 0;
 	goto end;
 
 free_setting:
