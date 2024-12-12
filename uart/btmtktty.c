@@ -1451,6 +1451,7 @@ static int btmtk_uart_set_para(struct btmtk_dev *bdev, int val)
 	return 0;
 }
 
+#if (USE_DEVICE_NODE == 1)
 static int btmtk_uart_set_xonv(struct btmtk_dev *bdev, u8 *connxo, int nvsz)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
@@ -1474,6 +1475,7 @@ static int btmtk_uart_set_xonv(struct btmtk_dev *bdev, u8 *connxo, int nvsz)
 				, sConnxo_cfg.ucDataLenLSB, sConnxo_cfg.ucDataLenMSB, sConnxo_cfg.ucFreqC1Axm52m);
 	return 0;
 }
+#endif
 
 static void btmtk_uart_cif_mutex_lock(struct btmtk_dev *bdev)
 {
@@ -3242,6 +3244,7 @@ int btmtk_cif_register(void)
 	hook.whole_reset = btmtk_sp_whole_chip_reset;
 	hook.trigger_assert = btmtk_uart_trigger_assert;
 	hook.wakeup_host = btmtk_wakeup_host;
+	hook.set_xonv = btmtk_uart_set_xonv;
 #else
 	hook.init = btmtk_ce_init;
 #endif
@@ -3262,7 +3265,6 @@ int btmtk_cif_register(void)
 	hook.waker_notify = btmtk_uart_waker_notify;
 	hook.enter_standby = btmtk_cif_suspend;
 	hook.set_para = btmtk_uart_set_para;
-	hook.set_xonv = btmtk_uart_set_xonv;
 	btmtk_reg_hif_hook(&hook);
 
 	ret = uart_register();
