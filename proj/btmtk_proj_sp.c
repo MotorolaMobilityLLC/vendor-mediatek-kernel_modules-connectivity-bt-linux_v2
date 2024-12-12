@@ -292,6 +292,14 @@ void btmtk_release_uarthub(bool force)
 		BTMTK_ERR("%s: cif_dev is NULL", __func__);
 		return;
 	}
+
+	/* Clear DEV0_HOST_AWAKE */
+	// 0 -> dujac, 1 -> Liber, 2 -> Jayer
+	if (cif_dev->sleep_flow_hw_mech_en) {
+		ret = mtk8250_uart_hub_clear_host_awake_sta(0);
+		BTMTK_INFO("%s: Clear DEV0_HOST_AWAKE ret[%d]", __func__, ret);
+	}
+
 	/* force is for only bt off flow */
 	if (force) {
 		ret = mtk8250_uart_hub_dev0_clear_tx_request();

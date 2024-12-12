@@ -528,7 +528,7 @@ static int BT_open(struct inode *inode, struct file *file)
 		if (g_sbdev->is_pre_cal_done)
 			ret = bt_open(g_sbdev->hdev);
 		if (ret) {
-			BTMTK_WARN_LIMITTED("%s: retry[%d] ret[%d] is_pre_cal_done[%d]"
+			BTMTK_WARN_LIMITTED("%s: ret[%d] retry[%d] is_pre_cal_done[%d]"
 							, __func__, ret, retry, g_sbdev->is_pre_cal_done);
 			msleep(20);
 		}

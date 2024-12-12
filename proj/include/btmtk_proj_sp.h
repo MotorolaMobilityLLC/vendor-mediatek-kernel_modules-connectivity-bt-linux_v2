@@ -63,6 +63,14 @@ extern int mtk8250_uart_hub_dev0_set_rx_request(void);
 extern int mtk8250_uart_hub_dev0_clear_tx_request(void);
 extern int mtk8250_uart_hub_dev0_clear_rx_request(struct tty_struct *tty);
 extern int mtk8250_uart_hub_get_host_wakeup_status(void);
+extern int mtk8250_uart_hub_get_bt_sleep_flow_hw_mech_en(void);
+extern int mtk8250_uart_hub_set_bt_sleep_flow_hw_mech_en(int enable);
+extern int mtk8250_uart_hub_get_host_awake_sta(int dev_index);
+extern int mtk8250_uart_hub_set_host_awake_sta(int dev_index);
+extern int mtk8250_uart_hub_clear_host_awake_sta(int dev_index);
+extern int mtk8250_uart_hub_get_host_bt_awake_sta(int dev_index);
+extern int mtk8250_uart_hub_get_cmm_bt_awake_sta(void);
+extern int mtk8250_uart_hub_get_bt_awake_sta(void);
 int btmtk_wakeup_uarthub(void);
 void btmtk_release_uarthub(bool force);
 #endif

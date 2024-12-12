@@ -185,7 +185,7 @@ struct btmtk_uart_dev {
 	u32			assert_state;
 
 	/* For uarthub setting */
-	u8			fw_hub_en;
+	u8			fw_hub_mode;
 	u8			crc_en;
 	u8			rhw_en;
 	u8			fw_dl_ready;
@@ -215,6 +215,10 @@ struct btmtk_uart_dev {
 	bool 		is_pre_cal;
 
 	bool		is_pre_on_done;
+
+	/* identify bt sleep flow hw mech */
+	int		sleep_flow_hw_mech_en;
+
 #endif
 };
 
