@@ -145,7 +145,7 @@ static int btmtk_subsys_reset(struct btmtk_dev *bdev)
 	bmain_info->hif_hook.read_uhw_register(bdev, BT_SUBSYS_RST, &val);
 
 	if (bdev->dualBT)
-		mcu_init_done |= MCU_BT1_INIT_DONE
+		mcu_init_done |= MCU_BT1_INIT_DONE;
 
 	do {
 		/* polling re-init CR */

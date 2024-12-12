@@ -1570,22 +1570,22 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwb
 
 	globalDesrc = (struct _Global_Descr *)(fwbuf + FW_ROM_PATCH_HEADER_SIZE);
 
-	BTMTK_INFO("[btmtk] =============== Patch Info ==============");
+	BTMTK_INFO("=============== Patch Info ==============");
 
 	if (fw_version) {
 		memset(main_info.fw_version_str, 0, FW_VERSION_BUF_SIZE);
 		fw_version_len = MIN(((u32)(fwbuf + fwbuf_len - fw_version)), FW_VERSION_BUF_SIZE);
 		memcpy(main_info.fw_version_str, fw_version, fw_version_len);
-		BTMTK_INFO("[btmtk] fw_version = %s", main_info.fw_version_str);
+		BTMTK_INFO("fw_version = %s", main_info.fw_version_str);
 	}
 
 	if (patchHdr) {
-		BTMTK_INFO("[btmtk] Built Time = %s", patchHdr->ucDateTime);
-		BTMTK_INFO("[btmtk] Hw Ver = 0x%04x", patchHdr->u2HwVer);
-		BTMTK_INFO("[btmtk] Sw Ver = 0x%04x", patchHdr->u2SwVer);
-		BTMTK_INFO("[btmtk] Magic Number = 0x%08x", patchHdr->u4MagicNum);
+		BTMTK_INFO("Built Time = %s", patchHdr->ucDateTime);
+		BTMTK_INFO("Hw Ver = 0x%04x", patchHdr->u2HwVer);
+		BTMTK_INFO("Sw Ver = 0x%04x", patchHdr->u2SwVer);
+		BTMTK_INFO("Magic Number = 0x%08x", patchHdr->u4MagicNum);
 
-		BTMTK_INFO("[btmtk] Platform = %c%c%c%c",
+		BTMTK_INFO("Platform = %c%c%c%c",
 				patchHdr->ucPlatform[0],
 				patchHdr->ucPlatform[1],
 				patchHdr->ucPlatform[2],
@@ -1594,11 +1594,11 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwb
 		BTMTK_WARN("%s, patchHdr is NULL!", __func__);
 
 	if (globalDesrc) {
-		BTMTK_INFO("[btmtk] Patch Ver = 0x%08x", globalDesrc->u4PatchVer);
-		BTMTK_INFO("[btmtk] Section num = 0x%08x", globalDesrc->u4SectionNum);
+		BTMTK_INFO("Patch Ver = 0x%08x", globalDesrc->u4PatchVer);
+		BTMTK_INFO("Section num = 0x%08x", globalDesrc->u4SectionNum);
 	} else
 		BTMTK_WARN("%s, globalDesrc is NULL!", __func__);
-	BTMTK_INFO("[btmtk] =========================================");
+	BTMTK_INFO("=========================================");
 }
 
 static void btmtk_print_wifi_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
@@ -2366,15 +2366,16 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag)
 
 	btmtk_load_code_from_bin(&rom_patch, bdev->rom_patch_bin_file_name, NULL,
 							&rom_patch_len, 10);
-	if(btmtk_load_code_from_bin_check(rom_patch, rom_patch_len, patch_flag)) {
-		BTMTK_ERR("%s: rom patch length check fail, retyrn",__func__);
-		ret = -1;
-		goto err;
-	}
 
 	if (!rom_patch) {
 		BTMTK_ERR("%s: please assign a rom patch(/etc/firmware/%s)or(/lib/firmware/%s)",
 				__func__, bdev->rom_patch_bin_file_name, bdev->rom_patch_bin_file_name);
+		ret = -1;
+		goto err;
+	}
+
+	if(btmtk_load_code_from_bin_check(rom_patch, rom_patch_len, patch_flag)) {
+		BTMTK_ERR("%s: rom patch length check fail, retyrn",__func__);
 		ret = -1;
 		goto err;
 	}
