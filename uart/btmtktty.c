@@ -2298,8 +2298,10 @@ void btmtk_wakeup_host(struct btmtk_dev *bdev)
 
 #if (defined(ANDROID_OS) && (KERNEL_VERSION(5, 15, 0) > LINUX_VERSION_CODE)) || defined(LINUX_OS)
 static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, char *flags, int count)
-#else
+#elif (KERNEL_VERSION(6, 6, 0) > LINUX_VERSION_CODE)
 static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const char *flags, int count)
+#else
+static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const u8 *flags, size_t count)
 #endif
 {
 	int ret = -1;
