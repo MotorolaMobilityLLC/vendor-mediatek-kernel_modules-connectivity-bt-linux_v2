@@ -28,7 +28,9 @@
 #include "btmtk_queue.h"
 #include "btmtk_proj_sp.h"
 #else
+#if defined(CHIP_IF_UART_TTY)
 #include "btmtk_proj_ce.h"
+#endif
 #endif
 
 #define MTKBT_UNSLEEPABLE_LOCK(x, y)	spin_lock_irqsave(x, y)
