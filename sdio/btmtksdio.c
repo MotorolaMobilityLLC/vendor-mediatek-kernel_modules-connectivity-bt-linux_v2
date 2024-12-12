@@ -1980,6 +1980,7 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 
 	/* create tx/rx thread */
 	init_waitqueue_head(&cif_dev->sdio_thread.wait_q);
+	init_waitqueue_head(&bdev->p_woble_fail_q);
 	skb_queue_head_init(&cif_dev->tx_queue);
 	atomic_set(&cif_dev->int_count, 0);
 	atomic_set(&cif_dev->tx_rdy, 1);
@@ -2223,6 +2224,7 @@ static void btmtk_cif_disconnect(struct sdio_func *func)
 		BTMTK_WARN("%s priv setting is NULL", __func__);
 		return;
 	}
+	btmtk_handle_mutex_lock(bdev);
 
 	btmtk_sdio_wake_lock(g_sdio_dev.device_ws, 0);
 	cif_state = &bdev->cif_state[cif_event];
@@ -2240,6 +2242,7 @@ static void btmtk_cif_disconnect(struct sdio_func *func)
 	/* Set End/Error state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
 	btmtk_sdio_wake_unlock(g_sdio_dev.device_ws);
+	btmtk_handle_mutex_unlock(bdev);
 	BTMTK_INFO("%s, end", __func__);
 }
 
@@ -2269,12 +2272,14 @@ static int btmtk_cif_suspend(struct device *dev)
 		BTMTK_ERR("%s: bdev is null", __func__);
 		return 0;
 	}
+	btmtk_handle_mutex_lock(bdev);
 
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 	bt_woble = &cif_dev->bt_woble;
 
 	if (bdev->suspend_count++) {
 		BTMTK_WARN("Has suspended. suspend_count: %d, end", bdev->suspend_count);
+		btmtk_handle_mutex_unlock(bdev);
 		return 0;
 	}
 
@@ -2333,10 +2338,13 @@ suspend_end:
 		BTMTK_ERR("%s suspend fail ret=%d, trigger reset", __func__, ret);
 		if (ret == -ETIMEDOUT)
 			main_info->chip_reset_flag = 1;
+		btmtk_handle_mutex_unlock(bdev);
 		btmtk_reset_trigger(bdev);
+		btmtk_handle_mutex_lock(bdev);
 	}
 	atomic_set(&b_suspending, 0);
 	BTMTK_INFO("%s, end. ret = %d", __func__, ret);
+	btmtk_handle_mutex_unlock(bdev);
 	return ret;
 }
 
@@ -2362,12 +2370,15 @@ static int btmtk_cif_resume(struct device *dev)
 	if (!bdev)
 		return 0;
 
+	btmtk_handle_mutex_lock(bdev);
+
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 	bt_woble = &cif_dev->bt_woble;
 
 	bdev->suspend_count--;
 	if (bdev->suspend_count) {
 		BTMTK_INFO("data->suspend_count %d, return 0", bdev->suspend_count);
+		btmtk_handle_mutex_unlock(bdev);
 		return 0;
 	}
 
@@ -2400,6 +2411,7 @@ static int btmtk_cif_resume(struct device *dev)
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 
 	BTMTK_INFO("end");
+	btmtk_handle_mutex_unlock(bdev);
 	return 0;
 }
 #endif	/* CONFIG_PM */

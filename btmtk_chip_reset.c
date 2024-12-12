@@ -86,6 +86,7 @@ void btmtk_reset_waker(struct work_struct *work)
 	int state = 0;
 	int err = 0;
 	int cur = 0;
+	int set_chip_state_flag = 0;
 #if (USE_DEVICE_NODE == 0)
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
@@ -98,8 +99,7 @@ void btmtk_reset_waker(struct work_struct *work)
 		return;
 	}
 
-	if (bmain_info->hif_hook.handle_mutex_lock)
-		bmain_info->hif_hook.handle_mutex_lock(bdev);
+	btmtk_handle_mutex_lock(bdev);
 
 	/*Noted, we must lock wakelock location properly to protect SDIO RW operation
 	and chip reset procedure from breaking by suspend event.*/
@@ -107,8 +107,8 @@ void btmtk_reset_waker(struct work_struct *work)
 
 	/* Check chip state is ok to do reset or not */
 	state = btmtk_get_chip_state(bdev);
-	if (state == BTMTK_STATE_SUSPEND || state == BTMTK_STATE_DISCONNECT) {
-		BTMTK_INFO("%s suspend state don't do chip reset!", __func__);
+	if ((state == BTMTK_STATE_SUSPEND && !test_bit(BT_WOBLE_FAIL_FOR_SUBSYS_RESET, &bdev->flags)) || state == BTMTK_STATE_DISCONNECT) {
+		BTMTK_INFO("%s suspend or disconnect state don't do chip reset!", __func__);
 		goto Finish;
 	}
 
@@ -159,6 +159,7 @@ void btmtk_reset_waker(struct work_struct *work)
 
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
+	set_chip_state_flag = 1;
 #endif
 
 	BTMTK_INFO("%s: Receive WDT interrupt subsys_reset_state[%d] chip_reset_flag[%d]", __func__,
@@ -230,6 +231,11 @@ void btmtk_reset_waker(struct work_struct *work)
 			atomic_read(&bmain_info->whole_reset_count));
 	}
 
+	if (err < 0 && test_bit(BT_WOBLE_FAIL_FOR_SUBSYS_RESET, &bdev->flags)) {
+		BTMTK_WARN("%s: L0.5 fail when Woble fail, L0 may have an impact on wifi, skip L0, return", __func__);
+		goto Finish;
+	}
+
 L0RESET:
 	if (err < 0) {
 		/* L0.5 reset failed or not support, do whole chip reset */
@@ -243,8 +249,8 @@ L0RESET:
 		if (bmain_info->hif_hook.whole_reset) {
 			cur = atomic_cmpxchg(&bmain_info->chip_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
 			if (cur == BTMTK_RESET_DOING) {
-				BTMTK_INFO("%s: have chip_reset in progress, return", __func__);
 				err = 0;
+				BTMTK_INFO("%s: have chip_reset in progress, return", __func__);
 				goto Finish;
 			}
 #ifdef CFG_SUPPORT_CHIP_RESET_KO
@@ -272,15 +278,25 @@ Finish:
 #if (USE_DEVICE_NODE == 0)
 	bmain_info->chip_reset_flag = 0;
 	/* Set End/Error state */
-	if (err < 0)
-		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
-	else
-		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	if (set_chip_state_flag) {
+		if (err < 0)
+			btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+		else
+			btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
+	}
 #endif
 
+	if (test_bit(BT_WOBLE_FAIL_FOR_SUBSYS_RESET, &bdev->flags)) {
+		set_bit(BT_WOBLE_RESET_DONE, &bdev->flags);
+
+		if (err < 0)
+			set_bit(BT_WOBLE_SKIP_WHOLE_CHIP_RESET, &bdev->flags);
+
+		wake_up(&bdev->p_woble_fail_q);
+	}
+
 	btmtk_reset_wake_unlock(bdev);
-	if (bmain_info->hif_hook.handle_mutex_unlock)
-		bmain_info->hif_hook.handle_mutex_unlock(bdev);
+	btmtk_handle_mutex_unlock(bdev);
 
 	DUMP_TIME_STAMP("chip_reset_end");
 }

@@ -11,6 +11,7 @@
 #include <linux/interrupt.h>
 
 #include "btmtk_woble.h"
+#include "btmtk_chip_reset.h"
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
 #define ATTRIBUTE_NO_KCFI __nocfi
@@ -644,6 +645,8 @@ static int ATTRIBUTE_NO_KCFI btmtk_handle_entering_WoBLE_state(struct btmtk_wobl
 	int ret = 0;
 	unsigned char fstate = 0;
 	int state = 0;
+	int send_fail = 0;
+	int retry = 3;
 	struct btmtk_dev *bdev = bt_woble->bdev;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 #endif
@@ -674,6 +677,7 @@ static int ATTRIBUTE_NO_KCFI btmtk_handle_entering_WoBLE_state(struct btmtk_wobl
 		goto Finish;
 	}
 
+SEND_CMD_RETRY:
 	/* Power on first if state is power off */
 	ret = btmtk_reset_power_on(bdev);
 	if (ret < 0) {
@@ -686,7 +690,7 @@ static int ATTRIBUTE_NO_KCFI btmtk_handle_entering_WoBLE_state(struct btmtk_wobl
 				__func__, fstate);
 		/* start traffic to recv event*/
 		ret = bmain_info->hif_hook.open(bdev->hdev);
-		if (ret < 0) {
+		if (ret < 0 && ret != -EBUSY) {
 			BTMTK_ERR("%s, cif_open failed", __func__);
 			goto Finish;
 		}
@@ -713,22 +717,57 @@ static int ATTRIBUTE_NO_KCFI btmtk_handle_entering_WoBLE_state(struct btmtk_wobl
 		} while (0);
 #endif
 		ret = btmtk_send_woble_read_BDADDR_cmd(bdev);
-		if (ret < 0)
+		if (ret < 0) {
+			send_fail = 1;
 			goto STOP_TRAFFIC;
+		}
 
 		ret = btmtk_set_Woble_APCF(bt_woble);
-		if (ret < 0)
+		if (ret < 0) {
+			send_fail = 1;
 			goto STOP_TRAFFIC;
+		}
 
 		ret = btmtk_set_Woble_Radio_Off(bt_woble);
-		if (ret < 0)
+		if (ret < 0) {
+			send_fail = 1;
 			goto STOP_TRAFFIC;
+		}
 	} else {
 		/* radio off cmd with wobx_mode_disable, used when unify woble off */
 		ret = btmtk_send_woble_suspend_cmd(bdev);
 	}
 
 STOP_TRAFFIC:
+	if (send_fail == 1 && retry > 0) {
+		BTMTK_INFO("%s: woble , reset done flag = %d, send_fail flag = %d", __func__, test_bit(BT_WOBLE_RESET_DONE, &bdev->flags), send_fail);
+		btmtk_handle_mutex_unlock(bdev);
+
+		set_bit(BT_WOBLE_FAIL_FOR_SUBSYS_RESET, &bdev->flags);
+		bmain_info->chip_reset_flag = 0;
+		send_fail = 0;
+		retry --;
+		btmtk_reset_trigger(bdev);
+		wait_event_timeout(bdev->p_woble_fail_q, test_bit(BT_WOBLE_RESET_DONE, &bdev->flags),
+				msecs_to_jiffies(10000));
+
+		btmtk_handle_mutex_lock(bdev);
+
+		clear_bit(BT_WOBLE_FAIL_FOR_SUBSYS_RESET, &bdev->flags);
+		if (!test_bit(BT_WOBLE_RESET_DONE, &bdev->flags)) {
+			BTMTK_ERR("%s: wait event timeout", __func__);
+			goto Finish;
+		}
+		clear_bit(BT_WOBLE_RESET_DONE, &bdev->flags);
+		if (test_bit(BT_WOBLE_SKIP_WHOLE_CHIP_RESET, &bdev->flags)) {
+			clear_bit(BT_WOBLE_SKIP_WHOLE_CHIP_RESET, &bdev->flags);
+			BTMTK_ERR("%s: L0.5 fail, return", __func__);
+			goto Finish;
+		}
+		BTMTK_INFO("%s: try send cmd, retry = %d", __func__, retry);
+		goto SEND_CMD_RETRY;
+
+	}
 	if (fstate != BTMTK_FOPS_STATE_OPENED) {
 		BTMTK_WARN("%s: fops is not open(%d), need to stop traffic after enter woble",
 				__func__, fstate);

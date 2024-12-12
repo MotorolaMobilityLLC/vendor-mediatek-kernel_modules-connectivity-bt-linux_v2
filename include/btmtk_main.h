@@ -115,6 +115,11 @@
 
 #define CHAR2HEX_SIZE	4
 
+/* woble reset flag */
+#define BT_WOBLE_FAIL_FOR_SUBSYS_RESET 12
+#define BT_WOBLE_RESET_DONE 13
+#define BT_WOBLE_SKIP_WHOLE_CHIP_RESET 14
+
 /**
  * For chip reset pin
  */
@@ -552,6 +557,7 @@ struct btmtk_dev {
 	struct sk_buff		*rx_skb;
 
 	wait_queue_head_t	p_wait_event_q;
+	wait_queue_head_t	p_woble_fail_q;
 
 	/* assert */
 	char	assert_reason[ASSERT_REASON_SIZE];
@@ -702,8 +708,6 @@ struct hif_hook_ptr {
 	cif_chip_reset_notify_ptr	chip_reset_notify;
 	cif_mutex_lock_ptr		cif_mutex_lock;
 	cif_mutex_unlock_ptr		cif_mutex_unlock;
-	cif_mutex_lock_ptr		handle_mutex_lock;
-	cif_mutex_unlock_ptr		handle_mutex_unlock;
 	cif_flush_ptr				flush;
 	cif_log_init_ptr			log_init;
 	cif_log_register_cb_ptr		log_register_cb;
