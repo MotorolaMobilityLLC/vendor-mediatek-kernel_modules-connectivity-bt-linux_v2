@@ -1,26 +1,44 @@
+#LOCAL_PATH   := $(call my-dir)
+#src = $(LOCAL_PATH)
+ifeq ($(KERNEL_MIXED_BUILD_SUPPORT),true)
+    include $(KERNEL_MIXED_BUILD_PATH)/Kbuild.common
+endif
+
 #################### Configurations ####################
 # Compile Options for bt driver configuration.
 CONFIG_SUPPORT_BT_DL_WIFI_PATCH=y
+CONFIG_SUPPORT_BT_DL_ZB_PATCH=n
 CONFIG_SUPPORT_BLUEZ=n
 CONFIG_SUPPORT_DVT=n
 CONFIG_SUPPORT_HW_DVT=n
 CONFIG_SUPPORT_MULTI_DEV_NODE=n
 CONFIG_GKI_SUPPORT=y
+CONFIG_SUPPORT_WAKEUP_SER=n
 
-ifeq ($(CONFIG_GKI_SUPPORT), y)
-ccflags-y += -DCFG_CHIP_RESET_KO_SUPPORT
-ccflags-y += -I$(src)/../wlan_driver/gen4m_mt7961/reset/include/
-
-RESET_DIR = $(shell pwd)/../../KERNEL_MODULES/wlan_mt7961_reset.ko_intermediates/LINKED/Module.symvers
-$(info 'RESET_DIR=' $(RESET_DIR))
-KBUILD_EXTRA_SYMBOLS += $(RESET_DIR)
+ifeq ($(CONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT), y)
+    ccflags-y += -DCONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT
 endif
 
+ifeq ($(CONFIG_DISABLE_SYMBOL_GET_SET), y)
+    ccflags-y += -DCONFIG_DISABLE_SYMBOL_GET_SET
+endif
+
+ifneq ($(TARGET_BUILD_VARIANT), user)
+    ccflags-y += -DBUILD_QA_DBG=1
+else
+    ccflags-y += -DBUILD_QA_DBG=0
+endif
 
 ifeq ($(CONFIG_SUPPORT_BT_DL_WIFI_PATCH), y)
     ccflags-y += -DCFG_SUPPORT_BT_DL_WIFI_PATCH=1
 else
     ccflags-y += -DCFG_SUPPORT_BT_DL_WIFI_PATCH=0
+endif
+
+ifeq ($(CONFIG_SUPPORT_BT_DL_ZB_PATCH), y)
+    ccflags-y += -DCFG_SUPPORT_BT_DL_ZB_PATCH=1
+else
+    ccflags-y += -DCFG_SUPPORT_BT_DL_ZB_PATCH=0
 endif
 
 ifeq ($(CONFIG_SUPPORT_BLUEZ), y)
@@ -33,6 +51,12 @@ ifeq ($(CONFIG_SUPPORT_HW_DVT), y)
     ccflags-y += -DCFG_SUPPORT_HW_DVT=1
 else
     ccflags-y += -DCFG_SUPPORT_HW_DVT=0
+endif
+
+ifeq ($(CONFIG_SUPPORT_WAKEUP_SER), y)
+    ccflags-y += -DCFG_SUPPORT_WAKEUP_IRQ=1
+else
+    ccflags-y += -DCFG_SUPPORT_WAKEUP_IRQ=0
 endif
 
 ifeq ($(CONFIG_SUPPORT_DVT), y)
@@ -49,17 +73,24 @@ endif
 
 ccflags-y += -DCONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT
 
-ccflags-y += -DCHIP_IF_USB
-ccflags-y += -I$(src)/include/usb
-ccflags-y += -I$(src)/include/ -I$(src)
+ifeq ($(CONFIG_GKI_SUPPORT), y)
+    ccflags-y += -DCFG_SUPPORT_CHIP_RESET_KO
+    ccflags-y += -I$(src)/../../mtreset_mt7961.ko_intermediates/LINKED/reset_v2/include/
+    ccflags-y += -I$(src)/../wlan_driver/gen4m_mt7961/reset_v2/include/
+
+    RESET_DIR = $(shell pwd)/../../KERNEL_MODULES/mtreset_mt7961.ko_intermediates/LINKED/Module.symvers
+    $(warning bt driver unify RESET_DIR=$(RESET_DIR))
+    $(info 'RESET_DIR=' $(RESET_DIR))
+    KBUILD_EXTRA_SYMBOLS += $(RESET_DIR)
+endif
 
 #################### Configurations ####################
-# For chip interface, driver supports "usb", "sdio", "uart" and "btif"
+# For chip interface, driver supports "usb", "sdio", "uart_tty", "uart_serdev" and "btif"
 MTK_CHIP_IF := usb
 
 ifeq ($(MTK_CHIP_IF), sdio)
     MOD_NAME = btmtk_sdio_unify
-    CFILES := sdio/btmtksdio.c btmtk_woble.c btmtk_buffer_mode.c btmtk_chip_reset.c
+    CFILES := sdio/btmtksdio.c btmtk_woble.c btmtk_chip_reset.c
     ccflags-y += -DCHIP_IF_SDIO
     ccflags-y += -DSDIO_DEBUG=0
     ccflags-y += -I$(src)/include/sdio
@@ -85,7 +116,7 @@ else
     ccflags-y += -I$(src)/include/btif
 endif
 
-CFILES += btmtk_main.c btmtk_fw_log.c
+CFILES += btmtk_main.c btmtk_fw_log.c btmtk_buffer_mode.c
 
 ccflags-y += -I$(src)/include/ -I$(src)/
 

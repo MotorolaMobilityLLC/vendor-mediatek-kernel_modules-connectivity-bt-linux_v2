@@ -36,6 +36,9 @@ static DEFINE_MUTEX(btmtk_chip_state_mutex);
 static DEFINE_MUTEX(btmtk_fops_state_mutex);
 #define FOPS_MUTEX_LOCK()	mutex_lock(&btmtk_fops_state_mutex)
 #define FOPS_MUTEX_UNLOCK()	mutex_unlock(&btmtk_fops_state_mutex)
+static DEFINE_MUTEX(btmtk_handle_mutex);
+#define HANDLE_MUTEX_LOCK()	mutex_lock(&btmtk_handle_mutex)
+#define HANDLE_MUTEX_UNLOCK()	mutex_unlock(&btmtk_handle_mutex)
 
 #define SECTION_NUM_MAX 10
 
@@ -98,6 +101,16 @@ static const struct btmtk_cif_state g_cif_state[] = {
 	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_CLOSED, BTMTK_STATE_ERR},
 };
 #endif
+
+void btmtk_handle_mutex_lock(struct btmtk_dev *bdev)
+{
+	HANDLE_MUTEX_LOCK();
+}
+
+void btmtk_handle_mutex_unlock(struct btmtk_dev *bdev)
+{
+	HANDLE_MUTEX_UNLOCK();
+}
 
 void btmtk_reg_hif_chip_hook(struct hif_hook_chip_ptr *hook)
 {
@@ -363,6 +376,7 @@ static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.phase1_wmt_cmd, PHASE1_WMT_CMD_COUNT);
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.vendor_cmd, VENDOR_CMD_COUNT);
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.audio_cmd, 1);
+	bdev->bt_cfg.support_dts_subsys_rst = 0;
 
 	BTMTK_DBG("%s end", __func__);
 }
@@ -602,6 +616,9 @@ void btmtk_clean_debug_reg_file(struct btmtk_dev *bdev)
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev == NULL", __func__);
 		return;
+	} else if (is_connac3(bdev->chip_id)) {
+		BTMTK_WARN("%s: connac3 not supported", __func__);
+		return;
 	}
 
 	btmtk_free_debug_reg_struct(&bdev->debug_sop_reg_dump);
@@ -761,6 +778,11 @@ void btmtk_load_debug_sop_register(char *debug_sop_name, struct device *dev, str
 {
 	int err;
 	u32 code_len = 0;
+
+	if (is_connac3(bdev->chip_id)) {
+		BTMTK_WARN("%s: connac3 chip not supported", __func__);
+		return;
+	}
 
 	btmtk_initialize_debug_reg_items(bdev);
 
@@ -973,7 +995,7 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 				if (buf[0] == (&pkts[index])->type) {
 					skb = bt_skb_alloc(
 						(&pkts[index])->maxlen,
-						   GFP_KERNEL);
+						   GFP_ATOMIC);
 					if (!skb) {
 						BTMTK_ERR("%s alloc failed!",
 							__func__);
@@ -1499,7 +1521,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		goto exit;
 	}
 
-	skb = alloc_skb(cmd_len + BT_SKB_RESERVE, GFP_KERNEL);
+	skb = alloc_skb(cmd_len + BT_SKB_RESERVE, GFP_ATOMIC);
 	if (skb == NULL) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		ret = -ENOMEM;
@@ -1674,6 +1696,7 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwb
 	struct _Global_Descr *globalDesrc = NULL;
 	u8 *fw_version = NULL;
 	u32 fw_version_len = 0;
+	u8 build_time[16] = {0};
 
 	if (fwbuf == NULL) {
 		BTMTK_WARN("%s, fwbuf is NULL!", __func__);
@@ -1695,9 +1718,11 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwb
 		BTMTK_INFO("fw_version = %s", main_info.fw_version_str);
 	}
 
-	if (patchHdr)
+	if (patchHdr) {
+		build_time[15] = '\0';
+		memcpy(build_time, patchHdr->ucDateTime, 15);
 		BTMTK_INFO("Built Time = %s, Platform = %c%c%c%c, Hw Ver = 0x%04x, Sw Ver = 0x%04x, Magic Number = 0x%08x",
-			    patchHdr->ucDateTime,
+			    build_time,
 			    patchHdr->ucPlatform[0],
 			    patchHdr->ucPlatform[1],
 			    patchHdr->ucPlatform[2],
@@ -1705,7 +1730,7 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwb
 			    patchHdr->u2HwVer,
 			    patchHdr->u2SwVer,
 			    patchHdr->u4MagicNum);
-	else
+	} else
 		BTMTK_WARN("%s, patchHdr is NULL!", __func__);
 
 	if (globalDesrc)
@@ -1721,6 +1746,7 @@ static void btmtk_print_wifi_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
 {
 	struct _PATCH_HEADER *patchHdr = NULL;
 	struct _Global_Descr *globalDesrc = NULL;
+	u8 build_time[16] = {0};
 
 	if (fwbuf == NULL) {
 		BTMTK_WARN("%s, fwbuf is NULL!", __func__);
@@ -1733,7 +1759,9 @@ static void btmtk_print_wifi_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
 
 	BTMTK_INFO("=============== Wifi Patch Info ==============");
 	if (patchHdr) {
-		BTMTK_INFO("Built Time = %s", patchHdr->ucDateTime);
+		build_time[15] = '\0';
+		memcpy(build_time, patchHdr->ucDateTime, 15);
+		BTMTK_INFO("Built Time = %s", build_time);
 		BTMTK_INFO("Hw Ver = 0x%04x",
 			((patchHdr->u2HwVer & 0x00ff) << 8) | ((patchHdr->u2HwVer & 0xff00) >> 8));
 		BTMTK_INFO("Sw Ver = 0x%04x",
@@ -1992,7 +2020,7 @@ static int btmtk_parsing_fw_rom_patch(struct btmtk_dev *bdev,
 	}
 
 	bdev->sectionMap_table = kmalloc_array(section_num,
-			sizeof(struct _Section_Map), GFP_KERNEL);
+			sizeof(struct _Section_Map), GFP_ATOMIC);
 	if (!bdev->sectionMap_table) {
 		BTMTK_ERR("%s: alloc memory fail (bdev->sectionMap_table)", __func__);
 		ret = -1;
@@ -2099,7 +2127,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 		goto exit;
 	}
 
-	pos = kmalloc(UPLOAD_PATCH_UNIT, GFP_KERNEL);
+	pos = kmalloc(UPLOAD_PATCH_UNIT, GFP_ATOMIC);
 	if (!pos) {
 		BTMTK_ERR("%s: alloc memory failed", __func__);
 		ret = -1;
@@ -3301,6 +3329,27 @@ static void btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 	if (ret)
 		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_VENDOR_CMD);
 
+	ret = btmtk_parse_bt_cfg_file(BT_DEBUG_SOP_MODE, text, searchcontent);
+	if (ret) {
+		if (kstrtoul(text, 10, &text_value) == 0)
+			bt_cfg_content->debug_sop_mode = text_value;
+		else
+			BTMTK_WARN("%s: kstrtoul failed %s!", __func__, BT_DEBUG_SOP_MODE);
+	} else {
+		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_DEBUG_SOP_MODE);
+	}
+	BTMTK_INFO("%s: bt_cfg_content->debug_sop_mode = %d", __func__,
+			bt_cfg_content->debug_sop_mode);
+
+	ret = btmtk_parse_bt_cfg_file(DTS_SUBSYS_RST, text, searchcontent);
+	if (ret) {
+		btmtk_bt_cfg_item_value_to_bool(text, &bt_cfg_content->support_dts_subsys_rst);
+		BTMTK_INFO("%s: bt_cfg_content->support_dts_subsys_rst = %d",
+			__func__,
+			bt_cfg_content->support_dts_subsys_rst);
+	} else {
+		BTMTK_WARN("%s: search item %s is invalid!", __func__, DTS_SUBSYS_RST);	}
+
 	/* release setting file memory */
 	if (bdev) {
 		kfree(bdev->setting_file);
@@ -3657,7 +3706,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, RHW_ASSERT_CMD, cmd);
 #endif
 
-	skb = alloc_skb(cmd.len + BT_SKB_RESERVE, GFP_KERNEL);
+	skb = alloc_skb(cmd.len + BT_SKB_RESERVE, GFP_ATOMIC);
 	if (!skb) {
 		BTMTK_ERR("%s allocate skb failed!!", __func__);
 		goto exit;
@@ -4266,9 +4315,11 @@ int bt_open(struct hci_dev *hdev)
 	int state = 0;
 	unsigned char fstate = 0;
 	struct btmtk_dev *bdev = NULL;
+#if (CFG_GKI_SUPPORT == 0)
 	void (*rlm_get_alpha2)(char *);
 	const char *wifi_func_name = "rlm_get_alpha2";
 	char alpha2[5];
+#endif
 
 	BTMTK_INFO("%s: MTK BT Driver Version : %s", __func__, VERSION);
 	DUMP_TIME_STAMP("open_start");

@@ -73,6 +73,9 @@ ifneq ($(filter 3.10 3.18 4.9 4.19 5.4 5.4_12 5.15_13, $(subst linux-,,$(KERNEL_
 include $(CLEAR_VARS)
 LOCAL_MODULE := btmtk_usb_unify_connac3.ko
 LOCAL_REQUIRED_MODULES := mtreset_connac3.ko
+ifeq ($(KERNEL_MIXED_BUILD_SUPPORT),true)
+LOCAL_REQUIRED_MODULES += mtk-pm.ko
+endif
 include $(MTK_KERNEL_MODULE)
 
 endif

@@ -7,7 +7,6 @@
 #include "connv3.h"
 #include "btmtk_uart_tty.h"
 
-
 #define BT_CR_DUMP_BUF_SIZE		(1024)
 #define DBG_TAG	"[btmtk_dbg_sop]"
 #define RHW_DBG_TAG	"[btmtk_dbg_sop_rhw]"

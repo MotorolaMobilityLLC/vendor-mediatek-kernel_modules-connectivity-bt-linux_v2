@@ -71,6 +71,16 @@
 #define BT_LOSS_OFFSET_6639		0x6A5
 #define SET_BT_LOSS_CMD_PAYLOAD_OFFSET		7
 
+/* For 7925 (Owl) */
+#define BT_MAC_OFFSET_7925			0x3B2
+#define BT_RADIO_OFFSET_7925			0x843
+#define BT0_GROUP_ANT0_ENABLE_OFFSET_7925	0x706
+#define BT0_GROUP_ANT0_OFFSET_7925		0x729
+#define BT0_CAL_ANT0_ENABLE_OFFSET_7925		0x708
+#define BT0_CAL_ANT0_OFFSET_7925		0x711
+#define BT_LOSS_ENABLE_OFFSET_7925		0x705
+#define BT_LOSS_OFFSET_7925			0x709
+
 struct btmtk_buffer_mode_radio_struct {
 	u8 radio_0;	/* bit 0-5:edr_init_pwr, 6-7:edr_pwr_mode */
 	u8 radio_1;	/* bit 0-5:edr_max_pwr, 6-7:reserved */

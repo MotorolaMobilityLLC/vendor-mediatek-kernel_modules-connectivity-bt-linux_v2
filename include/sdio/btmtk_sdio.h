@@ -18,7 +18,6 @@
 #include "btmtk_define.h"
 #include "btmtk_main.h"
 #include "btmtk_woble.h"
-#include "btmtk_buffer_mode.h"
 #include "btmtk_chip_reset.h"
 
 #ifndef BTMTK_SDIO_DEBUG
@@ -166,7 +165,6 @@ struct btmtk_sdio_dev {
 	struct sk_buff_head tx_queue;
 	struct btmtk_sdio_thread sdio_thread;
 	struct btmtk_woble bt_woble;
-	struct btmtk_buffer_mode_struct *buffer_mode;
 
 	struct timer_list fw_own_timer;
 	atomic_t fw_own_timer_flag;

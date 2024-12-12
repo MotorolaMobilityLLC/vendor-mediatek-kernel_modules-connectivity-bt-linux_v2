@@ -1752,16 +1752,10 @@ static int btmtk_uart_init(struct btmtk_dev *bdev)
 	}
 
 #if (USE_DEVICE_NODE == 0)
-	err = btmtk_register_hci_device(bdev);
-	if (err < 0) {
-		BTMTK_ERR("btmtk_register_hci_device failed!");
-		goto deinit;
-	}
-
 	err = btmtk_uart_set_pinmux(bdev);
 	if (err < 0) {
 		BTMTK_ERR("btmtk_uart_set_pinmux failed!");
-		goto free_hci;
+		goto deinit;
 	}
 #else
 	INIT_WORK(&bdev->hif_dump_work, btmtk_hif_dump_work);
@@ -1771,8 +1765,6 @@ static int btmtk_uart_init(struct btmtk_dev *bdev)
 	goto end;
 
 #if (USE_DEVICE_NODE == 0)
-free_hci:
-	btmtk_deregister_hci_device(bdev);
 deinit:
 	btmtk_main_cif_uninitialize(bdev, HCI_UART);
 #endif
@@ -1986,6 +1978,10 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 			BTMTK_ERR("btmtk_woble_initialize failed!");
 		else
 			BTMTK_ERR("btmtk_woble_initialize");
+		err = btmtk_register_hci_device(bdev);
+
+		if (err < 0)
+			BTMTK_ERR("btmtk_register_hci_device failed!");
 #endif
 		break;
 	case HCIUARTINIT:
@@ -2943,6 +2939,7 @@ int btmtk_cif_register(void)
 	hook.cif_mutex_unlock = btmtk_uart_cif_mutex_unlock;
 	hook.dl_dma = btmtk_uart_load_fw_patch_using_dma;
 	hook.waker_notify = btmtk_uart_waker_notify;
+	hook.enter_standby = btmtk_cif_suspend;
 	hook.set_para = btmtk_uart_set_para;
 	btmtk_reg_hif_hook(&hook);
 

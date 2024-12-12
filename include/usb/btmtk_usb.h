@@ -30,6 +30,15 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define HCI_EV_VENDOR			0xff
 #define HCI_USB_IO_BUF_SIZE		256
 
+/**
+ * For DTS sub system reset
+ */
+#define CHIP_RESET_DTS_NODE_NAME "mediatek,mtk-bt-reset"
+#define CHIP_RESET_GPIO_PROPERTY_NAME "btreset-gpios"
+#define BT_PINMUX_CTRL_REG 0x70005054
+#define BT_SUBSYS_RST_REG 0x70002610
+#define BT_SUBSYS_RST_PINMUX 0x00000020
+#define BT_SUBSYS_RST_ENABLE 0x00000080
 
 /* UHW CR mapping */
 #define BT_MISC 0x70002510
@@ -59,6 +68,30 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define READ_ADDRESS_EVT_PAYLOAD_OFFSET 7
 #define WOBLE_DEBUG_EVT_TYPE 0xE8
 #define BLE_EVT_TYPE 0x3E
+
+/**
+ * Chip debug info dump position - USB operation related CRs
+ */
+#define POWER_MANAGEMENT	0x74013404
+#define USB20_OPSTATE_SYS	0x74013460
+#define SSUSB_IP_DEV_PDN	0x74013E08
+#define SSUSB_U2_PORT_PDN	0x74013E50
+#define MISC_CTRL	0x74011C84
+#define SSUSB_IP_SLEEP_STS	0x74013E10
+
+/**
+ * Chip debug info dump position - USB EP0 Status CRs
+ */
+#define EPISR	0x74011080
+#define EPIER	0x74011084
+#define EPISR_MD	0x740110A0
+#define EPIER_MD	0x740110A4
+#define EPISR_UHW	0x740110B0
+#define EPIER_UHW	0x740110B4
+#define EP0CSR	0x74011100
+#define EP0DISPATCH	0x7401110C
+#define SSUSB_IP_SPARE0	0x74013EC8
+#define SSUSB_IP_SPARE1	0x74013ECC
 
 struct btmtk_cif_chip_reset {
 	/* For Whole chip reset */
@@ -150,4 +183,25 @@ struct btmtk_fops_sco {
 	unsigned char isoc_urb_submitted;
 };
 #endif
+
+/**
+ * For debug SOP
+ */
+#define RETRY_CR_BOUNDARY 3
+#define POLLING_CR_BOUNDARY 5
+#define POLLING_CURRENT_PC 10
+#define PSOP_STRING_LEN 10 // EX. PSOP_1_1_A (len = 10)
+#define TX3CSR2_TXFIFOADDR 0x74011138
+#define RX3CSR2_RXFIFOADDR 0x74011238
+
+enum {
+	BTMTK_DBG_DEFAULT_STATE,
+	BTMTK_CHECK_DBG_STATUS,
+	BTMTK_PDBG_SLAVE_NO_RESPONSE_CONDITIONAL,   // CONDITIONAL: Dump CR with DE flow
+	BTMTK_PDBG_SLAVE_NO_RESPONSE_ALL,           // ALL: Dump all CR when DE flow is wrong
+	BTMTK_LOW_POWER_CONDITIONAL,
+	BTMTK_LOW_POWER_ALL,
+	BTMTK_DBG_INFO
+};
+
 #endif
