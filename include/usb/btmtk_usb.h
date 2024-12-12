@@ -42,6 +42,7 @@ typedef int (*set_gpio_high)(u8 gpio);
 #define BT_WDT_STATUS 0x740003A0
 #define EP_RST_OPT 0x74011890
 #define EP_RST_IN_OUT_OPT 0x00010001
+#define BT_RADIO_OFF_DONE 0x7C05B100
 
 #define BT_GDMA_DONE_ADDR_W 0x74000A0C
 #define BT_GDMA_DONE_7921_VALUE_W 0x00403FA9
