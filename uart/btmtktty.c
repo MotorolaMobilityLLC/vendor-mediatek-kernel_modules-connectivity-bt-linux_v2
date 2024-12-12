@@ -1297,6 +1297,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 
 	/* bt on success, reset subsys count */
 	atomic_set(&bmain_info->subsys_reset_conti_count, 0);
+	bdev->reset_type = 0;
 
 	BTMTK_DBG("%s done", __func__);
 

@@ -773,8 +773,10 @@ static int btmtk_post_chip_rst_on_handler(unsigned int type)
 		BTMTK_INFO("%s: g_sbdev->reset_type = %d !", __func__, g_sbdev->reset_type);
 		// config pre_pwr_on related (GPIO, baudrate, uarthub, tx_thread)
 		ret = bmain_info->hif_hook.pre_open(g_sbdev);
-		if (ret != 0)
-			BTMTK_ERR("%s: btmtk_sp_pre_open failed", __func__);
+		if (ret != 0) {
+			BTMTK_ERR("%s: btmtk_sp_pre_open failed, ret = %d", __func__, ret);
+			goto end;
+		}
 
 		for (int region = 1; region <= 4; region++) {
 			BTMTK_INFO("%s: region[%d]", __func__, region);
@@ -853,9 +855,10 @@ static int btmtk_post_chip_rst_on_handler(unsigned int type)
 				// dump DFD post data
 				ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd), NULL, 0, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
 				BTMTK_INFO("%s, dump DFD post data, ret = %d", __func__, ret);
-				if (ret < 0)
+				if (ret < 0) {
 					BTMTK_ERR("%s: failed, ret[%d]", __func__, ret);
-
+					goto end;
+				}
 				// delay 20ms for dfd data rx
 				mdelay(20);
 
@@ -869,6 +872,7 @@ static int btmtk_post_chip_rst_on_handler(unsigned int type)
 				ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "PSTD", &g_sbdev->dfd_pstd[1], length);
 				if (ret) {
 					BTMTK_ERR("%s: connv3_coredump_send fail, ret = %d", __func__, ret);
+					goto end;
 				}
 			} while (total_length >= 0);
 		} //end for
@@ -877,7 +881,7 @@ end:
 		btmtk_sp_coredump_end();
 	}
 
-	return 0;
+	return ret;
 }
 #endif
 
