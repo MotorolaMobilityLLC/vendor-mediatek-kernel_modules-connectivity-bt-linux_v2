@@ -155,6 +155,7 @@ void rx_debug_save(int type, u32 value, u8 *buf)
 static void btmtk_sdio_dump_debug_register(struct btmtk_dev *bdev,
 		struct debug_reg_struct debug_reg)
 {
+	int ret = 0;
 	struct btmtk_sdio_dev *cif_dev = NULL;
 	u32 value = 0, i = 0, count = 0;
 	static u32 reg_page[] = {0, 0};
@@ -169,18 +170,26 @@ static void btmtk_sdio_dump_debug_register(struct btmtk_dev *bdev,
 		switch (debug_reg.reg[i].length) {
 		case 1:
 			/* reg read address */
-			btmtk_sdio_readl(debug_reg.reg[i].content[0],
+			ret = btmtk_sdio_readl(debug_reg.reg[i].content[0],
 				&value,
 				cif_dev->func);
+			if (ret == -ETIMEDOUT) {
+				BTMTK_ERR("%s L %d error abort", __func__, __LINE__);
+				break;
+			}
 			BTMTK_INFO("%s R(0x%08X) = 0x%08X",
 				__func__,
 				debug_reg.reg[i].content[0], value);
 			break;
 		case 2:
 			/* write reg address and value */
-			btmtk_sdio_writel(debug_reg.reg[i].content[0],
+			ret = btmtk_sdio_writel(debug_reg.reg[i].content[0],
 				debug_reg.reg[i].content[1],
 				cif_dev->func);
+			if (ret == -ETIMEDOUT) {
+				BTMTK_ERR("%s L %d error abort", __func__, __LINE__);
+				break;
+			}
 			reg_page[0] = debug_reg.reg[i].content[0];
 			reg_page[1] = debug_reg.reg[i].content[1];
 			BTMTK_INFO("%s W(0x%08X) = 0x%08X",
@@ -189,12 +198,20 @@ static void btmtk_sdio_dump_debug_register(struct btmtk_dev *bdev,
 			break;
 		case 3:
 			/* write reg and read reg */
-			btmtk_sdio_writel(debug_reg.reg[i].content[0],
+			ret = btmtk_sdio_writel(debug_reg.reg[i].content[0],
 				debug_reg.reg[i].content[1],
 				cif_dev->func);
-			btmtk_sdio_readl(debug_reg.reg[i].content[2],
+			if (ret == -ETIMEDOUT) {
+				BTMTK_ERR("%s L %d error abort", __func__, __LINE__);
+				break;
+			}
+			ret = btmtk_sdio_readl(debug_reg.reg[i].content[2],
 				&value,
 				cif_dev->func);
+			if (ret == -ETIMEDOUT) {
+				BTMTK_ERR("%s L %d error abort", __func__, __LINE__);
+				break;
+			}
 			BTMTK_INFO("%s W(0x%08X) = 0x%08X, W(0x%08X) = 0x%08X, R(0x%08X) = 0x%08X",
 				__func__,
 				reg_page[0], reg_page[1],
@@ -266,10 +283,18 @@ static int btmtk_sdio_set_fw_own(struct btmtk_sdio_dev *cif_dev, int retry)
 	 * 1: COM driver has ownership
 	 */
 	ret = btmtk_sdio_readl(CHLPCR, &u32CHLPCRValue, cif_dev->func);
+	if (ret) {
+		BTMTK_ERR("%s read CHLPCR fail ret: %d", __func__, ret);
+		goto done;
+	}
 	chlpcr_driver_own = ((u32CHLPCRValue & 0x100) == 0x100) ? 1 : 0;
 
 	if (cif_dev->patched == 1) {
 		ret = btmtk_sdio_readl(PD2HRM0R, &u32PD2HRM0RValue, cif_dev->func);
+		if (ret) {
+			BTMTK_ERR("%s read PD2HRM0R fail ret: %d", __func__, ret);
+			goto done;
+		}
 		pd2hrm0r_driver_own =
 			((u32PD2HRM0RValue & PD2HRM0R_DRIVER_OWN)
 				== PD2HRM0R_DRIVER_OWN) ? 1 : 0;
@@ -291,12 +316,14 @@ retry_own:
 		/* write CSICR to notify FW to set PD2HRM0R to 0 */
 		ret = btmtk_sdio_writel(CSICR, 1, cif_dev->func);
 		if (ret) {
+			BTMTK_ERR("%s write CSICR 1 fail ret: %d", __func__, ret);
 			ret = -EINVAL;
 			goto done;
 		}
 
 		ret = btmtk_sdio_writel(CSICR, 0xC0, cif_dev->func);
 		if (ret) {
+			BTMTK_ERR("%s write CSICR 0xC0 fail ret: %d", __func__, ret);
 			ret = -EINVAL;
 			goto done;
 		}
@@ -308,6 +335,10 @@ retry_own:
 			u32LoopCount--;
 			u32PollNum++;
 			ret = btmtk_sdio_readl(PD2HRM0R, &u32PD2HRM0RValue, cif_dev->func);
+			if (ret) {
+				BTMTK_ERR("%s read CHLPCR fail ret: %d", __func__, ret);
+				goto done;
+			}
 			BTMTK_DBG("%s set driver own PD2HRM0R = 0x%0x", __func__, u32PD2HRM0RValue);
 			pd2hrm0r_driver_own =
 				((u32PD2HRM0RValue & PD2HRM0R_DRIVER_OWN)
@@ -334,6 +365,7 @@ retry_own:
 	if (ret == 0) {
 		ret = btmtk_sdio_writel(CHLPCR, ownValue, cif_dev->func);
 		if (ret) {
+			BTMTK_ERR("%s write CHLPCR fail ret: %d", __func__, ret);
 			ret = -EINVAL;
 			goto done;
 		}
@@ -343,8 +375,9 @@ done:
 	fw_own_cnt++;
 #endif
 	if (ret) {
-		BTMTK_ERR("%s set FW own fail", __func__);
-		btmtk_sdio_dump_debug_sop(cif_dev->bdev);
+		BTMTK_ERR("%s set FW own fail, ret: %d", __func__, ret);
+		if (ret != -ETIMEDOUT)
+			btmtk_sdio_dump_debug_sop(cif_dev->bdev);
 	} else
 		BTMTK_DBG("%s set FW own success", __func__);
 
@@ -420,10 +453,18 @@ static int btmtk_sdio_set_driver_own(struct btmtk_sdio_dev *cif_dev, int retry)
 	 * 1: COM driver has ownership
 	 */
 	ret = btmtk_sdio_readl(CHLPCR, &u32CHLPCRValue, cif_dev->func);
+	if (ret) {
+		BTMTK_ERR("%s read CHLPCR fail ret: %d", __func__, ret);
+		goto done;
+	}
 	chlpcr_driver_own = ((u32CHLPCRValue & 0x100) == 0x100) ? 1 : 0;
 
 	if (cif_dev->patched == 1) {
 		ret = btmtk_sdio_readl(PD2HRM0R, &u32PD2HRM0RValue, cif_dev->func);
+		if (ret) {
+			BTMTK_ERR("%s read PD2HRM0R fail ret: %d", __func__, ret);
+			goto done;
+		}
 		pd2hrm0r_driver_own =
 			((u32PD2HRM0RValue & PD2HRM0R_DRIVER_OWN)
 				== PD2HRM0R_DRIVER_OWN) ? 1 : 0;
@@ -444,6 +485,7 @@ retry_own:
 	/* Write CR for Driver or FW own */
 	ret = btmtk_sdio_writel(CHLPCR, ownValue, cif_dev->func);
 	if (ret) {
+		BTMTK_ERR("%s write CHLPCR fail ret: %d", __func__, ret);
 		ret = -EINVAL;
 		goto done;
 	}
@@ -454,10 +496,18 @@ retry_own:
 		u32LoopCount--;
 		u32PollNum++;
 		ret = btmtk_sdio_readl(CHLPCR, &u32CHLPCRValue, cif_dev->func);
+		if (ret) {
+			BTMTK_ERR("%s read CHLPCR fail ret: %d", __func__, ret);
+			goto done;
+		}
 		BTMTK_DBG("%s set driver own CHLPCR = 0x%0x", __func__, u32CHLPCRValue);
 		chlpcr_driver_own = ((u32CHLPCRValue & 0x100) == 0x100) ? 1 : 0;
 		if (cif_dev->patched == 1) {
 			ret = btmtk_sdio_readl(PD2HRM0R, &u32PD2HRM0RValue, cif_dev->func);
+			if (ret) {
+				BTMTK_ERR("%s read CHLPCR fail ret: %d", __func__, ret);
+				goto done;
+			}
 			BTMTK_DBG("%s set driver own PD2HRM0R = 0x%0x", __func__, u32PD2HRM0RValue);
 			pd2hrm0r_driver_own =
 				((u32PD2HRM0RValue & PD2HRM0R_DRIVER_OWN)
@@ -487,12 +537,14 @@ done:
 	driver_own_cnt++;
 #endif
 	if (ret) {
-		BTMTK_ERR("%s set driver own fail", __func__);
-		for (i = 0; i < 8; i++) {
-			DUMP_FW_PC(cif_dev);
-			msleep(200);
+		BTMTK_ERR("%s set driver own fail, ret: %d", __func__, ret);
+		if (ret != -ETIMEDOUT) {
+			for (i = 0; i < 8; i++) {
+				DUMP_FW_PC(cif_dev);
+				msleep(200);
+			}
+			btmtk_sdio_dump_debug_sop(cif_dev->bdev);
 		}
-		btmtk_sdio_dump_debug_sop(cif_dev->bdev);
 	} else
 		BTMTK_DBG("%s set driver own success", __func__);
 unlock:
@@ -752,7 +804,7 @@ static void btmtk_sdio_open_done(struct btmtk_dev *bdev)
 
 static int btmtk_sdio_writesb(u32 offset, u8 *val, int len, struct sdio_func *func)
 {
-	u32 ret = 0;
+	int ret = 0;
 	u32 retry_count = 0;
 
 	if (func == NULL) {
@@ -764,6 +816,13 @@ static int btmtk_sdio_writesb(u32 offset, u8 *val, int len, struct sdio_func *fu
 		sdio_claim_host(func);
 		ret = sdio_writesb(func, offset, val, len);
 		sdio_release_host(func);
+		if (ret) {
+			BTMTK_ERR(" %s, ret:%d", __func__, ret);
+			if (ret == -ETIMEDOUT)
+				return ret;
+			else
+				usleep_range(5*1000, 10*1000);
+		}
 		retry_count++;
 		if (retry_count > SDIO_RW_RETRY_COUNT) {
 			BTMTK_ERR(" %s, ret:%d", __func__, ret);
@@ -776,7 +835,7 @@ static int btmtk_sdio_writesb(u32 offset, u8 *val, int len, struct sdio_func *fu
 
 static int btmtk_sdio_readsb(u32 offset, u8 *val, int len, struct sdio_func *func)
 {
-	u32 ret = 0;
+	int ret = 0;
 	u32 retry_count = 0;
 
 	if (func == NULL) {
@@ -788,6 +847,13 @@ static int btmtk_sdio_readsb(u32 offset, u8 *val, int len, struct sdio_func *fun
 		sdio_claim_host(func);
 		ret = sdio_readsb(func, val, offset, len);
 		sdio_release_host(func);
+		if (ret) {
+			BTMTK_ERR(" %s, ret:%d", __func__, ret);
+			if (ret == -ETIMEDOUT)
+				return ret;
+			else
+				usleep_range(5*1000, 10*1000);
+		}
 		retry_count++;
 		if (retry_count > SDIO_RW_RETRY_COUNT) {
 			BTMTK_ERR(" %s, ret:%d", __func__, ret);
@@ -800,7 +866,7 @@ static int btmtk_sdio_readsb(u32 offset, u8 *val, int len, struct sdio_func *fun
 
 int btmtk_sdio_writeb(u32 offset, u8 val, struct sdio_func *func)
 {
-	u32 ret = 0;
+	int ret = 0;
 	u32 retry_count = 0;
 
 	if (func == NULL) {
@@ -812,6 +878,13 @@ int btmtk_sdio_writeb(u32 offset, u8 val, struct sdio_func *func)
 		sdio_claim_host(func);
 		sdio_writeb(func, val, offset, &ret);
 		sdio_release_host(func);
+		if (ret) {
+			BTMTK_ERR(" %s, ret:%d", __func__, ret);
+			if (ret == -ETIMEDOUT)
+				return ret;
+			else
+				usleep_range(5*1000, 10*1000);
+		}
 		retry_count++;
 		if (retry_count > SDIO_RW_RETRY_COUNT) {
 			BTMTK_ERR(" %s, ret:%d", __func__, ret);
@@ -824,7 +897,7 @@ int btmtk_sdio_writeb(u32 offset, u8 val, struct sdio_func *func)
 
 static int btmtk_sdio_writel(u32 offset, u32 val, struct sdio_func *func)
 {
-	u32 ret = 0;
+	int ret = 0;
 	u32 retry_count = 0;
 
 	if (func == NULL) {
@@ -836,6 +909,13 @@ static int btmtk_sdio_writel(u32 offset, u32 val, struct sdio_func *func)
 		sdio_claim_host(func);
 		sdio_writel(func, val, offset, &ret);
 		sdio_release_host(func);
+		if (ret) {
+			BTMTK_ERR(" %s, ret:%d", __func__, ret);
+			if (ret == -ETIMEDOUT)
+				return ret;
+			else
+				usleep_range(5*1000, 10*1000);
+		}
 		retry_count++;
 		if (retry_count > SDIO_RW_RETRY_COUNT) {
 			BTMTK_ERR(" %s, ret:%d", __func__, ret);
@@ -848,7 +928,7 @@ static int btmtk_sdio_writel(u32 offset, u32 val, struct sdio_func *func)
 
 static int btmtk_sdio_readl(u32 offset,  u32 *val, struct sdio_func *func)
 {
-	u32 ret = 0;
+	int ret = 0;
 	u32 retry_count = 0;
 
 	if (func == NULL) {
@@ -860,6 +940,13 @@ static int btmtk_sdio_readl(u32 offset,  u32 *val, struct sdio_func *func)
 		sdio_claim_host(func);
 		*val = sdio_readl(func, offset, &ret);
 		sdio_release_host(func);
+		if (ret) {
+			BTMTK_ERR(" %s, ret:%d", __func__, ret);
+			if (ret == -ETIMEDOUT)
+				return ret;
+			else
+				usleep_range(5*1000, 10*1000);
+		}
 		retry_count++;
 		if (retry_count > SDIO_RW_RETRY_COUNT) {
 			BTMTK_ERR(" %s, ret:%d", __func__, ret);
@@ -872,7 +959,7 @@ static int btmtk_sdio_readl(u32 offset,  u32 *val, struct sdio_func *func)
 
 static int btmtk_sdio_readb(u32 offset, u8 *val, struct sdio_func *func)
 {
-	u32 ret = 0;
+	int ret = 0;
 	u32 retry_count = 0;
 
 	if (func == NULL) {
@@ -884,6 +971,13 @@ static int btmtk_sdio_readb(u32 offset, u8 *val, struct sdio_func *func)
 		sdio_claim_host(func);
 		*val = sdio_readb(func, offset, &ret);
 		sdio_release_host(func);
+		if (ret) {
+			BTMTK_ERR(" %s, ret:%d", __func__, ret);
+			if (ret == -ETIMEDOUT)
+				return ret;
+			else
+				usleep_range(5*1000, 10*1000);
+		}
 		retry_count++;
 		if (retry_count > SDIO_RW_RETRY_COUNT) {
 			BTMTK_ERR(" %s, ret:%d", __func__, ret);
@@ -896,7 +990,7 @@ static int btmtk_sdio_readb(u32 offset, u8 *val, struct sdio_func *func)
 
 static void btmtk_sdio_print_debug_sr(struct btmtk_sdio_dev *cif_dev)
 {
-	u32 ret = 0;
+	int ret = 0;
 	u32 CCIR_Value = 0;
 	u32 CHLPCR_Value = 0;
 	u32 CSDIOCSR_Value = 0;
@@ -952,7 +1046,7 @@ static void btmtk_sdio_print_debug_sr(struct btmtk_sdio_dev *cif_dev)
 
 static int btmtk_sdio_enable_interrupt(int enable, struct sdio_func *func)
 {
-	u32 ret = 0;
+	int ret = 0;
 	u32 cr_value = 0;
 
 	BTMTK_DBG("%s enable=%d", __func__, enable);
@@ -1575,7 +1669,7 @@ static int btmtk_sdio_unregister_dev(struct btmtk_sdio_dev *cif_dev)
 static int btmtk_sdio_set_write_clear(struct btmtk_sdio_dev *cif_dev)
 {
 	u32 u32ReadCRValue = 0;
-	u32 ret = 0;
+	int ret = 0;
 
 	ret = btmtk_sdio_readl(CHCR, &u32ReadCRValue, cif_dev->func);
 	if (ret) {
@@ -1840,6 +1934,7 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 		BTMTK_ERR("[ERR] bdev is NULL");
 		return -ENOMEM;
 	}
+	bmain_info->chip_reset_flag = 0;
 
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
@@ -2134,20 +2229,23 @@ static int btmtk_cif_suspend(struct device *dev)
 	struct btmtk_sdio_dev *cif_dev = NULL;
 	struct btmtk_woble *bt_woble = NULL;
 	mmc_pm_flag_t pm_flags;
+	struct btmtk_main_info *main_info = btmtk_get_main_info();
 
 	BTMTK_INFO("%s, enter", __func__);
 
-	if (!dev)
+	if (!dev) {
+		BTMTK_ERR("%s: dev is null", __func__);
 		return 0;
+	}
 	func = dev_to_sdio_func(dev);
 	bdev = sdio_get_drvdata(func);
-	if (!bdev)
+	if (!bdev) {
+		BTMTK_ERR("%s: bdev is null", __func__);
 		return 0;
+	}
 
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 	bt_woble = &cif_dev->bt_woble;
-
-	btmtk_sdio_keep_driver_own(cif_dev, 1);
 
 	if (bdev->suspend_count++) {
 		BTMTK_WARN("Has suspended. suspend_count: %d, end", bdev->suspend_count);
@@ -2163,6 +2261,12 @@ static int btmtk_cif_suspend(struct device *dev)
 		cif_event = HIF_EVENT_SUSPEND;
 
 	cif_state = &bdev->cif_state[cif_event];
+
+	ret = btmtk_sdio_keep_driver_own(cif_dev, 1);
+	if (ret == -ETIMEDOUT) {
+		BTMTK_ERR("%s set driver own timeout", __func__);
+		goto suspend_end;
+	}
 
 	/* Set Entering state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
@@ -2189,20 +2293,31 @@ static int btmtk_cif_suspend(struct device *dev)
 		ret = -ENOSYS;
 	}
 
+	ret = btmtk_sdio_keep_driver_own(cif_dev, 0);
+	if (ret == -ETIMEDOUT) {
+		BTMTK_ERR("%s set fw own timeout", __func__);
+		goto suspend_end;
+	}
+suspend_end:
+	btmtk_sdio_delete_fw_own_timer(cif_dev);
 	/* Set End/Error state */
 	if (ret == 0)
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
-	else
+	else {
+		bdev->suspend_count--; //When return failure, suspend will abort without calling the resume callback. should decrease the count.
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
-
-	btmtk_sdio_keep_driver_own(cif_dev, 0);
+		BTMTK_ERR("%s suspend fail ret=%d, trigger reset", __func__, ret);
+		if (ret == -ETIMEDOUT)
+			main_info->chip_reset_flag = 1;
+		btmtk_reset_trigger(bdev);
+	}
 	BTMTK_INFO("%s, end. ret = %d", __func__, ret);
 	return ret;
 }
 
 static int btmtk_cif_resume(struct device *dev)
 {
-	u8 ret = 0;
+	int ret = 0;
 	struct sdio_func *func = NULL;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_sdio_dev *cif_dev = NULL;
