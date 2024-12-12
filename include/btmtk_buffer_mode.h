@@ -18,8 +18,8 @@
 #include "btmtk_chip_common.h"
 
 #define BUFFER_MODE_SWITCH_FILE	"wifi.cfg"
-#define WIFI_CFG_NAME_PREFIX 		"wifi_mt"
-#define WIFI_CFG_NAME_SUFFIX 		"cfg"
+#define WIFI_CFG_NAME_PREFIX		"wifi_mt"
+#define WIFI_CFG_NAME_SUFFIX		"cfg"
 #define BUFFER_MODE_SWITCH_FIELD	"EfuseBufferModeCal"
 #define BUFFER_MODE_CFG_FILE		"EEPROM_MT%X_1.bin"
 #define EFUSE_MODE			0

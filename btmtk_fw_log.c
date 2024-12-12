@@ -372,7 +372,7 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 	spin_unlock_irqrestore(&g_fwlog->fwlog_lock, flags);
 
 	spin_lock_irqsave(&g_fwlog->fwlog_lock, flags);
-	if (skb == NULL &&skb_queue_len(&g_fwlog->dumplog_queue_latest)) {
+	if (skb == NULL && skb_queue_len(&g_fwlog->dumplog_queue_latest)) {
 		skb = skb_dequeue(&g_fwlog->dumplog_queue_latest);
 	}
 	spin_unlock_irqrestore(&g_fwlog->fwlog_lock, flags);
@@ -516,7 +516,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	}
 	if (strncmp(i_fwlog_buf, "subsys chip reset", strlen("subsys chip reset")) == 0) {
 		BTMTK_INFO("subsys chip reset");
-		if(bmain_info->hif_hook.trigger_assert)
+		if (bmain_info->hif_hook.trigger_assert)
 			bmain_info->hif_hook.trigger_assert(pp_bdev[hci_idx]);
 		else {
 			bmain_info->chip_reset_flag = 0;
