@@ -326,7 +326,7 @@ extern uint8_t _raw_buf_[];
 #define BT_BIN_TYP_NUM	6
 
 #define IO_BUF_SIZE		(HCI_MAX_EVENT_SIZE > 256 ? HCI_MAX_EVENT_SIZE : 256)
-#define EVENT_COMPARE_SIZE	64
+#define EVENT_COMPARE_SIZE	66
 
 #define SECTION_SPEC_NUM	13
 
