@@ -665,7 +665,8 @@ static int btmtk_uart_send_query_uart_cmd(struct hci_dev *hdev)
 static int btmtk_uart_read_chip_id_cmd(struct hci_dev *hdev)
 {
 	u8 cmd[] = {0x01, 0x6F, 0xFC, 0x05, 0x01, 0x04, 0x01, 0x00, 0x09};
-	u8 event[] = {0x04, 0xE4, 0x0A, 0x02, 0x04, 0x06, 0x00, 0x00, 0x09, 0x39, 0x66, 0x00, 0x00};
+	u8 event[] = {0x04, 0xE4};
+	// u8 event[] = {0x04, 0xE4, 0x0A, 0x02, 0x04, 0x06, 0x00, 0x00, 0x09, 0x39, 0x66, 0x00, 0x00};
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	int ret = -1;
 
@@ -682,7 +683,7 @@ static int btmtk_uart_read_chip_id_cmd(struct hci_dev *hdev)
 		return ret;
 	}
 
-	bdev->chip_id = (bdev->io_buf[9] == 0x39) ? 0x6635 : 0x6653;
+	bdev->chip_id = (bdev->io_buf[9] == 0x39) ? 0x6639 : 0x6653;
 	BTMTK_INFO("%s: bdev->chip_id = %04x", __func__, bdev->chip_id);
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -712,7 +713,7 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 	}
 	if (is_mt6639(bdev->chip_id) || is_mt66xx(bdev->chip_id)) {
 		BTMTK_INFO("%s: chip_id = 0x%x", __func__, bdev->chip_id);
-		if (!cif_dev->fw_dl_ready && bdev->chip_id == 0x6635)
+		if (!cif_dev->fw_dl_ready && bdev->chip_id == 0x6639)
 			ret = btmtk_main_send_cmd(bdev, cmd + 4, 1, event, WAKEUP_EVT_LEN,
 					0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 		else
