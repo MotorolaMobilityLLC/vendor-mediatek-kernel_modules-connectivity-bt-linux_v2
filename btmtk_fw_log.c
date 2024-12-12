@@ -236,7 +236,7 @@ static int btmtk_fops_initfwlog(void)
 
 	g_fwlog->pBTClass = class_create(THIS_MODULE, BT_FWLOG_DEV_NODE);
 	if (IS_ERR(g_fwlog->pBTClass)) {
-		BTMTK_ERR("%s: class create fail, error code(%ld)\n", __func__, PTR_ERR(g_fwlog->pBTClass));
+		BTMTK_ERR("%s: class create fail, error code(%ld)", __func__, PTR_ERR(g_fwlog->pBTClass));
 		goto create_node_error;
 	}
 
@@ -300,7 +300,7 @@ static int btmtk_fops_exitfwlog(void)
 #endif
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	BTMTK_INFO("%s: Start\n", __func__);
+	BTMTK_INFO("%s: Start", __func__);
 
 	//if (is_mt66xx(g_sbdev->chip_id))
 	if (bmain_info->hif_hook.log_deinit)
@@ -316,11 +316,11 @@ static int btmtk_fops_exitfwlog(void)
 		class_destroy(g_fwlog->pBTClass);
 		g_fwlog->pBTClass = NULL;
 	}
-	BTMTK_INFO("%s: pBTDevfwlog, pBTClass done\n", __func__);
+	BTMTK_INFO("%s: pBTDevfwlog, pBTClass done", __func__);
 
 	cdev_del(&g_fwlog->BT_cdevfwlog);
 	unregister_chrdev_region(devIDfwlog, 1);
-	BTMTK_INFO("%s: BT_chrdevfwlog driver removed.\n", __func__);
+	BTMTK_INFO("%s: BT_chrdevfwlog driver removed", __func__);
 #endif
 	kfree(g_fwlog);
 
@@ -336,7 +336,7 @@ void btmtk_init_node(void)
 	flag = 1;
 	btmtk_proc_create_new_entry();
 	if (btmtk_fops_initfwlog() < 0)
-		BTMTK_ERR("%s: create stpbtfwlog failed.\n", __func__);
+		BTMTK_ERR("%s: create stpbtfwlog failed", __func__);
 }
 
 void btmtk_deinit_node(void)
@@ -347,7 +347,7 @@ void btmtk_deinit_node(void)
 	flag = 0;
 	btmtk_proc_delete_entry();
 	if (btmtk_fops_exitfwlog() < 0)
-		BTMTK_ERR("%s: release stpbtfwlog failed.\n", __func__);
+		BTMTK_ERR("%s: release stpbtfwlog failed", __func__);
 }
 #if (STPBTFWLOG_ENABLE == 1)
 ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
@@ -895,10 +895,10 @@ static int btmtk_skb_enq_fwlog(struct btmtk_dev *bdev, void *src, u32 len, u8 ty
 		if (skb_tmp != NULL)
 			break;
 		else if (retry <= 0) {
-			pr_err("%s: alloc_skb return 0, error", __func__);
+			BTMTK_ERR("%s: alloc_skb return 0, error", __func__);
 			return -ENOMEM;
 		}
-		pr_err("%s: alloc_skb return 0, error, retry = %d", __func__, retry);
+		BTMTK_ERR("%s: alloc_skb return 0, error, retry = %d", __func__, retry);
 	} while (retry-- > 0);
 
 	if (type) {
@@ -1014,7 +1014,7 @@ int btmtk_dispatch_fwlog_bluetooth_kpi(struct btmtk_dev *bdev, u8 *buf, int len,
 	} else {
 		if (fwlog_blocking_warn == 0) {
 			fwlog_blocking_warn = 1;
-			pr_warn("btmtk_usb fwlog queue size is full(bluetooth_kpi)");
+			BTMTK_WARN("btmtk_usb fwlog queue size is full(bluetooth_kpi)");
 		}
 	}
 	return ret;
@@ -1125,7 +1125,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		} else {
 			if (fwlog_fwdump_blocking_warn == 0) {
 				fwlog_fwdump_blocking_warn = 1;
-				pr_warn("btmtk fwlog queue size is full(coredump)");
+				BTMTK_WARN("btmtk fwlog queue size is full(coredump)");
 			}
 		}
 
@@ -1146,7 +1146,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 		} else {
 			if (fwlog_picus_blocking_warn == 0) {
 				fwlog_picus_blocking_warn = 1;
-				pr_warn("btmtk fwlog queue size is full(picus)");
+				BTMTK_INFO("btmtk fwlog queue size is full(picus)");
 			}
 		}
 		return 1;

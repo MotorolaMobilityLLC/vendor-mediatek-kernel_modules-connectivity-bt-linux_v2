@@ -1100,13 +1100,13 @@ static const unsigned char *btmtk_split_stp(struct btmtk_dev *bdev,
 	/* The cursor is reset when all the data of STP is consumed out */
 	if (!bdev->stp_info.dlen && bdev->stp_info.cursor >= STP_MAX_HDR_LEN) {
 		bdev->stp_info.cursor = 0;
-		BTMTK_ERR("reset cursor = %d\n", bdev->stp_info.cursor);
+		BTMTK_ERR("reset cursor = %d", bdev->stp_info.cursor);
 	}
 
 	/* Filling pad until all STP info is obtained */
 	while (bdev->stp_info.cursor < STP_MAX_HDR_LEN && count > 0) {
 		bdev->stp_info.data[bdev->stp_info.cursor] = *data;
-		BTMTK_ERR("fill stp format (%02x, %d, %d)\n",
+		BTMTK_ERR("fill stp format (%02x, %d, %d)",
 		   bdev->stp_info.data[bdev->stp_info.cursor], bdev->stp_info.cursor, count);
 		bdev->stp_info.cursor++;
 		data++;
@@ -1124,7 +1124,7 @@ static const unsigned char *btmtk_split_stp(struct btmtk_dev *bdev,
 		if (stp_hdr->prefix != STP_HDR_PREFIX || bdev->stp_info.dlen > STP_MAX_PKT_LEN) {
 			BTMTK_ERR("stp format unexpect (%02x, %02x)",
 				   stp_hdr->prefix, bdev->stp_info.dlen);
-			BTMTK_ERR("reset cursor = %d\n", bdev->stp_info.cursor);
+			BTMTK_ERR("reset cursor = %d", bdev->stp_info.cursor);
 			bdev->stp_info.cursor = STP_HDR_OFFSET;
 			bdev->stp_info.dlen = 0;
 		}
@@ -1891,7 +1891,7 @@ static int btmtk_parsing_fw_rom_patch(struct btmtk_dev *bdev,
 		section_num = be2cpu32(globalDescr->u4SectionNum);
 	else
 		section_num = globalDescr->u4SectionNum;
-	BTMTK_INFO("%s: section_num = 0x%08x\n", __func__, section_num);
+	BTMTK_INFO("%s: section_num = 0x%08x", __func__, section_num);
 
 	if (section_num > SECTION_NUM_MAX) {
 		BTMTK_ERR("%s: section_num 0x%08x is an error value", __func__, section_num);
@@ -1940,7 +1940,7 @@ static int btmtk_parsing_fw_rom_patch(struct btmtk_dev *bdev,
 		}
 
 		BTMTK_INFO("%s: loop_count = %d, section_offset = 0x%08x, download patch_len = 0x%08x, "
-				"dl mode = %d, section bin_type = 0x%08x, bin_index =%d\n",
+				"dl mode = %d, section bin_type = 0x%08x, bin_index =%d",
 				__func__, loop_count, section_offset, dl_size, dma_flag, bin_type, bin_index);
 		memcpy(&bdev->sectionMap_table[loop_count], sectionMap, sizeof(struct _Section_Map));
 	} while (++loop_count < section_num);
@@ -2035,7 +2035,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 		dma_flag = PATCH_DOWNLOAD_USING_WMT;
 	}
 
-	BTMTK_INFO("%s: section_count = %d, section bin_type = 0x%08x, bin_index = %d\n",
+	BTMTK_INFO("%s: section_count = %d, section bin_type = 0x%08x, bin_index = %d",
 			__func__, loop_count, temp_type, temp_index);
 
 	if (dl_size > 0) {
@@ -2137,7 +2137,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 		section_num = be2cpu32(globalDescr->u4SectionNum);
 	else
 		section_num = globalDescr->u4SectionNum;
-	BTMTK_INFO("%s: section_num = 0x%08x\n", __func__, section_num);
+	BTMTK_INFO("%s: section_num = 0x%08x", __func__, section_num);
 
 	if (section_num > SECTION_NUM_MAX) {
 		BTMTK_ERR("%s: section_num 0x%08x is an error value", __func__, section_num);
@@ -2174,7 +2174,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct btmtk_dev *bdev,
 			if (main_info.hif_hook.dl_dma)
 				dma_flag = le2cpu32(sectionMap->bin_info_spec.u4DLModeCrcType) & 0xFF;
 		}
-		BTMTK_INFO("%s: loop_count = %d, section_offset = 0x%08x, download patch_len = 0x%08x, dl mode = %d\n",
+		BTMTK_INFO("%s: loop_count = %d, section_offset = 0x%08x, download patch_len = 0x%08x, dl mode = %d",
 						__func__, loop_count, section_offset, dl_size, dma_flag);
 		if (dl_size > 0) {
 			retry = 20;
@@ -2579,7 +2579,7 @@ void btmtk_release_dev(struct btmtk_dev *bdev)
 
 struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev)
 {
-	struct btmtk_dev *bdev;
+	struct btmtk_dev *bdev = NULL;
 	size_t len = sizeof(*bdev);
 
 	BTMTK_INFO("%s", __func__);
@@ -2747,7 +2747,7 @@ int btmtk_picus_disable(struct btmtk_dev *bdev)
 {
 	int ret = 0;	/* if successful, 0 */
 
-	BTMTK_INFO("%s\n", __func__);
+	BTMTK_INFO("%s", __func__);
 
 	ret = btmtk_send_cmd_to_fw(bdev,
 			PICUS_DISABLE_CMD, PICUS_DISABLE_EVT,
@@ -2954,7 +2954,7 @@ static bool btmtk_parse_bt_cfg_file(char *item_name,
 	p = ptr = strstr((char *)searchcontent, search);
 
 	if (!ptr) {
-		BTMTK_ERR("%s: Can't find %s\n", __func__, item_name);
+		BTMTK_ERR("%s: Can't find %s", __func__, item_name);
 		ret = false;
 		goto out;
 	}
@@ -2964,7 +2964,7 @@ static bool btmtk_parse_bt_cfg_file(char *item_name,
 		while ((*p == ' ') && (p != (char *)searchcontent))
 			p--;
 		if (*p == '#') {
-			BTMTK_ERR("%s: It's invalid bt cfg item\n", __func__);
+			BTMTK_ERR("%s: It's invalid bt cfg item", __func__);
 			ret = false;
 			goto out;
 		}

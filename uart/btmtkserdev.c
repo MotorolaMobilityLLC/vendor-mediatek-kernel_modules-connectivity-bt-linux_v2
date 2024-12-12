@@ -301,19 +301,19 @@ static int btmtk_uart_probe(struct serdev_device *serdev)
 
 	err = btmtk_load_rom_patch(bdev);
 	if (err < 0) {
-		BT_ERR("btmtk load rom patch failed!");
+		BTMTK_ERR("btmtk load rom patch failed!");
 		goto deinit;
 	}
 
 	err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
 	if (err < 0) {
-		BT_ERR("btmtk_main_woble_initialize failed!");
+		BTMTK_ERR("btmtk_main_woble_initialize failed!");
 		goto free_setting;
 	}
 
 	err = btmtk_register_hci_device(bdev);
 	if (err < 0) {
-		BT_ERR("btmtk_register_hci_device failed!");
+		BTMTK_ERR("btmtk_register_hci_device failed!");
 		goto free_setting;
 	}
 
@@ -629,9 +629,9 @@ int btmtk_cif_register(void)
 
 int btmtk_cif_deregister(void)
 {
-	BT_INFO("%s", __func__);
+	BTMTK_INFO("%s", __func__);
 	uart_deregister();
-	BT_INFO("%s: Done", __func__);
+	BTMTK_INFO("%s: Done", __func__);
 	return 0;
 }
 

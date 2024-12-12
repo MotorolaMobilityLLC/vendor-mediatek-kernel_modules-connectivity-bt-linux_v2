@@ -49,7 +49,7 @@
 #endif
 
 /** Driver version */
-#define VERSION "8.0.2023051901"
+#define VERSION "8.0.2023052201"
 #define SUBVER ":connac3_dev"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -155,14 +155,24 @@
 
 extern uint8_t btmtk_log_lvl;
 
+struct btmtk_dev *bdev __attribute__((weak)) = NULL;
+
 #define BTMTK_ERR(fmt, ...)	 \
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR) pr_warn("[btmtk_err] ***"fmt"***\n", ##__VA_ARGS__); } while (0)
+	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR) { \
+		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') pr_warn("[btmtk_err] %s ***"fmt"***\n", bdev->hdev->name, ##__VA_ARGS__); \
+		else pr_warn("[btmtk_err] ***"fmt"***\n", ##__VA_ARGS__);} } while (0)
 #define BTMTK_WARN(fmt, ...)	\
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN) pr_warn("[btmtk_warn] "fmt"\n", ##__VA_ARGS__); } while (0)
+	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN) { \
+		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') pr_warn("[btmtk_warn] %s "fmt"\n", bdev->hdev->name, ##__VA_ARGS__); \
+		else pr_warn("[btmtk_warn] "fmt"\n", ##__VA_ARGS__);} } while (0)
 #define BTMTK_INFO(fmt, ...)	\
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) pr_warn("[btmtk_info] "fmt"\n", ##__VA_ARGS__); } while (0)
+	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) { \
+		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') pr_warn("[btmtk_info] %s "fmt"\n", bdev->hdev->name, ##__VA_ARGS__); \
+		else pr_warn("[btmtk_info] "fmt"\n", ##__VA_ARGS__);} } while (0)
 #define BTMTK_DBG(fmt, ...)	 \
-	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) pr_warn("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__); } while (0)
+	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) { \
+		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') pr_warn("[btmtk_dbg] %s "fmt"\n", bdev->hdev->name, ##__VA_ARGS__); \
+		else pr_warn("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__);} } while (0)
 
 #define BTMTK_ERR_LIMITTED(fmt, ...)	\
 	do { \
@@ -192,11 +202,19 @@ extern uint8_t _raw_buf_[];
 			for (cnt_ = 0; cnt_ < len_; ++cnt_)	\
 				(void)snprintf(_raw_buf_+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
 			_raw_buf_[3*cnt_] = '\0';	\
-			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-				pr_cont("[btmtk_info] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
-			} else {	\
-				pr_cont("[btmtk_info] "fmt" %s (prtail)\n", ##__VA_ARGS__, _raw_buf_);	\
-			}	\
+			if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') { \
+				if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
+					pr_cont("[btmtk_info] %s "fmt" %s\n", bdev->hdev->name, ##__VA_ARGS__, _raw_buf_);	\
+				} else {	\
+					pr_cont("[btmtk_info] %s "fmt" %s (prtail)\n", bdev->hdev->name, ##__VA_ARGS__, _raw_buf_);	\
+				}	\
+			} else { \
+				if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
+					pr_cont("[btmtk_info] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
+				} else {	\
+					pr_cont("[btmtk_info] "fmt" %s (prtail)\n", ##__VA_ARGS__, _raw_buf_);	\
+				}	\
+			} \
 		}	\
 	} while (0)
 
@@ -212,7 +230,11 @@ extern uint8_t _raw_buf_[];
 					(void)snprintf(_raw_buf_+3*cnt_, 4, "%02X ", ptr[pos]);	\
 				}	\
 				_raw_buf_[3*cnt_] = '\0';	\
-				pr_cont("[btmtk_debug] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
+				if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') { \
+					pr_cont("[btmtk_debug] %s "fmt" %s\n", bdev->hdev->name, ##__VA_ARGS__, _raw_buf_);	\
+				} else { \
+					pr_cont("[btmtk_debug] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
+				} \
 			}	\
 		}	\
 	} while (0)
@@ -437,7 +459,7 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc);
 	do { \
 		struct bt_utc_struct utc; \
 		btmtk_getUTCtime(&utc); \
-		BTMTK_INFO("%s:%d, %s - DUMP_TIME_STAMP UTC: %d-%02d-%02d %02d:%02d:%02d.%06u", \
+		BTMTK_INFO("%s: %d, %s - DUMP_TIME_STAMP UTC: %d-%02d-%02d %02d:%02d:%02d.%06u", \
 			__func__, __LINE__, __str, \
 			utc.tm.tm_year, utc.tm.tm_mon, utc.tm.tm_mday, \
 			utc.tm.tm_hour, utc.tm.tm_min, utc.tm.tm_sec, utc.usec); \
