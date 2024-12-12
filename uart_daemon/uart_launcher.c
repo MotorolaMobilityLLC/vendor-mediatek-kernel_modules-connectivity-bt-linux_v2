@@ -61,6 +61,14 @@
 #include <sys/uio.h>
 #include <linux/serial.h> /* struct serial_struct  */
 #include "uart_launcher.h"
+#ifdef __ANDROID__
+/* use nvram */
+#include "CFG_BT_File.h"
+#include "CFG_file_lid.h"
+#include "libnvram.h"
+#include "Custom_NvRam_LID.h"
+#include "CFG_CONNXO_File.h"
+#endif
 
 //---------------------------------------------------------------------------
 static int set_speed(int fd, struct termios *ti, int speed);
@@ -261,7 +269,37 @@ static void uart_launcher_sig_handler(int signum)
     BPRINT_I("%s: sig[%d] fd[%d]", __func__, signum, gTtyFd);
     cont = 0;
 }
+#ifdef __ANDROID__
+static int xo_read_nvram(CONNXO_CFG_PARAM_STRUCT *pConnxo_cfg_param)
+{
+    F_ID xo_nvram_fd;
+    int rec_size = 0;
+    int rec_num = 0;
+    unsigned char buf[27] = {"\0"};
+    unsigned int num_read = 0;
 
+    xo_nvram_fd = NVM_GetFileDesc(AP_CFG_RDEB_FILE_CONNXO_LID, &rec_size, &rec_num, ISREAD);
+    if (xo_nvram_fd.iFileDesc < 0) {
+        BPRINT_I("Open CONNXO NVRAM fails errno %d\n", errno);
+        return -1;
+    }
+
+    BPRINT_I("%s: Open CONNXO NVRAM success", __func__);
+    BPRINT_I("%s: xo_nvram_fd %d rec_size %d rec_num %d\n",__func__, xo_nvram_fd.iFileDesc, rec_size, rec_num);
+
+    num_read = read(xo_nvram_fd.iFileDesc, buf, sizeof(buf)-1);
+    if (num_read <= 0) {
+        BPRINT_E("%s: num_read <= 0", __func__);
+        return -1;
+    }
+
+    memcpy(pConnxo_cfg_param, &buf[0], sizeof(CONNXO_CFG_PARAM_STRUCT));
+
+    NVM_CloseFileDesc(xo_nvram_fd);
+
+    return 0;
+}
+#endif
 //---------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
@@ -278,9 +316,15 @@ int main(int argc, char *argv[])
     char *tty_path = "/dev/ttyUSB0";
     struct UART_CONFIG sUartConfig;
     struct sigaction sigact;
-
+#ifdef __ANDROID__
+    int ret = 0;
+    CONNXO_CFG_PARAM_STRUCT sConnxo_cfg;
+#endif
     memset(&sUartConfig, 0, sizeof(struct UART_CONFIG));
     memset(&fds, 0, sizeof(struct pollfd));
+#ifdef __ANDROID__
+    memset(&sConnxo_cfg, 0, sizeof(CONNXO_CFG_PARAM_STRUCT));
+#endif
     sUartConfig.fc = flow_control;
 
     /* Register signal handler */
@@ -399,6 +443,16 @@ int main(int argc, char *argv[])
         } else
             break;
     }
+
+#ifdef __ANDROID__
+    /* read xo nvram */
+    ret = xo_read_nvram(&sConnxo_cfg);
+    err = ioctl(gTtyFd, HCIUARTXOPARAM, &sConnxo_cfg);
+    if (err < 0) {
+        BPRINT_E("ioctl HCIUARTXOPARAM error:[%d] %s", errno, strerror(errno));
+        goto exit;
+    }
+#endif
 
 restart:
     /* Set default Baud rate */
