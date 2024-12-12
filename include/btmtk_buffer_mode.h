@@ -80,6 +80,8 @@
 #define BT0_CAL_ANT0_OFFSET_7925		0x711
 #define BT_LOSS_ENABLE_OFFSET_7925		0x705
 #define BT_LOSS_OFFSET_7925			0x709
+#define BUFFER_MODE_COMPENSATION_BY_CHANNEL	6
+#define SET_COMPENSATION_BY_CHANNEL_CMD_PAYLOAD_OFFSET 8
 
 struct btmtk_buffer_mode_radio_struct {
 	u8 radio_0;	/* bit 0-5:edr_init_pwr, 6-7:edr_pwr_mode */
@@ -111,6 +113,7 @@ struct btmtk_buffer_mode_struct {
 	u8 bt_compensation_lv9_6639[BUFFER_MODE_COMPENSATION_LENGTH];
 	u8 bt_compensation_lv8_6639[BUFFER_MODE_COMPENSATION_LENGTH];
 	u8 bt_compensation_lv7_6639[BUFFER_MODE_COMPENSATION_LENGTH];
+	u8 bt_compensation_by_channel[BUFFER_MODE_COMPENSATION_BY_CHANNEL];
 	u8 bt_loss;
 };
 
