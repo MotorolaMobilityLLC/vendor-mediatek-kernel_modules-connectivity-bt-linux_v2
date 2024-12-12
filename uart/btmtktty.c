@@ -2838,15 +2838,16 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		/* two different event for fw allow sleep or not */
 		ret = btmtk_main_send_cmd(bdev, cmd, FWOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN - 3,
 				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
-		/* evt[7] = 1 for no sleep */
-		if (bdev->io_buf[7]) {
+		/* evt[7] = 1 for no sleep, evt[8] = 3 represent drv own evt */
+		if (bdev->io_buf[7] || bdev->io_buf[8] == 0x03) {
 			/* re-set tx request */
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 			if (cif_dev->hub_en)
 				btmtk_wakeup_uarthub();
 #endif
-			BTMTK_WARN("%s fw not allow sleep, keep drv own, cmd[9] = 0x%02x", __func__, cmd[9]);
+			BTMTK_WARN("%s fw not allow sleep or receive drv own evt, keep drv own, cmd[9] = 0x%02x, evt[7] = %d, evt[8] = %d", __func__, cmd[9], evt[7], evt[8]);
 			cif_dev->own_state = BTMTK_DRV_OWN;
+			btmtk_uart_update_fw_own_timer(cif_dev);
 			goto unlock;
 		}
 	} else
@@ -3027,14 +3028,21 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			if (ret < 0)
 				BTMTK_ERR("%s btmtk_main_send_cmd 0xFF fail, ret[%d]", __func__, ret);
 		}
-		do {
-			/* fw own clr cmd for notice is wakeup by bt driver */
-			/* let retry = 0 for only wait for event 500ms */
+		if (cif_dev->sleep_flow_hw_mech_en) {
 			ret = btmtk_main_send_cmd(bdev, fw_own_clr_cmd, 10, evt, OWNTYPE_EVT_LEN,
-					DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
+					DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
 			if (ret < 0)
 				BTMTK_ERR("%s fw_own_clr_cmd fail retry[%d]", __func__, retry);
-		} while (ret < 0 && --retry);
+		} else {
+			do {
+				/* fw own clr cmd for notice is wakeup by bt driver */
+				/* let retry = 0 for only wait for event 500ms */
+				ret = btmtk_main_send_cmd(bdev, fw_own_clr_cmd, 10, evt, OWNTYPE_EVT_LEN,
+						DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
+				if (ret < 0)
+					BTMTK_ERR("%s fw_own_clr_cmd fail retry[%d]", __func__, retry);
+			} while (ret < 0 && --retry);
+		}
 	} else
 		ret = 0;
 

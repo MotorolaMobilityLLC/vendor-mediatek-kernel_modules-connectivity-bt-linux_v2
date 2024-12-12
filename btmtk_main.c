@@ -5550,6 +5550,16 @@ static void btmtk_rx_work(struct work_struct *work)
 				skb = NULL;
 				continue;
 			}
+			/* intercept drv/fw own event */
+			if (skb->data[0] == 0xE4 && skb->data[1] == 0x07
+				&& skb->data[2] == 0x02 && skb->data[3] == 0x03) {
+				BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: intercept drv/fw own event", __func__);
+
+				/* Drop by driver, don't send to stack */
+				kfree_skb(skb);
+				skb = NULL;
+				continue;
+			}
 			/* record event to stack */
 			btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_ADV_EVT_HIF, skb->data, skb->len);
 #endif
