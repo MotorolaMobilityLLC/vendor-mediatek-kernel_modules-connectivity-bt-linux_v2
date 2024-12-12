@@ -31,7 +31,7 @@
 
 #define isdigit(c)    ('0' <= (c) && (c) <= '9')
 //- Local Configuration -----------------------------------------------------
-#define LD_VERSION "3.0.21051401"
+#define LD_VERSION "3.0.21110301"
 
 #define BUFFER_SIZE  (1024 * 4)	/* Size of RX Queue */
 #define BT_SEND_HCI_CMD_BEFORE_SUSPEND 1
@@ -111,10 +111,15 @@ static inline int is_mt7961(struct LD_btmtk_usb_data *data)
 	return ((data->chip_id & 0xffff) == 0x7961);
 }
 
+static inline int is_mt7902(struct LD_btmtk_usb_data *data)
+{
+	return ((data->chip_id & 0xffff) == 0x7902);
+}
+
 static inline int is_support_unify_woble(struct LD_btmtk_usb_data *data)
 {
 	if (data->bt_cfg.support_unify_woble) {
-		if (is_mt7668(data) || is_mt7663(data) || is_mt7961(data))
+		if (is_mt7668(data) || is_mt7663(data) || is_mt7961(data) || is_mt7902(data))
 			return 1;
 		else
 			return 0;
@@ -637,7 +642,7 @@ static void btmtk_usb_cap_init(struct LD_btmtk_usb_data *data)
 		}
 	} else {
 		btmtk_usb_io_read32_7xxx(data, BUZZARD_CHIP_ID, &data->chip_id);
-		if (is_mt7961(data)) {
+		if (is_mt7961(data) || is_mt7902(data)) {
 			btmtk_usb_io_read32_7xxx(data, BUZZARD_FLAVOR, &data->flavor);
 			btmtk_usb_io_read32_7xxx(data, BUZZARD_FW_VERSION, &data->fw_version);
 		} else {
@@ -661,22 +666,29 @@ static void btmtk_usb_cap_init(struct LD_btmtk_usb_data *data)
 		 *  $$$$ : chip id
 		 *  % : fw version & 0xFF + 1 (in HEX)
 		 */
-		data->flavor = (data->flavor & 0x00000080) >> 7;
+		if (is_mt7902(bdev->chip_id)) {
+			/* 7902 cant't use the same rule to recognize */
+			data->flavor = 0;
+		} else {
+			data->flavor = (data->flavor & 0x00000080) >> 7;
+		}
+		usb_debug("%s: flavor1 = 0x%x", __func__, data->flavor);
 		/* if flavor equals 1, it represent 7920, else it represent 7921 */
-		if (data->flavor)
+		if (data->flavor) {
 			//snprintf(data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 			//	"BT_RAM_CODE_MT%04x_1a_%x_hdr.bin", data->chip_id & 0xffff,
 			//	(data->fw_version & 0xff) + 1);
 			sprintf((char *)data->rom_patch_bin_file_name,
 				"BT_RAM_CODE_MT%04x_1a_%x_hdr.bin", data->chip_id & 0xffff,
 				(data->fw_version & 0xff) + 1);
-		else
+		} else {
 			//snprintf(data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 			//		"BT_RAM_CODE_MT%04x_1_%x_hdr.bin",
 			//		data->chip_id & 0xffff, (data->fw_version & 0xff) + 1);
 			sprintf(data->rom_patch_bin_file_name,
 				"BT_RAM_CODE_MT%04x_1_%x_hdr.bin",
 				data->chip_id & 0xffff, (data->fw_version & 0xff) + 1);
+		}
 
 		if(My_strlen((char *)data->rom_patch_bin_file_name) > MAX_BIN_FILE_NAME_LEN){
 			str_end = data->rom_patch_bin_file_name + MAX_BIN_FILE_NAME_LEN;
@@ -685,10 +697,11 @@ static void btmtk_usb_cap_init(struct LD_btmtk_usb_data *data)
 		usb_debug("patch name: %s\n", data->rom_patch_bin_file_name);
 		data->rom_patch_len = 0;
 
-		if (is_mt7961(data)) {
-			memcpy(data->woble_setting_file_name, WOBLE_SETTING_FILE_NAME_7961,
-				sizeof(WOBLE_SETTING_FILE_NAME_7961));
-			usb_debug("woble setting file name is %s", WOBLE_SETTING_FILE_NAME_7961);
+		if (is_mt7961(data) || is_mt7902(data)) {
+			(void)sprintf(data->woble_setting_file_name, "%s_%x.%s",
+					WOBLE_CFG_NAME_PREFIX, data->chip_id & 0xffff,
+					WOBLE_CFG_NAME_SUFFIX);
+			usb_debug("woble setting file name is %s", data->woble_setting_file_name);
 		} else {
 			memcpy(data->woble_setting_file_name, WOBLE_SETTING_FILE_NAME,
 				sizeof(WOBLE_SETTING_FILE_NAME));
@@ -1206,7 +1219,7 @@ static int btmtk_usb_set_apcf(struct LD_btmtk_usb_data *data, BOOL bin_file)
 		0x00, 0x00, 0x01, 0x80, 0x00 };
 	u8 event[] = { 0x0E, 0x07, 0x01, 0x57, 0xFD, 0x00, /* ... */ };
 
-	if (is_mt7961(data)) {
+	if (is_mt7961(data) || is_mt7902(data)) {
 		manufacture_data[5] = BUZZARD_FIDX;
 		filter_cmd[5] = BUZZARD_FIDX;
 	}
@@ -1529,7 +1542,7 @@ static void btmtk_print_bt_patch_info(struct LD_btmtk_usb_data *data)
 
 	patchHdr = (struct _PATCH_HEADER *)data->rom_patch;
 
-	if (is_mt7961(data))
+	if (is_mt7961(data) || is_mt7902(data))
 		globalDesrc = (struct _Global_Descr *)(data->rom_patch + FW_ROM_PATCH_HEADER_SIZE);
 
 	usb_debug("[btmtk] =============== Patch Info ==============\n");
@@ -1651,7 +1664,8 @@ get_response_again:
 		//usb_debug_raw(data->io_buf, ret, "%s OK: EVT:", __func__);
 		return ret; /* return read length */
 	} else if (retry > 0) {
-		usb_debug("%s: Trying to get response... (%d)\n", __func__, ret);
+		if (retry == 1)
+			usb_debug("%s: Trying to get response... (%d)\n", __func__, ret);
 		retry--;
 		goto get_response_again;
 	} else
@@ -1852,6 +1866,8 @@ exit:
 static int btmtk_send_fw_rom_patch_79xx(struct LD_btmtk_usb_data *data)
 {
 	u8 *pos;
+	HAL_TIME_T start_time;
+	HAL_TIME_T end_time;
 	int loop_count = 0;
 	int ret = 0;
 	u32 section_num = 0;
@@ -1873,6 +1889,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct LD_btmtk_usb_data *data)
 	globalDescr = (struct _Global_Descr *)(data->rom_patch + FW_ROM_PATCH_HEADER_SIZE);
 
 	usb_debug("%s: loading rom patch...\n", __func__);
+	HAL_GetTime(&start_time);
 
 	section_num = globalDescr->u4SectionNum;
 	usb_debug("%s: section_num = 0x%08x\n", __func__, section_num);
@@ -1944,7 +1961,11 @@ err:
 	pos = NULL;
 
 exit:
-	usb_debug("%s: loading rom patch... Done\n", __func__);
+	HAL_GetTime(&end_time);
+	usb_debug("%s: loading rom patch... Done, total use: %d us\n", __func__,
+		(1000000 * (end_time.u4Seconds - start_time.u4Seconds) +
+		end_time.u4Micros - start_time.u4Micros));
+
 	return ret;
 }
 
@@ -2166,7 +2187,7 @@ int btmtk_usb_set_unify_woble(struct LD_btmtk_usb_data *data)
 		0x41, 0x0F};
 	u8 event[] = { 0xE6, 0x02, 0x08, 0x00 };
 
-	if (is_mt7961(data)) {
+	if (is_mt7961(data) || is_mt7902(data)) {
 		cmd[19] = BUZZARD_FIDX;
 	}
 	if (data->woble_setting_radio_off.length && is_support_unify_woble(data)) {
@@ -2343,12 +2364,21 @@ int btmtk_usb_load_bt_cfg(char *cfg_name, struct LD_btmtk_usb_data *data)
 	}
 	data->setting_file_len = 0;
 
-	if (data->flavor)
-		(void)sprintf(bt_cfg_name, "%s%x_1a_%x.%s", BT_CFG_NAME_PREFIX,
-			data->chip_id & 0xffff, (data->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
+	if ((data->chip_id & 0xFF00) == 0x7900) {
+		if (data->flavor && !is_mt7902(data))
+			(void)sprintf(bt_cfg_name, "%s%x_1a_%x.%s",
+					BT_CFG_NAME_PREFIX, data->chip_id & 0xffff,
+					(data->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
+		else
+			(void)sprintf(bt_cfg_name, "%s%x_1_%x.%s",
+					BT_CFG_NAME_PREFIX, data->chip_id & 0xffff,
+					(data->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
+	} else if ((data->chip_id & 0xFF00) == 0x7600)
+		(void)sprintf(bt_cfg_name, "%s%x.%s", BT_CFG_NAME_PREFIX_76XX,
+				data->chip_id & 0xffff, BT_CFG_NAME_SUFFIX);
 	else
-		(void)sprintf(bt_cfg_name, "%s%x_1_%x.%s", BT_CFG_NAME_PREFIX,
-			data->chip_id & 0xffff, (data->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
+		(void)sprintf(bt_cfg_name, "bt.cfg");
+
 	LD_load_code_from_bin(&data->setting_file, bt_cfg_name, NULL, data->udev, &data->setting_file_len);
 
 	if (data->setting_file == NULL || data->setting_file_len == 0) {
@@ -2498,7 +2528,7 @@ void LD_btmtk_usb_SetWoble(mtkbt_dev_t *dev)
 		return;
 	}
 
-	if (is_mt7668(data) || is_mt7663(data) || is_mt7961(data)) {
+	if (!is_mt7662(data)) {
 		if (is_support_unify_woble(data)) {
 			if (data->bt_cfg.unify_woble_type == 1) {
 				/* BTW */
@@ -2507,14 +2537,14 @@ void LD_btmtk_usb_SetWoble(mtkbt_dev_t *dev)
 
 			/* Power on sequence */
 			btmtk_usb_send_wmt_power_on_cmd_7668(data);
-			if (!is_mt7961(data)) {
+			if ((data->chip_id & 0xFF00) == 0x7600) {
 				btmtk_usb_send_hci_tci_set_sleep_cmd_7668(data);
 				btmtk_usb_send_hci_reset_cmd(data);
 				btmtk_usb_get_vendor_cap(data);
 			}
 
 			/* Unify WoBLE flow */
-			if (is_mt7961(data))
+			if (is_mt7961(data) || is_mt7902(data))
 				btmtk_usb_send_apcf_reserved_79xx(data);
 
 			btmtk_usb_send_read_bdaddr(data);
@@ -2620,7 +2650,7 @@ int LD_btmtk_usb_probe(mtkbt_dev_t *dev,int flag)
 	if (data->need_load_rom_patch) {
 		if (is_mt7668(data) || is_mt7663(data))
 			err = btmtk_usb_load_rom_patch_7668(data);
-		else if (is_mt7961(data))
+		else if (is_mt7961(data) || is_mt7902(data))
 			err = btmtk_load_rom_patch_79xx(data);
 		else
 			err = btmtk_usb_load_rom_patch(data);

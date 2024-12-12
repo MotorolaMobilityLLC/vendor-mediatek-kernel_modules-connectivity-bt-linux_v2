@@ -2601,11 +2601,16 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 	 *  $$$$ : chip id
 	 *  % : fw version & 0xFF + 1 (in HEX)
 	 */
-	bdev->flavor = (bdev->flavor & 0x00000080) >> 7;
+	if (is_mt7902(bdev->chip_id)) {
+		/* 7902 cant't use the same rule to recognize */
+		bdev->flavor = 0;
+	} else {
+		bdev->flavor = (bdev->flavor & 0x00000080) >> 7;
+	}
 	BTMTK_INFO("%s: flavor1 = 0x%x", __func__, bdev->flavor);
 
 	/* if flavor equals 1, it represent 7920, else it represent 7921 */
-	if (bdev->flavor && !is_mt7902(bdev->chip_id)) {
+	if (bdev->flavor) {
 		(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN, "BT_RAM_CODE_MT%04x_1a_%x_hdr.bin",
 				bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
 		(void)snprintf(bdev->bt_cfg_file_name, MAX_BIN_FILE_NAME_LEN, "%s%x_1a_%x.%s", BT_CFG_NAME_PREFIX,
