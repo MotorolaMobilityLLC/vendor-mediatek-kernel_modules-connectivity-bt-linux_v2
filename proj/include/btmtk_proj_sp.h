@@ -26,6 +26,11 @@ enum wmt_system_state {
 	WMT_PARA_RESUME = 1
 };
 
+enum dump_type {
+	DUMP_TYPE_POWER = 0,
+	DUMP_TYPE_HIF,
+};
+
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 /* uarthub API */
 

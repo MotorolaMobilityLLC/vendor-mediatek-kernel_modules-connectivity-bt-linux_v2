@@ -930,7 +930,7 @@ exit:
  *						 bt HIF dump feature
  *******************************************************************************
  */
-int btmtk_dump_start(void *priv_data, unsigned int force_dump){
+int btmtk_dump_start(void *priv_data, unsigned int force_dump, enum dump_type dump_type){
 
 	struct btmtk_uart_dev *cif_dev = NULL;
 
@@ -938,6 +938,8 @@ int btmtk_dump_start(void *priv_data, unsigned int force_dump){
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return -1;
 	}
+
+	BTMTK_INFO("%s start, dump_type[%d]", __func__, dump_type);
 
 	if (btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_WORKING
 			|| btmtk_fops_get_state(g_sbdev) != BTMTK_FOPS_STATE_OPENED) {
@@ -952,12 +954,17 @@ int btmtk_dump_start(void *priv_data, unsigned int force_dump){
 		return -1;
 	}
 
+	if (dump_type == DUMP_TYPE_POWER) {
+		/* debug dump */
+		bthost_debug_print();
+		btmtk_query_fw_schedule_info(g_sbdev);
+	}
+
 	if (!force_dump && cif_dev->own_state != BTMTK_DRV_OWN) {
 		BTMTK_WARN("%s: not in drv own, force_dump[%d], own_state[%d]", __func__, force_dump, cif_dev->own_state);
 		return -1;
 	}
 
-	BTMTK_INFO("%s start", __func__);
 	/* make sure keep drv own */
 	atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_UKNOWN);
 	return 0;
@@ -988,10 +995,20 @@ int btmtk_dump_end(void *priv_data){
 
 int btmtk_hif_dump_start(enum connv3_drv_type from_drv, void *priv_data)
 {
-	return btmtk_dump_start(priv_data, TRUE);
+	return btmtk_dump_start(priv_data, TRUE, DUMP_TYPE_HIF);
 }
 
 int btmtk_hif_dump_end(enum connv3_drv_type from_drv, void *priv_data)
+{
+	return btmtk_dump_end(priv_data);
+}
+
+int btmtk_power_dump_start(void *priv_data, unsigned int force_dump)
+{
+	return btmtk_dump_start(priv_data, force_dump, DUMP_TYPE_POWER);
+}
+
+int btmtk_power_dump_end(void *priv_data)
 {
 	return btmtk_dump_end(priv_data);
 }
@@ -1034,8 +1051,8 @@ struct connv3_pre_calibration_cb btmtk_pre_cal_cb = {
  */
 
 struct connv3_power_dump_cb btmtk_pwr_dump_cb = {
-	.power_dump_start = btmtk_dump_start,
-	.power_dump_end = btmtk_dump_end,
+	.power_dump_start = btmtk_power_dump_start,
+	.power_dump_end = btmtk_power_dump_end,
 };
 
 /*
@@ -1486,10 +1503,6 @@ void btmtk_system_state_work(struct work_struct *work)
 		/* notify fw system resume */
 		btmtk_intcmd_system_status(WMT_PARA_RESUME);
 #endif // CFG_SUPPORT_FWLOG_OFF_WHEN_SUSPEND
-
-		/* debug dump */
-		bthost_debug_print();
-		btmtk_query_fw_schedule_info(g_sbdev);
 	}
 #endif
 }
