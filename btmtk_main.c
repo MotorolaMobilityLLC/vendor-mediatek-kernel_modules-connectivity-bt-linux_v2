@@ -623,7 +623,7 @@ int btmtk_load_register(char *block_name, struct debug_reg_struct *save_reg,
 		}
 		save_reg->num = (u32)parsing_result;
 		BTMTK_INFO("%s: reg num is %d", __func__, save_reg->num);
-	} else{
+	} else {
 		BTMTK_ERR("%s: %s is not found", __func__, search);
 		return ret;
 	}
