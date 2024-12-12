@@ -3652,10 +3652,18 @@ static int btmtk_uart_driver_probe(struct platform_device *pdev) {
 	return 0;
 }
 
-static int btmtk_uart_driver_remove(struct platform_device *pdev) {
+#if (KERNEL_VERSION(6, 11, 0) > LINUX_VERSION_CODE)
+static int btmtk_uart_driver_remove(struct platform_device *pdev)
+{
 	BTMTK_DBG("%s", __func__);
 	return 0;
 }
+#else
+static void btmtk_uart_driver_remove(struct platform_device *pdev)
+{
+	BTMTK_DBG("%s", __func__);
+}
+#endif
 
 #define BTMTK_UART_NAME			("btmtk_uart")
 static struct platform_driver btmtk_uart_driver = {
