@@ -1631,6 +1631,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 	struct connv3_issue_info issue_info;
 	int ret = 0, line = 0;
 	static unsigned int fwlog_count;
+	int drv = CONNV3_DRV_TYPE_BT;
 
 	if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 			skb->data[0] == 0x6f &&
@@ -1743,8 +1744,11 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				btmtk_reset_timer_update(bdev);
 			line = __LINE__;
 			bdev->collect_fwdump = TRUE;
+			if (strstr(bdev->assert_reason, "[BT_FW assert]"))
+				drv = CONNV3_DRV_TYPE_MAX;
+
 			ret = connv3_coredump_start(
-					bdev->main_info.hif_hook.coredump_handler, CONNV3_DRV_TYPE_BT,
+					bdev->hif_hook.coredump_handler, drv,
 					bdev->assert_reason, skb->data, bdev->main_info.fw_version_str);
 
 			if(ret == CONNV3_COREDUMP_ERR_CHIP_RESET_ONLY) {
@@ -1755,8 +1759,11 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			if (ret == CONNV3_COREDUMP_ERR_WRONG_STATUS) {
 				BTMTK_ERR_DEV(bdev, "%s: BT previous not end", __func__);
 				connv3_coredump_end(bdev->main_info.hif_hook.coredump_handler, "BT previous not end");
+				if (strstr(bdev->assert_reason, "[BT_FW assert]"))
+					drv = CONNV3_DRV_TYPE_MAX;
+
 				ret = connv3_coredump_start(
-					bdev->main_info.hif_hook.coredump_handler, CONNV3_DRV_TYPE_BT,
+					bdev->main_info.hif_hook.coredump_handler, drv,
 					bdev->assert_reason, skb->data, bdev->main_info.fw_version_str);
 			}
 			if (ret)
@@ -1803,8 +1810,8 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 								&issue_info, xml_log, CONNV3_XML_SIZE);
 			if (ret)
 				goto coredump_fail_unlock;
-			BTMTK_INFO_DEV(bdev, "%s: xml_log: %s, assert_info: %s ",
-						__func__, xml_log, issue_info.assert_info);
+			BTMTK_INFO_DEV(bdev, "%s: xml_log: %s, assert_info: %s, task_name: %s ",
+						__func__, xml_log, issue_info.assert_info, issue_info.task_name);
 			line = __LINE__;
 			ret = connv3_coredump_send(bdev->main_info.hif_hook.coredump_handler,
 							"INFO", xml_log, strlen(xml_log));

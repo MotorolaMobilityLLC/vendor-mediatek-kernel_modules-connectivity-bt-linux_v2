@@ -2678,8 +2678,8 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		BTMTK_ERR("%s: set fw own return fail, ret[%d]", __func__, ret);
 		if (bdev->assert_reason[0] == '\0') {
-			strncpy(bdev->assert_reason, "[BT_FW assert] fw own failed",
-					strlen("[BT_FW assert] fw own failed") + 1);
+			strncpy(bdev->assert_reason, "[BT_DRV assert] fw own failed",
+					strlen("[BT_DRV assert] fw own failed") + 1);
 			BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 		}
 		goto unlock;
@@ -2818,8 +2818,8 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		cif_dev->own_state = BTMTK_DRV_OWN;
 		BTMTK_ERR("%s: set driver own return fail, ret[%d]", __func__, ret);
 		if (bdev->assert_reason[0] == '\0') {
-			strncpy(bdev->assert_reason, "[BT_FW assert] drv own failed",
-					strlen("[BT_FW assert] drv own failed") + 1);
+			strncpy(bdev->assert_reason, "[BT_DRV assert] drv own failed",
+					strlen("[BT_DRV assert] drv own failed") + 1);
 			BTMTK_ERR("%s: [assert_reason] %s", __func__, bdev->assert_reason);
 		}
 		goto unlock;
