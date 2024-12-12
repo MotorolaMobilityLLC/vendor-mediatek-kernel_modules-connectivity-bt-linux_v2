@@ -34,6 +34,11 @@
 #include <linux/vmalloc.h>
 #include <linux/rtc.h>
 
+
+#if (KERNEL_VERSION(4, 11, 0) < LINUX_VERSION_CODE)
+#include <linux/sched/clock.h>
+#endif
+
 #ifdef CFG_SUPPORT_CHIP_RESET_KO
 #include "reset.h"
 #include "reset_fsm.h"
