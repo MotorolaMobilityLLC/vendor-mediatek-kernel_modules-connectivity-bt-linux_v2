@@ -4193,7 +4193,7 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 #if (USE_DEVICE_NODE == 0)
 		btmtk_reset_trigger(bdev);
 #else
-		btmtk_assert_wake_unlock();
+		btmtk_assert_wake_unlock(bdev);
 		return ret;
 #endif
 	} else {
@@ -5471,7 +5471,7 @@ static void btmtk_rx_work(struct work_struct *work)
 			/* intercept picus event */
 			if (skb->data[0] == 0x0E && skb->data[1] == 0x07 && skb->data[2] == 0x01
 				&& skb->data[3] == 0x5D && skb->data[4] == 0xFC) {
-				BTMTK_INFO_RAW(skb->data, skb->len, "%s: intercept picus event", __func__);
+				BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: intercept picus event", __func__);
 
 				/* Drop by driver, don't send to stack */
 				kfree_skb(skb);

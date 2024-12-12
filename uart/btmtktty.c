@@ -373,16 +373,6 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 		}
 		return 1;
 	}
-#if (USE_DEVICE_NODE == 1)
-	else {
-		if ((skb->len > sizeof(picus_evt)) &&
-			memcmp(skb->data, &picus_evt[1], sizeof(picus_evt) - 1) == 0) {
-			BTMTK_INFO_RAW(bdev, skb->data, skb->len,
-					"%s: intercept picus event without during send_and_recv:", __func__);
-			return 1;
-		}
-	}
-#endif
 
 	return 0;
 }
