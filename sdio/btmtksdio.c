@@ -518,15 +518,7 @@ static int btmtk_sdio_keep_driver_own(struct btmtk_sdio_dev *cif_dev, int enable
 static int btmtk_sdio_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 {
 	int ret = 0;
-	u8 cmd[READ_REGISTER_CMD_LEN] = {0x01, 0x6F, 0xFC, 0x0C,
-				0x01, 0x08, 0x08, 0x00,
-				0x02, 0x01, 0x00, 0x01,
-				0x00, 0x00, 0x00, 0x00};
-
-	u8 event[READ_REGISTER_EVT_HDR_LEN] = {0x04, 0xE4, 0x10, 0x02,
-			0x08, 0x0C, 0x00, 0x00,
-			0x00, 0x00, 0x01};
-
+	struct data_struct cmd, event;
 	/* To-do using structure for sdio header
 	 * struct btmtk_sdio_hdr *sdio_hdr;
 	 * sdio_hdr = (void *) cmd;
@@ -534,12 +526,13 @@ static int btmtk_sdio_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 	 * sdio_hdr->reserved = cpu_to_le16(0);
 	 * sdio_hdr->bt_type = hci_skb_pkt_type(skb);
 	 */
+	btmtk_get_cmd_or_event(bdev, READ_REGISTER_CMD, &cmd);
+	btmtk_get_cmd_or_event(bdev, READ_REGISTER_EVT, &event);
 
 	BTMTK_INFO("%s: read cr %x", __func__, reg);
 
-	memcpy(&cmd[MCU_ADDRESS_OFFSET_CMD], &reg, sizeof(reg));
-
-	ret = btmtk_main_send_cmd(bdev, cmd, READ_REGISTER_CMD_LEN, event, READ_REGISTER_EVT_HDR_LEN, DELAY_TIMES,
+	memcpy(&cmd.content[MCU_ADDRESS_OFFSET_CMD], &reg, sizeof(reg));
+	ret = btmtk_main_send_cmd(bdev, cmd.content, cmd.len, event.content, event.len, DELAY_TIMES,
 			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 
 	memcpy(val, bdev->io_buf + MCU_ADDRESS_OFFSET_EVT - HCI_TYPE_SIZE, sizeof(u32));
@@ -980,12 +973,7 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 	u32 crAddr = 0, crValue = 0;
 	ulong flags;
 	struct btmtk_sdio_dev *cif_dev = NULL;
-
-	/* for fw assert */
-	u8 fw_assert_cmd[FW_ASSERT_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
-	u8 fw_assert_cmd1[FW_ASSERT_CMD1_LEN] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x02, 0x01, 0x00, 0x08 };
-	/* for read/write CR */
-	u8 notify_alt_evt[NOTIFY_ALT_EVT_LEN] = {0x04, 0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00};
+	struct data_struct fw_assert_cmd, fw_assert_cmd1, notify_alt_evt;
 	struct sk_buff *evt_skb;
 
 	if (bdev == NULL) {
@@ -999,6 +987,10 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 		ret = -1;
 		goto exit;
 	}
+
+	btmtk_get_cmd_or_event(bdev, FD5B_ASSERT_CMD, &fw_assert_cmd);
+	btmtk_get_cmd_or_event(bdev, WMT_ASSERT_CMD, &fw_assert_cmd1);
+	btmtk_get_cmd_or_event(bdev, NOTIFY_ALT_EVT, &notify_alt_evt);
 
 	/* For read write CR */
 	if (skb->len > 9) {
@@ -1017,13 +1009,13 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 			btmtk_sdio_writel(crAddr, crValue, cif_dev->func);
 			evt_skb = skb_copy(skb, GFP_KERNEL);
 			if (evt_skb) {
-				bt_cb(evt_skb)->pkt_type = notify_alt_evt[0];
-				notify_alt_evt[3] = (crValue & 0xFF000000) >> 24;
-				notify_alt_evt[4] = (crValue & 0x00FF0000) >> 16;
-				notify_alt_evt[5] = (crValue & 0x0000FF00) >> 8;
-				notify_alt_evt[6] = (crValue & 0x000000FF);
-				memcpy(evt_skb->data, &notify_alt_evt[1], NOTIFY_ALT_EVT_LEN - 1);
-				evt_skb->len = NOTIFY_ALT_EVT_LEN - 1;
+				bt_cb(evt_skb)->pkt_type = notify_alt_evt.content[0];
+				notify_alt_evt.content[3] = (crValue & 0xFF000000) >> 24;
+				notify_alt_evt.content[4] = (crValue & 0x00FF0000) >> 16;
+				notify_alt_evt.content[5] = (crValue & 0x0000FF00) >> 8;
+				notify_alt_evt.content[6] = (crValue & 0x000000FF);
+				memcpy(evt_skb->data, &notify_alt_evt.content[1], notify_alt_evt.len - 1);
+				evt_skb->len = notify_alt_evt.len - 1;
 				hci_recv_frame(bdev->hdev, evt_skb);
 				kfree_skb(skb);
 				skb = NULL;
@@ -1046,14 +1038,14 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 					__func__, crAddr, crValue);
 			evt_skb = skb_copy(skb, GFP_KERNEL);
 			if (evt_skb) {
-				bt_cb(evt_skb)->pkt_type = notify_alt_evt[0];
+				bt_cb(evt_skb)->pkt_type = notify_alt_evt.content[0];
 				/* memcpy(&notify_alt_evt[2], &crValue, sizeof(crValue)); */
-				notify_alt_evt[3] = (crValue & 0xFF000000) >> 24;
-				notify_alt_evt[4] = (crValue & 0x00FF0000) >> 16;
-				notify_alt_evt[5] = (crValue & 0x0000FF00) >> 8;
-				notify_alt_evt[6] = (crValue & 0x000000FF);
-				memcpy(evt_skb->data, &notify_alt_evt[1], NOTIFY_ALT_EVT_LEN - 1);
-				evt_skb->len = NOTIFY_ALT_EVT_LEN - 1;
+				notify_alt_evt.content[3] = (crValue & 0xFF000000) >> 24;
+				notify_alt_evt.content[4] = (crValue & 0x00FF0000) >> 16;
+				notify_alt_evt.content[5] = (crValue & 0x0000FF00) >> 8;
+				notify_alt_evt.content[6] = (crValue & 0x000000FF);
+				memcpy(evt_skb->data, &notify_alt_evt.content[1], notify_alt_evt.len - 1);
+				evt_skb->len = notify_alt_evt.len - 1;
 				hci_recv_frame(bdev->hdev, evt_skb);
 				kfree_skb(skb);
 				skb = NULL;
@@ -1079,10 +1071,10 @@ int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 		skb->data[0] = HCI_ISO_PKT;
 	}
 
-	if ((skb->len == FW_ASSERT_CMD_LEN &&
-		!memcmp(skb->data, fw_assert_cmd, FW_ASSERT_CMD_LEN))
-		|| (skb->len == FW_ASSERT_CMD1_LEN &&
-		!memcmp(skb->data, fw_assert_cmd1, FW_ASSERT_CMD1_LEN))) {
+	if ((skb->len == fw_assert_cmd.len &&
+			!memcmp(skb->data, fw_assert_cmd.content, fw_assert_cmd.len))
+			|| (skb->len == fw_assert_cmd1.len &&
+			!memcmp(skb->data, fw_assert_cmd1.content, fw_assert_cmd1.len))) {
 		BTMTK_INFO_RAW(skb->data, skb->len, "%s: Trigger FW assert, dump CR", __func__);
 #if BTMTK_SDIO_DEBUG
 		rx_debug_print();
@@ -1228,14 +1220,16 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 
 int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
-	const u8 read_address_event[READ_ADDRESS_EVT_HDR_LEN] = { 0x4, 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00 };
+	struct data_struct read_address_event;
 	u8 *p = NULL, *pend = NULL;
 	u8 attr_len, attr_type;
 
+	btmtk_get_cmd_or_event(bdev, READ_ADDRESS_EVT, &read_address_event);
+
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		skb->len >= event_need_compare_len) {
-		if (memcmp(skb->data, &read_address_event[1], READ_ADDRESS_EVT_HDR_LEN - 1) == 0
-			&& (skb->len == (READ_ADDRESS_EVT_HDR_LEN - 1 + BD_ADDRESS_SIZE))) {
+		if (memcmp(skb->data, &read_address_event.content[1], read_address_event.len - 1) == 0
+				&& (skb->len == (read_address_event.len - 1 + BD_ADDRESS_SIZE))) {
 			memcpy(bdev->bdaddr, &skb->data[READ_ADDRESS_EVT_PAYLOAD_OFFSET - 1], BD_ADDRESS_SIZE);
 			BTMTK_INFO("%s: GET BDADDR = "MACSTR, __func__, MAC2STR(bdev->bdaddr));
 
@@ -1402,8 +1396,6 @@ static int btmtk_sdio_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	u32 redundant = 0;
 	u32 delay_count = 0;
 	struct btmtk_sdio_dev *cif_dev = NULL;
-	u8 cmd[LD_PATCH_CMD_LEN] = {0x02, 0x6F, 0xFC, 0x05, 0x00, 0x01, 0x01, 0x01, 0x00, PATCH_PHASE3};
-	u8 event[LD_PATCH_EVT_LEN] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
 
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 
@@ -1473,9 +1465,8 @@ static int btmtk_sdio_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	btmtk_sdio_enable_interrupt(1, cif_dev->func);
 
 	BTMTK_INFO("%s: send dl cmd", __func__);
-	ret = btmtk_main_send_cmd(bdev,
-			cmd, LD_PATCH_CMD_LEN,
-			event, LD_PATCH_EVT_LEN,
+	ret = btmtk_send_cmd_to_fw(bdev,
+			LD_PATCH_CMD, LD_PATCH_EVT,
 			PATCH_DOWNLOAD_PHASE3_DELAY_TIME,
 			PATCH_DOWNLOAD_PHASE3_RETRY,
 			BTMTK_TX_ACL_FROM_DRV);
@@ -1630,22 +1621,22 @@ static u32 btmtk_thread_wait_for_msg(struct btmtk_sdio_dev *cif_dev)
 
 	if (!skb_queue_empty(&cif_dev->tx_queue) && (atomic_read(&cif_dev->tx_rdy))) {
 		BTMTK_DBG("tx queue is not empty");
-		ret |= BTMTK_SDIO_THREAD_TX;
+		ret |= BTMTK_THREAD_TX;
 	}
 
 	if (atomic_read(&cif_dev->int_count)) {
 		BTMTK_DBG("cif_dev->int_count is %d", atomic_read(&cif_dev->int_count));
-		ret |= BTMTK_SDIO_THREAD_RX;
+		ret |= BTMTK_THREAD_RX;
 	}
 
 	if (kthread_should_stop()) {
 		BTMTK_DBG("kthread_should_stop");
-		ret |= BTMTK_SDIO_THREAD_STOP;
+		ret |= BTMTK_THREAD_STOP;
 	}
 
 	if (atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_RUNNING) {
 		BTMTK_DBG("fw own");
-		ret |= BTMTK_SDIO_THREAD_FW_OWN;
+		ret |= BTMTK_THREAD_FW_OWN;
 	}
 
 	return ret;
@@ -1765,13 +1756,13 @@ static int btmtk_sdio_main_thread(void *data)
 	for (;;) {
 		wait_event_interruptible(cif_dev->sdio_thread.wait_q,
 			(thread_flag = btmtk_thread_wait_for_msg(cif_dev)));
-		if (thread_flag & BTMTK_SDIO_THREAD_STOP) {
+		if (thread_flag & BTMTK_THREAD_STOP) {
 			BTMTK_WARN("sdio_thread: break from main thread");
 			break;
 		}
 		BTMTK_DBG("btmtk_sdio_main_thread doing...");
 
-		if (thread_flag & BTMTK_SDIO_THREAD_FW_OWN) {
+		if (thread_flag & BTMTK_THREAD_FW_OWN) {
 			ret = btmtk_sdio_set_fw_own(cif_dev, RETRY_TIMES);
 			if (ret) {
 				BTMTK_ERR("set fw own return fail");
@@ -1780,7 +1771,7 @@ static int btmtk_sdio_main_thread(void *data)
 			}
 		}
 
-		if (thread_flag & (BTMTK_SDIO_THREAD_TX | BTMTK_SDIO_THREAD_RX)) {
+		if (thread_flag & (BTMTK_THREAD_TX | BTMTK_THREAD_RX)) {
 			ret = btmtk_sdio_set_driver_own(cif_dev, RETRY_TIMES);
 			if (ret) {
 				BTMTK_ERR("set driver own return fail");
@@ -1790,7 +1781,7 @@ static int btmtk_sdio_main_thread(void *data)
 		}
 
 		/* Do interrupt */
-		if (thread_flag & BTMTK_SDIO_THREAD_RX) {
+		if (thread_flag & BTMTK_THREAD_RX) {
 			BTMTK_DBG("go int");
 			atomic_set(&cif_dev->int_count, 0);
 			if (btmtk_sdio_interrupt_process(bdev)) {
@@ -1801,7 +1792,7 @@ static int btmtk_sdio_main_thread(void *data)
 			BTMTK_DBG("go tx");
 		}
 
-		if (thread_flag & BTMTK_SDIO_THREAD_TX) {
+		if (thread_flag & BTMTK_THREAD_TX) {
 			spin_lock_irqsave(&bdev->txlock, flags);
 			skb = skb_dequeue(&cif_dev->tx_queue);
 			spin_unlock_irqrestore(&bdev->txlock, flags);
@@ -1969,8 +1960,7 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 #endif /* CFG_SUPPORT_HW_DVT */
 
 	/* It's HW workaround for mt7921 */
-	if (is_mt7961(bdev->chip_id))
-		cif_dev->patched = 1;
+	cif_dev->patched = bmain_info->hif_hook_chip.patched;
 
 	err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
 	if (err < 0) {
@@ -2151,7 +2141,6 @@ static int btmtk_cif_suspend(struct device *dev)
 	struct btmtk_sdio_dev *cif_dev = NULL;
 	struct btmtk_woble *bt_woble = NULL;
 	mmc_pm_flag_t pm_flags;
-	struct irq_desc *desc;
 
 	BTMTK_INFO("%s, enter", __func__);
 
@@ -2193,24 +2182,6 @@ static int btmtk_cif_suspend(struct device *dev)
 		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
 #endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
-	if (bdev->bt_cfg.support_woble_by_eint) {
-		if (bt_woble->wobt_irq != 0 && atomic_read(&(bt_woble->irq_enable_count)) == 0) {
-			/* clear irq data before enable woble irq to avoid DUT wake up
-			 *  automatically by edge trigger, sync from Jira CONN-50629
-			 */
-			desc = irq_to_desc(bt_woble->wobt_irq);
-			if (desc)
-				desc->irq_data.chip->irq_ack(&desc->irq_data);
-			else
-				BTMTK_INFO("%s:can't get desc\n", __func__);
-
-			BTMTK_INFO("%s, enable BT IRQ:%d", __func__, bt_woble->wobt_irq);
-			irq_set_irq_wake(bt_woble->wobt_irq, 1);
-			enable_irq(bt_woble->wobt_irq);
-			atomic_inc(&(bt_woble->irq_enable_count));
-		} else
-			BTMTK_INFO("%s, irq_enable count:%d", __func__, atomic_read(&(bt_woble->irq_enable_count)));
-	}
 
 	pm_flags = sdio_get_host_pm_caps(func);
 	if (!(pm_flags & MMC_PM_KEEP_POWER)) {
@@ -2333,6 +2304,7 @@ static int btmtk_sdio_subsys_reset(struct btmtk_dev *bdev)
 	int retry = RETRY_TIMES;
 	u32 ret = 0;
 	atomic_t subreset_retry;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	atomic_set(&subreset_retry, 0);
 reset_retry:
@@ -2348,7 +2320,7 @@ reset_retry:
 		 * 1: Driver own. 0: FW own
 		 */
 		btmtk_sdio_keep_driver_own(cif_dev, 1);
-		if (!is_mt7961(bdev->chip_id))
+		if (!bmain_info->hif_hook_chip.patched)
 			break;
 		ret = btmtk_sdio_readl(PD2HRM0R, &u32ReadCRValue, cif_dev->func);
 		msleep(DELAY_TIMES);
@@ -2481,11 +2453,9 @@ exit:
 int btmtk_sdio_whole_reset(struct btmtk_dev *bdev)
 {
 	int ret = -1;
-	int cur = 0;
 	struct btmtk_sdio_dev *cif_dev = NULL;
 	struct mmc_card *card = NULL;
 	struct mmc_host *host = NULL;
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (bdev == NULL || bdev->cif_dev == NULL)
 		cif_dev = &g_sdio_dev;
@@ -2500,12 +2470,6 @@ int btmtk_sdio_whole_reset(struct btmtk_dev *bdev)
 	card = cif_dev->func->card;
 	if ((card == NULL) || (card->host  == NULL)) {
 		BTMTK_ERR("mmc structs are NULL");
-		return ret;
-	}
-
-	cur = atomic_cmpxchg(&bmain_info->chip_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
-	if (cur == BTMTK_RESET_DOING) {
-		BTMTK_INFO("%s: reset in progress, return", __func__);
 		return ret;
 	}
 
@@ -2573,6 +2537,7 @@ static int sdio_deregister(void)
 static void btmtk_sdio_chip_reset_notify(struct btmtk_dev *bdev)
 {
 	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (cif_dev == NULL) {
 		BTMTK_INFO("%s, cif_dev is NULL", __func__);
@@ -2580,8 +2545,7 @@ static void btmtk_sdio_chip_reset_notify(struct btmtk_dev *bdev)
 	}
 	btmtk_sdio_keep_driver_own(cif_dev, 0);
 	/* It's HW workaround for mt7921 */
-	if (is_mt7961(bdev->chip_id))
-		cif_dev->patched = 1;
+	cif_dev->patched = bmain_info->hif_hook_chip.patched;
 	atomic_set(&cif_dev->tx_rdy, 1);
 
 	btmtk_sdio_set_wifi_driver_own(0);

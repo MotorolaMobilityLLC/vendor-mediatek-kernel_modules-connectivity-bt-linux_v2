@@ -25,9 +25,7 @@
 #include "btmtk_buffer_mode.h"
 #include "btmtk_chip_common.h"
 #if (USE_DEVICE_NODE == 1)
-#include "connv3_debug_utility.h"
 #include "btmtk_queue.h"
-#include "connv3.h"
 #include "btmtk_proj_sp.h"
 #endif
 
@@ -165,7 +163,6 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc)
 	utc->tm.tm_year += 1900;
 	utc->tm.tm_mon += 1;
 }
-
 
 int32_t btmtk_intcmd_set_fw_log(uint8_t flag)
 {
@@ -884,6 +881,13 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 	while (size) {
 		int index, length;
 		if (!skb) {
+			/* ignore first byte as 0xFF (FW wakeup) & 0x00 (noise from uart) */
+			while (size > 1 && (*buf == 0xFF || *buf == 0x00)) {
+				BTMTK_DBG("%s, receive 0x%02X in pkt head, pkt_len[%d]", __func__, buf[0], size);
+				buf++;
+				size--;
+			}
+
 			for (index = 0; index < pkts_count; index++) {
 				if (buf[0] == (&pkts[index])->type) {
 					skb = bt_skb_alloc(
@@ -901,7 +905,7 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 				}
 			}
 
-			/* Type not matched */
+			/* Check for invalid packet type */
 			if (!skb) {
 				BTMTK_ERR("%s,skb is invalid, buffer[0] = 0x%02X!", __func__,
 					buf[0]);
@@ -1022,6 +1026,10 @@ static const struct h4_recv_pkt mtk_recv_pkts[] = {
 	{ H4_RECV_SCO,      .recv = hci_recv_frame },
 	{ H4_RECV_EVENT,    .recv = btmtk_recv_event },
 	{ H4_RECV_ISO,      .recv = btmtk_recv_iso },
+#if (USE_DEVICE_NODE == 1)
+	{ H4_RECV_RHW_READ,	.recv = btmtk_recv_rhw},
+	{ H4_RECV_RHW_WRITE,	.recv = btmtk_recv_rhw},
+#endif
 };
 
 #if ENABLESTP
@@ -1334,6 +1342,31 @@ int btmtk_recv_iso(struct hci_dev *hdev, struct sk_buff *skb)
 	return 0;
 }
 
+#if (USE_DEVICE_NODE == 1)
+int btmtk_recv_rhw(struct hci_dev *hdev, struct sk_buff *skb)
+{
+	struct btmtk_dev *bdev = NULL;
+
+	if (hdev == NULL || skb == NULL) {
+		BTMTK_ERR("%s, invalid parameters!", __func__);
+		return -EINVAL;
+	}
+
+	bdev = hci_get_drvdata(hdev);
+	if (bdev == NULL || bdev->workqueue == NULL) {
+		BTMTK_ERR("%s, bdev or workqueue is invalid!", __func__);
+		kfree_skb(skb);
+		skb = NULL;
+		return -EINVAL;
+	}
+
+	skb_queue_tail(&bdev->rx_q, skb);
+	queue_work(bdev->workqueue, &bdev->rx_work);
+
+	return 0;
+}
+#endif
+
 int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		const int cmd_len, const uint8_t *event, const int event_len, int delay,
 		int retry, int pkt_type)
@@ -1393,7 +1426,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		 * but wait related event failed, in this case, we don't need to free skb here,
 		 * otherwise, it will be double free.
 		 */
-		if (ret != -ERRNUM)
+		if (ret != -ERRNUM && skb)
 			kfree_skb(skb);
 	}
 
@@ -1492,6 +1525,7 @@ int btmtk_load_code_from_bin_check(u8 *fwbuf, u32 len, int patch_flag)
 
 	return 0;
 }
+
 static u8 *btmtk_memstr(u8 *buf, u32 buf_len, char *substr)
 {
 	u32 sublen = 0;
@@ -2423,7 +2457,6 @@ __weak int32_t btmtk_set_sleep(struct hci_dev *hdev, u_int8_t need_wait)
 	//BTMTK_ERR("No btmtk_set_sleep function");
 	return -1;
 }
-
 
 int btmtk_load_rom_patch(struct btmtk_dev *bdev)
 {
@@ -3937,11 +3970,18 @@ static int bt_close(struct hci_dev *hdev)
 	state = btmtk_get_chip_state(bdev);
 
 #if (USE_DEVICE_NODE == 1)
-	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT) {
-		BTMTK_WARN("%s: fw dump or assert ongoing , can't close yet", __func__);
-		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT)))
-			BTMTK_ERR("%s: uanble to finish coredump in 15s", __func__);
-		goto exit;
+	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
+			|| state == BTMTK_STATE_SUBSYS_RESET) {
+		BTMTK_WARN("%s: wait dump_comp , can't close yet state[%d]", __func__, state);
+		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
+			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
+			btmtk_fwdump_wake_unlock();
+			connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump not complete");
+			btmtk_sp_coredump_end();
+		}
+		if (main_info.hif_hook.cif_mutex_lock)
+			main_info.hif_hook.cif_mutex_lock(bdev);
+		goto unlock;
 	}
 #endif
 
@@ -3998,11 +4038,8 @@ static int bt_close(struct hci_dev *hdev)
 		kfree_skb(bdev->rx_skb);
 	bdev->rx_skb = NULL;
 
-#if (USE_DEVICE_NODE == 0)
-	main_info.hif_hook.close(hdev);
-#endif
-
 unlock:
+	main_info.hif_hook.close(hdev);
 	if (main_info.hif_hook.cif_mutex_unlock)
 		main_info.hif_hook.cif_mutex_unlock(bdev);
 exit:
@@ -4010,15 +4047,8 @@ exit:
 #if (USE_DEVICE_NODE == 1)
 	/* avoid reset start at new bt on */
 	btmtk_reset_timer_del(bdev);
-	main_info.hif_hook.close(hdev);
 	state = btmtk_get_chip_state(bdev);
-	/* after fops set closed, would not get any rx data */
-	/* so if chip_state still fw_dump, need to release wakelock and coredump end*/
-	if (state == BTMTK_STATE_FW_DUMP) {
-		BTMTK_ERR("%s: end with chip_state still dumping", __func__);
-		btmtk_fwdump_wake_unlock();
-		connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump fail");
-	}
+
 	if (state != BTMTK_STATE_DISCONNECT)
 		btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
 
@@ -4165,6 +4195,21 @@ int bt_open(struct hci_dev *hdev)
 
 failed:
 #if (USE_DEVICE_NODE == 1)
+
+	state = btmtk_get_chip_state(bdev);
+
+	if (state == BTMTK_STATE_FW_DUMP || state == BTMTK_STATE_SEND_ASSERT
+			|| state == BTMTK_STATE_SUBSYS_RESET) {
+		BTMTK_WARN("%s: wait dump_comp, can't close yet state[%d]", __func__, state);
+		if (!wait_for_completion_timeout(&bdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
+			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
+			btmtk_fwdump_wake_unlock();
+			connv3_coredump_end(main_info.hif_hook.coredump_handler, "BT coredump fail");
+			btmtk_sp_coredump_end();
+
+		}
+	}
+
 	main_info.hif_hook.close(hdev);
 	state = btmtk_get_chip_state(bdev);
 	/* if state is disconnect means uart_launcher is disconnected, not set to close state */
@@ -4356,7 +4401,8 @@ static void btmtk_rx_work(struct work_struct *work)
 				continue;
 			}
 		}
-		BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
+		BTMTK_DBG_RAW(skb->data, skb->len, "%s: len[%d] %02x", __func__,
+							skb->len + 1, hci_skb_pkt_type(skb));
 		if (hci_skb_pkt_type(skb) == HCI_EVENT_PKT) {
 			/* save hci evt pkt for debug */
 			if (skb->data[0] == 0x3E)
@@ -4407,6 +4453,17 @@ static void btmtk_rx_work(struct work_struct *work)
 
 		} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
 			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_RX_ISO_STACK, skb->data, skb->len);
+
+#if (USE_DEVICE_NODE == 1)
+		} else if (hci_skb_pkt_type(skb) == RHW_WRITE_TYPE
+					|| hci_skb_pkt_type(skb) == RHW_READ_TYPE) {
+			main_info.hif_hook.event_filter(bdev, skb);
+			BTMTK_DBG("%s Drop by driver, don't send to stack", __func__);
+			/* Drop by driver, don't send to stack */
+			kfree_skb(skb);
+			skb = NULL;
+			continue;
+#endif
 		}
 
 		fstate = btmtk_fops_get_state(bdev);
@@ -4507,6 +4564,10 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 	/* rx_work init */
 	INIT_WORK(&bdev->rx_work, btmtk_rx_work);
 	INIT_WORK(&bdev->dynamic_fwdl_work, btmtk_dynamic_fwdl_work);
+#if (USE_DEVICE_NODE == 1)
+	INIT_WORK(&bdev->async_trx_work, btmtk_async_trx_work);
+	INIT_WORK(&bdev->pwr_on_uds_work, btmtk_pwr_on_uds_work);
+#endif
 	skb_queue_head_init(&bdev->rx_q);
 	bdev->workqueue = alloc_workqueue("BTMTK_RX_WQ", WQ_HIGHPRI | WQ_UNBOUND |
 					  WQ_MEM_RECLAIM, 1);
@@ -4892,8 +4953,10 @@ static int main_init(void)
 	BTMTK_INFO("%s supported intf count <%d>", __func__, btmtk_intf_num);
 
 	BTMTK_INFO("%s: Register reboot_notifier callback success.", __func__);
+#if (USE_DEVICE_NODE == 0)
 	/* Is it necessary? bt_close will be called by reboot. */
 	register_reboot_notifier(&btmtk_reboot_notifier);
+#endif
 	g_bdev = kzalloc((sizeof(*g_bdev) * btmtk_intf_num), GFP_KERNEL);
 	if (!g_bdev) {
 		BTMTK_WARN("%s insufficient memory", __func__);

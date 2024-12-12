@@ -60,6 +60,7 @@ typedef int (*set_gpio_high)(u8 gpio);
 
 struct btmtk_uart_dev {
 	struct serdev_device *serdev;
+	struct btmtk_woble	bt_woble;
 	struct clk *clk;
 	struct clk *osc;
 	unsigned char	*transfer_buf;

@@ -14,7 +14,7 @@
 #include "btmtk_chip_7961.h"
 #include "btmtk_chip_common.h"
 
-static int btmtk_chip_reg_init(struct btmtk_dev *bdev)
+static int btmtk_chip_reg_init_7961(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
@@ -60,7 +60,7 @@ static int btmtk_chip_reg_init(struct btmtk_dev *bdev)
 	return ret;
 }
 
-static int btmtk_read_pin_mux_setting(struct btmtk_dev *bdev, const uint8_t *cmd,
+static int btmtk_read_pin_mux_setting_7961(struct btmtk_dev *bdev, const uint8_t *cmd,
 		const int cmd_len, const uint8_t *event, const int event_len, u32 *value)
 {
 	int ret = 0;
@@ -79,7 +79,7 @@ static int btmtk_read_pin_mux_setting(struct btmtk_dev *bdev, const uint8_t *cmd
 	return ret;
 }
 
-static int btmtk_write_pin_mux_setting(struct btmtk_dev *bdev, uint8_t *cmd,
+static int btmtk_write_pin_mux_setting_7961(struct btmtk_dev *bdev, uint8_t *cmd,
 		int cmd_len, const uint8_t *event, const int event_len, u32 value)
 {
 	int ret = 0;
@@ -101,13 +101,14 @@ static int btmtk_write_pin_mux_setting(struct btmtk_dev *bdev, uint8_t *cmd,
 }
 
 
-static int btmtk_set_audio_pin_mux(struct btmtk_dev *bdev)
+static int btmtk_set_audio_pin_mux_7961(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 	unsigned int i = 0;
 	u32 pinmux = 0;
 	struct data_struct read_pinmux_cmd = {0}, read_pinmux_event = {0};
 	struct data_struct write_pinmux_cmd = {0}, write_pinmux_event = {0};
+	char pin_addr[PINMUX_REG_NUM] = {0x50, 0x54};
 
 	BTMTK_INFO("%s enter", __func__);
 
@@ -118,31 +119,23 @@ static int btmtk_set_audio_pin_mux(struct btmtk_dev *bdev)
 
 	for (i = 0; i < PINMUX_REG_NUM; i++) {
 		pinmux = 0;
-		if (i == PINMUX_REG_NUM - 1) {
-			read_pinmux_cmd.content[read_pinmux_cmd.len - 4] = 0x54;
-			write_pinmux_cmd.content[write_pinmux_cmd.len - 8] = 0x54;
-		}
-		ret = btmtk_read_pin_mux_setting(bdev, read_pinmux_cmd.content, read_pinmux_cmd.len,
+		read_pinmux_cmd.content[AUDIO_PINMUX_SETTING_OFFSET] = pin_addr[i];
+		write_pinmux_cmd.content[AUDIO_PINMUX_SETTING_OFFSET] = pin_addr[i];
+		ret = btmtk_read_pin_mux_setting_7961(bdev, read_pinmux_cmd.content, read_pinmux_cmd.len,
 			read_pinmux_event.content, read_pinmux_event.len, &pinmux);
 		if (ret) {
 			BTMTK_ERR("%s, btmtk_read_pin_mux_setting error(%d)", __func__, ret);
 			goto exit;
 		}
-		if (write_pinmux_cmd.content[write_pinmux_cmd.len - 8] == 0x50) {
+		if (i == 0) {
 			pinmux &= 0x00FFFFFF;
 			pinmux |= 0x11000000;
-		} else if (write_pinmux_cmd.content[write_pinmux_cmd.len - 8] == 0x54) {
+		} else {
 			pinmux &= 0xFFFFF0F0;
 			pinmux |= 0x00000101;
-		} else {
-			BTMTK_ERR("%s, pinmux register is error, write_pinmux_cmd[%d] = 0x%02x",
-					__func__, write_pinmux_cmd.len - 8,
-					write_pinmux_cmd.content[write_pinmux_cmd.len - 8]);
-			ret = -1;
-			goto exit;
 		}
 
-		ret = btmtk_write_pin_mux_setting(bdev, write_pinmux_cmd.content, write_pinmux_cmd.len,
+		ret = btmtk_write_pin_mux_setting_7961(bdev, write_pinmux_cmd.content, write_pinmux_cmd.len,
 			write_pinmux_event.content, write_pinmux_event.len, pinmux);
 
 		if (ret) {
@@ -151,7 +144,7 @@ static int btmtk_set_audio_pin_mux(struct btmtk_dev *bdev)
 		}
 
 		pinmux = 0;
-		ret = btmtk_read_pin_mux_setting(bdev, read_pinmux_cmd.content, read_pinmux_cmd.len,
+		ret = btmtk_read_pin_mux_setting_7961(bdev, read_pinmux_cmd.content, read_pinmux_cmd.len,
 			read_pinmux_event.content, read_pinmux_event.len, &pinmux);
 		if (ret) {
 			BTMTK_ERR("%s, btmtk_read_pin_mux_setting error(%d)", __func__, ret);
@@ -172,8 +165,8 @@ int btmtk_cif_chip_7961_register(void)
 
 	BTMTK_INFO("%s", __func__);
 
-	bmain_info->hif_hook_chip.bt_set_pinmux = btmtk_set_audio_pin_mux;
-	bmain_info->hif_hook_chip.cap_init = btmtk_chip_reg_init;
+	bmain_info->hif_hook_chip.bt_set_pinmux = btmtk_set_audio_pin_mux_7961;
+	bmain_info->hif_hook_chip.cap_init = btmtk_chip_reg_init_7961;
 	bmain_info->hif_hook_chip.patched = 1;
 
 	return retval;

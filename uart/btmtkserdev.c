@@ -144,11 +144,12 @@ int btmtk_uart_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 	return 0;
 }
 
+#if 0
 static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 {
-
 	return 0;
 }
+#endif
 
 int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
@@ -159,10 +160,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 		if (memcmp(skb->data, &read_address_event[1], READ_ADDRESS_EVT_HDR_LEN - 1) == 0
 			&& (skb->len == (READ_ADDRESS_EVT_HDR_LEN - 1 + BD_ADDRESS_SIZE))) {
 			memcpy(bdev->bdaddr, &skb->data[READ_ADDRESS_EVT_PAYLOAD_OFFSET - 1], BD_ADDRESS_SIZE);
-			BTMTK_INFO("GET BDADDR = %02X:%02X:%02X:%02X:%02X:%02X",
-				bdev->bdaddr[0], bdev->bdaddr[1], bdev->bdaddr[2],
-				bdev->bdaddr[3], bdev->bdaddr[4], bdev->bdaddr[5]);
-
+			BTMTK_INFO("%s: GET BDADDR = "MACSTR, __func__, MAC2STR(bdev->bdaddr));
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 		} else if (memcmp(skb->data, event_need_compare,
 					event_need_compare_len) == 0) {
@@ -307,7 +305,7 @@ static int btmtk_uart_probe(struct serdev_device *serdev)
 		goto deinit;
 	}
 
-	err = btmtk_main_woble_initialize(bdev);
+	err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
 	if (err < 0) {
 		BT_ERR("btmtk_main_woble_initialize failed!");
 		goto free_setting;
@@ -338,11 +336,15 @@ end:
 static void btmtk_uart_disconnect(struct serdev_device *serdev)
 {
 	struct btmtk_dev *bdev = serdev_device_get_drvdata(serdev);
+	struct btmtk_uart_dev *cif_dev = NULL;
 
 	if (!bdev)
 		return;
 
-	btmtk_cif_free_memory(bdev->cif_dev);
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+
+	btmtk_woble_uninitialize(&cif_dev->bt_woble);
+	btmtk_cif_free_memory(cif_dev);
 	//btmtk_uart_unregister_dev(bdev->cif_dev);
 
 	btmtk_main_cif_disconnect_notify(bdev, HCI_UART);
@@ -427,6 +429,7 @@ static int btmtk_cif_suspend(struct device *dev)
 	int state = BTMTK_STATE_UNKNOWN;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_uart_dev *cif_dev = NULL;
+	struct btmtk_woble *bt_woble = NULL;
 	struct serdev_device *serdev = NULL;
 
 	BTMTK_INFO("%s, enter", __func__);
@@ -441,6 +444,7 @@ static int btmtk_cif_suspend(struct device *dev)
 		return 0;
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	bt_woble = &cif_dev->bt_woble;
 
 	state = btmtk_get_chip_state(bdev);
 	/* Retrieve current HIF event state */
@@ -459,19 +463,19 @@ static int btmtk_cif_suspend(struct device *dev)
 #if CFG_SUPPORT_DVT
 	BTMTK_INFO("%s: SKIP Driver woble_suspend flow", __func__);
 #else
-	ret = btmtk_woble_suspend(bdev);
+	ret = btmtk_woble_suspend(bt_woble);
 	if (ret < 0)
 		BTMTK_ERR("%s: btmtk_woble_suspend return fail %d", __func__, ret);
 #endif
 
 	if (bdev->bt_cfg.support_woble_by_eint) {
-		if (bdev->wobt_irq != 0 && atomic_read(&(bdev->irq_enable_count)) == 0) {
-			BTMTK_INFO("enable BT IRQ:%d", bdev->wobt_irq);
-			irq_set_irq_wake(bdev->wobt_irq, 1);
-			enable_irq(bdev->wobt_irq);
-			atomic_inc(&(bdev->irq_enable_count));
+		if (bt_woble->wobt_irq != 0 && atomic_read(&(bt_woble->irq_enable_count)) == 0) {
+			BTMTK_INFO("enable BT IRQ:%d", bt_woble->wobt_irq);
+			irq_set_irq_wake(bt_woble->wobt_irq, 1);
+			enable_irq(bt_woble->wobt_irq);
+			atomic_inc(&(bt_woble->irq_enable_count));
 		} else {
-			BTMTK_INFO("irq_enable count:%d", atomic_read(&(bdev->irq_enable_count)));
+			BTMTK_INFO("irq_enable count:%d", atomic_read(&(bt_woble->irq_enable_count)));
 		}
 	}
 
@@ -491,6 +495,7 @@ static int btmtk_cif_resume(struct device *dev)
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct btmtk_cif_state *cif_state = NULL;
+	struct btmtk_woble *bt_woble = NULL;
 	struct serdev_device *serdev = NULL;
 
 	BTMTK_INFO("%s, enter", __func__);
@@ -505,6 +510,7 @@ static int btmtk_cif_resume(struct device *dev)
 		return 0;
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+	bt_woble = &cif_dev->bt_woble;
 
 	bdev->suspend_count--;
 	if (bdev->suspend_count) {
@@ -513,12 +519,12 @@ static int btmtk_cif_resume(struct device *dev)
 	}
 
 	if (bdev->bt_cfg.support_woble_by_eint) {
-		if (bdev->wobt_irq != 0 && atomic_read(&(bdev->irq_enable_count)) == 1) {
-			BTMTK_INFO("disable BT IRQ:%d", bdev->wobt_irq);
-			atomic_dec(&(bdev->irq_enable_count));
-			disable_irq_nosync(bdev->wobt_irq);
+		if (bt_woble->wobt_irq != 0 && atomic_read(&(bt_woble->irq_enable_count)) == 1) {
+			BTMTK_INFO("disable BT IRQ:%d", bt_woble->wobt_irq);
+			atomic_dec(&(bt_woble->irq_enable_count));
+			disable_irq_nosync(bt_woble->wobt_irq);
 		} else {
-			BTMTK_INFO("irq_enable count:%d", atomic_read(&(bdev->irq_enable_count)));
+			BTMTK_INFO("irq_enable count:%d", atomic_read(&(bt_woble->irq_enable_count)));
 		}
 	}
 
@@ -530,7 +536,7 @@ static int btmtk_cif_resume(struct device *dev)
 #if CFG_SUPPORT_DVT
 	BTMTK_INFO("%s: SKIP Driver woble_resume flow", __func__);
 #else
-	ret = btmtk_woble_resume(bdev);
+	ret = btmtk_woble_resume(bt_woble);
 	if (ret < 0)
 		BTMTK_ERR("%s: btmtk_woble_resume return fail %d", __func__, ret);
 #endif

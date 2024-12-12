@@ -50,7 +50,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <signal.h>
-#include <syslog.h>
+//#include <syslog.h>
 #include <termios.h>
 #include <time.h>
 #include <sys/time.h>
@@ -101,12 +101,12 @@ int setup_uart_param (
 
     cfmakeraw(&ti);
 
-    BPRINT_D("ti.c_cflag = 0x%08x", ti.c_cflag);
+    BPRINT_I("ti.c_cflag = 0x%08x", ti.c_cflag);
     ti.c_cflag |= CLOCAL;
-    BPRINT_D("CLOCAL = 0x%x", CLOCAL);
-    BPRINT_D("(ori)ti.c_iflag = 0x%08x", ti.c_iflag);
-    BPRINT_D("(ori)ti.c_cflag = 0x%08x", ti.c_cflag);
-    BPRINT_D("sUartConfig->fc= %d (0:none,sw,hw,linux)", sUartConfig->fc);
+    BPRINT_I("CLOCAL = 0x%x", CLOCAL);
+    BPRINT_I("(ori)ti.c_iflag = 0x%08x", ti.c_iflag);
+    BPRINT_I("(ori)ti.c_cflag = 0x%08x", ti.c_cflag);
+    BPRINT_I("sUartConfig->fc= %d (0:none,sw,hw,linux)", sUartConfig->fc);
 
     switch (sUartConfig->fc) {
      /* HW FC Enable */
@@ -122,13 +122,13 @@ int setup_uart_param (
         break;
     /* MTK Software FC */
     case UART_MTK_SW_FC:
-        ti.c_cflag &= ~(CRTSCTS);
-        ti.c_iflag |= NOFLSH;
+        ti.c_iflag |= CRTSCTS;
+        ti.c_cflag &= ~(NOFLSH);
         break;
     /* default disable flow control */
     default:
         ti.c_cflag &= ~(CRTSCTS);
-        ti.c_iflag &= ~(NOFLSH);
+        ti.c_iflag &= ~(NOFLSH|CRTSCTS);
     }
 
     BPRINT_D("c_c CRTSCTS = 0x%16x", CRTSCTS);
@@ -267,8 +267,9 @@ int main(int argc, char *argv[])
     int fd_num = 0;
     int err = 0;
     int opt;
-    int baudrate = 0;
+    int baudrate = 115200;
     int chang_baud_rate = 0;
+    int retry = 0;
     int flow_control = UART_DISABLE_FC;
     char *tty_path = "/dev/ttyUSB0";
     struct UART_CONFIG sUartConfig;
@@ -288,8 +289,9 @@ int main(int argc, char *argv[])
     sigaction(SIGQUIT, &sigact, NULL);
     sigaction(SIGKILL, &sigact, NULL);
     init_flock(&fl);
+    ld = N_MTK;
 
-    while ((opt = getopt(argc, argv, "c:f:p:k::")) != -1) {
+    while ((opt = getopt(argc, argv, "c:f:p:k:l::")) != -1) {
         switch (opt) {
             /* change baudrate */
             case 'c':
@@ -316,6 +318,11 @@ int main(int argc, char *argv[])
                 osi_system("killall uart_launcher");
                 BPRINT_I("Kill uart_launcher");
                 return 0;
+            /* set ldisc */
+            case 'l':
+                ld = atoi(optarg);
+                BPRINT_I("set ldisc[%d]", ld);
+                break;
             case '?':
         default:
                 BPRINT_I("set baud:\t uart_launcher -c [baudrate]");
@@ -323,30 +330,49 @@ int main(int argc, char *argv[])
                 BPRINT_I("\t\t 0:disable FC  1:MTK_SW_FC  2: SW_FC  3: HW_FC");
                 BPRINT_I("tty path:\t uart_launcher -p [path]");
                 BPRINT_I("kill process:\t uart_launcher -k");
-                goto done;
+                goto exit;
                 break;
         }
     }
 
     /* open ttyUSB */
     BPRINT_I("Running...");
-    gTtyFd = open(tty_path, O_RDWR | O_NOCTTY | O_NONBLOCK);
-    BPRINT_I("open done ttyfd %d", gTtyFd);
-    if (gTtyFd < 0) {
-        BPRINT_E("ttyfd %d, error", gTtyFd);
-        return 0;
+    /* node may not ready, retry 20 times */
+    while (1) {
+        gTtyFd = open(tty_path, O_RDWR | O_NOCTTY | O_NONBLOCK);
+        BPRINT_I("open done ttyfd %d", gTtyFd);
+        if (gTtyFd < 0) {
+            if (retry > 20) {
+                BPRINT_E("ttyfd %d, error", gTtyFd);
+                goto exit;
+            } else {
+                retry++;
+                (void)usleep(1000 * 1000);
+            }
+        } else
+            break;
     }
 
     /* flock the device node */
+    BPRINT_I("flock the device node");
     if (fcntl(gTtyFd, F_SETLK, &fl) < 0) {
         BPRINT_E("lock device node failed, uart_launcher already running.");
-        exit(0);
+        goto exit;
     }
 
-    ld = N_MTK;
-    if (ioctl(gTtyFd, TIOCSETD, &ld) < 0) {
-        BPRINT_E("set TIOCSETD N_MTK error");
-        return 0;
+    /* to ensure driver register TIOCSETD, retry 20 times */
+    retry = 0;
+    while (1) {
+        if (ioctl(gTtyFd, TIOCSETD, &ld) < 0) {
+            if (retry > 20) {
+                BPRINT_E("set TIOCSETD N_MTK error");
+                goto exit;
+            } else {
+                retry++;
+                (void)usleep(1000 * 1000);
+            }
+        } else
+            break;
     }
 
 restart:
@@ -415,9 +441,7 @@ restart:
         goto restart;
     }
 
-done:
-    /* unlock ttyFd */
-    unlock_flock(gTtyFd, &fl, F_UNLCK, SEEK_SET);
+    /* before exit daemon, return baud to default */
     if (chang_baud_rate | flow_control) {
         sUartConfig.iBaudrate = CUST_BAUDRATE_DFT;
         sUartConfig.fc = UART_DISABLE_FC;
@@ -437,8 +461,13 @@ done:
         }
     }
 
-    if (gTtyFd > 0)
+exit:
+    /* unlock ttyFd */
+    if (gTtyFd > 0) {
+        BPRINT_I("unlock_flock");
+        unlock_flock(gTtyFd, &fl, F_UNLCK, SEEK_SET);
         close(gTtyFd);
+    }
     BPRINT_I("uart_launcher stop");
     return 0;
 }

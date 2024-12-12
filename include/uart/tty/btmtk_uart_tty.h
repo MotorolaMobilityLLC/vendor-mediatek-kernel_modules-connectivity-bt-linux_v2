@@ -29,6 +29,9 @@
 #include <linux/pinctrl/consumer.h>
 #include <linux/clk.h>
 #include <linux/suspend.h>
+#if (USE_DEVICE_NODE == 1)
+#include "btmtk_proj_sp.h"
+#endif
 
 #define HCI_HEADER_LEN	4
 
@@ -99,6 +102,10 @@ struct btmtk_stp_hdr {
 #define OWNTYPE_EVT_LEN 10
 #endif
 
+#define BTMTK_MAX_SEND_RETRY 10000
+#define BTMTK_MAX_WAIT_RETRY 30000
+#define BTMTK_MAX_WAKEUP_RETRY 2
+
 #define BT_UART_DEFAULT_BAUD 115200
 
 /* Delay time between subsys reset GPIO pull low/high */
@@ -141,6 +148,7 @@ struct btmtk_uart_dev {
 	struct sk_buff_head	tx_queue;
 	spinlock_t		tx_lock;
 	struct task_struct	*tx_task;
+	atomic_t		thread_status;
 	unsigned long		tx_state;
 
 	/* For rx queue */
@@ -163,12 +171,39 @@ struct btmtk_uart_dev {
 
 	/* config form dts*/
 	u32			baudrate;
+	u32			hub_en;
+	u32			sleep_en;
+	u32			flush_en;
+	u32			assert_state;
 
 	/* For uarthub setting */
 	u8			fw_hub_en;
 	u8			crc_en;
 	u8			rhw_en;
 	u8			fw_dl_ready;
+
+	/* driver,fw own */
+	bool			no_fw_own;
+	u8			own_state;
+	struct timer_list	fw_own_timer;
+	atomic_t		fw_own_timer_flag;
+	atomic_t		need_drv_own;
+	atomic_t		fw_wake;
+
+	/* trigger assert */
+	atomic_t		need_assert;
+	bool			is_rhw_fail;
+
+	/* sempaphore to compare event */
+	struct semaphore	evt_comp_sem;
+
+#if (USE_DEVICE_NODE == 1)
+	/* dynamic tx power control */
+	struct btmtk_dypwr_st dy_pwr;
+
+	/* pre-cal flag */
+	bool 		is_pre_cal;
+#endif
 };
 
 #define btmtk_uart_is_standalone(bdev)	\
@@ -192,6 +227,13 @@ struct btmtk_uart_dev {
 #define HCIUARTLOADPATCH _IOW('U', 204, int)
 #define HCIUARTSETWAKEUP _IOW('U', 205, int)
 #define HCIUARTINIT _IOW('U', 206, int)
+
+/**
+ * parameter settings
+ */
+#define BTMTK_HUB_EN		(1 << 0)
+#define BTMTK_SLEEP_EN		(1 << 1)
+
 
 //int btmtk_cif_send_calibration(struct hci_dev *hdev);
 #endif
