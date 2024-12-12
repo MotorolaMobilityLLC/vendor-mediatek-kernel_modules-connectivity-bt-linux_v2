@@ -3314,7 +3314,7 @@ void btmtk_save_filter_vendor_cmd(struct sk_buff *skb, struct btmtk_dev *bdev, b
 			bdev->need_compare_num +=
 				(bdev->bt_cfg.filter_vendor_cmd[i].content[FILTER_LIST_COMPLETE_NUM] +
 				bdev->bt_cfg.filter_vendor_cmd[i].content[FILTER_LIST_STATUS_NUM]);
-			bdev->bt_cfg.filter_vendor_cmd[i].content[FILTER_OPCODE_NUM] =
+			bdev->bt_cfg.filter_vendor_cmd[i].content[FILTER_OPCODE_NUM] +=
 				(bdev->bt_cfg.filter_vendor_cmd[i].content[FILTER_LIST_COMPLETE_NUM] +
 				bdev->bt_cfg.filter_vendor_cmd[i].content[FILTER_LIST_STATUS_NUM]);
 
