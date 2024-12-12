@@ -1346,7 +1346,7 @@ static int btmtk_uart_pre_open(struct btmtk_dev *bdev)
 #if (USE_DEVICE_NODE == 0)
 	/* FW patch will be downloaded before BT open for CE,
 	 *   the own state must be set to FW own for ON/OFF SNS.
-	 * Because these is a timing issue that
+	 * Because these is a timeing issue that
 	 *   the own state may be set to DRV own when BT off
 	 * For example:
 	 *   BT OFF -> enqueue power off cmd -> set DRV own -> send power off cmd
@@ -2237,8 +2237,8 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 		cif_dev->fw_dl_ready = 1;
 
 #if (SLEEP_ENABLE == 1)
-		BTMTK_INFO("enable drv/fw own");
 		cif_dev->sleep_en = 1;
+		BTMTK_INFO("enable drv/fw own");
 		btmtk_uart_fw_own(bdev);
 #endif
 
@@ -2603,7 +2603,6 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 
 	BTMTK_DBG("%s: fw owning", __func__);
 	cif_dev->own_state = BTMTK_FW_OWNING;
-
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE) {
 		BTMTK_WARN("%s: during send_and_recv, keep drv own", __func__);
 		cif_dev->own_state = BTMTK_DRV_OWN;
