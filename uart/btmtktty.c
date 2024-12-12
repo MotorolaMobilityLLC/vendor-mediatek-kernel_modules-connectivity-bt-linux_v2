@@ -2491,7 +2491,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 
 	/* record data from tty */
 	btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_EVT_HIF, data, count);
-	BTMTK_DBG_RAW(bdev, data, count, "%s: len[%zu]", __func__, count);
+	BTMTK_DBG_RAW_ALL(bdev, data, count, "%s: len[%zu]", __func__, count);
 
 #if (SLEEP_ENABLE == 1)
 	//BTMTK_INFO_RAW(bdev, data, count, "%s: count[%d]", __func__, count);
@@ -3150,6 +3150,8 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 	}
 
 	cif_state = &bdev->cif_state[cif_event];
+
+	MAIN_MUTEX_INIT(bdev);
 
 	/* set working state for uart_launcher restart when driver already open */
 	if (btmtk_fops_get_state(bdev) == BTMTK_FOPS_STATE_OPENED) {

@@ -606,6 +606,10 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 		ptr = strstr(cmd, "whole chip reset");
 		if (ptr != NULL) {
 			BTMTK_INFO_DEV(bdev, " %s whole chip reset start", bdev->hdev->name);
+			if (bdev->assert_reason[0] == '\0') {
+					memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
+					strncpy(bdev->assert_reason, "FW_LOG_BT trigger whole chip reset", strlen("FW_LOG_BT trigger whole chip reset") + 1);
+			}
 			bdev->main_info.chip_reset_flag = 1;
 			btmtk_reset_trigger(bdev);
 			continue;
@@ -614,8 +618,16 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 		ptr = strstr(cmd, "subsys chip reset");
 		if (ptr != NULL) {
 			BTMTK_INFO_DEV(bdev, " %s subsys chip reset start", bdev->hdev->name);
-			bdev->main_info.chip_reset_flag = 0;
-			btmtk_reset_trigger(bdev);
+			if (bdev->assert_reason[0] == '\0') {
+				memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
+				strncpy(bdev->assert_reason, "FW_LOG_BT trigger subsys chip reset", strlen("FW_LOG_BT trigger subsys chip reset") + 1);
+			}
+			if (bdev->main_info.hif_hook.trigger_assert)
+				bdev->main_info.hif_hook.trigger_assert(bdev);
+			else {
+				bdev->main_info.chip_reset_flag = 0;
+				btmtk_reset_trigger(bdev);
+			}
 			continue;
 		}
 

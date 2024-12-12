@@ -1132,7 +1132,7 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 				if (buf[0] == (&pkts[index])->type) {
 					skb = bt_skb_alloc(
 						(&pkts[index])->maxlen,
-						   GFP_ATOMIC);
+						   GFP_KERNEL);
 					if (!skb) {
 						BTMTK_ERR_DEV(bdev, "%s alloc failed!",
 							__func__);
@@ -1166,9 +1166,16 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 			buf += 1;
 		}
 
+		/* if pkt only pkt type */
+		if (size == 0) {
+			BTMTK_INFO("%s: receive only one byte for pkt type[%d]", __func__, hci_skb_pkt_type(skb));
+			break;
+		}
+
 		length = min_t(uint, hci_skb_expect(skb) - skb->len, size);
 		if (length <= 0) {
-			BTMTK_ERR_DEV(bdev, "%s, length = %d!", __func__, length);
+			BTMTK_ERR_DEV(bdev, "%s, length[%d], skb_len[%d], size_dbg[%d], size[%d]",
+					__func__, skb->len, length, size_dbg, size);
 			kfree_skb(skb);
 			skb = NULL;
 			return ERR_PTR(-EINVAL);
@@ -5441,7 +5448,7 @@ static void btmtk_rx_work(struct work_struct *work)
 			}
 		}
 
-		BTMTK_DBG_RAW(bdev, skb->data, skb->len, "%s: len[%d] %02x", __func__,
+		BTMTK_DBG_RAW(bdev, skb->data, skb->len, "%s: len[%d] %02x ", __func__,
 							skb->len + 1, hci_skb_pkt_type(skb));
 		if (hci_skb_pkt_type(skb) == HCI_EVENT_PKT) {
 			/* save hci evt pkt for debug */
