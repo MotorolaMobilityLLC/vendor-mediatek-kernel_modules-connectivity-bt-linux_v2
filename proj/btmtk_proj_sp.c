@@ -1472,6 +1472,10 @@ void btmtk_platform_prop_register(struct btmtk_dev *bdev) {
 			BTMTK_INFO("%s: platform[%u] not create yet", __func__, platform);
 			//g_platform_prop = &MT6989_prop;
 			break;
+		case 6991:
+			BTMTK_INFO("%s: platform[%u]", __func__, platform);
+			g_platform_prop = &MT6991_prop;
+			break;
 		default:
 			BTMTK_WARN("%s: not recognize platform[%u]", __func__, platform);
 			break;
