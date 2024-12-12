@@ -265,7 +265,7 @@ void btmtk_get_cmd_or_event(struct btmtk_dev *bdev, enum cmd_index_s type, struc
 int btmtk_common_data_initialize(struct btmtk_dev *bdev);
 int btmtk_send_cmd_to_fw(struct btmtk_dev *bdev,
 		enum cmd_index_s cmd_type, enum cmd_index_s evt_type,
-		int delay, int retry, int pkt_type);
+		int delay, int retry, int pkt_type, bool flag);
 
 #define BTMTK_GET_CMD_OR_EVENT_DATA(bdev, type, cmd_or_event) \
 	do {	\

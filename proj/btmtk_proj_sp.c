@@ -329,7 +329,7 @@ void btmtk_coredump_post_start(void)
 	int ret = 0;
 	BTMTK_INFO("%s", __func__);
 
-	ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd), NULL, 0, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+	ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd), NULL, 0, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed, ret[%d]", __func__, ret);
 
@@ -970,7 +970,7 @@ int btmtk_read_pmic_state(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s enter", __func__);
 	ret = btmtk_main_send_cmd(bdev, read_pmic_state_cmd, sizeof(read_pmic_state_cmd),
-			read_pmic_state_event, sizeof(read_pmic_state_event), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			read_pmic_state_event, sizeof(read_pmic_state_event), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
 	else
@@ -1076,7 +1076,7 @@ int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 	BTMTK_DBG_RAW(cmd, offset, "%s: Send: ", __func__);
 
 	ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
-			event, sizeof(event), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			event, sizeof(event), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
@@ -1181,7 +1181,7 @@ int btmtk_intcmd_wmt_blank_status(unsigned char blank_state) {
 	cmd[6] = blank_state;
 	ret = btmtk_main_send_cmd(g_sbdev,
 			cmd, sizeof(cmd), evt, sizeof(evt),
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s faill to set blank_state[%d] to fw", __func__, blank_state);
 
@@ -1459,7 +1459,7 @@ static void btmtk_send_set_tx_power_cmd(struct btmtk_dev *bdev)
 
 	cmd_set[5] = dy_pwr->set_val;
 	ret = btmtk_main_send_cmd(bdev, cmd_set, sizeof(cmd_set),
-				evt_set, sizeof(evt_set), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+				evt_set, sizeof(evt_set), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
@@ -1556,7 +1556,7 @@ int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb)
 	 * ZZ: Low power region boundary dBm
 	 */
 	ret = btmtk_main_send_cmd(bdev, cmd_query, sizeof(cmd_query),
-				evt_query, sizeof(evt_query), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+				evt_query, sizeof(evt_query), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
@@ -1727,7 +1727,7 @@ int32_t btmtk_intcmd_wmt_utc_sync(void)
 	memcpy(cmd + 6 + sizeof(uint32_t), &utc.usec, sizeof(uint32_t));
 
 	ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd),
-		evt, sizeof(evt), DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+		evt, sizeof(evt), DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
 
 	if (ret < 0)
 		BTMTK_ERR("%s: failed(%d)", __func__, ret);
@@ -1942,7 +1942,7 @@ int btmtk_find_my_phone_cmd(void)
 
 	BTMTK_INFO("%s", __func__);
 	ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd), evt, sizeof(evt),
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
 	if (ret < 0)
 		BTMTK_ERR("%s: failed, ret[%d]", __func__, ret);
 	return ret;

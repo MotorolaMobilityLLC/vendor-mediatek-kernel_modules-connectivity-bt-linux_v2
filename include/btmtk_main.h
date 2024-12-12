@@ -115,6 +115,12 @@
 
 #define CHAR2HEX_SIZE	4
 
+/*probe reset flag*/
+#define BT_PROBE_FAIL_FOR_SUBSYS_RESET	8
+#define BT_PROBE_FAIL_FOR_WHOLE_RESET	9
+#define BT_PROBE_RESET_DONE	10
+#define BT_PROBE_DO_WHOLE_CHIP_RESET 11
+
 /* woble reset flag */
 #define BT_WOBLE_FAIL_FOR_SUBSYS_RESET 12
 #define BT_WOBLE_RESET_DONE 13
@@ -187,6 +193,15 @@
 
 #define FW_VERSION_BUF_SIZE 256
 #define FW_VERSION_KEY_WORDS "t-neptune"
+
+#define OPCODE_LEN 2
+#define CMD_NEED_FILTER 1
+#define CMD_NO_NEED_FILTER 0
+#define FILTER_LIST_OPCODE_1 0
+#define FILTER_LIST_OPCODE_2 1
+#define FILTER_LIST_COMPLETE_NUM 2
+#define FILTER_LIST_STATUS_NUM 3
+#define FILTER_OPCODE_NUM 4
 
 #define FW_PATCH_SIZE_MAX (2*1024*1024)
 
@@ -542,6 +557,7 @@ struct btmtk_dev {
 
 	int	suspend_count;
 	bool	suspend_state;
+	int	need_compare_num;
 
 	/* pre-cal flag */
 	bool	is_pre_cal_done;
@@ -558,6 +574,8 @@ struct btmtk_dev {
 
 	wait_queue_head_t	p_wait_event_q;
 	wait_queue_head_t	p_woble_fail_q;
+	wait_queue_head_t	probe_fail_wq;
+	wait_queue_head_t	compare_event_wq;
 
 	/* assert */
 	char	assert_reason[ASSERT_REASON_SIZE];
@@ -657,11 +675,11 @@ typedef int (*cif_reg_write_ptr)(struct btmtk_dev *bdev, u32 reg, u32 val);
 typedef int (*cif_probe_hdl_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_disc_hdl_ptr)(void);
 typedef int (*cif_send_cmd_ptr)(struct btmtk_dev *bdev, struct sk_buff *skb,
-		int delay, int retry, int pkt_type);
+		int delay, int retry, int pkt_type, bool flag);
 typedef int (*cif_send_and_recv_ptr)(struct btmtk_dev *bdev,
 		struct sk_buff *skb,
 		const uint8_t *event, const int event_len,
-		int delay, int retry, int pkt_type);
+		int delay, int retry, int pkt_type, bool flag);
 typedef int (*cif_event_filter_ptr)(struct btmtk_dev *bdev, struct sk_buff *skb);
 typedef int (*cif_subsys_reset_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_whole_reset_ptr)(struct btmtk_dev *bdev);
@@ -961,6 +979,10 @@ void btmtk_free_setting_file(struct btmtk_dev *bdev);
 
 unsigned char btmtk_fops_get_state(struct btmtk_dev *bdev);
 
+void btmtk_save_filter_vendor_cmd(struct sk_buff *skb,
+		struct btmtk_dev *bdev, bool flag);
+int btmtk_vendor_cmd_filter(struct btmtk_dev *bdev, struct sk_buff *skb);
+
 void btmtk_hci_snoop_save(unsigned int type, const u8 *buf, u32 len);
 void btmtk_hci_snoop_print(const u8 *buf, u32 len);
 void btmtk_hci_snoop_print_to_log(void);
@@ -977,7 +999,7 @@ int btmtk_load_code_from_bin(u8 **image, char *bin_name,
 int btmtk_data_length_check(u8 *data, u16 length, u8 type);
 int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		const int cmd_len, const uint8_t *event, const int event_len, int delay,
-		int retry, int pkt_type);
+		int retry, int pkt_type, bool flag);
 int btmtk_load_code_from_setting_files(char *setting_file_name,
 			struct device *dev, u32 *code_len, struct btmtk_dev *bdev);
 int btmtk_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_content,

@@ -595,7 +595,7 @@ static int btmtk_sdio_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 
 	memcpy(&cmd.content[MCU_ADDRESS_OFFSET_CMD], &reg, sizeof(reg));
 	ret = btmtk_main_send_cmd(bdev, cmd.content, cmd.len, event.content, event.len, DELAY_TIMES,
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 
 	memcpy(val, bdev->io_buf + MCU_ADDRESS_OFFSET_EVT - HCI_TYPE_SIZE, sizeof(u32));
 	*val = le32_to_cpu(*val);
@@ -1065,7 +1065,7 @@ static int btmtk_sdio_enable_interrupt(int enable, struct sdio_func *func)
 }
 
 int btmtk_sdio_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
-		int delay, int retry, int pkt_type)
+		int delay, int retry, int pkt_type, bool flag)
 {
 	int ret = 0;
 	u32 crAddr = 0, crValue = 0;
@@ -1340,6 +1340,7 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			BTMTK_INFO("%s: GET BDADDR = "MACSTR, __func__, MAC2STR(bdev->bdaddr));
 
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+			wake_up(&bdev->compare_event_wq);
 		} else if (memcmp(skb->data, event_need_compare,
 					event_need_compare_len) == 0) {
 			/* if it is wobx debug event, just print in kernel log, drop it
@@ -1372,6 +1373,7 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			/* make sure memcpy done before we compare it */
 			smp_wmb();
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+			wake_up(&bdev->compare_event_wq);
 			BTMTK_DBG("%s, compare success", __func__);
 		} else {
 			if (skb->data[0] != BLE_EVT_TYPE) {
@@ -1381,19 +1383,27 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 					"%s: event_need_compare:", __func__);
 				BTMTK_INFO_RAW(skb->data, skb->len, "%s: skb->data:", __func__);
 			}
+
+			if (btmtk_vendor_cmd_filter(bdev, skb))
+				return 1;
+
 			return 0;
 		}
 		return 1;
+	} else {
+		if (btmtk_vendor_cmd_filter(bdev, skb))
+			return 1;
 	}
+
 	return 0;
 }
 
 int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 		struct sk_buff *skb,
 		const uint8_t *event, const int event_len,
-		int delay, int retry, int pkt_type)
+		int delay, int retry, int pkt_type, bool flag)
 {
-	unsigned long comp_event_timo = 0, start_time = 0;
+	unsigned long start_time = 0;
 	int ret = -1;
 	struct btmtk_sdio_dev *cif_dev = NULL;
 
@@ -1414,7 +1424,6 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 		/* check hci event /wmt event for SDIO/UART interface, check hci
 		 * event for USB interface
 		 */
-		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_COMP_EVENT_TIMO);
 		BTMTK_DBG("event_need_compare_len %d, event_compare_status %d",
 			event_need_compare_len, event_compare_status);
 	} else {
@@ -1423,30 +1432,34 @@ int btmtk_sdio_send_and_recv(struct btmtk_dev *bdev,
 
 	BTMTK_DBG_RAW(skb->data, skb->len, "%s, send, len = %d", __func__, skb->len);
 
-	ret = btmtk_sdio_send_cmd(bdev, skb, delay, retry, pkt_type);
+	ret = btmtk_sdio_send_cmd(bdev, skb, delay, retry, pkt_type, flag);
 	if (ret < 0) {
 		BTMTK_ERR("%s btmtk_sdio_send_cmd failed!!", __func__);
 		goto exit;
 	}
 
-	do {
-		/* check if event_compare_success */
+	/* check if event_compare_success */
+	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
+		/* make sure memcpy done before we compare it */
+		smp_rmb();
+		ret = 0;
+	} else {
+		BTMTK_INFO("%s: begin wait event interruptible", __func__);
+		wait_event_interruptible_timeout(bdev->compare_event_wq, (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS),
+			msecs_to_jiffies(WOBLE_COMP_EVENT_TIMO));
 		if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
 			/* make sure memcpy done before we compare it */
 			smp_rmb();
 			ret = 0;
-			break;
 		}
+	}
 
-		/* error handle*/
-		if (!atomic_read(&cif_dev->sdio_thread.thread_status)) {
-			BTMTK_WARN("%s main thread already stopped, don't wait evt anymore!!", __func__);
-			ret = -ERRNUM;
-			goto exit;
-		}
-
-		usleep_range(10, 100);
-	} while (time_before(jiffies, comp_event_timo));
+	/* error handle*/
+	if (!atomic_read(&cif_dev->sdio_thread.thread_status)) {
+		BTMTK_WARN("%s main thread already stopped, don't wait evt anymore!!", __func__);
+		ret = -ERRNUM;
+		goto exit;
+	}
 
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		atomic_read(&cif_dev->sdio_thread.thread_status)) {
@@ -1564,7 +1577,7 @@ static int btmtk_sdio_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			LD_PATCH_CMD, LD_PATCH_EVT,
 			PATCH_DOWNLOAD_PHASE3_DELAY_TIME,
 			PATCH_DOWNLOAD_PHASE3_RETRY,
-			BTMTK_TX_ACL_FROM_DRV);
+			BTMTK_TX_ACL_FROM_DRV, CMD_NO_NEED_FILTER);
 	if (ret < 0) {
 		BTMTK_ERR("%s: send wmd dl cmd failed, terminate!", __func__);
 		return ret;
@@ -1937,6 +1950,37 @@ static void btmtk_sdio_stop_main_thread(struct btmtk_sdio_dev *cif_dev)
 	}
 }
 
+#if ((CFG_SUPPORT_HW_DVT == 0) || CFG_SUPPORT_BLUEZ)
+static int btmtk_probe_retry(struct btmtk_dev *bdev)
+{
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	int ret = 0;
+
+	bmain_info->chip_reset_flag = 0;
+	set_bit(BT_PROBE_FAIL_FOR_SUBSYS_RESET, &bdev->flags);
+	btmtk_reset_trigger(bdev);
+
+	ret = wait_event_timeout(bdev->probe_fail_wq, test_bit(BT_PROBE_RESET_DONE, &bdev->flags),
+		msecs_to_jiffies(20000));
+	clear_bit(BT_PROBE_FAIL_FOR_SUBSYS_RESET, &bdev->flags);
+
+	if (ret > 0) {
+		BTMTK_INFO("%s: end", __func__);
+		clear_bit(BT_PROBE_RESET_DONE, &bdev->flags);
+		return 0;
+	} else {
+		BTMTK_ERR("%s: timeout", __func__);
+		if (test_bit(BT_PROBE_RESET_DONE, &bdev->flags)) {
+			clear_bit(BT_PROBE_RESET_DONE,&bdev->flags);
+			return 0;
+		} else {
+			BTMTK_ERR("%s: chip reset timeout", __func__);
+			return -1;
+		}
+	}
+}
+#endif
+
 static int btmtk_sdio_probe(struct sdio_func *func,
 					const struct sdio_device_id *id)
 {
@@ -1945,6 +1989,16 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 	struct btmtk_sdio_dev *cif_dev = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	u8 i = 0;
+#if (CFG_SUPPORT_HW_DVT == 0)
+	u8 load_patch_fail = 0;
+#endif
+#if CFG_SUPPORT_BLUEZ
+	u8 send_init_fail = 0;
+#endif
+	u8 cap_init_fail = 0;
+#if ((CFG_SUPPORT_HW_DVT == 0) || CFG_SUPPORT_BLUEZ)
+	int retry = 4;
+#endif
 
 	bdev = sdio_get_drvdata(func);
 	if (!bdev) {
@@ -1981,6 +2035,8 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 	/* create tx/rx thread */
 	init_waitqueue_head(&cif_dev->sdio_thread.wait_q);
 	init_waitqueue_head(&bdev->p_woble_fail_q);
+	init_waitqueue_head(&bdev->probe_fail_wq);
+	init_waitqueue_head(&bdev->compare_event_wq);
 	skb_queue_head_init(&cif_dev->tx_queue);
 	atomic_set(&cif_dev->int_count, 0);
 	atomic_set(&cif_dev->tx_rdy, 1);
@@ -2036,7 +2092,7 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 		i++;
 		if (i == RETRY_TIMES - 1) {
 			BTMTK_WARN("wait btmtk_sdio_main_thread start failed, do chip reset!!!");
-			bdev->bt_cfg.support_dongle_reset = 1;
+			bdev->bt_cfg.support_dongle_whole_reset = 1;
 			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
 			btmtk_reset_trigger(bdev);
 			goto exit;
@@ -2047,6 +2103,7 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 	if (err < 0) {
 		if (err == -EIO) {
 			BTMTK_ERR("[ERR] btmtk_main_cif_initialize failed, do chip reset!!!");
+			cap_init_fail = 1;
 			goto exit;
 		} else {
 			BTMTK_ERR("[ERR] btmtk_main_cif_initialize failed!");
@@ -2061,10 +2118,17 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 	err = btmtk_load_rom_patch(bdev);
 	if (err < 0) {
 		BTMTK_ERR("btmtk load rom patch failed, do chip reset!!!");
+		if (retry > 2) {
+			load_patch_fail = 1;
+			retry--;
+		}
 		goto exit;
 	}
 #endif /* CFG_SUPPORT_HW_DVT */
 
+#if (CFG_SUPPORT_HW_DVT == 0)
+LOAD_PATCH_RETRY:
+#endif
 	/* It's HW workaround for mt7921 */
 	cif_dev->patched = bmain_info->hif_hook_chip.patched;
 
@@ -2075,10 +2139,16 @@ static int btmtk_sdio_probe(struct sdio_func *func,
 	}
 
 #if CFG_SUPPORT_BLUEZ
+SEND_INIT_RETRY:
 	err = btmtk_send_init_cmds(bdev);
 	if (err < 0) {
 		BTMTK_ERR("%s, btmtk_send_init_cmds failed, err = %d", __func__, err);
-		goto free_setting;
+		if (retry > 0) {
+			send_init_fail = 1;
+			retry--;
+			goto exit;
+		} else
+			goto free_setting;
 	}
 #endif /* CFG_SUPPORT_BLUEZ */
 
@@ -2113,6 +2183,47 @@ end:
 	btmtk_assert_wake_unlock();
 
 exit:
+exit:
+	if (cap_init_fail == 1) {
+		bmain_info->chip_reset_flag = 1;
+		cap_init_fail = 0;
+		set_bit(BT_PROBE_FAIL_FOR_WHOLE_RESET, &bdev->flags);
+		btmtk_reset_trigger(bdev);
+		atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+		return err;
+	}
+#if (CFG_SUPPORT_HW_DVT == 0)
+	if (load_patch_fail == 1) {
+		load_patch_fail = 0;
+		err = btmtk_probe_retry(bdev);
+		if (err < 0) {
+			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+			return -1;
+		}
+		if (test_bit(BT_PROBE_DO_WHOLE_CHIP_RESET, &bdev->flags)) {
+			clear_bit(BT_PROBE_DO_WHOLE_CHIP_RESET, &bdev->flags);
+			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+			return -1;
+		}
+		goto LOAD_PATCH_RETRY;
+	}
+#endif
+#if CFG_SUPPORT_BLUEZ
+	if (send_init_fail == 1) {
+		send_init_fail = 0;
+		err = btmtk_probe_retry(bdev);
+		if (err < 0) {
+			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+			return -1;
+		}
+		if (test_bit(BT_PROBE_DO_WHOLE_CHIP_RESET, &bdev->flags)) {
+			clear_bit(BT_PROBE_DO_WHOLE_CHIP_RESET, &bdev->flags);
+			atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+			return -1;
+		}
+		goto SEND_INIT_RETRY;
+	}
+#endif
 	atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
 	return 0;
 }
