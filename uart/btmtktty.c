@@ -2684,7 +2684,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 				12 Clear DEVx_HOST_AWAKE = 0
 				14 Clear TX/RX REQ
 			*/
-			BTMTK_INFO("%s For Liber new sleep wakeup", __func__);
+			BTMTK_DBG_LIMITTED("%s For new sleep wakeup", __func__);
 			btmtk_release_uarthub(true);
 		} else {
 			btmtk_release_uarthub(false);
@@ -2735,7 +2735,6 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		BTMTK_ERR("%s wait uart resume timeout", __func__);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	BTMTK_INFO("%s: cif_dev->hub_en = %d, cif_dev->sleep_en = %d", __func__, cif_dev->hub_en, cif_dev->sleep_en);
 	if (cif_dev->hub_en && cif_dev->sleep_en) {
 		do {
 			ret = btmtk_wakeup_uarthub();
