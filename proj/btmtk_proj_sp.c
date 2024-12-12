@@ -620,6 +620,12 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason, un
 		BTMTK_ERR("%s: [assert_reason] %s", __func__, g_sbdev->assert_reason);
 	}
 
+	temp_buf = vmalloc(DFD_EMI_DUMP_SIZE);
+	if (temp_buf == NULL) {
+		BTMTK_ERR("%s: vmalloc failed!!", __func__);
+		return -1;
+	}
+
 	if (drv == CONNV3_DRV_TYPE_CONNV3 && (strncmp(reason, "PMIC Fault", strlen("PMIC Fault")) == 0 || reset_type == CONNV3_CHIP_RST_TYPE_PMIC_FAULT_B)) {
 		BTMTK_WARN("%s: PMIC Fault, no need to wait coredump", __func__);
 		goto exit;
@@ -644,7 +650,6 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason, un
 		if (g_sbdev->dfd_value_addr_remap_base == NULL) {
 			BTMTK_ERR("%s: dfd_value_addr_remap_base failed", __func__);
 		} else {
-			temp_buf = vmalloc(DFD_EMI_DUMP_SIZE);
 			memcpy_fromio(temp_buf, (char *)g_sbdev->dfd_value_addr_remap_base, g_sbdev->dfd_value_size);
 			BTMTK_INFO("%s: dfd-value-size =  0x%04x, temp_buf[0] =  0x%02x, temp_buf[1] =  0x%02x", __func__, g_sbdev->dfd_value_size, temp_buf[0], temp_buf[1]);
 			ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "PRED", temp_buf, g_sbdev->dfd_value_size);
@@ -776,6 +781,8 @@ static int btmtk_post_chip_rst_on_handler(unsigned int type)
 				goto end;
 				break;
 			}
+			if (total_length > DFD_CB_INFRA_BT_SRAM_LEN)
+				total_length = DFD_CB_INFRA_BT_SRAM_LEN;
 
 			do {
 				if (total_length <= 0) {
@@ -1087,6 +1094,10 @@ static int btmtk_send_connfem_new(struct btmtk_dev *bdev)
 	}
 
 	cmd = vmalloc(HCI_MAX_ACL_SIZE);
+	if (!cmd) {
+		BTMTK_ERR("unable to allocate confem_new command");
+		return -1;
+	}
 
 	memcpy(cmd, cmd_header, sizeof(cmd_header));
 	offset = sizeof(cmd_header);
