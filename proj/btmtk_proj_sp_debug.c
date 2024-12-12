@@ -184,7 +184,7 @@ int RHW_READ(uint32_t addr, uint32_t *val)
 
 }
 
-int CONNV3_RHW_WRITE(uint32_t addr, uint32_t val)
+int WMT_WRITE(uint32_t addr, uint32_t val)
 {
 	int ret = -1;
 
@@ -223,7 +223,7 @@ int CONNV3_RHW_WRITE(uint32_t addr, uint32_t val)
 	return ret ;
 }
 
-int CONNV3_RHW_READ(uint32_t addr, uint32_t *val)
+int WMT_READ(uint32_t addr, uint32_t *val)
 {
 	int ret = -1;
 
@@ -736,27 +736,42 @@ static inline void btmtk_dump_bt_mcysys_vlp(void)
 
 static int btmtk_connv3_cr_read_cb(void* priv_data, unsigned int addr, unsigned int *value)
 {
-	return CONNV3_RHW_READ(addr, value);
+#if CFG_SUPPORT_RHW_DUMP
+	return RHW_READ(addr, value);
+#else
+	return WMT_READ(addr, value);
+#endif
 }
 
 static int btmtk_connv3_cr_write_cb(void* priv_data, unsigned int addr, unsigned int value)
 {
-	return CONNV3_RHW_WRITE(addr, value);
+#if CFG_SUPPORT_RHW_DUMP
+	return RHW_WRITE(addr, value);
+#else
+	return WMT_WRITE(addr, value);
+#endif
 }
 
 static int btmtk_connv3_cr_write_mask_cb(void* priv_data, unsigned int addr, unsigned int mask, unsigned int value)
 {
 	int ret = 0;
 	uint32_t org_value;
-	ret = CONNV3_RHW_READ(addr, &org_value);
+#if CFG_SUPPORT_RHW_DUMP
+	ret = RHW_READ(addr, &org_value);
+#else
+	ret = WMT_READ(addr, &org_value);
+#endif
 	if (ret < 0) {
 		BTMTK_ERR("%s: read [%x] err", __func__, addr);
 		return ret;
 	}
 
 	org_value = (org_value & ~mask ) | value;
-
-	return CONNV3_RHW_WRITE(addr, org_value);
+#if CFG_SUPPORT_RHW_DUMP
+	return RHW_WRITE(addr, org_value);
+#else
+	return WMT_WRITE(addr, org_value);
+#endif
 }
 
 struct connv3_cr_cb btmtk_connv3_cr_cb = {
