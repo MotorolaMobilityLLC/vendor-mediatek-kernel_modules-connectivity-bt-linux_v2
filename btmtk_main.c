@@ -5392,9 +5392,14 @@ exit:
 	if (bdev->main_info.hif_hook.cif_mutex_unlock)
 		bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
 
-	if (ret >= 0 && fw_coredump_flag == 1)
+	if (ret >= 0 && fw_coredump_flag == 1) {
+#if (USE_DEVICE_NODE == 0)
 		btmtk_set_chip_state(bdev, BTMTK_STATE_SEND_ASSERT);
-
+#else
+		/* avoid race condition with driver triger reset */
+		BTMTK_INFO_DEV(bdev, "%s fw_coredump_flag == 1", __func__);
+#endif
+	}
 #if BTMTK_RUNTIME_ENABLE
 	if (cif_dev)
 		usb_autopm_put_interface(cif_dev->intf);
