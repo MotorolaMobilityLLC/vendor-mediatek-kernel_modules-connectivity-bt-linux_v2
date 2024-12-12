@@ -707,7 +707,7 @@ typedef ssize_t (*cif_log_read_to_user_ptr)(char __user *buf, size_t count);
 typedef unsigned int (*cif_log_get_buf_size_ptr)(void);
 typedef void (*cif_log_deinit_ptr)(void);
 typedef int (*cif_log_handler_ptr)(u8 *buf, u32 size);
-typedef int (*cif_met_log_handler_ptr)(u8 *buf, u32 size);
+typedef int (*cif_met_log_handler_ptr)(struct btmtk_dev *bdev, u8 *buf, u32 size);
 typedef int (*cif_dl_dma_ptr)(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset, int patch_flag);
 typedef void (*cif_dump_debug_sop_ptr)(struct btmtk_dev *bdev);
@@ -1075,7 +1075,7 @@ void btmtk_connsys_log_deinit(void);
 int btmtk_connsys_log_handler(u8 *buf, u32 size);
 ssize_t btmtk_connsys_log_read_to_user(char __user *buf, size_t count);
 unsigned int btmtk_connsys_log_get_buf_size(void);
-int btmtk_met_log_handler(u8 *buf, u32 size);
+int btmtk_met_log_handler(struct btmtk_dev *bdev, u8 *buf, u32 size);
 int32_t btmtk_intcmd_set_fw_log(uint8_t flag);
 int btmtk_send_connfem_cmd(struct btmtk_dev *bdev);
 int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb);

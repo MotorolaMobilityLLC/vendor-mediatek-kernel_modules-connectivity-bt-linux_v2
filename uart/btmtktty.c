@@ -3473,38 +3473,61 @@ unsigned int btmtk_connsys_log_get_buf_size(void)
 	return connv3_log_get_buf_size(CONNV3_DEBUG_TYPE_BT);
 }
 
-#define MET_LOG_MAX_BUF_SIZE (256 * 2 + 64)
-int btmtk_met_log_handler(u8 *buf, u32 size)
+#define MET_LOG_MAX_BUF_SIZE (512 * 2 + 64)
+int btmtk_met_log_handler(struct btmtk_dev *bdev, u8 *buf, u32 size)
 {
 	const static int module_id = 0x00;
-	const static int project_id = 0x6985;
-	const static int adie_id = 0x6639;
+	static int project_id = 0x6985;
+	static int adie_id = 0x6639;
 	const static int adie_ver = 0x0000;
 	unsigned int i = 0;
 	int len = 0;
 	uint8_t raw_buf[MET_LOG_MAX_BUF_SIZE] = {0};
+	int single_data_len = 4;
 
-	if ((size & 0x03) != 0 || size == 0) {
-		BTMTK_ERR("%s: packet size should be multiple of 4", __func__);
+	if (!bdev) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return -1;
 	}
 
+	if (bdev->chip_id == 0x6639) {
+		project_id = 0x6985;
+		adie_id = 0x6639;
+		single_data_len = 4;
+	} else if (bdev->chip_id == 0x6653) {
+		project_id = 0x6991;
+		adie_id = 0x6653;
+		single_data_len = 8;
+	} else {
+		BTMTK_ERR("%s: Unsupport connsys chip for MET", __func__);
+		return -1;
+	}
 
-	for (i = 0; i <= size - 4; i += 4) {
-		len = snprintf(raw_buf, MET_LOG_MAX_BUF_SIZE, "%s%02X%02X%02X%02X,",
-					   raw_buf, buf[i+3], buf[i+2], buf[i+1], buf[i]);
+	if (((size & (single_data_len - 1)) != 0) ||  size == 0) {
+		BTMTK_ERR("%s: packet size should be multiple of %d", __func__, single_data_len);
+		return -1;
+	}
+
+	for (i = 0; i <= size - single_data_len; i += single_data_len) {
+		if (single_data_len == 4)
+			len = snprintf(raw_buf, MET_LOG_MAX_BUF_SIZE, "%s%02X%02X%02X%02X,",
+					raw_buf, buf[i+3], buf[i+2], buf[i+1], buf[i]);
+		else if (single_data_len == 8)
+			len = snprintf(raw_buf, MET_LOG_MAX_BUF_SIZE, "%s%02X%02X%02X%02X%02X%02X%02X%02X,",
+					raw_buf, buf[i+7], buf[i+6], buf[i+5], buf[i+4],
+					         buf[i+3], buf[i+2], buf[i+1], buf[i]);
 		if (len <= 0) {
 			BTMTK_ERR("%s: snprintf error len = %d", __func__, len);
 			return -1;
 		}
 
-		if (((i + 4) & 0xFF) == 0 || i == size - 4) {
+		if (((i + single_data_len) & 0xFF) == 0 || i == size - single_data_len) {
 			raw_buf[len - 1] = '\0';
 			BTMTK_INFO("MCU_MET_DATA:%02X%04X%04X%04X,%s",
 						module_id, project_id,
 						adie_id, adie_ver,
 						raw_buf);
-			memset(raw_buf, 0,	MET_LOG_MAX_BUF_SIZE);
+			memset(raw_buf, 0, MET_LOG_MAX_BUF_SIZE);
 		}
 	}
 
