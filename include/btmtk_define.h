@@ -44,7 +44,7 @@
 #define VERSION "8.0.2023091101"
 #define SUBVER ":connac3_dev"
 
-#ifdef CFG_SUPPORT_WAKEUP_IRQ
+#if CFG_SUPPORT_WAKEUP_IRQ
 #define WAKEUP_BT_IRQ 1
 #else
 #define WAKEUP_BT_IRQ 0

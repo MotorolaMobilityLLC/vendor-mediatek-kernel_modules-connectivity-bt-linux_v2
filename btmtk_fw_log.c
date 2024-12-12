@@ -456,15 +456,15 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 #if (CFG_ENABLE_DEBUG_WRITE == 0)
 	return -ENODEV;
 #else
-	int i = 0, len = 0, ret = -1;
+	int i = 0, len = 0, ret = 0;
 	int hci_idx = 0;
 	int vlen = 0, index = 3;
 	struct sk_buff *skb = NULL;
 #if (USE_DEVICE_NODE == 0)
 	struct sk_buff *skb_opcode = NULL;
 #endif
-	int state = BTMTK_STATE_INIT;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	int state = 0;
+	unsigned char fstate = 0;
 	u8 *i_fwlog_buf = NULL;
 	u8 *o_fwlog_buf = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();

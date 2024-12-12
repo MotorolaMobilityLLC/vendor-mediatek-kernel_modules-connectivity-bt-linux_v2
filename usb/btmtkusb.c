@@ -752,7 +752,6 @@ static int btusb_recv_isoc(struct btmtk_dev *bdev, void *buffer, int count)
 			if (!hci_skb_expect(skb)) {
 				/* Complete frame */
 				hci_recv_frame(bdev->hdev, skb);
-				skb = NULL;
 			}
 		} else {
 			BTMTK_INFO("%s: the size of skb is too small", __func__);
@@ -1027,6 +1026,7 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 			return;
 		} else {
 			BTMTK_INFO("%s: the size of skb is too small!", __func__);
+			kfree_skb(skb);
 			return;
 		}
 	} else if (urb->status == -ENOENT) {
@@ -2404,6 +2404,9 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 						kfree_skb(skb);
 exit:
 						return ret;
+					} else {
+						BTMTK_INFO("%s: the size of skb is too small!", __func__);
+						return -ENOMEM;
 					}
 				}
 			} else {
@@ -3790,6 +3793,9 @@ static int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val
 	__le16 reg_low;
 	u8 reset_buf[4];
 
+	if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT)
+		return -ENODEV;
+
 	reg_high = ((reg >> 16) & 0xffff);
 	reg_low = (reg & 0xffff);
 
@@ -3824,6 +3830,9 @@ static int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val
 	int ret = 0;
 	__le16 reg_high;
 	__le16 reg_low;
+
+	if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT || bdev->io_buf == NULL)
+		return -ENODEV;
 
 	reg_high = ((reg >> 16) & 0xffff);
 	reg_low = (reg & 0xffff);
