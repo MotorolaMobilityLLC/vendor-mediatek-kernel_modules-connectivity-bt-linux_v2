@@ -3055,12 +3055,12 @@ void btmtk_hif_dump_work(struct work_struct *work)
 	}
 
 exit:
-	if (atomic_read(&bdev->assert_state) == BTMTK_ASSERT_START) {
+	if (atomic_read(&bdev->assert_state) == BTMTK_ASSERT_START && btmtk_get_chip_state(bdev) != BTMTK_STATE_FW_DUMP) {
 		BTMTK_INFO("%s: set bt assert_state end", __func__);
 		atomic_set(&bdev->assert_state, BTMTK_ASSERT_END);
 		complete_all(&bdev->dump_comp);
 	} else
-		BTMTK_INFO("%s: not set bt assert_state start yet", __func__);
+		BTMTK_INFO("%s: not set bt assert_state start yet, assert_state[%d], state[%d]", __func__, atomic_read(&bdev->assert_state), btmtk_get_chip_state(bdev));
 }
 void btmtk_hif_sp_dump_debug_sop(struct btmtk_dev *bdev)
 {
