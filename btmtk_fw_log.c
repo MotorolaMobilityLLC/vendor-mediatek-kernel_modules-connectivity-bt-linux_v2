@@ -938,12 +938,32 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 #ifdef CHIP_IF_USB
 			/* USB hif: recv both 0xff and fw dump end, then do chip reset */
-			bdev->chip_reset_signal |= (1 << 1);
-			BTMTK_INFO("%s ,chip_reset_signal = %02x", __func__, bdev->chip_reset_signal);
-			if (bdev->chip_reset_signal == 0x03) {
-				bdev->chip_reset_signal = 0x00;
-				DUMP_TIME_STAMP("notify_chip_reset");
-				btmtk_reset_trigger(bdev);
+			if (bdev->dualBT) {
+				/* If it is dual BT,
+				 * the condition for FW dump end is that both BT0 and BT1 are completed.
+				 */
+				if (bdev->chip_reset_signal & (1 << 1)) {
+					bdev->chip_reset_signal |= (1 << 2);
+					BTMTK_INFO("%s ,BT1 FW dump end, chip_reset_signal = %02x",
+							__func__, bdev->chip_reset_signal);
+					if (bdev->chip_reset_signal == 0x07) {
+						bdev->chip_reset_signal = 0x00;
+						DUMP_TIME_STAMP("notify_chip_reset");
+						btmtk_reset_trigger(bdev);
+					}
+				} else {
+					bdev->chip_reset_signal |= (1 << 1);
+					BTMTK_INFO("%s ,BT0 FW dump end, chip_reset_signal = %02x",
+							__func__, bdev->chip_reset_signal);
+				}
+			} else {
+				bdev->chip_reset_signal |= (1 << 1);
+				BTMTK_INFO("%s ,chip_reset_signal = %02x", __func__, bdev->chip_reset_signal);
+				if (bdev->chip_reset_signal == 0x03) {
+					bdev->chip_reset_signal = 0x00;
+					DUMP_TIME_STAMP("notify_chip_reset");
+					btmtk_reset_trigger(bdev);
+				}
 			}
 #endif
 		}
