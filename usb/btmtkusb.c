@@ -2272,6 +2272,7 @@ static int btmtk_usb_enter_standby(void)
 	int ret = 0;
 	int i = 0;
 	int cif_event = 0;
+	int state =0;
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_usb_dev *cif_dev = NULL;
@@ -2284,6 +2285,13 @@ static int btmtk_usb_enter_standby(void)
 		/* Find valid dev for already probe interface. */
 		if (pp_bdev[i]->hdev != NULL) {
 			bdev = pp_bdev[i];
+			btmtk_fops_get_state(bdev);
+			state = btmtk_get_chip_state(bdev);
+			if (state != BTMTK_STATE_WORKING) {
+				BTMTK_WARN("%s: not in working(%d).", __func__, state);
+				break;
+			}
+
 			cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 			bt_woble = &cif_dev->bt_woble;
 
