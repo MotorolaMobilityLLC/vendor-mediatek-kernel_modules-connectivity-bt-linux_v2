@@ -48,6 +48,8 @@ static const struct usb_device_id btusb_table[] = {
 	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x7902, 0xe0, 0x01, 0x01) },
 	/* Mediatek MT6639 */
 	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x6639, 0xe0, 0x01, 0x01) },
+	/* Mediatek MT7925 */
+	{ USB_DEVICE_AND_INTERFACE_INFO(0x0e8d, 0x7925, 0xe0, 0x01, 0x01) },
 	{ }	/* Terminating entry */
 };
 
@@ -2324,7 +2326,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 			else
 				urb = alloc_ctrl_urb(hdev, skb);
 		} else if (BTMTK_IS_BT_1_INTF(ifnum_base)) {
-			if (is_mt7961(bdev->chip_id)) {
+			if (is_mt7961(bdev->chip_id) || is_mt7925(bdev->chip_id)) {
 				if (cif_dev->bulk_cmd_tx_ep) {
 					UNUSED(alloc_ctrl_bgf1_urb);
 					urb = alloc_bulk_cmd_urb(hdev, skb);
