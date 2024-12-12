@@ -2717,7 +2717,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		/* if fw already wake, no need to send 0xFF and wait 6ms before clr fw own */
 		if (atomic_read(&cif_dev->fw_wake) && !cif_dev->sleep_flow_hw_mech_en) {
 #else
-                if (atomic_read(&cif_dev->fw_wake) {
+		if (atomic_read(&cif_dev->fw_wake)) {
 #endif
 			/* wait a while for avoid rx pkt error */
 			usleep_range(4000, 4100);
