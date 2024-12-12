@@ -1171,7 +1171,7 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 
 		/* if pkt only pkt type */
 		if (size == 0) {
-			BTMTK_INFO("%s: receive only one byte for pkt type[%d]", __func__, hci_skb_pkt_type(skb));
+			BTMTK_DBG_DEV(bdev, "%s: receive only one byte for pkt type[%d]", __func__, hci_skb_pkt_type(skb));
 			break;
 		}
 

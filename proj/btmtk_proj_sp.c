@@ -284,7 +284,6 @@ void btmtk_sp_coredump_end(void)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
 	int ret = 0;
-	struct btmtk_main_info bmain_info = g_sbdev->main_info;
 
 	BTMTK_INFO("%s: start", __func__);
 
@@ -299,7 +298,7 @@ void btmtk_sp_coredump_end(void)
 		return;
 	}
 	if(g_sbdev->collect_fwdump)
-		ret = connv3_coredump_end(bmain_info.hif_hook.coredump_handler, g_sbdev->assert_reason);
+		ret = connv3_coredump_end(g_sbdev->main_info.hif_hook.coredump_handler, g_sbdev->assert_reason);
 
 	if (ret)
 		BTMTK_ERR("%s: coredump_end fail ret[%d]", __func__, ret);
@@ -435,7 +434,6 @@ int btmtk_set_uart_rx_aux(void)
 int btmtk_set_gpio_default(void)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
-	struct btmtk_main_info bmain_info = g_sbdev->main_info;
 
 	BTMTK_DBG("%s: start", __func__);
 
@@ -455,7 +453,7 @@ int btmtk_set_gpio_default(void)
 	btmtk_pinctrl_exec(RST_OFF_PINCTRL_NAME);
 	msleep(50);
 
-	if (!bmain_info.find_my_phone_mode) {
+	if (!g_sbdev->main_info.find_my_phone_mode) {
 		/* If BT off, Wifi on keep Aux func */
 		//btmtk_pinctrl_exec(DEFAULT_STATE_PINCTRL_NAME);
 	} else {
@@ -517,7 +515,6 @@ int btmtk_sp_whole_chip_reset(struct btmtk_dev *bdev)
 int btmtk_sp_close(void)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
-	struct btmtk_main_info bmain_info = g_sbdev->main_info;
 
 	BTMTK_INFO("%s enter!", __func__);
 	if (g_sbdev == NULL) {
@@ -539,8 +536,8 @@ int btmtk_sp_close(void)
 			if (g_sbdev->reset_type != CONNV3_CHIP_RST_TYPE_DFD_DUMP)
 				btmtk_sp_coredump_end();
 			/* trigger hif dump */
-			if (bmain_info.hif_hook.dump_hif_debug_sop) {
-				bmain_info.hif_hook.dump_hif_debug_sop(g_sbdev);
+			if (g_sbdev->main_info.hif_hook.dump_hif_debug_sop) {
+				g_sbdev->main_info.hif_hook.dump_hif_debug_sop(g_sbdev);
 				flush_work(&g_sbdev->hif_dump_work);
 			}
 		}
@@ -586,7 +583,6 @@ int btmtk_sp_close(void)
 */
 static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason, unsigned int reset_type)
 {
-	struct btmtk_main_info bmain_info = g_sbdev->main_info;
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
 	int ret = 0;
 	char *temp_buf = NULL;
@@ -596,7 +592,7 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason, un
 		return -1;
 	}
 
-	if (bmain_info.hif_hook.trigger_assert == NULL) {
+	if (g_sbdev->main_info.hif_hook.trigger_assert == NULL) {
 		BTMTK_ERR("%s: hif_hook.trigger_assert is NULL", __func__);
 		return -1;
 	}
@@ -604,7 +600,7 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason, un
 	g_bt_state = btmtk_get_chip_state(g_sbdev);
 	fstate = btmtk_fops_get_state(g_sbdev);
 	/* let bt close not send power off cmd */
-	bmain_info.reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
+	g_sbdev->main_info.reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 
 	/* Ask FW to do coredump */
 	BTMTK_ERR("%s: state[%d], reason[%s], reset_type[%d]", __func__, g_bt_state, reason, reset_type);
@@ -641,8 +637,8 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason, un
 		BTMTK_INFO("%s: reset type = %d", __func__, g_sbdev->reset_type);
 	}
 
-	atomic_set(&bmain_info.chip_reset, BTMTK_RESET_DOING);
-	bmain_info.hif_hook.trigger_assert(g_sbdev);
+	atomic_set(&g_sbdev->main_info.chip_reset, BTMTK_RESET_DOING);
+	g_sbdev->main_info.hif_hook.trigger_assert(g_sbdev);
 
 	if (reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
 		if (!wait_for_completion_timeout(&g_sbdev->dump_dfd_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT)))
@@ -654,7 +650,7 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason, un
 		} else {
 			memcpy_fromio(temp_buf, (char *)g_sbdev->dfd_value_addr_remap_base, g_sbdev->dfd_value_size);
 			BTMTK_INFO("%s: dfd-value-size =  0x%04x, temp_buf[0] =  0x%02x, temp_buf[1] =  0x%02x", __func__, g_sbdev->dfd_value_size, temp_buf[0], temp_buf[1]);
-			ret = connv3_coredump_send(bmain_info.hif_hook.coredump_handler, "PRED", temp_buf,
+			ret = connv3_coredump_send(g_sbdev->main_info.hif_hook.coredump_handler, "PRED", temp_buf,
 					g_sbdev->dfd_value_size);
 			iounmap(g_sbdev->dfd_value_addr_remap_base);
 			if (ret)
@@ -678,18 +674,17 @@ exit:
 
 static int btmtk_post_chip_rst_handler(void)
 {
-	struct btmtk_main_info bmain_info = g_sbdev->main_info;
-
-	BTMTK_INFO("%s: state[%d]", __func__, g_bt_state);
+	BTMTK_INFO("%s: state[%d] is_whole_chip_reset[%d], reset_type[%d]", __func__,
+				g_bt_state, g_sbdev->is_whole_chip_reset, g_sbdev->reset_type);
 	if (g_sbdev->is_whole_chip_reset || g_sbdev->reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
 		/* for let hw err evt can send event */
-		bmain_info.reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
+		g_sbdev->main_info.reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 		btmtk_send_hw_err_to_host(g_sbdev);
 	} else
 		BTMTK_WARN("%s: BT is not on state, no need to send hw err", __func__);
 
 	/* move to bt open flow, ensure hw err event send to stack restart bt*/
-	//atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
+	//atomic_set(&g_sbdev->main_info.chip_reset, BTMTK_RESET_DONE);
 
 	return 0;
 }
@@ -708,7 +703,6 @@ static int btmtk_post_chip_rst_handler(void)
 */
 static int btmtk_post_chip_rst_on_handler(unsigned int type)
 {
-	struct btmtk_main_info bmain_info = g_sbdev->main_info;
 	int ret = 0;
 	u32 length = 0;
 	int total_length = 0;
@@ -724,7 +718,7 @@ static int btmtk_post_chip_rst_on_handler(unsigned int type)
 
 		BTMTK_INFO("%s: g_sbdev->reset_type = %d !", __func__, g_sbdev->reset_type);
 		// config pre_pwr_on related (GPIO, baudrate, uarthub, tx_thread)
-		ret = bmain_info.hif_hook.pre_open(g_sbdev);
+		ret = g_sbdev->main_info.hif_hook.pre_open(g_sbdev);
 		if (ret != 0) {
 			BTMTK_ERR("%s: btmtk_sp_pre_open failed, ret = %d", __func__, ret);
 			goto end;
@@ -1340,7 +1334,6 @@ int btmtk_set_pcm_pin_mux(void)
 static irqreturn_t btmtk_host_wake_isr(int irq, void *dev)
 {
 	struct btmtk_dev *bdev = (struct btmtk_dev *)dev;
-	struct btmtk_main_info bmain_info = g_sbdev->main_info;
 	int host_wake;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
@@ -1353,7 +1346,7 @@ static irqreturn_t btmtk_host_wake_isr(int irq, void *dev)
 
 	/* 0 value for wake up*/
 	if (!host_wake)
-		bmain_info.hif_hook.wakeup_host(bdev);
+		g_sbdev->main_info.hif_hook.wakeup_host(bdev);
 
 	return IRQ_HANDLED;
 }
@@ -1466,7 +1459,6 @@ int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v
 {
 	int *data = (int *)v;
 	int32_t new_state = 0;
-	struct btmtk_main_info bmain_info = g_sbdev->main_info;
 	/*
 	 *	MTK_DISP_EARLY_EVENT_BLANK (0x00): This event will happen before lcm suspend/resume
 	 *	MTK_DISP_EVENT_BLANK (0x01): This event will happen after lcm suspend/resume
@@ -1475,7 +1467,7 @@ int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v
 	 */
 
 	BTMTK_INFO("%s: before_after_blank[%ld], blank_power_down[%d], fops_state[%d], fw_log_on[%d]",
-				__func__, value, *data, btmtk_fops_get_state(g_sbdev), bmain_info.fw_log_on);
+				__func__, value, *data, btmtk_fops_get_state(g_sbdev), g_sbdev->main_info.fw_log_on);
 
 	if (value == MTK_DISP_EARLY_EVENT_BLANK) {
 		switch (*data) {
@@ -1490,7 +1482,7 @@ int btmtk_disp_notify_cb(struct notifier_block *nb, unsigned long value, void *v
 				goto end;
 		}
 
-		if (btmtk_fops_get_state(g_sbdev) == BTMTK_FOPS_STATE_OPENED && bmain_info.fw_log_on) {
+		if (btmtk_fops_get_state(g_sbdev) == BTMTK_FOPS_STATE_OPENED && g_sbdev->main_info.fw_log_on) {
 			BTMTK_DBG("%s: blank state [%d]->[%d], and send cmd", __func__, g_sbdev->blank_state, new_state);
 			g_sbdev->blank_state = new_state;
 			btmtk_intcmd_wmt_blank_status(g_sbdev->blank_state);

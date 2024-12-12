@@ -991,7 +991,7 @@ static int btmtk_RegisterBTIrq(struct st_woble *bt_woble)
 	struct btmtk_dev *bdev = bt_woble->bdev;
 	struct device_node *eint_node = NULL;
 	int interrupts[2];
-	char of_node[BTMTK_DONGLE_TYPE_MAX][32] = {0};
+	char of_node[BTMTK_DONGLE_TYPE_MAX][32] = {{0}};
 	int idx;
 	enum btmtk_dongle_type dongle_type;
 
