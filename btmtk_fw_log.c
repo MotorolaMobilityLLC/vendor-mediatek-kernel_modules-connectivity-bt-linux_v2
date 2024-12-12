@@ -2075,8 +2075,10 @@ coredump_fail_unlock:
 
 		return 1;
 	} else if (bt_cb(skb)->pkt_type == HCI_EVENT_PKT && skb->data[0] == 0xE3) {
-		BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: get E3 event, len[%d] %02x",
+		BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: get E3 event and drop it, len[%d] %02x",
 				__func__, skb->len + 1, hci_skb_pkt_type(skb));
+
+		return 1;
 	}
 
 	return 0;
