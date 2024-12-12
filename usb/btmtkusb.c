@@ -5643,7 +5643,6 @@ static int btmtk_cif_probe(struct usb_interface *intf,
 		return -ENODEV;
 	}
 
-	MAIN_MUTEX_INIT(bdev);
 	btmtk_handle_mutex_lock(bdev);
 	usb_set_intfdata(intf, bdev);
 

@@ -3035,6 +3035,8 @@ struct btmtk_dev *btmtk_allocate_dev_memory(struct device *dev)
 #if (USE_DEVICE_NODE == 0)
 	memset(bdev, 0, sizeof(struct btmtk_dev));
 #endif
+
+	MAIN_MUTEX_INIT(bdev);
 	btmtk_set_chip_state(bdev, BTMTK_STATE_INIT);
 
 	return bdev;

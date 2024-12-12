@@ -3428,7 +3428,6 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 
 	cif_state = &bdev->cif_state[cif_event];
 
-	MAIN_MUTEX_INIT(bdev);
 
 	/* set working state for uart_launcher restart when driver already open */
 	if (btmtk_fops_get_state(bdev) == BTMTK_FOPS_STATE_OPENED) {
