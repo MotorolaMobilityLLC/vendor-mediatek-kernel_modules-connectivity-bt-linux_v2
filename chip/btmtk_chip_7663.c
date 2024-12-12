@@ -187,7 +187,7 @@ exit:
 
 static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 {
-	u8 *pos;
+	u8 *pos = NULL;
 	u8 *rom_patch = NULL;
 	u32 patch_len = 0;
 	int ret = 0;
