@@ -19,6 +19,12 @@
 
 #include "btmtk_woble.h"
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+#define ATTRIBUTE_NO_KCFI __nocfi
+#else
+#define ATTRIBUTE_NO_KCFI
+#endif
+
 static int is_support_unify_woble(struct btmtk_dev *bdev)
 {
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
@@ -585,7 +591,7 @@ exit:
 #endif
 }
 
-static int btmtk_handle_entering_WoBLE_state(struct btmtk_woble *bt_woble)
+static int ATTRIBUTE_NO_KCFI btmtk_handle_entering_WoBLE_state(struct btmtk_woble *bt_woble)
 {
 #if !WAKEUP_BT_IRQ
 	int ret = 0;
