@@ -2228,9 +2228,9 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 		if (copy_from_user(&uart_cfg, (struct UART_CONFIG __user *)arg,
 					sizeof(struct UART_CONFIG)))
 			return -ENOMEM;
-		cif_dev->uart_cfg = uart_cfg;
-		BTMTK_INFO("%s: <!!> Set BAUDRATE, fc = %d iBaudrate = %d <!!>",
-				__func__, (int)uart_cfg.fc, uart_cfg.iBaudrate);
+		memcpy(&cif_dev->uart_cfg, &uart_cfg, sizeof(struct UART_CONFIG));
+		BTMTK_INFO("%s: <!!> Set BAUDRATE, fc = %u iBaudrate = %d <!!>",
+				__func__, uart_cfg.fc, uart_cfg.iBaudrate);
 #if (USE_DEVICE_NODE == 0)
 		err = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
 #endif
@@ -2354,9 +2354,9 @@ static int btmtk_uart_tty_compat_ioctl(struct tty_struct *tty,
 		if (copy_from_user(&uart_cfg, (struct UART_CONFIG __user *)arg,
 					sizeof(struct UART_CONFIG)))
 			return -ENOMEM;
-		cif_dev->uart_cfg = uart_cfg;
-		BTMTK_INFO("%s: <!!> Set BAUDRATE, fc = %d iBaudrate = %d <!!>",
-				__func__, (int)uart_cfg.fc, uart_cfg.iBaudrate);
+		memcpy(&cif_dev->uart_cfg, &uart_cfg, sizeof(struct UART_CONFIG));
+		BTMTK_INFO("%s: <!!> Set BAUDRATE, fc = %u iBaudrate = %d <!!>",
+				__func__, uart_cfg.fc, uart_cfg.iBaudrate);
 		err = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
 		break;
 	case HCIUARTSETWAKEUP:

@@ -1290,6 +1290,10 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 	}
 
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, HCI_RESET_EVT, hci_reset_event);
+	if (hci_reset_event.len < MTK_HCI_EVENT_HEAD_SIZE) {
+		BTMTK_INFO_RAW(hci_reset_event.content, hci_reset_event.len, "%s: get hci reset event failed:", __func__);
+		return -1;
+	}
 
 	if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 			skb->data[0] == 0x6f &&

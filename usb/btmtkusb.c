@@ -6330,7 +6330,10 @@ int btmtk_usb_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		skb->len >= event_need_compare_len) {
 		BTMTK_GET_CMD_OR_EVENT_DATA(bdev, READ_ADDRESS_EVT, read_address_event);
-
+		if (read_address_event.len < MTK_HCI_EVENT_HEAD_SIZE) {
+			BTMTK_INFO_RAW(read_address_event.content, read_address_event.len, "%s: get read addr event failed:", __func__);
+			return -1;
+		}
 		if (memcmp(skb->data, &read_address_event.content[1], read_address_event.len - 1) == 0
 			&& (skb->len == (read_address_event.len - 1 + BD_ADDRESS_SIZE))) {
 			memcpy(bdev->bdaddr, &skb->data[READ_ADDRESS_EVT_PAYLOAD_OFFSET - 1], BD_ADDRESS_SIZE);
@@ -6378,4 +6381,3 @@ int btmtk_usb_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 	return 0;
 }
-

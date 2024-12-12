@@ -1098,10 +1098,9 @@ void btmtk_hci_snoop_print_to_log(void)
 	for (snoop_index = 0; snoop_index < HCI_SNOOP_TYPE_MAX; snoop_index++) {
 		BTMTK_INFO("*** Dump %s *** (Using A5 A5 to separator the head 32 bytes and the tail 32 bytes data)",
 			snoop_str[snoop_index]);
-		if (main_info.snoop[snoop_index].index >= (HCI_SNOOP_ENTRY_NUM - 1))
+		index = main_info.snoop[snoop_index].index + 1;
+		if (index >= HCI_SNOOP_ENTRY_NUM)
 			index = 0;
-		else
-			index = main_info.snoop[snoop_index].index + 1;
 		for (counter = 0; counter < HCI_SNOOP_ENTRY_NUM; counter++) {
 			if (main_info.snoop[snoop_index].len[index] > 0)
 				BTMTK_INFO_RAW(main_info.snoop[snoop_index].buf[index],
@@ -2203,6 +2202,10 @@ int btmtk_send_hw_err_to_host(struct btmtk_dev *bdev)
 	BTMTK_ERR("%s reset_stack_flag = %d!!", __func__, main_info.reset_stack_flag);
 
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, HWERR_EVT, hwerr_event);
+	if (hwerr_event.len < MTK_HCI_EVENT_HEAD_SIZE) {
+		BTMTK_INFO_RAW(hwerr_event.content, hwerr_event.len, "%s: get hw err event failed:", __func__);
+		return -1;
+	}
 
 	if (main_info.reset_stack_flag) {
 		skb = alloc_skb(hwerr_event.len + BT_SKB_RESERVE, GFP_KERNEL);
