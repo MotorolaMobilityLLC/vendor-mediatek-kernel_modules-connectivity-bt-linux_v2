@@ -4049,12 +4049,21 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 #if (SLEEP_ENABLE == 0)
 	ret = main_info.hif_hook.send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES, (int)BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 #else
-	ret = main_info.hif_hook.send_cmd(bdev, skb, WMT_DELAY_TIMES, RETRY_TIMES, (int)BTMTK_TX_PKT_SEND_DIRECT, CMD_NO_NEED_FILTER);
+	/* use btmtk_main_send_cmd make sure drv own for BTMTK_TX_PKT_SEND_DIRECT
+	 * evt would be same with cmd
+	 */
+	ret = btmtk_main_send_cmd(bdev, cmd.content, cmd.len, cmd.content, cmd.len, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
 #endif
-	if (ret < 0) {
+
+	if (ret < 0 && skb) {
 		BTMTK_ERR("%s failed!!", __func__);
 		kfree_skb(skb);
+		skb = NULL;
+#if (USE_DEVICE_NODE == 0)
 		btmtk_reset_trigger(bdev);
+#else
+		return ret;
+#endif
 	} else {
 		btmtk_reset_timer_update(bdev);
 		BTMTK_INFO("%s: OK", __func__);

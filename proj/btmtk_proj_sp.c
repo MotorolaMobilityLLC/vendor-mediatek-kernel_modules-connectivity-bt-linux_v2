@@ -566,6 +566,7 @@ int btmtk_sp_whole_chip_reset(struct btmtk_dev *bdev)
 int btmtk_sp_close(void)
 {
 	struct btmtk_uart_dev *cif_dev = NULL;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	BTMTK_INFO("%s enter!", __func__);
 	if (g_sbdev == NULL) {
@@ -586,12 +587,12 @@ int btmtk_sp_close(void)
 			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
 			if (g_sbdev->reset_type != CONNV3_CHIP_RST_TYPE_DFD_DUMP)
 				btmtk_sp_coredump_end();
+			/* trigger hif dump */
+			if (bmain_info->hif_hook.dump_hif_debug_sop) {
+				bmain_info->hif_hook.dump_hif_debug_sop(g_sbdev);
+				flush_work(&g_sbdev->hif_dump_work);
+			}
 		}
-	}
-	if (atomic_read(&g_sbdev->assert_state) == BTMTK_ASSERT_START) {
-		BTMTK_WARN("%s: coredump not complete and without wait 15s", __func__);
-		if (g_sbdev->reset_type != CONNV3_CHIP_RST_TYPE_DFD_DUMP)
-			btmtk_sp_coredump_end();
 	}
 
 	cancel_work_sync(&g_sbdev->reset_waker);
