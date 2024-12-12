@@ -141,7 +141,7 @@ static void btmtk_proc_create_new_entry(void)
 		remove_proc_entry("stpbt", NULL);
 	}
 
-	proc_show_chip_reset_count_entry = proc_create(PROC_BT_CHIP_RESET_COUNT, 0666,
+	proc_show_chip_reset_count_entry = proc_create(PROC_BT_CHIP_RESET_COUNT, 0660,
 			bmain_info->proc_dir, &BT_proc_chip_reset_count_fops);
 	if (proc_show_chip_reset_count_entry == NULL) {
 		BTMTK_ERR("Unable to creat %s node", PROC_BT_CHIP_RESET_COUNT);
