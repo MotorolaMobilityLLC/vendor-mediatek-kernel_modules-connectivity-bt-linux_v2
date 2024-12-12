@@ -869,6 +869,7 @@ int btmtk_cif_chip_register(struct btmtk_dev *bdev)
 		btmtk_cif_chip_7961_register();
 		break;
 	case 0x6639:
+	case 0x7925:
 		btmtk_cif_chip_6639_register();
 		break;
 	case 0x6631:

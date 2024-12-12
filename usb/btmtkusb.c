@@ -1796,8 +1796,9 @@ static int btmtk_usb_open(struct hci_dev *hdev)
 	ifnum_base = cif_dev->intf->cur_altsetting->desc.bInterfaceNumber;
 
 	if (is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id)
-			|| is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) {
-		BTMTK_INFO("%s 7961 submit urb\n", __func__);
+			|| is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)
+			|| is_mt7925(bdev->chip_id)) {
+		BTMTK_INFO("%s 79xx submit urb\n", __func__);
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
 			if (cif_dev->reset_intr_ep) {
 				err = btusb_submit_intr_reset_urb(hdev, GFP_KERNEL);
@@ -1822,6 +1823,7 @@ static int btmtk_usb_open(struct hci_dev *hdev)
 			/* btmtk_usb_send_power_on_cmd_7668(hdev); */
 		}
 	}
+
 	err = btusb_submit_intr_urb(hdev, GFP_KERNEL);
 	if (err < 0)
 		goto failed;
@@ -2471,8 +2473,13 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 
 	BTMTK_INFO("%s: loading rom patch... start", __func__);
 	while (1) {
-		sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT - HCI_TYPE_SIZE) ?
-				(UPLOAD_PATCH_UNIT - HCI_TYPE_SIZE) : (section_dl_size - cur_len);
+		/* MT7925 DMA download needs 4 bytes align */
+		if (is_mt7925(bdev->chip_id))
+			sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT - 4) ?
+					(UPLOAD_PATCH_UNIT - 4) : (section_dl_size - cur_len);
+		else
+			sent_len = (section_dl_size - cur_len) >= (UPLOAD_PATCH_UNIT - HCI_TYPE_SIZE) ?
+					(UPLOAD_PATCH_UNIT - HCI_TYPE_SIZE) : (section_dl_size - cur_len);
 
 		if (sent_len > 0) {
 			/* btmtk_cif_send_bulk_out will send from image[1],
@@ -2495,7 +2502,7 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			break;
 	}
 
-	if (is_mt6639(bdev->chip_id)) {
+	if (is_mt6639(bdev->chip_id) || is_mt7925(bdev->chip_id)) {
 		delay = PATCH_DOWNLOAD_PHASE3_SECURE_BOOT_DELAY_TIME;
 		reg_value = BT_GDMA_DONE_6639_VALUE_W;
 	} else if (is_mt7922(bdev->chip_id) || is_mt7902(bdev->chip_id)) {
@@ -2506,7 +2513,7 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		reg_value = BT_GDMA_DONE_7921_VALUE_W;
 	}
 
-	if (is_mt6639(bdev->chip_id)) {
+	if (is_mt6639(bdev->chip_id) || is_mt7925(bdev->chip_id)) {
 		dma_done_cr_w = BT_GDMA_DONE_6639_ADDR_W;
 		dma_done_cr_r = BT_GDMA_DONE_6639_ADDR_R;
 		dma_done_value = BT_GDMA_DONE_6639_VALUE_R;
@@ -2517,7 +2524,7 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	}
 
 	/* Poll the register until dma dl is completed */
-	if (is_mt6639(bdev->chip_id) || is_mt7961(bdev->chip_id) || is_mt7922(bdev->chip_id)) {
+	if (is_mt6639(bdev->chip_id) || is_mt7961(bdev->chip_id) || is_mt7922(bdev->chip_id) || is_mt7925(bdev->chip_id)) {
 		do {
 			btmtk_cif_write_uhw_register(bdev, dma_done_cr_w, reg_value);
 			btmtk_cif_read_uhw_register(bdev, dma_done_cr_r, &value);
@@ -2536,7 +2543,7 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, LD_PATCH_CMD_USB, cmd);
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, LD_PATCH_EVT, event);
-	if (is_mt6639(bdev->chip_id)) {
+	if (is_mt6639(bdev->chip_id) || is_mt7925(bdev->chip_id)) {
 		event.content[4] = 0x01; /* the byte will be modified to 0x54 when download wifi */
 		cmd.content[4] = 0x01;
 	}
@@ -3112,6 +3119,17 @@ static int btusb_probe(struct usb_interface *intf,
 	btmtk_woble_wake_unlock(bdev);
 
 #if CFG_SUPPORT_BLUEZ
+	if (is_mt7925(bdev->chip_id)) {
+		btmtk_dynamic_load_rom_patch(bdev, 1);
+		err = btmtk_send_cmd_to_fw(bdev,
+				SET_EFEM1_CMD, SET_EFEM1_EVT,
+				WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+		if (err < 0) {
+			BTMTK_ERR("%s, set efem failed, err = %d", __func__, err);
+			goto free_setting;
+		}
+	}
+
 	err = btmtk_send_init_cmds(bdev);
 	if (err < 0) {
 		BTMTK_ERR("%s, btmtk_send_init_cmds failed, err = %d", __func__, err);

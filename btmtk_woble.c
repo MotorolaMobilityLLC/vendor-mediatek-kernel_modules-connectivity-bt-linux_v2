@@ -734,7 +734,11 @@ int btmtk_woble_suspend(struct btmtk_woble *bt_woble)
 			/* clear irq data before enable woble irq to avoid DUT wake up
 			 * automatically by edge trigger, sync from Jira CONN-50629
 			 */
+#if (KERNEL_VERSION(5, 11, 0) > LINUX_VERSION_CODE)
 			desc = irq_to_desc(bt_woble->wobt_irq);
+#else
+			desc = irq_data_to_desc(irq_get_irq_data(bt_woble->wobt_irq));
+#endif
 			if (desc)
 				desc->irq_data.chip->irq_ack(&desc->irq_data);
 			else
