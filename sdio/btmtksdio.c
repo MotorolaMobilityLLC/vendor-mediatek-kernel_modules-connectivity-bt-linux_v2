@@ -1276,6 +1276,22 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 	BTMTK_DBG_RAW(cif_dev->transfer_buf, rx_length, "%s: raw data is :", __func__);
 
 	hci_type = cif_dev->transfer_buf[MTK_SDIO_PACKET_HEADER_SIZE];
+	hci_pkt_len = get_pkt_len(hci_type, &cif_dev->transfer_buf[MTK_SDIO_PACKET_HEADER_SIZE + 1]) + 1;
+	if (hci_type == HCI_ISO_PKT) {
+		hci_pkt_len -= 1;
+		/* Add ACL header*/
+		bdev->io_buf[0] = HCI_ACLDATA_PKT;
+		bdev->io_buf[1] = 0x00;
+		bdev->io_buf[2] = 0x44;
+		bdev->io_buf[3] = (hci_pkt_len & 0x00ff);
+		bdev->io_buf[4] = ((hci_pkt_len & 0xff00) >> 8);
+		memcpy(bdev->io_buf + 5, cif_dev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE + 1, hci_pkt_len);
+		memset(cif_dev->transfer_buf, 0, URB_MAX_BUFFER_SIZE);
+		hci_pkt_len += 5;
+		memcpy(cif_dev->transfer_buf + MTK_SDIO_PACKET_HEADER_SIZE, bdev->io_buf, hci_pkt_len);
+		BTMTK_DBG_RAW(cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
+	}
+#if 0
 	switch (hci_type) {
 	/* Please reference hci header format
 	 * A = len
@@ -1309,6 +1325,7 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev)
 		BTMTK_DBG_RAW(cif_dev->transfer_buf, hci_pkt_len, "%s: raw data is :", __func__);
 		break;
 	}
+#endif
 	ret = hci_pkt_len;
 	bdev->recv_evt_len = hci_pkt_len;
 
@@ -1369,7 +1386,7 @@ int btmtk_sdio_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 						break;
 					default:
 						BTMTK_ERR("%s: unexpected attribute type(0x%x)", __func__, attr_type);
-						return;
+						return 1;
 					}
 					p += 1 + attr_len;	// 1: len
 				}

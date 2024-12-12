@@ -436,6 +436,12 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
+	if (strncmp(i_fwlog_buf, "dump btsnoop", strlen("dump btsnoop")) == 0) {
+		btmtk_hci_snoop_print_to_log();
+		ret = count;
+		goto exit;
+	}
+
 	if (strncmp(i_fwlog_buf, "dump_debug=", strlen("dump_debug")) == 0) {
 		u8 val = *(i_fwlog_buf + strlen("dump_debug=")) - '0';
 

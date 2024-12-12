@@ -373,12 +373,22 @@ enum {
 };
 
 enum {
-	HCI_SNOOP_TYPE_CMD = 0,
-	HCI_SNOOP_TYPE_EVT,
-	HCI_SNOOP_TYPE_ADV_EVT,
-	HCI_SNOOP_TYPE_NOCP_EVT,
-	HCI_SNOOP_TYPE_TX_ACL,
-	HCI_SNOOP_TYPE_RX_ACL,
+	HCI_SNOOP_TYPE_CMD_STACK = 0,
+	HCI_SNOOP_TYPE_CMD_HIF,
+	HCI_SNOOP_TYPE_EVT_STACK,
+	HCI_SNOOP_TYPE_EVT_HIF,
+	HCI_SNOOP_TYPE_ADV_EVT_STACK,
+	HCI_SNOOP_TYPE_ADV_EVT_HIF,
+	HCI_SNOOP_TYPE_NOCP_EVT_STACK,
+	HCI_SNOOP_TYPE_NOCP_EVT_HIF,
+	HCI_SNOOP_TYPE_TX_ACL_STACK,
+	HCI_SNOOP_TYPE_TX_ACL_HIF,
+	HCI_SNOOP_TYPE_RX_ACL_STACK,
+	HCI_SNOOP_TYPE_RX_ACL_HIF,
+	HCI_SNOOP_TYPE_TX_ISO_STACK,
+	HCI_SNOOP_TYPE_TX_ISO_HIF,
+	HCI_SNOOP_TYPE_RX_ISO_STACK,
+	HCI_SNOOP_TYPE_RX_ISO_HIF,
 	HCI_SNOOP_TYPE_MAX
 };
 
@@ -671,6 +681,43 @@ static inline int is_mt66xx(u32 chip_id)
 	return 0;
 }
 
+/* Get BT whole packet length except hci type */
+static inline unsigned int get_pkt_len(unsigned char type, unsigned char *buf)
+{
+	unsigned int len = 0;
+
+	switch (type) {
+	/* Please reference hci header format
+	 * AA = len
+	 * xx = buf[0]
+	 * cmd : 01 xx yy AA + payload
+	 * acl : 02 xx yy AA AA + payload
+	 * sco : 03 xx yy AA + payload
+	 * evt : 04 xx AA + payload
+	 * ISO : 05 xx yy AA AA + payload
+	 */
+	case HCI_COMMAND_PKT:
+		len = buf[2] + 3;
+		break;
+	case HCI_ACLDATA_PKT:
+		len = buf[2] + ((buf[3] << 8) & 0xff00) + 4;
+		break;
+	case HCI_SCODATA_PKT:
+		len = buf[2] + 3;
+		break;
+	case HCI_EVENT_PKT:
+		len = buf[1] + 2;
+		break;
+	case HCI_ISO_PKT:
+		len = buf[2] + (((buf[3] & 0x3F) << 8) & 0xff00) + HCI_ISO_PKT_HEADER_SIZE;
+		break;
+	default:
+		len = 0;
+	}
+
+	return len;
+}
+
 unsigned char btmtk_get_chip_state(struct btmtk_dev *bdev);
 void btmtk_set_chip_state(struct btmtk_dev *bdev, unsigned char new_state);
 int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type);
@@ -695,8 +742,8 @@ void btmtk_free_setting_file(struct btmtk_dev *bdev);
 
 unsigned char btmtk_fops_get_state(struct btmtk_dev *bdev);
 
-void btmtk_hci_snoop_save(unsigned int type, u32 len, u8 *buf);
-void btmtk_hci_snoop_print(u32 len, const u8 *buf);
+void btmtk_hci_snoop_save(unsigned int type, u8 *buf, u32 len);
+void btmtk_hci_snoop_print(const u8 *buf, u32 len);
 void btmtk_hci_snoop_print_to_log(void);
 void *btmtk_kallsyms_lookup_name(const char *name);
 void btmtk_do_gettimeofday(struct timeval *tv);

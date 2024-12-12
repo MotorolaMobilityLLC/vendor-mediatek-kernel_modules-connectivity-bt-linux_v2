@@ -1265,6 +1265,17 @@ static void btusb_intr_complete(struct urb *urb)
 		intr_blocking_usb_warn = 0;
 
 	if (urb->status == 0) {
+		buf = urb->transfer_buffer;
+		if (buf[0] == 0x3E)
+			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_ADV_EVT_HIF,
+				buf, urb->actual_length);
+		else if (buf[0] == 0x13)
+			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_NOCP_EVT_HIF,
+				buf, urb->actual_length);
+		else
+			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_EVT_HIF,
+				buf, urb->actual_length);
+
 		hdev->stat.byte_rx += urb->actual_length;
 
 		if (!cif_dev->urb_intr_buf) {
@@ -1272,12 +1283,11 @@ static void btusb_intr_complete(struct urb *urb)
 			return;
 		}
 
-		buf = urb->transfer_buffer;
 		if (urb->actual_length >= URB_MAX_BUFFER_SIZE ||
-			(urb->actual_length != (buf[1] + 2) && urb->actual_length > 1)) {
+			(urb->actual_length != get_pkt_len(HCI_EVENT_PKT, buf) && urb->actual_length > 1)) {
 			BTMTK_ERR("%s: urb->actual_length is invalid, buf[1] = %d!",
 				__func__, buf[1]);
-			btmtk_hci_snoop_print(urb->actual_length, urb->transfer_buffer);
+			btmtk_hci_snoop_print(urb->transfer_buffer, urb->actual_length);
 			goto intr_resub;
 		}
 		memset(cif_dev->urb_intr_buf, 0, URB_MAX_BUFFER_SIZE);
@@ -1302,8 +1312,8 @@ static void btusb_intr_complete(struct urb *urb)
 		if (err) {
 			BTMTK_ERR("%s corrupted event packet, urb_intr_buf = %p, transfer_buffer = %p",
 				hdev->name, cif_dev->urb_intr_buf, urb->transfer_buffer);
-			btmtk_hci_snoop_print(urb->actual_length, urb->transfer_buffer);
-			btmtk_hci_snoop_print(urb->actual_length + 1, cif_dev->urb_intr_buf);
+			btmtk_hci_snoop_print(urb->transfer_buffer, urb->actual_length);
+			btmtk_hci_snoop_print(cif_dev->urb_intr_buf, urb->actual_length + 1);
 			hdev->stat.err_rx++;
 		}
 	} else if (urb->status == -ENOENT) {
@@ -1643,18 +1653,23 @@ static void btusb_bulk_complete(struct urb *urb)
 	 * return;
 	 */
 	if (urb->status == 0) {
+		buf = urb->transfer_buffer;
+ 		if ((buf[0] == 0x6f && buf[1] == 0xfc) ||
+			((buf[0] == 0xff || buf[0] == 0xfe) && buf[1] == 0x05))
+			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_RX_ACL_HIF,
+				buf, urb->actual_length);
+
 		hdev->stat.byte_rx += urb->actual_length;
 		if (!cif_dev->urb_bulk_buf) {
 			BTMTK_ERR("%s: bdev->urb_bulk_buf is NULL!", __func__);
 			return;
 		}
 
-		buf = urb->transfer_buffer;
-		len = buf[2] + ((buf[3] << 8) & 0xff00);
+		len = get_pkt_len(HCI_ACLDATA_PKT, buf);
 		if (urb->actual_length >= URB_MAX_BUFFER_SIZE ||
-			urb->actual_length != len + 4) {
+			urb->actual_length != len) {
 			BTMTK_ERR("%s urb->actual_length is invalid, len = %d!", __func__, len);
-			btmtk_hci_snoop_print(urb->actual_length, urb->transfer_buffer);
+			btmtk_hci_snoop_print(urb->transfer_buffer, urb->actual_length);
 			goto bulk_resub;
 		}
 		memset(cif_dev->urb_bulk_buf, 0, URB_MAX_BUFFER_SIZE);
@@ -1666,8 +1681,8 @@ static void btusb_bulk_complete(struct urb *urb)
 		if (err) {
 			BTMTK_ERR("%s corrupted ACL packet, urb_bulk_buf = %p, transfer_buffer = %p",
 				hdev->name, cif_dev->urb_bulk_buf, urb->transfer_buffer);
-			btmtk_hci_snoop_print(urb->actual_length, urb->transfer_buffer);
-			btmtk_hci_snoop_print(urb->actual_length + 1, cif_dev->urb_bulk_buf);
+			btmtk_hci_snoop_print(urb->transfer_buffer, urb->actual_length);
+			btmtk_hci_snoop_print(cif_dev->urb_bulk_buf, urb->actual_length + 1);
 			hdev->stat.err_rx++;
 		}
 	} else if (urb->status == -ENOENT) {
@@ -1786,15 +1801,17 @@ static void btusb_ble_isoc_complete(struct urb *urb)
 	}
 
 	if (urb->status == 0) {
-		hdev->stat.byte_rx += urb->actual_length;
 		isoc_buf = urb->transfer_buffer;
+		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_RX_ISO_HIF,
+			isoc_buf, urb->actual_length);
+		hdev->stat.byte_rx += urb->actual_length;
 
 		if (!cif_dev->urb_ble_isoc_buf) {
 			BTMTK_ERR("%s: bdev->urb_ble_isoc_buf is NULL!", __func__);
 			return;
 		}
-		isoc_pkt_len = isoc_buf[2] + (isoc_buf[3] << 8) + HCI_ISO_PKT_HEADER_SIZE;
 
+		isoc_pkt_len = get_pkt_len(HCI_ISO_PKT, isoc_buf);
 		/* Skip padding */
 		BTMTK_DBG("%s: isoc_pkt_len = %d, urb->actual_length = %d", __func__, isoc_pkt_len, urb->actual_length);
 		if (isoc_pkt_len == HCI_ISO_PKT_HEADER_SIZE) {
@@ -1804,7 +1821,7 @@ static void btusb_ble_isoc_complete(struct urb *urb)
 
 		if (urb->actual_length + HCI_ISO_PKT_WITH_ACL_HEADER_SIZE > URB_MAX_BUFFER_SIZE) {
 			BTMTK_ERR("%s urb->actual_length is invalid!", __func__);
-			btmtk_hci_snoop_print(urb->actual_length, urb->transfer_buffer);
+			btmtk_hci_snoop_print(urb->transfer_buffer, urb->actual_length);
 			goto ble_iso_resub;
 		}
 		/* It's mtk specific heade for stack
@@ -1819,7 +1836,7 @@ static void btusb_ble_isoc_complete(struct urb *urb)
 		cif_dev->urb_ble_isoc_buf[3] = (isoc_pkt_len & 0x00ff);
 		cif_dev->urb_ble_isoc_buf[4] = (isoc_pkt_len >> 8);
 		memcpy(cif_dev->urb_ble_isoc_buf + HCI_ISO_PKT_WITH_ACL_HEADER_SIZE,
-			urb->transfer_buffer, isoc_pkt_len + HCI_ISO_PKT_HEADER_SIZE);
+			urb->transfer_buffer, isoc_pkt_len);
 
 		BTMTK_DBG_RAW(cif_dev->urb_ble_isoc_buf,
 			isoc_pkt_len + HCI_ISO_PKT_WITH_ACL_HEADER_SIZE,
@@ -1838,7 +1855,7 @@ static void btusb_ble_isoc_complete(struct urb *urb)
 
 ble_iso_resub:
 	if (!test_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags)) {
-		BTMTK_INFO("%s: bdev->flags is RUNNING!", __func__);
+		BTMTK_INFO("%s: bdev->flags is not RUNNING!", __func__);
 		return;
 	}
 
@@ -2173,7 +2190,6 @@ static int btmtk_usb_open(struct hci_dev *hdev)
 		goto failed;
 	}
 
-
 	set_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 
 done:
@@ -2432,11 +2448,29 @@ static struct urb *alloc_isoc_urb(struct hci_dev *hdev, struct sk_buff *skb)
 	return urb;
 }
 
-static int submit_tx_urb(struct hci_dev *hdev, struct urb *urb)
+static int submit_tx_urb(struct hci_dev *hdev, struct urb *urb, int type)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 	int err;
+
+	switch (type)
+	{
+	case HCI_COMMAND_PKT:
+		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_CMD_HIF,
+			urb->transfer_buffer, urb->transfer_buffer_length);
+		break;
+	case HCI_ACLDATA_PKT:
+		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ACL_HIF,
+			urb->transfer_buffer, urb->transfer_buffer_length);
+		break;
+	case HCI_ISO_PKT:
+		btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ISO_HIF,
+			urb->transfer_buffer, urb->transfer_buffer_length);
+		break;
+	default:
+		BTMTK_INFO("%s: invalid type(%d)", __func__, type);
+	}
 
 	usb_anchor_urb(urb, &cif_dev->tx_anchor);
 
@@ -2455,7 +2489,7 @@ static int submit_tx_urb(struct hci_dev *hdev, struct urb *urb)
 	return err;
 }
 
-static int submit_or_queue_tx_urb(struct hci_dev *hdev, struct urb *urb)
+static int submit_or_queue_tx_urb(struct hci_dev *hdev, struct urb *urb, int type)
 {
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	unsigned long flags;
@@ -2468,7 +2502,7 @@ static int submit_or_queue_tx_urb(struct hci_dev *hdev, struct urb *urb)
 	spin_unlock_irqrestore(&bdev->txlock, flags);
 
 	if (!suspending)
-		return submit_tx_urb(hdev, urb);
+		return submit_tx_urb(hdev, urb, type);
 
 	schedule_work(&bdev->waker);
 
@@ -2646,7 +2680,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		}
 
 		hdev->stat.cmd_tx++;
-		return submit_or_queue_tx_urb(hdev, urb);
+		return submit_or_queue_tx_urb(hdev, urb, HCI_COMMAND_PKT);
 
 	case HCI_ACLDATA_PKT:
 		if (skb->data[0] == 0x00 && skb->data[1] == 0x44) {
@@ -2689,7 +2723,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					}
 
 					hdev->stat.acl_tx++;
-					ret = submit_or_queue_tx_urb(hdev, urb);
+					ret = submit_or_queue_tx_urb(hdev, urb, HCI_ISO_PKT);
 					if (ret < 0) {
 						/* when ret < 0, skb will be free in hci_send_frame,
 						 * but need to free iso_skb, because iso_skb alloc in bt driver
@@ -2719,7 +2753,7 @@ exit:
 			}
 		}
 		hdev->stat.acl_tx++;
-		return submit_or_queue_tx_urb(hdev, urb);
+		return submit_or_queue_tx_urb(hdev, urb, HCI_ACLDATA_PKT);
 
 	case HCI_SCODATA_PKT:
 		if (hci_conn_num(hdev, SCO_LINK) < 1) {
@@ -2737,7 +2771,7 @@ exit:
 		}
 
 		hdev->stat.sco_tx++;
-		return submit_tx_urb(hdev, urb);
+		return submit_tx_urb(hdev, urb, HCI_SCODATA_PKT);
 	}
 
 	return -EILSEQ;
@@ -3100,6 +3134,7 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_WMT_RUNNING, &bdev->flags);
+	clear_bit(BTUSB_SUSPENDING, &bdev->flags);
 	bdev->sco_num = 0;
 
 	btusb_stop_traffic((struct btmtk_usb_dev *)bdev->cif_dev);
@@ -3715,6 +3750,7 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 	clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_WMT_RUNNING, &bdev->flags);
+	clear_bit(BTUSB_SUSPENDING, &bdev->flags);
 
 	btusb_stop_traffic(cif_dev);
 
@@ -4219,7 +4255,6 @@ error1:
 	usb_free_urb(urb);
 exit:
 	return ret;
-
 }
 
 int btmtk_usb_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
