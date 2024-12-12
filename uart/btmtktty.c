@@ -424,14 +424,6 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 	/* if just protect event, another cmd would reinit event_compare_status */
 	down(&cif_dev->evt_comp_sem);
-	/* if send cmd without drv own, not direct send cmd incase of tx_thread cant not do drv own with send_and_recv */
-	if (cif_dev->own_state != BTMTK_DRV_OWN && pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT
-		&& atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_RUNNING
-		&& atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_DONE) {
-		BTMTK_ERR("%s: wait driver own retry", __func__);
-		up(&cif_dev->evt_comp_sem);
-		return -EAGAIN;
-	}
 
 	if (event) {
 		if (event_len > EVENT_COMPARE_SIZE) {
@@ -444,6 +436,18 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		event_compare_status = BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE;
 		memcpy(event_need_compare, event + 1, event_len - 1);
 		event_need_compare_len = event_len - 1;
+
+		/* if send cmd without drv own, not direct send cmd incase of tx_thread cant not do drv own with send_and_recv */
+		if (pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT &&
+			(cif_dev->own_state != BTMTK_DRV_OWN ||
+			atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_RUNNING ||
+			atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_DONE)) {
+
+			BTMTK_WARN("%s: wait driver own retry, own_state[%d]", __func__, cif_dev->own_state);
+			event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
+			up(&cif_dev->evt_comp_sem);
+			return -EAGAIN;
+		}
 
 		start_time = jiffies;
 		/* check hci event /wmt event for uart/UART interface, check hci
@@ -2580,13 +2584,15 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		goto unlock;
 	}
 
+	BTMTK_DBG("%s: fw owning", __func__);
+	cif_dev->own_state = BTMTK_FW_OWNING;
+
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE) {
 		BTMTK_WARN("%s: during send_and_recv, keep drv own", __func__);
+		cif_dev->own_state = BTMTK_DRV_OWN;
 		btmtk_uart_update_fw_own_timer(cif_dev);
 		goto unlock;
 	}
-
-	cif_dev->own_state = BTMTK_FW_OWNING;
 
 	if (cif_dev->sleep_en) {
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
