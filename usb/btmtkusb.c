@@ -2698,24 +2698,20 @@ int btmtk_usb_toggle_rst_pin(struct btmtk_dev *bdev)
 #endif
 	int cur = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-	btmtk_usb_handle_mutex_lock(bdev);
 
 
 	cur = atomic_cmpxchg(&bmain_info->chip_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
 	if (cur == BTMTK_RESET_DOING) {
 		BTMTK_INFO("%s: reset in progress, return", __func__);
-		btmtk_usb_handle_mutex_unlock(bdev);
 		return -1;
 	}
 
 	if (!bdev) {
 		BTMTK_WARN("%s: bdev is NULL!", __func__);
-		btmtk_usb_handle_mutex_unlock(bdev);
 		return -1;
 	}
 	if (bdev->bt_cfg.dongle_reset_gpio_pin == -1) {
 		BTMTK_WARN("%s: bt driver is not ready, please don't call chip reset!", __func__);
-		btmtk_usb_handle_mutex_unlock(bdev);
 		return -1;
 	}
 
@@ -2806,7 +2802,6 @@ int btmtk_usb_toggle_rst_pin(struct btmtk_dev *bdev)
 
 exit:
 	BTMTK_INFO("%s: end", __func__);
-	btmtk_usb_handle_mutex_unlock(bdev);
 	return 0;
 }
 EXPORT_SYMBOL(btmtk_usb_toggle_rst_pin);
@@ -3470,14 +3465,13 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 
 	BTMTK_WARN("%s: begin", __func__);
 
-	btmtk_usb_handle_mutex_lock(bdev);
-
 	BTMTK_CIF_GET_DEV_PRIV(bdev, intf, ifnum_base);
 	if (!bdev) {
 		BTMTK_ERR("%s: bdev is NULL, return", __func__);
-		btmtk_usb_handle_mutex_unlock(bdev);
 		return;
 	}
+
+	btmtk_usb_handle_mutex_lock(bdev);
 
 	state = btmtk_get_chip_state(bdev);
 	if (state == BTMTK_STATE_DISCONNECT) {
