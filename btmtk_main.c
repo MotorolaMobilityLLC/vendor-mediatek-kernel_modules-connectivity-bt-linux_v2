@@ -3399,11 +3399,12 @@ static int bt_close(struct hci_dev *hdev)
 			goto unlock;
 		}
 
-#if CFG_SUPPORT_DVT
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
 		/* Don't send init cmd for DVT
 		 * Such as Lowpower DVT
 		 */
 		bdev->power_state = BTMTK_DONGLE_STATE_POWER_OFF;
+		BTMTK_INFO("%s, SKIP btmtk_send_deinit_cmds", __func__);
 #else
 		if (state != BTMTK_STATE_STANDBY) {
 			ret = btmtk_send_deinit_cmds(bdev);
@@ -3412,7 +3413,7 @@ static int bt_close(struct hci_dev *hdev)
 				goto unlock;
 			}
 		}
-#endif /* CFG_SUPPORT_DVT */
+#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 	}
 
 	/* Flush RX works */
@@ -3497,18 +3498,19 @@ static int bt_open(struct hci_dev *hdev)
 	}
 
 	if (!is_mt66xx(bdev->chip_id)) {
-#if CFG_SUPPORT_DVT
+#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
 		/* Don't send init cmd for DVT
 		 * Such as Lowpower DVT
 		 */
 		bdev->power_state = BTMTK_DONGLE_STATE_POWER_ON;
+		BTMTK_INFO("%s, SKIP btmtk_send_init_cmds", __func__);
 #else
 		ret = btmtk_send_init_cmds(bdev);
 		if (ret < 0) {
 			BTMTK_ERR("%s, btmtk_send_init_cmds failed", __func__);
 			goto failed;
 		}
-#endif /* CFG_SUPPORT_DVT */
+#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
 
 		ret = btmtk_send_apcf_reserved(bdev);
 		if (ret < 0) {
