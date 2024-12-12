@@ -1161,7 +1161,6 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	cif_dev->rhw_fail_cnt = 0;
 	reinit_completion(&bdev->dump_comp);
 	reinit_completion(&bdev->dump_dfd_comp);
-	memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
 	bdev->is_whole_chip_reset = FALSE;
 	bmain_info->dbg_send = 0;
 
@@ -1196,6 +1195,9 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		BTMTK_INFO("%s: DFD done, return", __func__);
 		return 0;
 	}
+
+	/* for dfd, clear assert reason here */
+	memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
 
 	/* query cmd, make sure can communicate with fw */
 	do {
