@@ -61,6 +61,7 @@ module_param(BT_major, uint, 0444);
 static struct cdev BT_cdev;
 static struct class *BT_class;
 static struct device *BT_dev;
+static uint32_t BT_open_count;
 
 static uint8_t i_buf[BT_BUFFER_SIZE]; /* Input buffer for read */
 static uint8_t o_buf[BT_BUFFER_SIZE]; /* Output buffer for write */
@@ -467,15 +468,24 @@ static long BT_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long
 		if (copy_from_user(ioc_buf, (uint8_t __user *)arg, IOCTL_BT_HOST_INTTRX_SIZE))
 			retval = -EFAULT;
 		else {
-			BTMTK_INFO_RAW(g_sbdev, ioc_buf, ioc_buf[3] + 4, "%s: len[%d] TX: ", __func__, ioc_buf[3] + 4);
 			/* DynamicAdjustTxPower function */
 			if (ioc_buf[0] == 0x01 && ioc_buf[1] == 0x2D && ioc_buf[2] == 0xFC) {
+				BTMTK_INFO_RAW(g_sbdev, ioc_buf, ioc_buf[3] + 4, "%s: len[%d] TX: ",
+					__func__, ioc_buf[3] + 4);
 				if (ioc_buf[4] == HCI_CMD_DY_ADJ_PWR_QUERY)
 					btmtk_query_tx_power(g_sbdev, _ioctl_copy_evt_to_buf);
 				else
 					btmtk_set_tx_power(g_sbdev, ioc_buf[5], _ioctl_copy_evt_to_buf);
 				if (copy_to_user((uint8_t __user *)arg, ioc_buf, IOCTL_BT_HOST_INTTRX_SIZE))
 					retval = -EFAULT;
+			} else if (ioc_buf[0] == 0x01 && ioc_buf[1] == 0x64 && ioc_buf[2] == 0xFD) {
+				BTMTK_INFO_RAW(g_sbdev, ioc_buf, ioc_buf[6] + 7, "%s: len[%d] TX: ",
+					__func__, ioc_buf[6] + 7);
+				if (ioc_buf[6] > 240) {
+					BTMTK_ERR("eids buffer is large than expected");
+					retval = -EFAULT;
+				} else
+					btmtk_send_finder_eids(ioc_buf, ioc_buf[6] + 7);
 			} else
 				retval = -EFAULT;
 		}
@@ -515,6 +525,12 @@ static int BT_open(struct inode *inode, struct file *file)
 		return -1;
 	}
 
+	if (BT_open_count > 0) {
+		BTMTK_INFO("Driver already openned, reuse openned driver as tunnel");
+		BT_open_count++;
+		return 0;
+	}
+
 	__pm_stay_awake(bt_wakelock);
 	BTMTK_INFO("major %d minor %d (pid %d)", imajor(inode), iminor(inode), current->pid);
 
@@ -545,12 +561,12 @@ static int BT_open(struct inode *inode, struct file *file)
 		return ret;
 	}
 
+	BT_open_count++;
 	btmtk_register_rx_event_cb(BT_event_cb);
 
 	bt_ftrace_flag = 1;
 	hw_err_retry = 0;
 	__pm_relax(bt_wakelock);
-
 	bthost_debug_init();
 
 	BTMTK_INFO("BT turn on OK!");
@@ -578,6 +594,12 @@ static int BT_close(struct inode *inode, struct file *file)
 		return -1;
 	}
 
+	if (BT_open_count > 1) {
+		BT_open_count--;
+		BTMTK_INFO("BT turn off OK!, BT_open_count [%d]", BT_open_count);
+		return 0;
+	}
+
 	__pm_stay_awake(bt_wakelock);
 	BTMTK_INFO("%s: major %d minor %d (pid %d)", __func__, imajor(inode), iminor(inode), current->pid);
 	/* wait uds_work done or remove uds_work from workqueue */
@@ -587,6 +609,7 @@ static int BT_close(struct inode *inode, struct file *file)
 
 	bthost_debug_init();
 
+	BT_open_count--;
 	if (ret) {
 		BTMTK_ERR("BT turn off fail!");
 		return ret;
