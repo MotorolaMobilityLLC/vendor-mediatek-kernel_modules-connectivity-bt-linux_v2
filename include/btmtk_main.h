@@ -579,7 +579,6 @@ struct btmtk_stp_info {
 #if (USE_DEVICE_NODE == 1)
 typedef void (*cif_chrdev_fw_log_state_ptr)(struct btmtk_dev *bdev, uint8_t state);
 #endif
-
 typedef int (*cif_bt_init_ptr)(void);
 typedef void (*cif_bt_exit_ptr)(void);
 typedef int (*cif_pre_open_ptr)(struct btmtk_dev *bdev);
@@ -942,6 +941,9 @@ struct btmtk_dev {
 	u32	dfd_value_size;
 	char temp_buf[DFD_EMI_DUMP_SIZE];
 	u8 dfd_pstd[DFD_EMI_DUMP_SIZE];
+
+	/* BLE Finding function */
+	atomic_t poweroff_finder_mode;
 #endif
 	/* completion */
 	struct completion	dump_comp;

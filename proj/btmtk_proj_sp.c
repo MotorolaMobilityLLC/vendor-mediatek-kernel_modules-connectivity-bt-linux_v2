@@ -1615,6 +1615,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 		return -1;
 	}
 
+	atomic_set(&bdev->poweroff_finder_mode, 0);
 	bdev->dfd_value_addr_remap_base = NULL;
 	tty->dev->of_node = of_find_compatible_node(NULL, NULL, "mediatek,mt6991-conn_scp");
 	if (!tty->dev->of_node)

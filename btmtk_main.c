@@ -4127,8 +4127,10 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 	if (bdev->main_info.find_my_phone_mode)
 		btmtk_find_my_phone_cmd(bdev->main_info.find_my_phone_mode);
 
-	if (bdev->main_info.find_my_phone_mode_extend)
-		btmtk_find_my_phone_extend_cmd(bdev->main_info.find_my_phone_mode_extend);
+	BTMTK_INFO("%s: poweroff_finder_mode = %d, bdev = %p", __func__, atomic_read(&bdev->poweroff_finder_mode), bdev);
+	if (atomic_read(&bdev->poweroff_finder_mode)) {
+		btmtk_set_powered_off_finder_mode(atomic_read(&bdev->poweroff_finder_mode));
+	}
 #endif
 
 	ret = btmtk_send_wmt_power_off_cmd(bdev);
@@ -5995,7 +5997,6 @@ static int btmtk_reboot_notify(struct notifier_block *nb,
 	struct btmtk_dev *bdev = NULL;
 
 	BTMTK_INFO("%s: event(%d)", __func__, (int)event);
-
 
 	for (i = 0; i < btmtk_mcu_num; i++) {
 		/* Find valid dev for already probe interface. */
