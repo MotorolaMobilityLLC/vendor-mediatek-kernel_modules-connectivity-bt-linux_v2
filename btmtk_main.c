@@ -4806,8 +4806,8 @@ int bt_close(struct hci_dev *hdev)
 				bdev->main_info.hif_hook.cif_mutex_lock(bdev);
 			goto unlock;
 		}
-#endif
 
+#else
 		if (state != BTMTK_STATE_WORKING && state != BTMTK_STATE_STANDBY) {
 			/* If hif disconnect occurs,
 			 * it will call cif_mutex_lock and release hci device.
@@ -4819,6 +4819,7 @@ int bt_close(struct hci_dev *hdev)
 			BTMTK_WARN_DEV(bdev, "%s: not in working state and standby state(%d).", __func__, state);
 			goto exit;
 		}
+#endif
 
 		if (bdev->main_info.hif_hook.cif_mutex_lock)
 			bdev->main_info.hif_hook.cif_mutex_lock(bdev);
@@ -4874,7 +4875,7 @@ unlock:
 
 		if (bdev->main_info.hif_hook.cif_mutex_unlock)
 			bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
-exit:
+
 #if (USE_DEVICE_NODE == 1)
 		/* avoid reset start at new bt on */
 		btmtk_reset_timer_del(bdev);
@@ -4882,8 +4883,9 @@ exit:
 
 		if (state != BTMTK_STATE_DISCONNECT)
 			btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
-
-#endif
+#else
+exit:
+#endif // USE_DEVICE_NODE
 		btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
 	}
 
@@ -5027,10 +5029,9 @@ int bt_open(struct hci_dev *hdev)
 		state = btmtk_get_chip_state(bdev);
 		if (state == BTMTK_STATE_INIT || state == BTMTK_STATE_DISCONNECT
 #if (USE_DEVICE_NODE == 0)
-			|| state == BTMTK_STATE_PROBE) {
-#else
-		) {
+			|| state == BTMTK_STATE_PROBE
 #endif
+		) {
 			BTMTK_WARN_DEV(bdev, "%s: chip_state[%d] is init or disconnect!", __func__, state);
 			ret = -EAGAIN;
 			if (bdev->main_info.hif_hook.cif_mutex_unlock)
@@ -5160,6 +5161,9 @@ int bt_open(struct hci_dev *hdev)
 
 failed:
 #if (USE_DEVICE_NODE == 1)
+	/* add mutext avoid racing confition with uart_launcher deinit flow */
+	if (bdev->main_info.hif_hook.cif_mutex_lock)
+		bdev->main_info.hif_hook.cif_mutex_lock(bdev);
 	if (ret != CONNV3_ERR_RST_ONGOING)
 		bdev->main_info.hif_hook.close(hdev);
 	else {
@@ -5170,6 +5174,8 @@ failed:
 	/* if state is disconnect means uart_launcher is disconnected, not set to close state */
 	if (state != BTMTK_STATE_DISCONNECT)
 		btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
+	if (bdev->main_info.hif_hook.cif_mutex_unlock)
+		bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
 
 	if (++bdev->on_fail_count > BTMTK_MAX_SUBSYS_RESET_COUNT && bdev->main_info.hif_hook.whole_reset) {
 		memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);

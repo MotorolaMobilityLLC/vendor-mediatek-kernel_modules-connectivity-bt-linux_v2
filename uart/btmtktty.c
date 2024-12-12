@@ -3521,6 +3521,11 @@ int btmtk_met_log_handler(struct btmtk_dev *bdev, u8 *buf, u32 size)
 		return -1;
 	}
 
+	if (!buf) {
+		BTMTK_ERR("%s: buf is NULL", __func__);
+		return -1;
+	}
+
 	if (bdev->chip_id == 0x6639) {
 		project_id = 0x6985;
 		adie_id = 0x6639;

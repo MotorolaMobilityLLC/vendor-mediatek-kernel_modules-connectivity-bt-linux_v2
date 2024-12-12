@@ -558,18 +558,21 @@ int btmtk_sp_close(void)
 
 	btmtk_set_gpio_default();
 
-	/* flush tty before tty close */
-	down(&cif_dev->tty_flush_sem);
-	BTMTK_INFO("%s: tty flush, tty_chars_in_buffer[%d]", __func__, tty_chars_in_buffer(cif_dev->tty));
-	/* stop uart auto send next pkt to avoid flush conflict with send pkt */
-	cif_dev->tty->flow.stopped = true;
-	tty_driver_flush_buffer(cif_dev->tty);
-	cif_dev->tty->flow.stopped = false;
-	up(&cif_dev->tty_flush_sem);
+	/* if uart already disconnect, do not use tty related API */
+	if (btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_DISCONNECT && cif_dev->tty != NULL) {
+		/* flush tty before tty close */
+		down(&cif_dev->tty_flush_sem);
+		BTMTK_INFO("%s: tty flush, tty_chars_in_buffer[%d]", __func__, tty_chars_in_buffer(cif_dev->tty));
+		/* stop uart auto send next pkt to avoid flush conflict with send pkt */
+		cif_dev->tty->flow.stopped = true;
+		tty_driver_flush_buffer(cif_dev->tty);
+		cif_dev->tty->flow.stopped = false;
+		up(&cif_dev->tty_flush_sem);
 
+		BTMTK_INFO("%s: tty close, tty_chars_in_buffer[%d]", __func__, tty_chars_in_buffer(cif_dev->tty));
+		cif_dev->tty->ops->close(cif_dev->tty, NULL);
+	}
 
-	BTMTK_INFO("%s: tty close, tty_chars_in_buffer[%d]", __func__, tty_chars_in_buffer(cif_dev->tty));
-	cif_dev->tty->ops->close(cif_dev->tty, NULL);
 	cif_dev->is_pre_on_done = FALSE;
 
 	return 0;
@@ -2496,7 +2499,8 @@ int btmtk_uart_launcher_deinit(void)
 			&& cif_dev->tty->port->count == 0)
 			cif_dev->tty->port->count = 1;
 	}
-
+	/* set disconnect to avoid android BT open/close driver */
+	btmtk_set_chip_state(g_sbdev, BTMTK_STATE_DISCONNECT);
 	BTMTK_INFO("%s: BT turn off OK", __func__);
 
 	return 0;
