@@ -2832,6 +2832,8 @@ static int btmtk_cif_suspend(struct device *dev)
 	cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 	bt_woble = &cif_dev->bt_woble;
 
+	btmtk_sdio_keep_driver_own(cif_dev, 1);
+
 	if (bdev->suspend_count++) {
 		BTMTK_WARN("Has suspended. suspend_count: %d, end", bdev->suspend_count);
 		return 0;
@@ -2896,6 +2898,7 @@ static int btmtk_cif_suspend(struct device *dev)
 	else
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 
+	btmtk_sdio_keep_driver_own(cif_dev, 0);
 	BTMTK_INFO("%s, end. ret = %d", __func__, ret);
 	return ret;
 }
