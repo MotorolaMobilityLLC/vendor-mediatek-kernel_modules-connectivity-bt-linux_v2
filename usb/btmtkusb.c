@@ -2211,7 +2211,7 @@ EXPORT_SYMBOL(btmtk_usb_toggle_rst_pin);
 
 static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 {
-	int val, retry = 10;
+	int val, retry = 10, ret;
 	u32 mcu_init_done = MCU_BT0_INIT_DONE;
 	u32 bt_subsys_cr;
 
@@ -2258,14 +2258,23 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	btmtk_cif_write_uhw_register(bdev, bt_subsys_cr, val);
 
 	/* Read reset CR */
-	btmtk_cif_read_uhw_register(bdev, bt_subsys_cr, &val);
+	ret = btmtk_cif_read_uhw_register(bdev, bt_subsys_cr, &val);
+	if (ret == -ENODEV) {
+		BTMTK_INFO("%s, now usb disconnect happen, stop subsys chip reset", __func__);
+		return ret;
+	}
 
 	if (bdev->dualBT)
 		mcu_init_done |= MCU_BT1_INIT_DONE;
 
 	do {
 		/* polling re-init CR */
-		btmtk_cif_read_uhw_register(bdev, BT_MISC, &val);
+		ret = btmtk_cif_read_uhw_register(bdev, BT_MISC, &val);
+		if (ret == -ENODEV) {
+			BTMTK_INFO("%s, usb disconnect happen, stop subsys chip reset", __func__);
+			return ret;
+		}
+
 		BTMTK_INFO("%s: reg=%x, value=0x%08x", __func__, BT_MISC, val);
 		if (val == 0xffffffff) {
 			/* read init CR failed */
@@ -3139,6 +3148,9 @@ static int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val
 	__le16 reg_low;
 	u8 reset_buf[4];
 
+	if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT)
+		return -ENODEV;
+
 	reg_high = ((reg >> 16) & 0xffff);
 	reg_low = (reg & 0xffff);
 
@@ -3173,6 +3185,9 @@ static int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val
 	int ret = 0;
 	__le16 reg_high;
 	__le16 reg_low;
+
+	if (btmtk_get_chip_state(bdev) == BTMTK_STATE_DISCONNECT)
+		return -ENODEV;
 
 	reg_high = ((reg >> 16) & 0xffff);
 	reg_low = (reg & 0xffff);

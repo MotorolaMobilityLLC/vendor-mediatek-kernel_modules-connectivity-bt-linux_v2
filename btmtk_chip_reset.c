@@ -134,6 +134,10 @@ void btmtk_reset_waker(struct work_struct *work)
 			err = bmain_info->hif_hook.subsys_reset(bdev);
 			atomic_set(&bmain_info->subsys_reset, BTMTK_RESET_DONE);
 			if (err < 0) {
+				if (err == -ENODEV) {
+					BTMTK_INFO("%s, usb disconnect, no more chip reset", __func__);
+					return;
+				}
 				BTMTK_INFO("subsys reset failed, do whole chip reset!");
 				goto L0RESET;
 			}
