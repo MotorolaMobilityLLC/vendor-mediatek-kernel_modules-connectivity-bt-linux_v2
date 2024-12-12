@@ -63,7 +63,9 @@ static char event_compare_status;
 static struct tty_struct *g_tty;
 static struct tty_ldisc_ops btmtk_uart_ldisc;
 extern struct btmtk_dev *g_sbdev;
+#if (USE_DEVICE_NODE == 1)
 static CONNXO_CFG_PARAM_STRUCT sConnxo_cfg;
+#endif
 
 #if (SLEEP_ENABLE == 1)
 
@@ -275,7 +277,7 @@ static int btmtk_uart_write_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 	memcpy(&cmd[MCU_VALUE_OFFSET_CMD], val, BT_REG_VALUE_LEN);
 
 	ret = btmtk_main_send_cmd(bdev, cmd, WRITE_REGISTER_CMD_LEN, event, WRITE_REGISTER_EVT_HDR_LEN, DELAY_TIMES,
-			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 
 	return ret;
 }
@@ -662,6 +664,7 @@ static int btmtk_uart_send_query_uart_cmd(struct hci_dev *hdev)
 	return ret;
 }
 
+#if (USE_DEVICE_NODE == 1)
 static int btmtk_uart_read_chip_id_cmd(struct hci_dev *hdev)
 {
 	u8 cmd[] = {0x01, 0x6F, 0xFC, 0x05, 0x01, 0x04, 0x01, 0x00, 0x09};
@@ -688,6 +691,7 @@ static int btmtk_uart_read_chip_id_cmd(struct hci_dev *hdev)
 	BTMTK_INFO("%s done", __func__);
 	return ret;
 }
+#endif
 
 int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 {
@@ -2147,12 +2151,14 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 		BTMTK_INFO("%s: <!!> Set HCIUARTDEINIT <!!>", __func__);
 		err = btmtk_uart_deinit(bdev);
 		break;
-        case HCIUARTXOPARAM:
+#if (USE_DEVICE_NODE == 1)
+	case HCIUARTXOPARAM:
 		if (copy_from_user(&sConnxo_cfg, (CONNXO_CFG_PARAM_STRUCT __user *)arg, sizeof(CONNXO_CFG_PARAM_STRUCT)))
 			return -ENOMEM;
 		BTMTK_INFO("%s: <!!> Set HCIUARTXOPARAM <!!>", __func__);
 		BTMTK_INFO("%s: ucDataLenLSB = %02x, ucDataLenMSB = %02x", __func__, sConnxo_cfg.ucDataLenLSB, sConnxo_cfg.ucDataLenMSB);
 		break;
+#endif
 	default:
 		/* pr_info("<!!> n_tty_ioctl_helper <!!>\n"); */
 #if (KERNEL_VERSION(5, 16, 0) <= LINUX_VERSION_CODE)

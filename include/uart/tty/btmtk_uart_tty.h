@@ -244,7 +244,9 @@ struct btmtk_uart_dev {
 #define HCIUARTSETWAKEUP _IOW('U', 205, int)
 #define HCIUARTINIT _IOW('U', 206, int)
 #define HCIUARTDEINIT _IOW('U', 207, int)
+#if (USE_DEVICE_NODE == 1)
 #define HCIUARTXOPARAM _IOW('U', 208, CONNXO_CFG_PARAM_STRUCT)
+#endif
 /**
  * parameter settings
  */
@@ -255,4 +257,3 @@ struct btmtk_uart_dev {
 
 //int btmtk_cif_send_calibration(struct hci_dev *hdev);
 #endif
-

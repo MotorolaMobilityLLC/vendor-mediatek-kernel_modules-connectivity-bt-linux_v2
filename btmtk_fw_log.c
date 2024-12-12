@@ -1213,12 +1213,12 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				dumplog_queue = &g_fwlog->dumplog_queue_latest;
 			}
 		}
-
+#ifdef CHIP_IF_USB
 		if ((bdev->chip_reset_signal & 0x8) == 0) {
 			btmtk_dump_timestamp_add(dumplog_queue);
 			bdev->chip_reset_signal |= 0x08;
 		}
-
+#endif
 		dump_data_counter++;
 		dump_data_length += skb->len - 4;
 
@@ -1249,10 +1249,10 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			if (bmain_info->hif_hook.waker_notify)
 				bmain_info->hif_hook.waker_notify(bdev);
 
+#ifdef CHIP_IF_USB
 			/* Clear 4th bit when received coredump end  */
 			bdev->chip_reset_signal &= ~0x08;
 
-#ifdef CHIP_IF_USB
 			/* USB hif: recv both 0xff and fw dump end, then do chip reset */
 			if (bdev->dualBT) {
 				/* If it is dual BT,
@@ -1607,4 +1607,3 @@ coredump_fail_unlock:
 	return 0;
 }
 #endif // #else (USE_DEVICE_NODE == 1)
-
