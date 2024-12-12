@@ -3847,10 +3847,10 @@ static int btmtk_usb_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 	reg_high = ((reg >> 16) & 0xffff);
 	reg_low = (reg & 0xffff);
 
-	buf[0] = 0;
-	buf[1] = 0;
-	buf[2] = (val & 0x00ff);
-	buf[3] = ((val >> 8) & 0x00ff);
+	buf[0] = (val & 0x00ff);
+	buf[1] = ((val >> 8) & 0x00ff);
+	buf[2] = ((val >> 16) & 0x00ff);
+	buf[3] = ((val >> 24) & 0x00ff);
 
 	memcpy(cif_dev->o_usb_buf, buf, sizeof(buf));
 	ret = usb_control_msg(cif_dev->udev, usb_sndctrlpipe(cif_dev->udev, 0),
