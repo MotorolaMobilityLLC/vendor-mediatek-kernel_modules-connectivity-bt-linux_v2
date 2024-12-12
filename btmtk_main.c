@@ -5660,8 +5660,10 @@ int btmtk_allocate_hci_device(struct btmtk_dev *bdev, int hci_bus_type)
 	hdev->bus = hci_bus_type;
 	hci_set_drvdata(hdev, bdev);
 
+#if (KERNEL_VERSION(6, 6, 33) > LINUX_VERSION_CODE)
 	/* HCI_PRIMARY = 0x00 */
 	hdev->dev_type = 0x00;
+#endif
 
 	bdev->hdev = hdev;
 
