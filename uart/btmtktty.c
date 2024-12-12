@@ -1911,7 +1911,7 @@ int btmtk_cif_send_calibration(struct btmtk_dev *bdev)
 static int btmtk_uart_set_pinmux(struct btmtk_dev *bdev)
 {
 	int err = 0;
-	u32 val;
+	u32 val = 0;
 
 	/* BT_PINMUX_CTRL_REG setup  */
 	btmtk_uart_read_register(bdev, BT_PINMUX_CTRL_REG, &val);
@@ -2614,7 +2614,10 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 			btmtk_release_uarthub(false);
 		}
 #endif
-		__pm_relax(bt_trx_wakelock);
+#if (USE_DEVICE_NODE == 0)
+		if (btmtk_get_chip_state(bdev) != BTMTK_STATE_SUSPEND)
+#endif
+			__pm_relax(bt_trx_wakelock);
 		BTMTK_INFO("%s success, cmd[9] = 0x%02x", __func__, cmd[9]);
 	}
 unlock:
@@ -2644,7 +2647,10 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	}
 
 	cif_dev->own_state = BTMTK_DRV_OWNING;
-	__pm_stay_awake(bt_trx_wakelock);
+#if (USE_DEVICE_NODE == 0)
+	if (btmtk_get_chip_state(bdev) != BTMTK_STATE_SUSPEND)
+#endif
+		__pm_stay_awake(bt_trx_wakelock);
 	while (bdev->suspend_state && --wait_uart_resume_cnt) {
 		usleep_range(1000, 1100);
 		BTMTK_DBG("%s wait uart resume", __func__);
