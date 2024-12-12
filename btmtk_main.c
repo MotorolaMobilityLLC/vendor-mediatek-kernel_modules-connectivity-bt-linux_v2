@@ -3261,7 +3261,13 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 		goto exit;
 	}
 
-	btmtk_common_data_initialize(bdev); /* load default data */
+	ret = btmtk_common_data_initialize(bdev); /* load default data */
+	if (ret) {
+		BTMTK_ERR("%s, load default data failed!", __func__);
+		ret = -1;
+		goto exit;
+	}
+
 	btmtk_cif_chip_common_register(); /* load default hook func */
 
 #if (USE_DEVICE_NODE == 1)

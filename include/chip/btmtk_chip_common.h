@@ -267,7 +267,7 @@ int btmtk_cif_chip_deregister(struct btmtk_dev *bdev);
 int btmtk_cif_chip_register(struct btmtk_dev *bdev);
 int btmtk_cif_chip_common_register(void);
 void btmtk_get_cmd_or_event(struct btmtk_dev *bdev, enum cmd_index_s type, struct data_struct *default_cmd);
-void btmtk_common_data_initialize(struct btmtk_dev *bdev);
+int btmtk_common_data_initialize(struct btmtk_dev *bdev);
 int btmtk_send_cmd_to_fw(struct btmtk_dev *bdev,
 		enum cmd_index_s cmd_type, enum cmd_index_s evt_type,
 		int delay, int retry, int pkt_type);
