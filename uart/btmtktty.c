@@ -698,8 +698,13 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 	u8 cmd[] = { 0x01, 0x6f, 0xfc, 0x01, 0xFF };
 	/* event before fw dl */
 	u8 event[] = { 0x04, 0xE4, 0x06, 0x02, 0x03, 0x02, 0x00, 0x00, 0x03};
+#if (USE_DEVICE_NODE == 0)
+	/* For ce, can't judge load patch or not now */
+	u8 event_partial[] = { 0x04, 0xE4 };
+#else
 	/* event after fw dl */
 	u8 event2[] = { 0x04, 0xE4, 0x07, 0x02, 0x03, 0x03, 0x00, 0x00, 0x03, 0x01 };
+#endif
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 	struct btmtk_uart_dev *cif_dev = NULL;
 	int ret = -1;
@@ -717,12 +722,17 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 	}
 	if (is_mt6639(bdev->chip_id) || is_mt66xx(bdev->chip_id)) {
 		BTMTK_INFO("%s: chip_id = 0x%x", __func__, bdev->chip_id);
+#if (USE_DEVICE_NODE == 0)
+		ret = btmtk_main_send_cmd(bdev, cmd + 4, 1, event_partial, 2,
+					0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
+#else
 		if (!cif_dev->fw_dl_ready && bdev->chip_id == 0x6639)
 			ret = btmtk_main_send_cmd(bdev, cmd + 4, 1, event, WAKEUP_EVT_LEN,
 					0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 		else
 			ret = btmtk_main_send_cmd(bdev, cmd + 4, 1, event2, WAKEUP_EVT_LEN + 1,
 					0, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
+#endif
 	} else
 		ret = btmtk_main_send_cmd(bdev, cmd, WAKEUP_CMD_LEN, event, WAKEUP_EVT_LEN,
 				0, 0, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
@@ -826,15 +836,22 @@ static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 	tty = cif_dev->tty;
 	new_termios = tty->termios;
 
-	BTMTK_INFO("%s tigger reset pin: %d", __func__, bdev->bt_cfg.dongle_reset_gpio_pin);
-	gpio_set_value(bdev->bt_cfg.dongle_reset_gpio_pin, 0);
-	msleep(SUBSYS_RESET_GPIO_DELAY_TIME);
-	gpio_set_value(bdev->bt_cfg.dongle_reset_gpio_pin, 1);
-	/* Basically, we need to polling the cr (BT_MISC) untill the subsys reset is completed
-	 * However, there is no uart_hw mechnism in buzzard, we can't read the info from controller now
-	 * use msleep instead currently
-	 */
-	msleep(SUBSYS_RESET_GPIO_DELAY_TIME);
+	/* RST pin must be defined in dts for connac3 */
+	/* Maybe can be moved into bt.cfg ? */
+	if (is_connac3(bdev->chip_id)) {
+		btmtk_ce_subsys_reset(bdev);
+	} else {
+		BTMTK_INFO("%s tigger reset pin: %d", __func__, bdev->bt_cfg.dongle_reset_gpio_pin);
+		gpio_set_value(bdev->bt_cfg.dongle_reset_gpio_pin, 0);
+		msleep(SUBSYS_RESET_GPIO_DELAY_TIME);
+		gpio_set_value(bdev->bt_cfg.dongle_reset_gpio_pin, 1);
+		/* Basically, we need to polling the cr (BT_MISC) untill the subsys reset is completed
+		* However, there is no uart_hw mechnism in buzzard, we can't read the info from controller now
+		* use msleep instead currently
+		*/
+		msleep(SUBSYS_RESET_GPIO_DELAY_TIME);
+	}
+
 
 	/* Flush any pending characters in the driver and discipline. */
 	tty_ldisc_flush(tty);
@@ -1291,35 +1308,6 @@ static int btmtk_uart_pre_open(struct btmtk_dev *bdev)
 	return ret;
 }
 
-static int btmtk_uart_probe_handler(struct btmtk_dev *bdev)
-{
-	int ret = 0;
-#if (USE_DEVICE_NODE == 0)
-	ret = btmtk_ce_gpio_init(bdev->cif_dev);
-	if (ret < 0) {
-		BTMTK_ERR("%s: ce gpio init failed!", __func__);
-		return ret;
-	}
-	ret = btmtk_pre_power_on_handler(bdev->cif_dev);
-	if (ret < 0) {
-		BTMTK_ERR("%s: pre power on handler failed!", __func__);
-		return ret;
-	}
-#endif
-	return ret;
-}
-
-static int btmtk_uart_disconnect_handler(void)
-{
-	int ret = 0;
-	ret = btmtk_set_gpio_default();
-	if (ret < 0) {
-		BTMTK_ERR("%s: disconnect handle failed!", __func__);
-		return ret;
-	}
-	return ret;
-}
-
 static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 {
 
@@ -1632,8 +1620,10 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		BTMTK_ERR("%s: retry[%d] fail", __func__, count);
 		ret = -1;
 	}
+#if (USE_DEVICE_NODE == 1)
 	/* use HCI_SNOOP_TYPE_TX_ISO_HIF to record data sended to tty */
 	btmtk_hci_snoop_save(HCI_SNOOP_TYPE_TX_ISO_HIF, cmd, cmd_len);
+#endif
 	BTMTK_DBG_RAW(cmd, cmd_len, "%s, len[%d] write_retry[%d] room[%d] flush_retry[%d] CMD :", __func__, cmd_len,
 						count, tty_write_room(cif_dev->tty), flush_retry);
 
@@ -1853,8 +1843,11 @@ static int btmtk_tx_thread_exit(struct btmtk_uart_dev *cif_dev)
 }
 
 /* Allocate Uart-Related memory */
-static int btmtk_uart_allocate_memory(void)
+static int btmtk_uart_allocate_memory(struct btmtk_dev *bdev)
 {
+	if (!IS_ERR_OR_NULL(bdev->rx_skb))
+		kfree_skb(bdev->rx_skb);
+	bdev->rx_skb = NULL;
 	return 0;
 }
 
@@ -1903,6 +1896,19 @@ static int btmtk_uart_deinit(struct btmtk_dev *bdev)
 static int btmtk_uart_init(struct btmtk_dev *bdev)
 {
 	int err = 0;
+
+#if (USE_DEVICE_NODE == 0)
+	err = btmtk_ce_gpio_init(bdev->cif_dev);
+	if (err < 0) {
+		BTMTK_ERR("%s: ce gpio init failed!", __func__);
+		return err;
+	}
+	err = btmtk_pre_power_on_handler(bdev->cif_dev);
+	if (err < 0) {
+		BTMTK_ERR("%s: pre power on handler failed!", __func__);
+		return err;
+	}
+#endif
 
 	err = btmtk_main_cif_initialize(bdev, HCI_UART);
 	if (err < 0) {
@@ -1961,7 +1967,7 @@ static int btmtk_uart_tty_probe(struct tty_struct *tty)
 	tty->port->low_latency = 1;
 #endif
 
-	btmtk_uart_allocate_memory();
+	btmtk_uart_allocate_memory(bdev);
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	tty->disc_data = bdev;
@@ -2117,7 +2123,6 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 		BTMTK_INFO("%s: <!!> Set STP mandatory command <!!>", __func__);
 		break;
 	case HCIUARTLOADPATCH:
-
 #if (USE_DEVICE_NODE == 0)
 		BTMTK_INFO("%s: <!!> Set HCIUARTLOADPATCH command <!!>", __func__);
 
@@ -2130,7 +2135,9 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 		else {
 			BTMTK_ERR("%s: Set HCIUARTLOADPATCH command failed (%d)", __func__, err);
 			btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
+			return err;
 		}
+		cif_dev->fw_dl_ready = 1;
 
 		err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
 		if (err < 0)
@@ -2145,6 +2152,7 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 		break;
 	case HCIUARTINIT:
 		BTMTK_INFO("%s: <!!> Set HCIUARTINIT <!!>", __func__);
+		cif_dev->fw_dl_ready = 0;
 		err = btmtk_uart_init(bdev);
 		break;
 	case HCIUARTDEINIT:
@@ -2307,6 +2315,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	int ret = -1;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	unsigned char state = 0;
 	struct btmtk_dev *bdev = tty->disc_data;
 	static u32 recv_fail_cnt;
 
@@ -2316,7 +2325,12 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	}
 
 	fstate = btmtk_fops_get_state(bdev);
-	if (fstate == BTMTK_FOPS_STATE_CLOSED) {
+	state = btmtk_get_chip_state(bdev);
+	if (fstate == BTMTK_FOPS_STATE_CLOSED
+#if (USE_DEVICE_NODE == 0)
+	 && state != BTMTK_STATE_FW_DUMP && state != BTMTK_STATE_SUBSYS_RESET
+#endif
+	) {
 #if (KERNEL_VERSION(6, 6, 0) > LINUX_VERSION_CODE)
 		BTMTK_INFO_RAW(data, count, "[SKIP] %s: count[%d]", __func__, count);
 #else
@@ -2337,6 +2351,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 
 	/* record data from tty */
 	btmtk_hci_snoop_save(HCI_SNOOP_TYPE_EVT_HIF, data, count);
+	BTMTK_DBG_RAW(data, count, "%s: len[%d]", __func__, count);
 
 #if (SLEEP_ENABLE == 1)
 	//BTMTK_INFO_RAW(data, count, "%s: count[%d]", __func__, count);
@@ -2946,15 +2961,6 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 
 	/* Do HIF events */
 	ret = btmtk_uart_tty_probe(tty);
-#if (USE_DEVICE_NODE == 0)
-	if (bmain_info->hif_hook_chip.probe_handler) {
-		ret = bmain_info->hif_hook_chip.probe_handler(bdev);
-		if (ret < 0) {
-			BTMTK_ERR("%s: pre probe failed!", __func__);
-			return ret;
-		}
-	}
-#endif
 #if (defined(LINUX_OS) && (KERNEL_VERSION(5, 4, 0) > LINUX_VERSION_CODE)) ||	\
 		(defined(ANDROID_OS) && (KERNEL_VERSION(4, 19, 0) > LINUX_VERSION_CODE))
 	bt_trx_wakelock = wakeup_source_register("bt_drv_trx");
@@ -2988,7 +2994,9 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_uart_dev *cif_dev;
 	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+#if (USE_DEVICE_NODE == 1)
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+#endif
 
 	BTMTK_INFO("%s: start", __func__);
 	bdev = dev_get_drvdata(tty->dev);
@@ -3037,8 +3045,9 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 		/* Do HIF events */
 #if (USE_DEVICE_NODE == 1)
 		btmtk_connv3_sub_drv_deinit();
-		btmtk_set_gpio_default();
 #endif
+
+		btmtk_set_gpio_default();
 		btmtk_uart_tty_disconnect(tty);
 #if (USE_DEVICE_NODE == 0)
 		devm_kfree(tty->dev, cif_dev);
@@ -3048,15 +3057,7 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 	/* Set End/Error state */
 	btmtk_set_chip_state((void *)bdev, cif_state->ops_end);
 	btmtk_uart_cif_mutex_unlock(bdev);
-#if (USE_DEVICE_NODE == 0)
-	if (bmain_info->hif_hook_chip.disc_handler) {
-		err = bmain_info->hif_hook_chip.disc_handler(bdev);
-		if (err < 0) {
-			BTMTK_ERR("%s: disconnect handle failed!", __func__);
-			return;
-		}
-	}
-#endif
+
 	err = unregister_pm_notifier(&btmtk_pm_notifier);
 	if (err) {
 		BTMTK_ERR("Unregister pm notifier failed. (%d)", err);
@@ -3144,14 +3145,14 @@ int btmtk_cif_register(void)
 	hook.whole_reset = btmtk_sp_whole_chip_reset;
 	hook.trigger_assert = btmtk_uart_trigger_assert;
 	hook.wakeup_host = btmtk_wakeup_host;
+#else
+	hook.init = btmtk_ce_init;
 #endif
 	hook.open = btmtk_uart_open;
 	hook.close = btmtk_uart_close;
 	hook.pre_open = btmtk_uart_pre_open;
 	hook.open_done = btmtk_uart_open_done;
 	hook.reg_read = btmtk_uart_read_register;
-	hook.probe_handler = btmtk_uart_probe_handler;
-	hook.disc_handler = btmtk_uart_disconnect_handler;
 	hook.send_cmd = btmtk_uart_send_cmd;
 	hook.send_and_recv = btmtk_uart_send_and_recv;
 	hook.event_filter = btmtk_uart_event_filter;

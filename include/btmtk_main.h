@@ -781,7 +781,7 @@ typedef int (*cif_bt_open_handler)(struct btmtk_dev *bdev);
 typedef int (*cif_bt_close_handler)(struct btmtk_dev *bdev);
 typedef int (*cif_bt_set_audio_pinmux)(struct btmtk_dev *bdev);
 typedef int (*cif_bt_dl_delay_time)(struct btmtk_dev *bdev);
-typedef int (*cif_bt_cap_init)(struct btmtk_dev *bdev);
+typedef int (*cif_bt_get_fw_info)(struct btmtk_dev *bdev);
 typedef int (*cif_bt_subsys_reset)(struct btmtk_dev *bdev);
 
 #ifdef CHIP_IF_SDIO
@@ -802,7 +802,7 @@ struct hif_hook_chip_ptr {
 	cif_bt_open_handler				bt_open_handler;
 	cif_bt_close_handler			bt_close_handler;
 	cif_bt_set_audio_pinmux			bt_set_pinmux;
-	cif_bt_cap_init					cap_init;
+	cif_bt_get_fw_info				get_fw_info;
 	cif_bt_subsys_reset				bt_subsys_reset;
 
 /* for calibration */

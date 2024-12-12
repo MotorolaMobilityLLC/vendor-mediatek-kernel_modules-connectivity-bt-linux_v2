@@ -127,7 +127,7 @@ int btmtk_cif_chip_66xx_register(void)
 
 	BTMTK_INFO("%s", __func__);
 
-	bmain_info->hif_hook_chip.cap_init = NULL;
+	bmain_info->hif_hook_chip.get_fw_info = NULL;
 	bmain_info->hif_hook_chip.load_patch = btmtk_load_fw_patch;
 	bmain_info->hif_hook_chip.err_handler = btmtk_recv_error_handler;
 	bmain_info->hif_hook_chip.rx_handler = btmtk_cif_rx_packet_handler;
@@ -142,4 +142,3 @@ int btmtk_cif_chip_66xx_register(void)
 
 	return retval;
 }
-

@@ -571,7 +571,6 @@ static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	bdev->bt_cfg.dongle_reset_gpio_pin = 220;
 	bdev->bt_cfg.support_dongle_subsys_reset = 0;
 	bdev->bt_cfg.support_dongle_whole_reset = 0;
-	bdev->bt_cfg.support_full_fw_dump = 0;
 	bdev->bt_cfg.support_unify_woble = 1;
 	bdev->bt_cfg.unify_woble_type = 0;
 	bdev->bt_cfg.support_woble_by_eint = 0;
@@ -1479,7 +1478,7 @@ int btmtk_recv(struct hci_dev *hdev, const u8 *data, size_t count)
 		return -EINVAL;
 	}
 
-#if (USE_DEVICE_NODE == 0)
+#ifndef CHIP_IF_UART_TTY
 	if (btmtk_data_length_check((u8 *)&data[1], count, (u8)data[0])) {
 		BTMTK_INFO("%s: length check fail,return", __func__);
 		return -1;
@@ -2372,11 +2371,13 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 	if (main_info.hif_hook.dl_dma)
 		dma_flag = le2cpu32(sectionMap->bin_info_spec.u4DLModeCrcType) & 0xFF;
 
+/* dynamic dl with uart hif is too slow, stack will timeout when startup */
+#ifndef CHIP_IF_UART_TTY
 	if (mode == DOWNLOAD_BY_INDEX) {
-		/* daynamic download need downloaded by wmt cmd */
+		/* dynamic download need downloaded by wmt cmd */
 		dma_flag = PATCH_DOWNLOAD_USING_WMT;
 	}
-
+#endif
 	BTMTK_INFO("%s:bin_type[0x%08x] mode[%d] bin_info[0x%08x] section_index[%d] bin_index[%d]",
 			__func__, temp_type, mode, binInfo, loop_count, temp_index);
 
@@ -3509,15 +3510,6 @@ static void btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_WHOLE_RESET_DONGLE);
 	}
 
-	ret = btmtk_parse_bt_cfg_file(BT_FULL_FW_DUMP, text, searchcontent);
-	if (ret) {
-		btmtk_bt_cfg_item_value_to_bool(text, &bt_cfg_content->support_full_fw_dump);
-		BTMTK_INFO("%s: bt_cfg_content->support_full_fw_dump = %d", __func__,
-				bt_cfg_content->support_full_fw_dump);
-	} else {
-		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_FULL_FW_DUMP);
-	}
-
 	ret = btmtk_parse_bt_cfg_file(BT_WOBLE_WAKELOCK, text, searchcontent);
 	if (ret) {
 		btmtk_bt_cfg_item_value_to_bool(text, &bt_cfg_content->support_woble_wakelock);
@@ -3795,10 +3787,10 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 		goto exit;
 	}
 
-	if (main_info.hif_hook_chip.cap_init) {
-		ret = main_info.hif_hook_chip.cap_init(bdev);
+	if (main_info.hif_hook_chip.get_fw_info) {
+		ret = main_info.hif_hook_chip.get_fw_info(bdev);
 		if (ret < 0) {
-			BTMTK_ERR("%s, btmtk_cap_init error(%d)", __func__, ret);
+			BTMTK_ERR("%s, get_fw_info error(%d)", __func__, ret);
 			goto exit;
 		}
 	}
@@ -5049,13 +5041,15 @@ int btmtk_data_length_check(u8 *data, u16 length, u8 type)
 	if (type == HCI_COMMAND_PKT) {
 		data_len = data[2] + MTK_HCI_CMD_HEAD_SIZE;
 		if (data_len != length) {
-			BTMTK_ERR("CMD length check fail, recv len = 0x%04x, data len = 0x%04x", length, data_len);
+			BTMTK_ERR("%s CMD length check fail, recv len = 0x%04x, data len = 0x%04x", __func__, length, data_len);
+			BTMTK_INFO_RAW(data, length, "%s: - ", __func__);
 			return -1;
 		}
 	} else if (type == HCI_ACLDATA_PKT) {
 		data_len = data[2] + ((data[3] << 8) & 0xff00) + MTK_HCI_ACL_HEAD_SIZE;
 		if (data_len != length) {
-			BTMTK_ERR("ACL length check fail, recv len = 0x%04x, data len = 0x%04x", length, data_len);
+			BTMTK_ERR("%s ACL length check fail, recv len = 0x%04x, data len = 0x%04x", __func__, length, data_len);
+			BTMTK_INFO_RAW(data, length, "%s: - ", __func__);
 			return -1;
 		}
 	} else if (type == HCI_SCODATA_PKT) {
@@ -5064,24 +5058,28 @@ int btmtk_data_length_check(u8 *data, u16 length, u8 type)
 #else
 		data_len = data[2] + MTK_HCI_SCO_HEAD_SIZE;
 		if (data_len != length) {
-			BTMTK_ERR("SCO length check fail, recv len = 0x%04x, data len = 0x%04x", length, data_len);
+			BTMTK_ERR("%s SCO length check fail, recv len = 0x%04x, data len = 0x%04x", __func__, length, data_len);
+			BTMTK_INFO_RAW(data, length, "%s: - ", __func__);
 			return -1;
 		}
 #endif
 	} else if (type == HCI_EVENT_PKT) {
 		data_len = data[1] + MTK_HCI_EVENT_HEAD_SIZE;
 		if (data_len != length) {
-			BTMTK_ERR("EVENT length check fail, recv len = 0x%04x, data len = 0x%04x", length, data_len);
+			BTMTK_ERR("%s EVENT length check fail, recv len = 0x%04x, data len = 0x%04x", __func__, length, data_len);
+			BTMTK_INFO_RAW(data, length, "%s: - ", __func__);
 			return -1;
 		}
 	} else if (type == HCI_ISO_PKT) {
 		data_len = data[2] + (((data[3] & 0x3f) << 8) & 0x3f00) + HCI_ISO_PKT_HEADER_SIZE + 1;
 		if (data_len != length) {
-			BTMTK_ERR("ISO length check fail, recv len = 0x%04x, data len = 0x%04x", length, data_len);
+			BTMTK_ERR("%s ISO length check fail, recv len = 0x%04x, data len = 0x%04x", __func__, length, data_len);
+			BTMTK_INFO_RAW(data, length, "%s: - ", __func__);
 			return -1;
 		}
 	} else {
-		BTMTK_ERR("invalid parameters, return");
+		BTMTK_ERR("%s invalid parameters, recv len = 0x%04x", __func__, length);
+		BTMTK_INFO_RAW(data, length, "%s: - ", __func__);
 		return -1;
 	}
 	return 0;

@@ -47,7 +47,7 @@
 
 /** Driver version */
 
-#define VERSION "8.0.2023111001"
+#define VERSION "8.0.2023122701"
 #define SUBVER ":connac3_dev"
 
 #if CFG_SUPPORT_WAKEUP_IRQ
@@ -320,7 +320,6 @@ extern uint8_t _raw_buf_[];
 #define BT_DONGLE_RESET_PIN "BT_DONGLE_RESET_GPIO_PIN"
 #define BT_SUBSYS_RESET_DONGLE "SUPPORT_DONGLE_SUBSYS_RESET"
 #define BT_WHOLE_RESET_DONGLE "SUPPORT_DONGLE_WHOLE_RESET"
-#define BT_FULL_FW_DUMP "SUPPORT_FULL_FW_DUMP"
 #define BT_FILTER_VENDOR_CMD "FILTER_CMD"
 #define BT_WOBLE_WAKELOCK "SUPPORT_WOBLE_WAKELOCK"
 #define BT_WOBLE_FOR_BT_DISABLE "SUPPORT_WOBLE_FOR_BT_DISABLE"
@@ -376,7 +375,6 @@ struct bt_cfg_struct {
 	bool	support_woble_by_eint;		/* support woble by eint or not */
 	bool	support_dongle_subsys_reset;	/*support subsys reset or not*/
 	bool	support_dongle_whole_reset;	/*support whole reset or not*/
-	bool	support_full_fw_dump;		/* dump full fw coredump or not */
 	bool	support_woble_wakelock;		/* support when woble error, do wakelock or not */
 	bool	support_woble_for_bt_disable;		/* when bt disable, support enter susend or not */
 	bool	reset_stack_after_woble;	/* support reset stack to re-connect IOT after resume */
