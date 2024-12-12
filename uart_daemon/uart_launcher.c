@@ -236,6 +236,7 @@ int cmd_hdr_baud (struct UART_CONFIG *sUartConfig, int baudrate) {
 }
 
 //---------------------------------------------------------------------------
+#if 0 /* Remove for coverity */
 int osi_system(const char *cmd)
 {
     FILE *fp;
@@ -262,7 +263,7 @@ int osi_system(const char *cmd)
     }
     return ret;
 }
-
+#endif
 //---------------------------------------------------------------------------
 static void uart_launcher_sig_handler(int signum)
 {
@@ -349,11 +350,11 @@ int main(int argc, char *argv[])
     init_flock(&fl);
     ld = N_MTK;
 
-    while ((opt = getopt(argc, argv, "c:f:p:k:l::")) != -1) {
+    while ((opt = getopt(argc, argv, "c:f:p:k:l:")) != -1) {
         switch (opt) {
             /* change baudrate */
             case 'c':
-                baudrate = atoi(optarg);
+                baudrate = strtol(optarg, NULL, 10);
                 BPRINT_I("baudrate = %d", baudrate);
                 /* not need to change if baudrate is same */
                 if (baudrate == CUST_BAUDRATE_DFT) {
@@ -363,7 +364,7 @@ int main(int argc, char *argv[])
                 break;
             /* flow control */
             case 'f':
-                flow_control = atoi(optarg);
+                flow_control = strtol(optarg, NULL, 10);
                 BPRINT_I("flow_control = %d", flow_control);
                 break;
             /* tty path */
@@ -373,12 +374,14 @@ int main(int argc, char *argv[])
                 break;
             /* kill process */
             case 'k':
+#if 0 /* Remove for coverity */
                 osi_system("killall uart_launcher");
                 BPRINT_I("Kill uart_launcher");
+#endif
                 return 0;
             /* set ldisc */
             case 'l':
-                ld = atoi(optarg);
+                ld = strtol(optarg, NULL, 10);
                 BPRINT_I("set ldisc[%d]", ld);
                 break;
             case '?':
