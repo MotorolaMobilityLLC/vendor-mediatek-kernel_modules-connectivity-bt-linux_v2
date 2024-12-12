@@ -2632,8 +2632,6 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 				14 Clear TX/RX REQ
 			*/
 			BTMTK_INFO("%s For Liber new sleep wakeup", __func__);
-			ret = mtk8250_uart_hub_clear_host_awake_sta(0);
-			BTMTK_INFO("%s mtk8250_uart_hub_clear_host_awake_sta, ret[%d]", __func__, ret);
 			btmtk_release_uarthub(true);
 		} else {
 			btmtk_release_uarthub(false);
