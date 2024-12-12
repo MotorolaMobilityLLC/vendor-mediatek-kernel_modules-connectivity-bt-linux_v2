@@ -307,6 +307,17 @@ static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s end", __func__);
 }
 
+static void btmtk_init_memory(struct btmtk_dev *bdev)
+{
+	bdev->suspend_count = 0;
+	bdev->tx_in_flight = 0;
+	bdev->get_hci_reset = 0;
+	bdev->iso_threshold = 0;
+	bdev->sco_num = 0;
+	bdev->isoc_altsetting = 0;
+	bdev->tx_state = 0;
+}
+
 u8 btmtk_get_chip_state(struct btmtk_dev *bdev)
 {
 	u8 state = 0;
@@ -1517,9 +1528,8 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		 * but wait related event failed, in this case, we don't need to free skb here,
 		 * otherwise, it will be double free.
 		 */
-		if (ret != -ERRNUM) {
+		if (ret != -ERRNUM)
 			kfree_skb(skb);
-		}
 	}
 
 exit:
@@ -4318,6 +4328,7 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 	}
 
 	btmtk_initialize_cfg_items(bdev);
+	btmtk_init_memory(bdev);
 
 	err = btmtk_allocate_hci_device(bdev, hci_bus);
 	if (err < 0) {
@@ -4365,6 +4376,7 @@ end:
 
 void btmtk_main_cif_uninitialize(struct btmtk_dev *bdev, int hci_bus)
 {
+	btmtk_init_memory(bdev);
 	btmtk_free_setting_file(bdev);
 	btmtk_free_hci_device(bdev, hci_bus);
 	btmtk_main_free_memory(bdev);
