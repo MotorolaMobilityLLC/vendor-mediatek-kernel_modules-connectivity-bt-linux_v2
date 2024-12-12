@@ -1789,13 +1789,23 @@ static int btmtk_sdio_interrupt_process(struct btmtk_dev *bdev)
 {
 	struct btmtk_sdio_dev *cif_dev = (struct btmtk_sdio_dev *)bdev->cif_dev;
 	int ret = 0;
-	u32 u32ReadCRValue = 0;
+	u32 u32ReadCRValue = 0, u32SM1RValue = 0;
 
 	ret = btmtk_sdio_readl(CHISR, &u32ReadCRValue, cif_dev->func);
 #if BTMTK_SDIO_DEBUG
 	rx_debug_save(CHISR_r_1, u32ReadCRValue, NULL);
 #endif
 	BTMTK_DBG("%s CHISR 0x%08x", __func__, u32ReadCRValue);
+
+	if (u32ReadCRValue & FIRMWARE_INT_BIT9) {
+		btmtk_sdio_readl(PH2DSM1R, &u32SM1RValue, cif_dev->func);
+		btmtk_sdio_writel(PH2DSM1R, u32SM1RValue | PH2DSM1R_SDIO_STATUS, cif_dev->func);
+	}
+
+	if (u32ReadCRValue & FIRMWARE_INT_BIT10) {
+		btmtk_sdio_readl(PH2DSM1R, &u32SM1RValue, cif_dev->func);
+		btmtk_sdio_writel(PH2DSM1R, u32SM1RValue & (~PH2DSM1R_SDIO_STATUS), cif_dev->func);
+	}
 
 	if (u32ReadCRValue & FIRMWARE_INT_BIT15) {
 		btmtk_sdio_set_no_fwn_own(cif_dev, 1);
