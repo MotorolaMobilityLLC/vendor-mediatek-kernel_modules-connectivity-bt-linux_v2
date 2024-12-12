@@ -213,6 +213,12 @@ endif
 ccflags-y += -DDEBUG_DUMP_TIME
 ccflags-y += -DBTMTK_ISOC_TEST=0
 
+ifeq ($(CONFIG_BT_SDK_SQC), y)
+    ccflags-y += -DENABLE_BT_SDK_SQC=1
+else
+    ccflags-y += -DENABLE_BT_SDK_SQC=0
+endif
+
 #################### Configurations ####################
 # For chip interface, driver supports "usb", "sdio", "uart_tty", "uart_serdev" and "btif"
 MTK_CHIP_IF := usb
