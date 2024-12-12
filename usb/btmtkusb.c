@@ -4616,6 +4616,7 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	int ret = 0;
 	int state = 0;
 	struct device_node *node;
+	struct btmtk_usb_dev *cif_dev;
 	int status;
 	uint32_t gpio_num = 0;
 	int val = 0;
@@ -4632,6 +4633,8 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 		return -1;
 	}
 
+	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
+
 	cancel_work_sync(&bdev->work);
 	cancel_work_sync(&bdev->waker);
 
@@ -4644,7 +4647,8 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	clear_bit(BTUSB_OPENED, &bdev->flags);
 	bdev->sco_num = 0;
 
-	btusb_stop_traffic((struct btmtk_usb_dev *)bdev->cif_dev);
+	btusb_stop_traffic(cif_dev);
+	usb_kill_anchored_urbs(&cif_dev->tx_anchor);
 
 	if (bdev->bt_cfg.support_dts_subsys_rst) {
 		/* For reset */
