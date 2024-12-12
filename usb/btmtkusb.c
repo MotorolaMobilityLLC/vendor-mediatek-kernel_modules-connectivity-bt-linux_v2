@@ -950,7 +950,7 @@ void btmtk_usb_pc_lr_dump(struct btmtk_dev *bdev)
 void btmtk_usb_CONN_TOP_SPI_RD(struct btmtk_dev *bdev, char* section_name, u32 dump_index, u32 dump_r_addr, bool uhw)
 {
 	int status;
-	u32 val;
+	u32 val = 0;
 
 	// Driver need to read A die CR with RFSPI_RD_CMD sequence
 	if (is_connac3(bdev->chip_id)) {
@@ -973,7 +973,7 @@ void btmtk_usb_CONN_TOP_SPI_RD(struct btmtk_dev *bdev, char* section_name, u32 d
 
 void btmtk_usb_slave_no_response_dump(struct btmtk_dev *bdev, u8 mode)
 {
-	u32 val, version, r_address, r_index;
+	u32 val = 0, version, r_address, r_index;
 	bool  check = FALSE;
 	int status, i, j;
 
@@ -1932,7 +1932,7 @@ void btmtk_usb_enable_DMA_debug(struct btmtk_dev *bdev)
 
 void btmtk_usb_cbinfra_dump(struct btmtk_dev *bdev)
 {
-	u32 val;
+	u32 val = 0;
 	u32 w_address, r_address = 0;
 	u32 r_index;
 	u32 CbInfraVlpReadOnly[] = {
