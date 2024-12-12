@@ -90,11 +90,22 @@ include $(LOCAL_PATH)/uart_daemon/Android.mk
 endif
 endif
 
-ifeq ($(WIFI_CONSYS_PRODUCT_SUPPORT),CE_TV)
+ifeq ($(WIFI_CONSYS_PRODUCT_SUPPORT), CE_TV)
 
+# build connac2 driver
 include $(CLEAR_VARS)
 LOCAL_MODULE := btmtk_usb_unify.ko
 LOCAL_REQUIRED_MODULES += mtreset.ko
+BT_OPTS := BT_CHIP_TYPE=connac2
 include $(MTK_KERNEL_MODULE)
+$(linked_module): OPTS += $(BT_OPTS)
+
+# build connac3 driver
+include $(CLEAR_VARS)
+LOCAL_MODULE := btmtk_usb_unify_connac3.ko
+LOCAL_REQUIRED_MODULES += mtreset_connac3.ko
+BT_OPTS := BT_CHIP_TYPE=connac3
+include $(MTK_KERNEL_MODULE)
+$(linked_module): OPTS += $(BT_OPTS)
 
 endif

@@ -329,6 +329,9 @@ static void btmtk_check_copin(struct btmtk_dev *bdev)
 	int gpio = -1;
 	bool co_flag;
 
+	if (is_mt7925(bdev->chip_id))
+		addr = 0x3E;
+
 	if (btmtk_efuse_read(bdev, addr, &value) < 0) {
 		BTMTK_INFO("%s: get copin failed", __func__);
 		co_flag = false;

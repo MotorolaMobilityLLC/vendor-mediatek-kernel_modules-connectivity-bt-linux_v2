@@ -100,8 +100,14 @@ endif
 
 ifeq ($(CONFIG_RESET_KO_SUPPORT), y)
     ccflags-y += -DCFG_SUPPORT_CHIP_RESET_KO
+ifeq ($(BT_CHIP_TYPE), connac3)
+    $(info BT_CHIP_TYPE = $(BT_CHIP_TYPE))
+    ccflags-y += -I$(src)/../wlan_driver/gen4m_connac3/reset/include/
+    RESET_DIR = $(shell pwd)/../../KERNEL_MODULES/mtreset_connac3.ko_intermediates/LINKED/Module.symvers
+else
     ccflags-y += -I$(src)/../wlan_driver/gen4m_mt7961/reset/include/
     RESET_DIR = $(shell pwd)/../../KERNEL_MODULES/mtreset.ko_intermediates/LINKED/Module.symvers
+endif
     $(warning bt driver unify1111 RESET_DIR=$(RESET_DIR))
     $(info 'RESET_DIR=' $(RESET_DIR))
     KBUILD_EXTRA_SYMBOLS += $(RESET_DIR)
@@ -224,7 +230,13 @@ ifeq ($(MTK_CHIP_IF), sdio)
     ccflags-y += -DSDIO_DEBUG=0
     ccflags-y += -I$(KO_CODE_PATH)/include/sdio
 else ifeq ($(MTK_CHIP_IF), usb)
-    MOD_NAME = btmtk_usb_unify
+    ifeq ($(MTK_PROJ_TYPE), ce)
+        ifeq ($(BT_CHIP_TYPE), connac3)
+            MOD_NAME = btmtk_usb_unify_connac3
+        else
+            MOD_NAME = btmtk_usb_unify
+        endif
+    endif
     CFILES := usb/btmtkusb.c btmtk_woble.c btmtk_chip_reset.c
     ccflags-y += -DCHIP_IF_USB
     ccflags-y += -I$(KO_CODE_PATH)/include/usb
