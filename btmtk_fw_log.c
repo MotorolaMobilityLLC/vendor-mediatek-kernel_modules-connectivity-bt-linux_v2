@@ -10,6 +10,8 @@
 
 #if (USE_DEVICE_NODE == 1)
 #include "btmtk_proj_sp.h"
+#include "conn_dbg.h"
+#include "aee.h"
 #endif
 
 /*
@@ -1717,6 +1719,39 @@ coredump_fail_unlock:
 		BTMTK_INFO_RAW(skb->data, skb->len, "%s: FW Schedule Event:", __func__);
                 /* Send Fw Schedule Event to host */
 		return 0;
+	} else if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
+				skb->len > 7 && skb->data[0] == 0x0E &&
+				skb->data[1] == 0x06 && skb->data[2] == 0x01
+				&& skb->data[3] == 0x2D && skb->data[4] == 0xFC && skb->data[6] == 0x0D) {
+		BTMTK_INFO_RAW(skb->data, skb->len, "%s: Tx power abnormal Event:", __func__);
+		switch (skb->data[7]) {
+		case 0x00:
+			BTMTK_INFO("%s: RF0 TSSI offset too large", __func__);
+			conn_dbg_add_log(CONN_DBG_LOG_TYPE_HW_ERR, "[bt] RF0 TSSI offset too large");
+			break;
+		case 0x01:
+			BTMTK_INFO("%s: RF1 TSSI offset too large", __func__);
+			conn_dbg_add_log(CONN_DBG_LOG_TYPE_HW_ERR, "[bt] RF1 TSSI offset too large");
+			break;
+		case 0x02:
+			BTMTK_INFO("%s: RF0 TX chipout power abnormal", __func__);
+			conn_dbg_add_log(CONN_DBG_LOG_TYPE_HW_ERR, "[bt] RF0 TX chipout power abnormal");
+			break;
+		case 0x03:
+			BTMTK_INFO("%s: RF1 TX chipout power abnormal", __func__);
+			conn_dbg_add_log(CONN_DBG_LOG_TYPE_HW_ERR, "[bt] RF1 TX chipout power abnormal");
+			break;
+		case 0x04:
+			BTMTK_INFO("%s: RF0 TX voltage abnormal", __func__);
+			conn_dbg_add_log(CONN_DBG_LOG_TYPE_HW_ERR, "[bt] RF0 TX voltage abnormal");
+			break;
+		case 0x05:
+			BTMTK_INFO("%s: RF1 TX voltage abnormal", __func__);
+			conn_dbg_add_log(CONN_DBG_LOG_TYPE_HW_ERR, "[bt] RF1 TX voltage abnormal");
+			break;
+		}
+		aee_kernel_warning("bt thermal", "BT power abnormal\n");
+		return 1;
 	} else if (bt_cb(skb)->pkt_type == HCI_EVENT_PKT && bmain_info->dbg_send
 				&& skb->len > 4 &&
 				skb->data[3] == bmain_info->dbg_send_opcode[0] &&
