@@ -15,7 +15,6 @@
 #define _BTMTK_UART_H_
 #include "btmtk_define.h"
 #include "btmtk_main.h"
-#include "btmtk_buffer_mode.h"
 #include "btmtk_woble.h"
 #include "btmtk_chip_reset.h"
 

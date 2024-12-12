@@ -520,6 +520,7 @@ struct btmtk_dev {
 	unsigned long	flags;
 	void *intf_dev;
 	void *cif_dev;
+	struct btmtk_buffer_mode_struct *buffer_mode;
 
 	struct work_struct	work;
 	struct work_struct	waker;

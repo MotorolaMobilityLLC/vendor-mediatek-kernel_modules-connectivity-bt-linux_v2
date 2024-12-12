@@ -79,7 +79,7 @@ MTK_CHIP_IF := usb
 
 ifeq ($(MTK_CHIP_IF), sdio)
     MOD_NAME = btmtk_sdio_unify
-    CFILES := sdio/btmtksdio.c btmtk_woble.c btmtk_buffer_mode.c btmtk_chip_reset.c
+    CFILES := sdio/btmtksdio.c btmtk_woble.c btmtk_chip_reset.c
     ccflags-y += -DCHIP_IF_SDIO
     ccflags-y += -DSDIO_DEBUG=0
     ccflags-y += -I$(src)/include/sdio
@@ -105,7 +105,7 @@ else
     ccflags-y += -I$(src)/include/btif
 endif
 
-CFILES += btmtk_main.c btmtk_fw_log.c
+CFILES += btmtk_main.c btmtk_fw_log.c btmtk_buffer_mode.c
 
 ccflags-y += -I$(src)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth
 

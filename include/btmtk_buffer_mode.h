@@ -42,6 +42,12 @@
 #define SET_PWR_OFFSET_EVT_LEN 7
 #define SET_PWR_OFFSET_CMD_PAYLOAD_OFFSET 8
 
+#define SET_COMPENSATION_CMD_LEN 20
+#define SET_COMPENSATION_EVT_LEN 7
+#define SET_COMPENSATION_CMD_PAYLOAD_OFFSET 4
+#define BUFFER_MODE_COMPENSATION_LENGTH	16
+#define BT0_COMPENSATION_OFFSET		0x376
+
 #define BUFFER_MODE_MAC_LENGTH	6
 #define BT0_MAC_OFFSET			0x139
 #define BT1_MAC_OFFSET			0x13F
@@ -87,6 +93,7 @@ struct btmtk_buffer_mode_struct {
 	u8 bt0_ant1_pwr_offset[BUFFER_MODE_CAL_LENGTH];
 	u8 bt1_ant0_pwr_offset[BUFFER_MODE_CAL_LENGTH];
 	u8 bt1_ant1_pwr_offset[BUFFER_MODE_CAL_LENGTH];
+	u8 bt0_ant0_compensation[BUFFER_MODE_COMPENSATION_LENGTH];
 };
 
 int btmtk_buffer_mode_send(struct btmtk_buffer_mode_struct *buffer_mode);

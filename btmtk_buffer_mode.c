@@ -113,7 +113,7 @@ static int btmtk_buffer_mode_set_addr(struct btmtk_buffer_mode_struct *buffer_mo
 		ret = btmtk_main_send_cmd(buffer_mode->bdev,
 				cmd, SET_ADDRESS_CMD_LEN,
 				event, SET_ADDRESS_EVT_LEN,
-				0, 0, BTMTK_TX_CMD_FROM_DRV);
+				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST);
 	}
 
 	BTMTK_INFO("%s done", __func__);
@@ -135,7 +135,7 @@ static int btmtk_buffer_mode_set_radio(struct btmtk_buffer_mode_struct *buffer_m
 	ret = btmtk_main_send_cmd(buffer_mode->bdev,
 			cmd, SET_RADIO_CMD_LEN,
 			event, SET_RADIO_EVT_LEN,
-			0, 0, BTMTK_TX_CMD_FROM_DRV);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST);
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -153,7 +153,7 @@ static int btmtk_buffer_mode_set_group_boundary(struct btmtk_buffer_mode_struct 
 	ret = btmtk_main_send_cmd(buffer_mode->bdev,
 			cmd, SET_GRP_CMD_LEN,
 			event, SET_GRP_EVT_LEN,
-			0, 0, BTMTK_TX_CMD_FROM_DRV);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST);
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -172,7 +172,26 @@ static int btmtk_buffer_mode_set_power_offset(struct btmtk_buffer_mode_struct *b
 	ret = btmtk_main_send_cmd(buffer_mode->bdev,
 			cmd, SET_PWR_OFFSET_CMD_LEN,
 			event, SET_PWR_OFFSET_EVT_LEN,
-			0, 0, BTMTK_TX_CMD_FROM_DRV);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST);
+
+	BTMTK_INFO("%s done", __func__);
+	return ret;
+}
+
+static int btmtk_buffer_mode_set_compensation(struct btmtk_buffer_mode_struct *buffer_mode)
+{
+	u8 cmd[SET_COMPENSATION_CMD_LEN] = {0x01, 0x93, 0xFC, 0x10,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+	u8 event[SET_COMPENSATION_EVT_LEN] = {0x04, 0x0E, 0x04, 0x01, 0x93, 0xFC, 0x00};
+	int ret = 0;
+
+	memcpy(&cmd[SET_COMPENSATION_CMD_PAYLOAD_OFFSET], buffer_mode->bt0_ant0_compensation, BUFFER_MODE_COMPENSATION_LENGTH);
+
+	BTMTK_INFO_RAW(cmd, SET_COMPENSATION_CMD_LEN, "%s: Send", __func__);
+	ret = btmtk_main_send_cmd(buffer_mode->bdev,
+			cmd, SET_COMPENSATION_CMD_LEN,
+			event, SET_COMPENSATION_EVT_LEN,
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_FROM_HOST);
 
 	BTMTK_INFO("%s done", __func__);
 	return ret;
@@ -201,13 +220,19 @@ int btmtk_buffer_mode_send(struct btmtk_buffer_mode_struct *buffer_mode)
 		if (ret < 0)
 			BTMTK_ERR("set radio failed");
 
-		ret = btmtk_buffer_mode_set_group_boundary(buffer_mode);
-		if (ret < 0)
-			BTMTK_ERR("set group_boundary failed");
+		if (is_mt7961(buffer_mode->bdev->chip_id) && buffer_mode->bdev->flavor) {
+			ret = btmtk_buffer_mode_set_compensation(buffer_mode);
+			if (ret < 0)
+				BTMTK_ERR("set compensation failed");
+		} else {
+			ret = btmtk_buffer_mode_set_group_boundary(buffer_mode);
+			if (ret < 0)
+				BTMTK_ERR("set group_boundary failed");
 
-		ret = btmtk_buffer_mode_set_power_offset(buffer_mode);
-		if (ret < 0)
-			BTMTK_ERR("set power_offset failed");
+			ret = btmtk_buffer_mode_set_power_offset(buffer_mode);
+			if (ret < 0)
+				BTMTK_ERR("set power_offset failed");
+		}
 	}
 	return 0;
 }
@@ -261,6 +286,10 @@ void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev, struct btmtk_buffer_mo
 			BUFFER_MODE_CAL_LENGTH);
 	memcpy(btmtk_buffer_mode.bt1_ant1_pwr_offset, &bdev->setting_file[BT1_CAL_ANT1_OFFSET],
 			BUFFER_MODE_CAL_LENGTH);
+
+	if (is_mt7961(bdev->chip_id) && bdev->flavor)
+		memcpy(btmtk_buffer_mode.bt0_ant0_compensation, &bdev->setting_file[BT0_COMPENSATION_OFFSET],
+				BUFFER_MODE_COMPENSATION_LENGTH);
 
 	*buffer_mode = &btmtk_buffer_mode;
 }
