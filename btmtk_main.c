@@ -161,18 +161,22 @@ __weak int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 void btmtk_getUTCtime(struct bt_utc_struct *utc)
 {
 	struct timespec64 ts;
+#if (USE_DEVICE_NODE == 1)
 	unsigned long long kerneltime;
+#endif
 
 	ktime_get_real_ts64(&ts);
 	rtc_time64_to_tm(ts.tv_sec, &utc->tm);
 	utc->usec = ts.tv_nsec/1000;
 	utc->sec = ts.tv_sec;
 
+#if (USE_DEVICE_NODE == 1)
 	/* kernel time */
 	/* ktime_get_ts64 is not accurate */
 	kerneltime = sched_clock();
 	utc->ksec = kerneltime/1000000000;
 	utc->knsec = do_div(kerneltime, 1000000000)/1000;
+#endif
 	utc->tm.tm_year += 1900;
 	utc->tm.tm_mon += 1;
 }
@@ -226,11 +230,18 @@ void btmtk_get_UTC_time_str(char *ts_str)
 	btmtk_getUTCtime(&utc);
 
 	memset(ts_str, 0, HCI_SNOOP_TS_STR_LEN);
+#if (USE_DEVICE_NODE == 0)
+	(void)snprintf(ts_str, HCI_SNOOP_TS_STR_LEN,
+			"%04d%02d%02d-%02d%02d%02d.%06u",
+			utc.tm.tm_year, utc.tm.tm_mon, utc.tm.tm_mday,
+			utc.tm.tm_hour+8, utc.tm.tm_min, utc.tm.tm_sec, utc.usec);
+#else
 	(void)snprintf(ts_str, HCI_SNOOP_TS_STR_LEN,
 			"%04d%02d%02d-%02d%02d%02d.%06u/Kernel:%6lu.%06lu",
 			utc.tm.tm_year, utc.tm.tm_mon, utc.tm.tm_mday,
 			utc.tm.tm_hour+8, utc.tm.tm_min, utc.tm.tm_sec, utc.usec,
 			utc.ksec, utc.knsec);
+#endif
 }
 
 /*get 1 byte only*/
@@ -1135,7 +1146,12 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 				if (buf[0] == (&pkts[index])->type) {
 					skb = bt_skb_alloc(
 						(&pkts[index])->maxlen,
-						   GFP_KERNEL);
+#if (USE_DEVICE_NODE == 0)
+							GFP_ATOMIC
+#else
+							GFP_KERNEL
+#endif
+						   );
 					if (!skb) {
 						BTMTK_ERR_DEV(bdev, "%s alloc failed!",
 							__func__);
