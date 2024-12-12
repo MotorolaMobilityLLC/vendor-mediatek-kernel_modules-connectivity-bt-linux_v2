@@ -558,7 +558,7 @@ static int btmtk_sdio_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 
 static int btmtk_cif_allocate_memory(struct btmtk_sdio_dev *cif_dev)
 {
-	int ret = -1;
+	int ret = 0;
 
 	if (cif_dev->transfer_buf == NULL) {
 		cif_dev->transfer_buf = kzalloc(URB_MAX_BUFFER_SIZE, GFP_KERNEL);

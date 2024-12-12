@@ -1775,6 +1775,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					skb_tmp = skb_put(iso_skb, isoc_pkt_padding);
 					if (!skb_tmp) {
 						BTMTK_ERR("%s, skb_put failed!", __func__);
+						kfree_skb(iso_skb);
 						kfree_skb(skb);
 						return -ENOMEM;
 					}
@@ -1787,7 +1788,6 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 
 					if (IS_ERR(urb)) {
 						kfree_skb(iso_skb);
-						iso_skb = NULL;
 						return PTR_ERR(urb);
 					}
 
@@ -1798,13 +1798,11 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 						 * but need to free iso_skb, because iso_skb alloc in bt driver
 						 */
 						kfree_skb(iso_skb);
-						iso_skb = NULL;
 						goto exit;
 					}
 
 					/* It's alloc by hci drver, bt driver must free it when ret >=0. */
 					kfree_skb(skb);
-					skb = NULL;
 exit:
 					return ret;
 				}
@@ -1813,7 +1811,6 @@ exit:
 						bdev->iso_threshold);
 				/* if iso channel not exist, we need to drop iso data then free the skb */
 				kfree_skb(skb);
-				skb = NULL;
 				return 0;
 			}
 		} else {
@@ -2344,7 +2341,6 @@ static int btusb_probe(struct usb_interface *intf,
 	bdev = usb_get_intfdata(intf);
 	if (!bdev) {
 		BTMTK_ERR("[ERR] bdev is NULL");
-		err = -ENOMEM;
 		goto end;
 	}
 	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
@@ -2398,7 +2394,6 @@ static int btusb_probe(struct usb_interface *intf,
 
 	if (!cif_dev->intr_ep || !cif_dev->bulk_tx_ep || !cif_dev->bulk_rx_ep) {
 		BTMTK_ERR("[ERR] intr_ep or bulk_tx_ep or bulk_rx_ep is NULL");
-		err = -ENODEV;
 		goto end;
 	}
 
@@ -2757,7 +2752,7 @@ done:
 static int btmtk_cif_probe(struct usb_interface *intf,
 		       const struct usb_device_id *id)
 {
-	int ret = -1;
+	int ret = 0;
 	int cif_event = 0;
 	unsigned int ifnum_base;
 	struct btmtk_cif_state *cif_state = NULL;
@@ -3105,7 +3100,7 @@ static void btmtk_cif_free_memory(struct btmtk_usb_dev *cif_dev)
 static int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 {
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
-	int ret = -1;
+	int ret = 0;
 	__le16 reg_high;
 	__le16 reg_low;
 	u8 reset_buf[4];
@@ -3141,7 +3136,7 @@ static int btmtk_cif_write_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 val
 static int btmtk_cif_read_uhw_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 {
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
-	int ret = -1;
+	int ret = 0;
 	__le16 reg_high;
 	__le16 reg_low;
 
@@ -3206,7 +3201,7 @@ static int btmtk_usb_read_register(struct btmtk_dev *bdev, u32 reg, u32 *val)
 static int btmtk_usb_write_register(struct btmtk_dev *bdev, u32 reg, u32 val)
 {
 	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
-	int ret = -1;
+	int ret = 0;
 	__le16 reg_high;
 	__le16 reg_low;
 	u8 buf[4];
@@ -3355,7 +3350,7 @@ exit:
 int btmtk_usb_send_cmd(struct btmtk_dev *bdev, struct sk_buff *skb,
 		int delay, int retry, int pkt_type)
 {
-	int ret = -1;
+	int ret = 0;
 
 	if (pkt_type == BTMTK_TX_CMD_FROM_DRV) {
 		/* handle wmt cmd from driver */

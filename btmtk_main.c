@@ -309,7 +309,7 @@ static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 
 u8 btmtk_get_chip_state(struct btmtk_dev *bdev)
 {
-	u8 state = BTMTK_STATE_INIT;
+	u8 state = 0;
 
 	CHIP_STATE_MUTEX_LOCK();
 	state = bdev->interface_state;
@@ -340,7 +340,7 @@ void btmtk_set_chip_state(struct btmtk_dev *bdev, u8 new_state)
 
 u8 btmtk_fops_get_state(struct btmtk_dev *bdev)
 {
-	u8 state = BTMTK_FOPS_STATE_INIT;
+	u8 state = 0;
 
 	FOPS_MUTEX_LOCK();
 	state = bdev->fops_state;
@@ -541,8 +541,9 @@ int btmtk_load_register(char *block_name, struct debug_reg_struct *save_reg,
 		memcpy(regnum, search_result + 1, search_end - search_result - 1);
 		regnum[search_end - search_result - 1] = '\0';
 		ret = kstrtoul(regnum, 0, &parsing_result);
+		kfree(regnum);
 		if (ret != 0) {
-			BTMTK_ERR("%s: %s kstrtoul fail: %d", __func__, regnum, ret);
+			BTMTK_ERR("%s: kstrtoul fail: %d", __func__, ret);
 			return -ENOMEM;
 		}
 
@@ -1460,7 +1461,7 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 {
 	struct sk_buff *skb = NULL;
 	int ret = 0;
-	int state = BTMTK_STATE_INIT;
+	int state = 0;
 
 	if (bdev == NULL || bdev->hdev == NULL ||
 		cmd == NULL || cmd_len <= 0) {
@@ -1518,7 +1519,6 @@ int btmtk_main_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 		 */
 		if (ret != -ERRNUM) {
 			kfree_skb(skb);
-			skb = NULL;
 		}
 	}
 
@@ -2220,8 +2220,6 @@ void btmtk_release_dev(struct btmtk_dev *bdev)
 				 * disconnected before probe, can't do chip reset
 				 */
 				bdev->bt_cfg.dongle_reset_gpio_pin = -1;
-
-				tmp_bdev = NULL;
 				break;
 			}
 		}
@@ -2325,7 +2323,7 @@ int btmtk_send_wmt_power_off_cmd(struct btmtk_dev *bdev)
 	u8 cmd[WMT_POWER_OFF_CMD_LEN] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x06, 0x02, 0x00, 0x00, 0x00 };
 	/* To-Do, for event check */
 	u8 event[WMT_POWER_OFF_EVT_HDR_LEN] = { 0x04, 0xE4, 0x05, 0x02, 0x06, 0x01, 0x00 };
-	int ret = -1;
+	int ret = 0;
 
 	if (!bdev) {
 		BTMTK_ERR("%s: bdev is NULL !", __func__);
@@ -2608,7 +2606,7 @@ end:
 static bool btmtk_parse_bt_cfg_file(char *item_name,
 		char *text, u8 *searchcontent)
 {
-	bool ret = true;
+	bool ret = 0;
 	int temp_len = 0;
 	char search[SEARCH_LEN];
 	char *ptr = NULL, *p = NULL;
@@ -2684,7 +2682,7 @@ static void btmtk_bt_cfg_item_value_to_bool(char *item_value, bool *value)
 static void btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 		u8 *searchcontent, struct btmtk_dev *bdev)
 {
-	bool ret = true;
+	bool ret = 0;
 	char text[TEXT_LEN]; /* save for search text */
 	unsigned long text_value = 0;
 
@@ -3652,8 +3650,8 @@ static int bt_flush(struct hci_dev *hdev)
 static int bt_close(struct hci_dev *hdev)
 {
 	int ret = -1;
-	int state = BTMTK_STATE_INIT;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	int state = 0;
+	unsigned char fstate = 0;
 	struct btmtk_dev *bdev = NULL;
 
 	if (!hdev) {
@@ -3742,9 +3740,9 @@ err:
 
 static int bt_open(struct hci_dev *hdev)
 {
-	int ret = -1;
-	int state = BTMTK_STATE_INIT;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	int ret = 0;
+	int state = 0;
+	unsigned char fstate = 0;
 	struct btmtk_dev *bdev = NULL;
 	void (*rlm_get_alpha2)(char *);
 	const char *wifi_func_name = "rlm_get_alpha2";
@@ -3873,9 +3871,9 @@ static int bt_setup(struct hci_dev *hdev)
 
 static int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 {
-	int ret = -1;
-	int state = BTMTK_STATE_INIT;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	int ret = 0;
+	int state = 0;
+	unsigned char fstate = 0;
 	/* parsing commands */
 	u8 fw_coredump_cmd[FW_COREDUMP_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
 	u8 fw_coredump_flag = 0;
@@ -4009,7 +4007,7 @@ static void btmtk_rx_work(struct work_struct *work)
 	int err = 0, skip_pkt = 0;
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, rx_work);
 	struct sk_buff *skb;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	unsigned char fstate = 0;
 	int state = 0;
 
 	BTMTK_DBG("%s enter", __func__);

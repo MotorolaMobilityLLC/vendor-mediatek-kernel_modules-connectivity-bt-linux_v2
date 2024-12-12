@@ -349,13 +349,13 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 }
 ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos)
 {
-	int i = 0, len = 0, ret = -1;
+	int i = 0, len = 0, ret = 0;
 	int hci_idx = 0;
 	int vlen = 0, index = 3;
 	struct sk_buff *skb = NULL;
 	struct sk_buff *skb_opcode = NULL;
-	int state = BTMTK_STATE_INIT;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	int state = 0;
+	unsigned char fstate = 0;
 	u8 *i_fwlog_buf = NULL;
 	u8 *o_fwlog_buf = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
@@ -859,7 +859,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
 	static u8 fwlog_picus_blocking_warn;
 	static u8 fwlog_fwdump_blocking_warn;
-	int state = BTMTK_STATE_INIT;
+	int state = 0;
 	u8 hci_reset_event[HCI_RESET_EVT_LEN] = { 0x04, 0x0E, 0x04, 0x01, 0x03, 0x0c, 0x00 };
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	struct sk_buff *skb_opcode = NULL;
