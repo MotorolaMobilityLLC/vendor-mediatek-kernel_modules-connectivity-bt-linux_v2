@@ -2677,6 +2677,7 @@ textdone:
 	*temp = '\0';
 
 out:
+	ret = true
 	return ret;
 }
 
