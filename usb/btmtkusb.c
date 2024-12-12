@@ -4295,8 +4295,8 @@ static int btmtk_cif_recv_evt(struct btmtk_dev *bdev, int delay, int retry)
 
 	ifnum_base = cif_dev->intf->cur_altsetting->desc.bInterfaceNumber;
 get_response_again:
-	/* ms delay */
-	msleep(delay);
+	/* us delay */
+	usleep_range(delay * TIME_MULTIPL, delay * TIME_MULTIPL + TIME_US_OFFSET_RANGE);
 
 	/* check WMT event */
 	memset(bdev->io_buf, 0, IO_BUF_SIZE);
