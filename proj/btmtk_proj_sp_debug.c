@@ -281,12 +281,11 @@ static void rhw_dump_utility(const struct bt_dump_list *dump_list)
 	/* Print register value */
 	pCmdList = dump_list->cmd_list;
 	for (i = 0; i < dump_list->dump_size; i++) {
-		if (pCmdList[i].mask == 0)
-			RHW_WRITE(pCmdList[i].w_addr, (pCmdList[i].value));
-		else {
-			if (pCmdList[i].write) {
+		if (pCmdList[i].write) {
+			if (pCmdList[i].mask == 0)
+				RHW_WRITE(pCmdList[i].w_addr, (pCmdList[i].value));
+			else
 				RHW_WRITE(pCmdList[i].w_addr, (pCmdList[i].value & pCmdList[i].mask));
-			}
 		}
 
 		if (pCmdList[i].read) {
@@ -901,12 +900,11 @@ static void hif_dump_utility(const struct bt_dump_list *dump_list)
 	/* Print register value */
 	pCmdList = dump_list->cmd_list;
 	for (i = 0; i < dump_list->dump_size; i++) {
-		if (pCmdList[i].mask == 0)
-			RHW_WRITE(pCmdList[i].w_addr, (pCmdList[i].value));
-		else {
-			if (pCmdList[i].write) {
+		if (pCmdList[i].write) {
+			if (pCmdList[i].mask == 0)
+				HIF_WRITE(pCmdList[i].w_addr, (pCmdList[i].value));
+			else
 				HIF_WRITE(pCmdList[i].w_addr, (pCmdList[i].value & pCmdList[i].mask));
-			}
 		}
 
 		if (pCmdList[i].read) {
