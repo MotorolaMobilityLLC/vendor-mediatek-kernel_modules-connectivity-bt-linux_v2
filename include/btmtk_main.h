@@ -112,7 +112,9 @@
 #define FWLOG_BLUETOOTH_KPI_QUEUE_COUNT		400
 #define HCI_MAX_COMMAND_SIZE			255
 #define HCI_MAX_COMMAND_BUF_SIZE		(HCI_MAX_COMMAND_SIZE * 3)
+#ifndef HCI_MAX_ISO_SIZE
 #define HCI_MAX_ISO_SIZE	340
+#endif
 
 /* fwlog information define */
 #define FWLOG_TYPE		0xF0
@@ -753,7 +755,6 @@ void btmtk_hci_snoop_save(unsigned int type, u8 *buf, u32 len);
 void btmtk_hci_snoop_print(const u8 *buf, u32 len);
 void btmtk_hci_snoop_print_to_log(void);
 void *btmtk_kallsyms_lookup_name(const char *name);
-void btmtk_do_gettimeofday(struct timeval *tv);
 void btmtk_get_UTC_time_str(char *ts_str);
 void btmtk_reg_hif_hook(struct hif_hook_ptr *hook);
 int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus);

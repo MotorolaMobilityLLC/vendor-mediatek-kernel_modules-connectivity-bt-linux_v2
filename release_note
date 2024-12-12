@@ -4,6 +4,9 @@ Checking list:
     3. If bin mode is enabled for the project, BT_ADDR/tx_power will be set by EEPROM.bin
     4. wifi.cfg will enable bin mode or not, and set coex mode(hybrid, legacy, TDD). Please confirm with wifi owner
 
+20220110    CL: 5489513     Build pass with Linux K4.19 and Android K5.10
+                            Add MACRO: LINUX_OS&ANDROID_OS. Please define it for platform
+
 20211202    CL: 5332794     Add audio setting from bt.cfg.support to enable/disable audio setting cmd form bt.cfg.
                             Need update with bt.cfg.
 
