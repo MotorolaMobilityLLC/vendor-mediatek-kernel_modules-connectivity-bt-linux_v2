@@ -111,10 +111,10 @@ static int btmtk_set_audio_pin_mux(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s enter", __func__);
 
-	btmtk_get_cmd_or_event(bdev, READ_PINMUX_CMD, &read_pinmux_cmd);
-	btmtk_get_cmd_or_event(bdev, READ_PINMUX_EVT, &read_pinmux_event);
-	btmtk_get_cmd_or_event(bdev, WRITE_PINMUX_CMD, &write_pinmux_cmd);
-	btmtk_get_cmd_or_event(bdev, WRITE_PINMUX_EVT, &write_pinmux_event);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, READ_PINMUX_CMD, read_pinmux_cmd);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, READ_PINMUX_EVT, read_pinmux_event);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, WRITE_PINMUX_CMD, write_pinmux_cmd);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, WRITE_PINMUX_EVT, write_pinmux_event);
 
 	for (i = 0; i < PINMUX_REG_NUM; i++) {
 		pinmux = 0;

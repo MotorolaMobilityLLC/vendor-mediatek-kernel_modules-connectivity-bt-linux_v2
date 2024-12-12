@@ -1193,7 +1193,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
 	char xml_log[CONNV3_XML_SIZE] = {0};
-	int state = BTMTK_STATE_INIT;
+	int state = BTMTK_STATE_UNKNOWN;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	struct connv3_issue_info issue_info;
 	int ret = 0, line = 0;

@@ -558,8 +558,8 @@ int btmtk_send_cmd_to_fw(struct btmtk_dev *bdev,
 
 	BTMTK_DBG("%s enter", __func__);
 
-	btmtk_get_cmd_or_event(bdev, cmd_type, &cmd);
-	btmtk_get_cmd_or_event(bdev, evt_type, &event);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, cmd_type, cmd);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, evt_type, event);
 
 	if (cmd.content == NULL || cmd.len <= 0) {
 		BTMTK_WARN("%s: do not send cmd %d", __func__, cmd_type);
@@ -620,8 +620,8 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 
 	BTMTK_DBG("%s enter", __func__);
 
-	btmtk_get_cmd_or_event(bdev, READ_PINMUX_CMD, &reset_cmd);
-	btmtk_get_cmd_or_event(bdev, READ_PINMUX_EVT, &fw_coredump_cmd);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, READ_PINMUX_CMD, reset_cmd);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, READ_PINMUX_EVT, fw_coredump_cmd);
 
 	/* +1 byte for not include pkt_type */
 	btmtk_dispatch_fwlog_bluetooth_kpi(bdev, skb->data + 1, skb->len - 1, hci_skb_pkt_type(skb));
@@ -681,7 +681,7 @@ int btmtk_cif_check_power_status_common(struct btmtk_dev *bdev, const uint8_t *c
 
 int btmtk_load_rom_patch_common(struct btmtk_dev *bdev)
 {
-	int err = -1;
+	int err = 0;
 
 	BTMTK_INFO("%s: enter", __func__);
 
@@ -712,10 +712,10 @@ static int btmtk_set_audio_pin_mux_common(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s enter", __func__);
 
-	btmtk_get_cmd_or_event(bdev, WRITE_PINMUX_CMD, &write_pinmux_cmd);
-	btmtk_get_cmd_or_event(bdev, WRITE_PINMUX_EVT, &write_pinmux_event);
-	btmtk_get_cmd_or_event(bdev, AUDIO_PINMUX_NUM, &write_pinmux_pin_num);
-	btmtk_get_cmd_or_event(bdev, AUDIO_PINMUX_MODE, &write_pinmux_pin_mode);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, WRITE_PINMUX_CMD, write_pinmux_cmd);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, WRITE_PINMUX_EVT, write_pinmux_event);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, AUDIO_PINMUX_NUM, write_pinmux_pin_num);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, AUDIO_PINMUX_MODE, write_pinmux_pin_mode);
 
 	if(!write_pinmux_cmd.len){
 		BTMTK_WARN("%s write_pinmux_cmd is NULL, return", __func__);

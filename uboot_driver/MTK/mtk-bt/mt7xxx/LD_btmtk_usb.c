@@ -566,7 +566,7 @@ static int btmtk_usb_switch_iobase(struct LD_btmtk_usb_data *data, int base)
 			break;
 
 		default:
-			return -EINVAL;
+			return -BT_LD_ERROR_INVALID;
 	}
 
 	return ret;
@@ -947,7 +947,7 @@ load_patch_protect:
 	buf = os_kzalloc(UPLOAD_PATCH_UNIT, MTK_GFP_ATOMIC);
 	if (!buf)
 	{
-		ret = -ENOMEM;
+		ret = -BT_LD_ERROR_NO_MEM;
 		goto error;
 	}
 	pos = buf;
@@ -1370,7 +1370,7 @@ static int btmtk_usb_load_partial_rom_patch_7668(struct LD_btmtk_usb_data *data,
 
 	buf = os_kzalloc(UPLOAD_PATCH_UNIT, MTK_GFP_ATOMIC);
 	if (!buf) {
-		return -ENOMEM;
+		return -BT_LD_ERROR_NO_MEM;
 	}
 	pos = buf;
 
@@ -1745,7 +1745,7 @@ int btmtk_main_send_cmd(struct LD_btmtk_usb_data *data, const uint8_t *cmd,
 
 	if (data == NULL || cmd == NULL) {
 		usb_debug("%s, invalid parameters!\n", __func__);
-		ret = -EINVAL;
+		ret = -BT_LD_ERROR_INVALID;
 		return ret;
 	}
 
@@ -2137,7 +2137,7 @@ static int btmtk_usb_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct 
 			save_content[i].content = os_kzalloc(temp_len, MTK_GFP_ATOMIC);
 			if (save_content[i].content == NULL) {
 				usb_debug("Allocate memory fail(%d)\n", i);
-				return -ENOMEM;
+				return -BT_LD_ERROR_NO_MEM;
 			}
 			x_memcpy(save_content[i].content, temp, temp_len);
 			save_content[i].length = temp_len;
@@ -2155,7 +2155,7 @@ int btmtk_usb_load_woble_setting(struct LD_btmtk_usb_data *data)
 	BOOL wake_on_ble_conf = FALSE;
 
 	if (!data)
-		return -EINVAL;
+		return -BT_LD_ERROR_INVALID;
 
 	/* For woble_setting.bin */
 	if (data->setting_file != NULL) {
@@ -2256,7 +2256,7 @@ LOAD_ERR:
 	}
 
 	if (woble_setting_bin == FALSE && wake_on_ble_conf == FALSE)
-		return -ENOENT;
+		return -BT_LD_ERROR_NO_FILE;
 	return 0;
 }
 
@@ -2282,7 +2282,7 @@ int btmtk_usb_set_unify_woble(struct LD_btmtk_usb_data *data)
 		radio_off = os_kzalloc(length, MTK_GFP_ATOMIC);
 		if (!radio_off) {
 			usb_debug("alloc memory fail (radio_off)\n");
-			ret = -ENOMEM;
+			ret = -BT_LD_ERROR_NO_MEM;
 			return ret;
 		}
 
@@ -2450,7 +2450,7 @@ int btmtk_usb_load_bt_cfg(char *cfg_name, struct LD_btmtk_usb_data *data)
 	char bt_cfg_name[MAX_BIN_FILE_NAME_LEN] = {'\0'};
 
 	if (!data)
-		return -EINVAL;
+		return -BT_LD_ERROR_INVALID;
 
 	/* For woble_setting.bin */
 	if (data->setting_file != NULL) {
@@ -2483,7 +2483,7 @@ int btmtk_usb_load_bt_cfg(char *cfg_name, struct LD_btmtk_usb_data *data)
 		if (data->setting_file == NULL || data->setting_file_len == 0) {
 			usb_debug("%s not exist in the /vendor/firmware\n", BT_CFG_NAME);
 			usb_debug("Please make sure %s or %s in the /vendor/firmware\n", bt_cfg_name, BT_CFG_NAME);
-			return -ENOMEM;
+			return -BT_LD_ERROR_NO_MEM;
 		}
 	}
 
@@ -2686,7 +2686,7 @@ int LD_btmtk_usb_probe(mtkbt_dev_t *dev,int flag)
 	data = os_kzalloc(sizeof(*data), MTK_GFP_ATOMIC);
 	if (!data) {
 		usb_debug("[ERR] end Error 1\n");
-		return -ENOMEM;
+		return -BT_LD_ERROR_NO_MEM;
 	}
 
 	data->hcif = BT_INST(dev)->hci_if;
@@ -2701,7 +2701,7 @@ int LD_btmtk_usb_probe(mtkbt_dev_t *dev,int flag)
 	if (!data->io_buf) {
 		usb_debug("Can't allocate memory io_buf\n");
 		os_kfree(data);
-		return -ENOMEM;
+		return -BT_LD_ERROR_NO_MEM;
 	}
 
 	data->rom_patch_bin_file_name = os_kzalloc(MAX_BIN_FILE_NAME_LEN, MTK_GFP_ATOMIC);
@@ -2709,7 +2709,7 @@ int LD_btmtk_usb_probe(mtkbt_dev_t *dev,int flag)
 		usb_debug("Can't allocate memory rom_patch_bin_file_name\n");
 		os_kfree(data->io_buf);
 		os_kfree(data);
-		return -ENOMEM;
+		return -BT_LD_ERROR_NO_MEM;
 	}
 
 	if (data->woble_setting_file_name == NULL) {
@@ -2719,7 +2719,7 @@ int LD_btmtk_usb_probe(mtkbt_dev_t *dev,int flag)
 			os_kfree(data->rom_patch_bin_file_name);
 			os_kfree(data->io_buf);
 			os_kfree(data);
-			return -ENOMEM;
+			return -BT_LD_ERROR_NO_MEM;
 		}
 	}
 

@@ -380,6 +380,7 @@ int btmtk_cif_chip_6639_register(void)
 	bmain_info->hif_hook_chip.backup_free = btmtk_cif_connac3_calibration_backup_free;
 	bmain_info->hif_hook_chip.bt_open_handler = btmtk_bt_open;
 	bmain_info->hif_hook_chip.load_patch = btmtk_load_fw_patch;
+	bmain_info->hif_hook_chip.bt_set_pinmux = NULL;
 
 	return retval;
 }

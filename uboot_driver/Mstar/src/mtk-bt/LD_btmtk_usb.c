@@ -65,20 +65,22 @@
 */
 
 //---------------------------------------------------------------------------
-#include <mtk-bt/LD_usbbt.h>
-#include <mtk-bt/LD_btmtk_usb.h>
-#include <mtk-bt/errno.h>
+#include <LD_usbbt.h>
+#include <LD_btmtk_usb.h>
+#include <errno.h>
+#include <stdlib.h>
 
-#define le32_to_cpu(x) ByteSwap32(x)
+#define bt_le32_to_cpu(x) ByteSwap32(x)
 #define ByteSwap32(x) \
     ((((x) & 0xff000000) >> 24) | (((x) & 0x00ff0000) >>  8) | \
       (((x) & 0x0000ff00) <<  8) | (((x) & 0x000000ff) << 24))
 
+#define BT_MIN(x,y) ((x < y) ? x : y)
+
 /*============================================================================*/
 /* Local Configuration */
 /*============================================================================*/
-
-#define LD_VERSION "4.0.22041101"
+#define LD_VERSION "4.0.22081001"
 
 #define BUFFER_SIZE  (1024 * 4)	/* Size of RX Queue */
 #define BT_SEND_HCI_CMD_BEFORE_SUSPEND 1
@@ -114,58 +116,65 @@ extern int snprintf(char *str, size_t size, const char *fmt, ...);
 
 static inline int is_mt7630(struct LD_btmtk_usb_data *data)
 {
-	return ((data->chip_id & 0xffff0000) == 0x76300000);
+	return ((data->chip_id & CHIP_ID_MASK1) == CHIP_ID_7630);
 }
 
 static inline int is_mt7650(struct LD_btmtk_usb_data *data)
 {
-	return ((data->chip_id & 0xffff0000) == 0x76500000);
+	return ((data->chip_id & CHIP_ID_MASK1) == CHIP_ID_7650);
 }
 
 static inline int is_mt7632(struct LD_btmtk_usb_data *data)
 {
-	return ((data->chip_id & 0xffff0000) == 0x76320000);
+	return ((data->chip_id & CHIP_ID_MASK1) == CHIP_ID_7632);
 }
 
 static inline int is_mt7662(struct LD_btmtk_usb_data *data)
 {
-	return ((data->chip_id & 0xffff0000) == 0x76620000);
+	return ((data->chip_id & CHIP_ID_MASK1) == CHIP_ID_7662);
 }
 
 static inline int is_mt7662T(struct LD_btmtk_usb_data *data)
 {
-	return ((data->chip_id & 0xffffffff) == 0x76620100);
+	return ((data->chip_id & CHIP_ID_MASK2) == CHIP_ID_7662T);
 }
 
 static inline int is_mt7632T(struct LD_btmtk_usb_data *data)
 {
-	return ((data->chip_id & 0xffffffff) == 0x76320100);
+	return ((data->chip_id & CHIP_ID_MASK2) == CHIP_ID_7632T);
 }
 
 static inline int is_mt7668(struct LD_btmtk_usb_data *data)
 {
-	return ((data->chip_id & 0xffff) == 0x7668);
+	return ((data->chip_id & CHIP_ID_MASK) == CHIP_ID_7668);
 }
 
 static inline int is_mt7663(struct LD_btmtk_usb_data *data)
 {
-	return ((data->chip_id & 0xffff) == 0x7663);
+	return ((data->chip_id & CHIP_ID_MASK) == CHIP_ID_7663);
 }
 
 static inline int is_mt7961(struct LD_btmtk_usb_data *data)
 {
-	return ((data->chip_id & 0xffff) == 0x7961);
+	return ((data->chip_id & CHIP_ID_MASK) == CHIP_ID_7961);
 }
 
 static inline int is_mt7902(struct LD_btmtk_usb_data *data)
 {
-	return ((data->chip_id & 0xffff) == 0x7902);
+    return ((data->chip_id & CHIP_ID_MASK) == CHIP_ID_7902);
+}
+
+static inline int is_mt6639(struct LD_btmtk_usb_data *data)
+{
+	return ((data->chip_id & CHIP_ID_MASK) == CHIP_ID_6639);
 }
 
 static inline int is_support_unify_woble(struct LD_btmtk_usb_data *data)
 {
 	if (data->bt_cfg.support_unify_woble) {
-		if (is_mt7668(data) || is_mt7663(data) || is_mt7961(data) || is_mt7902(data))
+		if (is_mt7668(data) || is_mt7663(data) ||
+			is_mt7961(data) || is_mt7902(data) ||
+			is_mt6639(data))
 			return 1;
 		else
 			return 0;
@@ -194,13 +203,12 @@ static int btmtk_usb_io_read32(struct LD_btmtk_usb_data *data, u32 reg, u32 *val
 	}
 
 	os_memmove(val, data->io_buf, sizeof(u32));
-	//*val = le32_to_cpu(*val);
 	return 0;
 }
 
 static int btmtk_usb_io_read32_7xxx(struct LD_btmtk_usb_data *data, u32 reg, u32 *val)
 {
-	int ret = -1;
+	int ret = 0;
 	__le16 reg_high;
 	__le16 reg_low;
 
@@ -217,7 +225,6 @@ static int btmtk_usb_io_read32_7xxx(struct LD_btmtk_usb_data *data, u32 reg, u32
 	}
 
 	os_memmove(val, data->io_buf, sizeof(u32));
-	//*val = le32_to_cpu(*val);
 	return 0;
 }
 
@@ -261,7 +268,7 @@ static int btmtk_usb_io_write32(struct LD_btmtk_usb_data *data, u32 reg, u32 val
 static int btmtk_usb_send_wmt_cmd(struct LD_btmtk_usb_data *data, const u8 *cmd,
 		const int cmd_len, const u8 *event, const int event_len, u32 delay, u8 retry)
 {
-	int ret = -1;
+	int ret = 0;
 	BOOL check = FALSE;
 
 	if (!data || !data->hcif || !data->io_buf || !cmd) {
@@ -338,10 +345,11 @@ static int btmtk_usb_send_hci_cmd(struct LD_btmtk_usb_data *data, u8 *cmd,
 	 */
 #define USB_CTRL_IO_TIMO 100
 #define USB_INTR_MSG_TIMO 2000
-	int ret = -1;
+	int ret = 0;
 	int len = 0;
-	int i = 0;
 	u8 retry = 0;
+	/* apcf reserved event last byte both 0x10, 0x11 are ok*/
+	u8 reserve_apcf_event[] = { 0xE6, 0x02, 0x08, 0x10 };
 	BOOL check = FALSE;
 
 	if (!data || !data->hcif || !data->io_buf || !cmd) {
@@ -375,20 +383,19 @@ static int btmtk_usb_send_hci_cmd(struct LD_btmtk_usb_data *data, u8 *cmd,
 			else return 0;
 		}
 
-		if (check == TRUE) {
-			if (len >= event_len) {
-				for (i = 0; i < event_len; i++) {
-					if (event[i] != data->io_buf[i])
-						break;
-				}
+		if (check == TRUE && ret == 0) {
+			if (!memcmp(event, reserve_apcf_event,
+				BT_MIN(event_len, sizeof(reserve_apcf_event) - 1))) {
+				if (!memcmp(reserve_apcf_event, data->io_buf, sizeof(reserve_apcf_event))
+					|| !memcmp(event, data->io_buf, event_len))
+					return event_len;
 			} else {
-				usb_debug("event length is not match(%d/%d)\n", len, event_len);
+				if (!memcmp(event, data->io_buf, event_len))
+					return event_len;
 			}
-			if (i != event_len) {
-				usb_debug("got unknown event(%d)\n", len);
-			} else {
-				return len; /* actually read length */
-			}
+
+			usb_debug("got unknown event\n");
+
 			MTK_MDELAY(10);
 			++retry;
 		}
@@ -399,7 +406,7 @@ static int btmtk_usb_send_hci_cmd(struct LD_btmtk_usb_data *data, u8 *cmd,
 
 static int btmtk_usb_send_hci_suspend_cmd(struct LD_btmtk_usb_data *data)
 {
-	int ret = -1;
+	int ret = 0;
 #if SUPPORT_HISENSE_WoBLE
 	u8 cmd[] = {0xC9, 0xFC, 0x02, 0x01, 0x0D}; // for Hisense WoBLE
 
@@ -424,7 +431,7 @@ static int btmtk_usb_send_hci_reset_cmd(struct LD_btmtk_usb_data *data)
 {
 	u8 cmd[] = { 0x03, 0x0C, 0x00 };
 	u8 event[] = { 0x0E, 0x04, 0x01, 0x03, 0x0C, 0x00 };
-	int ret = -1;
+	int ret = 0;
 
 	ret = btmtk_usb_send_hci_cmd(data, cmd, sizeof(cmd), event, sizeof(event));
 	if (ret < 0) {
@@ -440,7 +447,7 @@ static int btmtk_usb_send_hci_set_ce_cmd(struct LD_btmtk_usb_data *data)
 {
 	u8 cmd[] = { 0xD1, 0xFC, 0x04, 0x0C, 0x07, 0x41, 0x00 };
 	u8 event[] = { 0x0E, 0x08, 0x01, 0xD1, 0xFC, 0x00 };
-	int ret = -1;
+	int ret = 0;
 
 	ret = btmtk_usb_send_hci_cmd(data, cmd, sizeof(cmd), event, sizeof(event));
 	if (ret < 0) {
@@ -537,7 +544,7 @@ static int btmtk_usb_switch_iobase(struct LD_btmtk_usb_data *data, int base)
 			break;
 
 		default:
-			return -EINVAL;
+			return -BT_LD_ERROR_INVALID;
 	}
 
 	return ret;
@@ -613,7 +620,7 @@ static void btmtk_usb_cap_init(struct LD_btmtk_usb_data *data)
 		}
 	} else {
 		btmtk_usb_io_read32_7xxx(data, BUZZARD_CHIP_ID, &data->chip_id);
-		if (is_mt7961(data) || is_mt7902(data)) {
+		if (is_mt7961(data) || is_mt7902(data) || is_mt6639(data)) {
 			btmtk_usb_io_read32_7xxx(data, BUZZARD_FLAVOR, &data->flavor);
 			btmtk_usb_io_read32_7xxx(data, BUZZARD_FW_VERSION, &data->fw_version);
 		} else {
@@ -637,22 +644,29 @@ static void btmtk_usb_cap_init(struct LD_btmtk_usb_data *data)
 		 *  $$$$ : chip id
 		 *  % : fw version & 0xFF + 1 (in HEX)
 		 */
+		if (is_mt6639(data)) {
+			data->proj = data->flavor & 0x00000001;
+		} else {
+			data->proj = 0;
+		}
+
 		if (is_mt7902(data)) {
 			/* 7902 cant't use the same rule to recognize */
 			data->flavor = 0;
 		} else {
 			data->flavor = (data->flavor & 0x00000080) >> 7;
 		}
+		usb_debug("%s: proj = 0x%x\n", __func__, data->proj);
 		usb_debug("%s: flavor1 = 0x%x\n", __func__, data->flavor);
 		/* if flavor equals 1, it represent 7920, else it represent 7921 */
 		if (data->flavor) {
-			sprintf((char *)data->rom_patch_bin_file_name,
-				"BT_RAM_CODE_MT%04x_1a_%x_hdr.bin", data->chip_id & 0xffff,
-				(data->fw_version & 0xff) + 1);
+			(void)snprintf((char *)data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+				"BT_RAM_CODE_MT%04x_%xa_%x_hdr.bin",
+				data->chip_id & 0xffff, (data->proj & 0xff) + 1, (data->fw_version & 0xff) + 1);
 		} else {
-			sprintf(data->rom_patch_bin_file_name,
-				"BT_RAM_CODE_MT%04x_1_%x_hdr.bin",
-				data->chip_id & 0xffff, (data->fw_version & 0xff) + 1);
+			(void)snprintf((char *)data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+				"BT_RAM_CODE_MT%04x_%x_%x_hdr.bin",
+				data->chip_id & 0xffff, (data->proj & 0xff) + 1, (data->fw_version & 0xff) + 1);
 		}
 
 		if(strlen((char *)data->rom_patch_bin_file_name) > MAX_BIN_FILE_NAME_LEN){
@@ -662,9 +676,9 @@ static void btmtk_usb_cap_init(struct LD_btmtk_usb_data *data)
 		usb_debug("patch name: %s\n", data->rom_patch_bin_file_name);
 		data->rom_patch_len = 0;
 
-		if (is_mt7961(data) || is_mt7902(data)) {
-			(void)sprintf(data->woble_setting_file_name, "%s_%x.%s",
-					WOBLE_CFG_NAME_PREFIX, data->chip_id & 0xffff,
+		if (is_mt7961(data) || is_mt7902(data) || is_mt6639(data)) {
+			(void)snprintf(data->woble_setting_file_name, MAX_BIN_FILE_NAME_LEN,
+					"%s_%x.%s", WOBLE_CFG_NAME_PREFIX, data->chip_id & 0xffff,
 					WOBLE_CFG_NAME_SUFFIX);
 			usb_debug("woble setting file name is %s", data->woble_setting_file_name);
 		} else {
@@ -770,7 +784,7 @@ static int btmtk_usb_send_wmt_reset_cmd(struct LD_btmtk_usb_data *data)
 	/* reset command */
 	u8 cmd[] = { 0x6F, 0xFC, 0x05, 0x01, 0x07, 0x01, 0x00, 0x04 };
 	u8 event[] = { 0xE4, 0x05, 0x02, 0x07, 0x01, 0x00, 0x00 };
-	int ret = -1;
+	int ret = 0;
 
 	ret = btmtk_usb_send_wmt_cmd(data, cmd, sizeof(cmd), event, sizeof(event), 20, 0);
 	if (ret < 0) {
@@ -909,7 +923,7 @@ load_patch_protect:
 	buf = os_kzalloc(UPLOAD_PATCH_UNIT, MTK_GFP_ATOMIC);
 	if (!buf)
 	{
-		ret = -ENOMEM;
+		ret = -BT_LD_ERROR_NO_MEM;
 		goto error;
 	}
 	pos = buf;
@@ -1018,7 +1032,7 @@ load_patch_protect:
 	}
 
 	MTK_MDELAY(20);
-	ret = btmtk_usb_get_rom_patch_result(data);
+	btmtk_usb_get_rom_patch_result(data);
 	MTK_MDELAY(20);
 
 	/* Send Checksum request */
@@ -1064,7 +1078,7 @@ static int btmtk_usb_send_wmt_power_on_cmd_7668(struct LD_btmtk_usb_data *data)
 	u8 count = 0;	/* retry 3 times */
 	u8 cmd[] = { 0x6F, 0xFC, 0x06, 0x01, 0x06, 0x02, 0x00, 0x00, 0x01 };
 	u8 event[] = { 0xE4, 0x05, 0x02, 0x06, 0x01, 0x00 };	/* event[6] is key */
-	int ret = -1;	/* if successful, 0 */
+	int ret = 0;	/* if successful, 0 */
 
 	do {
 		ret = btmtk_usb_send_wmt_cmd(data, cmd, sizeof(cmd), event, sizeof(event), 100, 10);
@@ -1096,7 +1110,7 @@ static int btmtk_usb_send_hci_tci_set_sleep_cmd_7668(struct LD_btmtk_usb_data *d
 {
 	u8 cmd[] = { 0x7A, 0xFC, 0x07, 0x05, 0x40, 0x06, 0x40, 0x06, 0x00, 0x00 };
 	u8 event[] = { 0x0E, 0x04, 0x01, 0x7A, 0xFC, 0x00 };
-	int ret = -1;	/* if successful, 0 */
+	int ret = 0;	/* if successful, 0 */
 
 	ret = btmtk_usb_send_hci_cmd(data, cmd, sizeof(cmd), event, sizeof(event));
 	if (ret < 0) {
@@ -1113,7 +1127,7 @@ static int btmtk_usb_get_vendor_cap(struct LD_btmtk_usb_data *data)
 {
 	u8 cmd[] = { 0x53, 0xFD, 0x00 };
 	u8 event[6] = { 0x0E, 0x12, 0x01, 0x53, 0xFD, 0x00, /* ... */ };
-	int ret = -1;
+	int ret = 0;
 
 	// TODO: should not compare whole event
 	ret = btmtk_usb_send_hci_cmd(data, cmd, sizeof(cmd), event, sizeof(event));
@@ -1147,10 +1161,11 @@ static int btmtk_usb_send_read_bdaddr(struct LD_btmtk_usb_data *data)
 {
 	u8 cmd[] = { 0x09, 0x10, 0x00 };
 	u8 event[] = { 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00, /* 6 bytes are BDADDR */ };
-	int ret = -1;
+	int ret = 0;
 
 	ret = btmtk_usb_send_hci_cmd(data, cmd, sizeof(cmd), event, sizeof(event));
-	if (ret < 0 || ret != 12 /* Event actual length */) {
+	//if (ret < 0 || ret != 12 /* Event actual length */) {
+	if (ret < 0/* Event actual length */) {
 		usb_debug("Failed(%d)\n", ret);
 		return ret;
 	}
@@ -1166,7 +1181,7 @@ static int btmtk_usb_send_read_bdaddr(struct LD_btmtk_usb_data *data)
 
 static int btmtk_usb_set_apcf(struct LD_btmtk_usb_data *data, BOOL bin_file)
 {
-	int i = 0, ret = -1;
+	int i = 0, ret = 0;
 	// Legacy RC pattern
 	u8 manufacture_data[] = { 0x57, 0xFD, 0x27, 0x06, 0x00, FIDX,
 		0x46, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -1177,7 +1192,7 @@ static int btmtk_usb_set_apcf(struct LD_btmtk_usb_data *data, BOOL bin_file)
 		0x00, 0x00, 0x01, 0x80, 0x00 };
 	u8 event[] = { 0x0E, 0x07, 0x01, 0x57, 0xFD, 0x00, /* ... */ };
 
-	if (is_mt7961(data) || is_mt7902(data)) {
+	if (is_mt7961(data) || is_mt7902(data) || is_mt6639(data)) {
 		manufacture_data[FIDX_OFFSET_APCF] = BUZZARD_FIDX;
 		filter_cmd[FIDX_OFFSET_APCF] = BUZZARD_FIDX;
 	}
@@ -1295,7 +1310,7 @@ static int btmtk_usb_check_need_load_patch_7668(struct LD_btmtk_usb_data *data)
 {
 	u8 cmd[] = { 0x6F, 0xFC, 0x05, 0x01, 0x17, 0x01, 0x00, 0x01 };
 	u8 event[] = { 0xE4, 0x05, 0x02, 0x17, 0x01, 0x00, /* 0x02 */ };	/* event[6] is key */
-	int ret = -1;
+	int ret = 0;
 
 	ret = btmtk_usb_send_wmt_cmd(data, cmd, sizeof(cmd), event, sizeof(event), 20, 0);
 	/* can't get correct event */
@@ -1326,7 +1341,7 @@ static int btmtk_usb_load_partial_rom_patch_7668(struct LD_btmtk_usb_data *data,
 
 	buf = os_kzalloc(UPLOAD_PATCH_UNIT, MTK_GFP_ATOMIC);
 	if (!buf) {
-		return -ENOMEM;
+		return -BT_LD_ERROR_NO_MEM;
 	}
 	pos = buf;
 
@@ -1497,7 +1512,7 @@ static void btmtk_print_bt_patch_info(struct LD_btmtk_usb_data *data)
 
 	patchHdr = (struct _PATCH_HEADER *)data->rom_patch;
 
-	if (is_mt7961(data) || is_mt7902(data))
+	if (is_mt7961(data) || is_mt7902(data) || is_mt6639(data))
 		globalDesrc = (struct _Global_Descr *)(data->rom_patch + FW_ROM_PATCH_HEADER_SIZE);
 
 	usb_debug("[btmtk] =============== Patch Info ==============\n");
@@ -1544,7 +1559,7 @@ static void btmtk_print_wifi_patch_info(struct LD_btmtk_usb_data *data)
 			((patchHdr->u2HwVer & 0x00ff) << 8) | ((patchHdr->u2HwVer & 0xff00) >> 8));
 		usb_debug("[btmtk] Sw Ver = 0x%04x\n",
 			((patchHdr->u2SwVer & 0x00ff) << 8) | ((patchHdr->u2SwVer & 0xff00) >> 8));
-		usb_debug("[btmtk] Magic Number = 0x%08x\n", le32_to_cpu(patchHdr->u4MagicNum));
+		usb_debug("[btmtk] Magic Number = 0x%08x\n", bt_le32_to_cpu(patchHdr->u4MagicNum));
 
 		usb_debug("[btmtk] Platform = %c%c%c%c\n",
 				patchHdr->ucPlatform[0],
@@ -1558,11 +1573,11 @@ static void btmtk_print_wifi_patch_info(struct LD_btmtk_usb_data *data)
 		usb_debug("[btmtk] Patch Ver = 0x%08x\n",
 			globalDesrc->u4PatchVer);
 		usb_debug("[btmtk] Patch Ver = 0x%08x\n",
-			le32_to_cpu(globalDesrc->u4PatchVer));
+			bt_le32_to_cpu(globalDesrc->u4PatchVer));
 		usb_debug("[btmtk] Section num = 0x%08x\n",
 			globalDesrc->u4SectionNum);
 		usb_debug("[btmtk] Section num = 0x%08x\n",
-			le32_to_cpu(globalDesrc->u4SectionNum));
+			bt_le32_to_cpu(globalDesrc->u4SectionNum));
 	} else
 		usb_debug("%s, globalDesrc is NULL!\n", __func__);
 	usb_debug("[btmtk] =========================================\n");
@@ -1603,7 +1618,8 @@ int btmtk_cif_send_bulk_out(struct LD_btmtk_usb_data *data,
 		return ret;
 	}
 
-	ret = data->hcif->usb_bulk_msg(data->udev, MTKBT_BULK_TX_EP, cmd, cmd_len, &real_len, 0);
+	ret = data->hcif->usb_bulk_msg(data->udev, MTKBT_BULK_TX_EP, (uint8_t *)cmd,
+			cmd_len, &real_len, 0);
 	if (ret < 0) {
 		usb_debug("command send failed(%d)\n", ret);
 		return ret;
@@ -1701,7 +1717,7 @@ int btmtk_main_send_cmd(struct LD_btmtk_usb_data *data, const uint8_t *cmd,
 
 	if (data == NULL || cmd == NULL) {
 		usb_debug("%s, invalid parameters!\n", __func__);
-		ret = -EINVAL;
+		ret = -BT_LD_ERROR_INVALID;
 		return ret;
 	}
 
@@ -1750,6 +1766,12 @@ static int btmtk_send_wmt_download_cmd(struct LD_btmtk_usb_data *data,
 	cmd[3] = 0x01;
 	cmd[4] = 0x01; /* opcode */
 
+	event[3] = 0x01; /* should be same as cmd*/
+	if (is_mt6639(data) && patch_flag == WIFI_DOWNLOAD) {
+		cmd[4] = 0x54; /* opcode */
+		event[3] = 0x54;
+	}
+
 	if (fw_state == 0) {
 		/* prepare WMT DL cmd */
 		payload_len = SEC_MAP_NEED_SEND_SIZE + 2;
@@ -1763,7 +1785,7 @@ static int btmtk_send_wmt_download_cmd(struct LD_btmtk_usb_data *data,
 
 		if (patch_flag == WIFI_DOWNLOAD) {
 			for (i = 0; i < SECTION_SPEC_NUM; i++) {
-				revert_SecSpec = le32_to_cpu(sectionMap->u4SecSpec[i]);
+				revert_SecSpec = bt_le32_to_cpu(sectionMap->u4SecSpec[i]);
 				memcpy(&cmd[PATCH_HEADER_SIZE_BULK_EP] + i * sizeof(u32), (u8 *)&revert_SecSpec, sizeof(u32));
 			}
 		} else
@@ -1789,7 +1811,7 @@ static int btmtk_send_wmt_download_cmd(struct LD_btmtk_usb_data *data,
 }
 
 static int btmtk_load_fw_patch_using_wmt_cmd(struct LD_btmtk_usb_data *data,
-		u8 *image, u8 *event, int event_len, u32 patch_len, int offset)
+		u8 *image, u8 *event, int event_len, u32 patch_len, int offset, int patch_flag)
 {
 /* Using Bulk EP will cause Buzzard no response
  * Need check later
@@ -1871,6 +1893,16 @@ static int btmtk_load_fw_patch_using_wmt_cmd(struct LD_btmtk_usb_data *data,
 				retry = PATCH_DOWNLOAD_PHASE3_RETRY;
 			}
 
+			event[3] = 0x01; /* should be same as cmd*/
+			if (is_mt6639(data) && patch_flag == WIFI_DOWNLOAD) {
+#if DL_PATCH_BY_BULK_EP
+				image[5] = 0x54; /* opcode */
+#else
+				image[4] = 0x54; /* opcode */
+#endif
+				event[3] = 0x54;
+			}
+
 			cur_len += sent_len;
 			ret = btmtk_main_send_cmd(data, image, sent_len + sent_hdr_len,
 					event, event_len, delay, retry, ep);
@@ -1912,13 +1944,18 @@ static int btmtk_send_fw_rom_patch_79xx(struct LD_btmtk_usb_data *data, int patc
 	usb_debug("%s: loading rom patch...\n", __func__);
 
 	if (patch_flag == WIFI_DOWNLOAD) {
-		section_num = le32_to_cpu(globalDescr->u4SectionNum);
+		section_num = bt_le32_to_cpu(globalDescr->u4SectionNum);
 		usb_debug("%s: globalDescr section_num = 0x%08x\n", __func__, globalDescr->u4SectionNum);
 		usb_debug("%s: section_num = 0x%08x\n", __func__, section_num);
 	} else
 		section_num = globalDescr->u4SectionNum;
 
 	usb_debug("%s: section_num = 0x%08x\n", __func__, section_num);
+	if (section_num > SECTION_NUM_MAX || section_num < SECTION_NUM_MIN) {
+		usb_debug("%s: section_num is out of range, invalid!!!\n", __func__);
+		ret = -1;
+		goto exit;
+	}
 
 	pos = os_kzalloc(UPLOAD_PATCH_UNIT, MTK_GFP_ATOMIC);
 	if (!pos) {
@@ -1933,8 +1970,8 @@ static int btmtk_send_fw_rom_patch_79xx(struct LD_btmtk_usb_data *data, int patc
 
 		if (patch_flag == WIFI_DOWNLOAD) {
 			/* wifi is big-endian */
-			section_offset = le32_to_cpu(sectionMap->u4SecOffset);
-			dl_size = le32_to_cpu(sectionMap->bin_info_spec.u4DLSize);
+			section_offset = bt_le32_to_cpu(sectionMap->u4SecOffset);
+			dl_size = bt_le32_to_cpu(sectionMap->bin_info_spec.u4DLSize);
 		} else {
 			section_offset = sectionMap->u4SecOffset;
 			dl_size = sectionMap->bin_info_spec.u4DLSize;
@@ -1975,7 +2012,7 @@ static int btmtk_send_fw_rom_patch_79xx(struct LD_btmtk_usb_data *data, int patc
 			} else {
 				/* using legacy wmt cmd to download fw patch */
 				ret = btmtk_load_fw_patch_using_wmt_cmd(data, pos, event,
-						sizeof(event) - 1, dl_size, section_offset);
+						sizeof(event) - 1, dl_size, section_offset, patch_flag);
 				if (ret < 0) {
 					usb_debug("%s: btmtk_load_fw_patch_using_wmt_cmd failed!\n", __func__);
 					goto err;
@@ -1992,33 +2029,222 @@ err:
 	pos = NULL;
 
 exit:
+	usb_debug("%s: loading rom patch... Done\n", __func__);
 	return ret;
 }
 
-int btmtk_load_rom_patch_79xx(struct LD_btmtk_usb_data *data, int patch_flag)
+static int LD_parsing_fw_rom_patch(struct LD_btmtk_usb_data *data, int patch_flag)
+{
+	int loop_count = 0;
+	int ret = 0;
+	u32 section_num = 0;
+	u32 section_offset = 0;
+	u32 dl_size = 0;
+	u32 bin_type = 0;
+	u8 bin_index = 0;
+	u8 dma_flag = PATCH_DOWNLOAD_USING_WMT;
+	struct _Section_Map *sectionMap;
+	struct _Global_Descr *globalDescr;
+	if (data->rom_patch == NULL) {
+		usb_debug("%s, fwbuf is NULL!\n", __func__);
+		ret = -1;
+		goto exit;
+	}
+	globalDescr = (struct _Global_Descr *)(data->rom_patch + FW_ROM_PATCH_HEADER_SIZE);
+	if (patch_flag == WIFI_DOWNLOAD)
+		section_num = bt_le32_to_cpu(globalDescr->u4SectionNum);
+	else
+		section_num = globalDescr->u4SectionNum;
+	usb_debug("%s: section_num = 0x%08x\n", __func__, section_num);
+	if (section_num > SECTION_NUM_MAX || section_num < SECTION_NUM_MIN) {
+		usb_debug("%s: section_num is out of range, invalid!!!\n", __func__);
+		ret = -1;
+		goto exit;
+	}
+	data->sectionMap_table = os_kzalloc((section_num * sizeof(struct _Section_Map)),
+		MTK_GFP_ATOMIC);
+	if (data->sectionMap_table == NULL) {
+		usb_debug("%s: os_kzalloc failed", __func__);
+		ret = -1;
+		goto exit;
+	}
+	do {
+		sectionMap = (struct _Section_Map *)(data->rom_patch + FW_ROM_PATCH_HEADER_SIZE +
+			FW_ROM_PATCH_GD_SIZE + FW_ROM_PATCH_SEC_MAP_SIZE * loop_count);
+		if (patch_flag == WIFI_DOWNLOAD) {
+			/* wifi is big-endian */
+			section_offset = bt_le32_to_cpu(sectionMap->u4SecOffset);
+			dl_size = bt_le32_to_cpu(sectionMap->bin_info_spec.u4DLSize);
+			bin_index = (bt_le32_to_cpu(sectionMap->bin_info_spec.u4DLModeCrcType) >> 16) & 0xFF;
+			bin_type = bt_le32_to_cpu(sectionMap->bin_info_spec.u4SecType);
+		} else {
+			/* BT is little-endian */
+			section_offset = sectionMap->u4SecOffset;
+			dl_size = sectionMap->bin_info_spec.u4DLSize;
+			/*
+			* loop_count = 0: BGF patch
+			*              1: BT ILM
+			* only BT ILM support DL DMA for Buzzard
+			*/
+			bin_index = (sectionMap->bin_info_spec.u4DLModeCrcType >> 16) & 0xFF;
+			bin_type = sectionMap->bin_info_spec.u4SecType;
+		}
+		usb_debug("%s: loop_count = %d, section_offset = 0x%08x, download patch_len = 0x%08x, "
+			"dl mode = %d, section bin_type = 0x%08x, bin_index =%d\n",
+			__func__, loop_count, section_offset, dl_size, dma_flag, bin_type, bin_index);
+		memcpy(&data->sectionMap_table[loop_count], sectionMap, sizeof(struct _Section_Map));
+	} while (++loop_count < section_num);
+exit:
+	return ret;
+}
+
+int LD_load_fw_by_bin_info(struct LD_btmtk_usb_data *data,
+	u32 binInfo, int mode)
+{
+	u8 *pos;
+	int loop_count = 0;
+	int ret = 0;
+	u32 section_num = 0;
+	u32 section_offset = 0;
+	u32 dl_size = 0;
+	u32 temp_type = 0;
+	u8 temp_index = 0;
+	int patch_status = 0;
+	int retry = 20;
+	u8 dma_flag = PATCH_DOWNLOAD_USING_WMT;
+	struct _Section_Map *sectionMap;
+	struct _Global_Descr *globalDescr;
+	u8 event[] = {0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[6] is status*/
+	/*
+	* flag 0 for bin_index u8
+	* flag 1 for bin_type u32
+	*/
+	usb_debug("%s enter : mode %d expected bin_info = 0x%08x\n", __func__, mode, binInfo);
+	if (data->rom_patch == NULL) {
+		usb_debug("%s, fwbuf is NULL!\n", __func__);
+		ret = -1;
+		goto exit;
+	}
+	globalDescr = (struct _Global_Descr *)(data->rom_patch + FW_ROM_PATCH_HEADER_SIZE);
+	section_num = globalDescr->u4SectionNum;
+	if (section_num > SECTION_NUM_MAX || section_num < SECTION_NUM_MIN) {
+		usb_debug("%s: section_num 0x%08x is an error value\n", __func__, section_num);
+		ret = -1;
+		goto exit;
+	}
+	do {
+		sectionMap = &data->sectionMap_table[loop_count];
+		temp_index = (sectionMap->bin_info_spec.u4DLModeCrcType >> 16) & 0xFF;
+		temp_type = sectionMap->bin_info_spec.u4SecType;
+		if (mode == DOWNLOAD_BY_TYPE) {
+			if (temp_type == binInfo) {
+				usb_debug("%s, download by bin type\n", __func__);
+				break;
+			}
+		} else {
+			if (temp_index == (binInfo & 0xFF)) {
+				usb_debug("%s, download by bin index\n", __func__);
+				break;
+			}
+		}
+	} while (++loop_count < section_num);
+	if (loop_count == section_num) {
+		usb_debug("%s: bin_info 0x%08x is not found\n", __func__, binInfo);
+		ret = 0;
+		goto exit;
+	}
+	pos = os_kzalloc(UPLOAD_PATCH_UNIT, MTK_GFP_ATOMIC);
+	if (!pos) {
+		usb_debug("%s: alloc memory failed\n", __func__);
+		ret = -1;
+		goto exit;
+	}
+	/* BT is little-endian */
+	section_offset = sectionMap->u4SecOffset;
+	dl_size = sectionMap->bin_info_spec.u4DLSize;
+	/*
+	* loop_count = 0: BGF patch
+	*              1: BT ILM
+	* only BT ILM support DL DMA for Buzzard
+	*/
+	usb_debug("%s: section_count = %d, section bin_type = 0x%08x, bin_index = %d\n",
+	__func__, loop_count, temp_type, temp_index);
+	if (dl_size > 0) {
+		retry = 20;
+		do {
+			patch_status = btmtk_send_wmt_download_cmd(data, pos, 0,
+				event, sizeof(event) - 1, sectionMap, 0, dma_flag, BT_DOWNLOAD);
+			usb_debug("%s: patch_status %d\n", __func__, patch_status);
+			if (patch_status > BUZZARD_PATCH_READY || patch_status == PATCH_ERR) {
+				usb_debug("%s: patch_status error\n", __func__);
+				ret = -1;
+				goto err;
+			} else if (patch_status == BUZZARD_PATCH_READY) {
+				usb_debug("%s: no need to load rom patch section%d\n", __func__, loop_count);
+				goto err;
+			} else if (patch_status == BUZZARD_PATCH_IS_DOWNLOAD_BY_OTHER) {
+				MTK_MDELAY(100);
+				retry--;
+			} else if (patch_status == BUZZARD_PATCH_NEED_DOWNLOAD) {
+				break;
+				/* Download ROM patch directly */
+			}
+		} while (retry > 0);
+		if (patch_status == BUZZARD_PATCH_IS_DOWNLOAD_BY_OTHER) {
+			usb_debug("%s: Hold by another fun more than 2 seconds\n", __func__);
+			ret = -1;
+			goto err;
+		}
+		/* using legacy wmt cmd to download fw patch */
+		ret = btmtk_load_fw_patch_using_wmt_cmd(data, pos, event,
+		sizeof(event) - 1, dl_size, section_offset, BT_DOWNLOAD);
+		if (ret < 0) {
+			usb_debug("%s: btmtk_load_fw_patch_using_wmt_cmd failed!\n", __func__);
+			goto err;
+		}
+		usb_debug("%s end", __func__);
+	}
+err:
+	os_kfree(pos);
+	pos = NULL;
+exit:
+	return ret;
+}
+
+
+int btmtk_load_rom_patch_connac3(struct LD_btmtk_usb_data *data, int patch_flag)
 {
 	int ret = 0;
+	int i = 0;
+	u32 bt_bin_type[BT_BIN_TYP_NUM] = {0x00000000, 0x00000002, 0x00000003, 0x00000080,
+		0x00000090, 0x00010000};
+	//u32 wf_bin_type[] = {0x00000100};
 
 	if (patch_flag == WIFI_DOWNLOAD) {
 		/* For 7902, we can't read flavor from controller successfully */
 		if (data->flavor)
 			/* if flavor equals 1, it represent 7920, else it represent 7921*/
-			sprintf((char *)data->rom_patch_bin_file_name,
+			(void)snprintf((char *)data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 					"WIFI_MT%04x_patch_mcu_1a_%x_hdr.bin",
 					data->chip_id & 0xffff, (data->fw_version & 0xff) + 1);
 		else
-			sprintf((char *)data->rom_patch_bin_file_name,
+			(void)snprintf((char *)data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 					"WIFI_MT%04x_patch_mcu_1_%x_hdr.bin",
 					data->chip_id & 0xffff, (data->fw_version & 0xff) + 1);
+		if (is_mt6639(data))
+			(void)snprintf((char *)data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+					"WIFI_MT%04x_PATCH_MCU_%x_%x_hdr.bin",
+					data->chip_id & 0xffff, (data->proj & 0xff) + 1, (data->fw_version & 0xff) + 1);
+
 	} else if (patch_flag == BT_DOWNLOAD) {
 		if (data->flavor) {
-			sprintf((char *)data->rom_patch_bin_file_name,
-				"BT_RAM_CODE_MT%04x_1a_%x_hdr.bin",
-				data->chip_id & 0xffff, (data->fw_version & 0xff) + 1);
+			(void)snprintf((char *)data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+					"BT_RAM_CODE_MT%04x_%xa_%x_hdr.bin",
+					data->chip_id & 0xffff, (data->proj & 0xff) + 1, (data->fw_version & 0xff) + 1);
 		} else {
-			sprintf(data->rom_patch_bin_file_name,
-				"BT_RAM_CODE_MT%04x_1_%x_hdr.bin",
-				data->chip_id & 0xffff, (data->fw_version & 0xff) + 1);
+			(void)snprintf((char *)data->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+					"BT_RAM_CODE_MT%04x_%x_%x_hdr.bin",
+					data->chip_id & 0xffff, (data->proj & 0xff) + 1, (data->fw_version & 0xff) + 1);
 		}
 	}
 	usb_debug("patch flag %d, patch name: %s\n",patch_flag, data->rom_patch_bin_file_name);
@@ -2034,19 +2260,86 @@ int btmtk_load_rom_patch_79xx(struct LD_btmtk_usb_data *data, int patch_flag)
 	if (patch_flag == WIFI_DOWNLOAD) {
 		/*Display rom patch info*/
 		btmtk_print_wifi_patch_info(data);
+		ret = btmtk_send_fw_rom_patch_79xx(data, patch_flag);
+		if (ret < 0) {
+			usb_debug("%s, btmtk_send_fw_rom_patch_79xx failed!\n", __func__);
+			return ret;
+		}
 	} else if (patch_flag == BT_DOWNLOAD) {
 		btmtk_print_bt_patch_info(data);
+		LD_parsing_fw_rom_patch(data, patch_flag);
+		for (i = 0; i < BT_BIN_TYP_NUM; i++) {
+			ret = LD_load_fw_by_bin_info(data, bt_bin_type[i],
+				DOWNLOAD_BY_TYPE);
+			if (ret < 0) {
+				usb_debug("%s failed!, bin type is 0x%08x",
+					__func__, bt_bin_type[i]);
+			return ret;
+			}
+		}
 	}
 
-	ret = btmtk_send_fw_rom_patch_79xx(data, patch_flag);
-	if (ret < 0) {
-		usb_debug("%s, btmtk_send_fw_rom_patch_79xx failed!\n", __func__);
-		return ret;
-	}
-
-	usb_debug("btmtk_load_rom_patch_79xx end\n");
+	usb_debug("btmtk_load_rom_patch_connac3 end\n");
 
 	return ret;
+}
+
+int btmtk_load_wifi_patch_connac3(struct LD_btmtk_usb_data *data, int  patch_flag)
+{
+	int err = 0;
+	int retry = 20;
+	int patch_status = 0;
+	u8 wifi_patch_query_cmd[] = {0x6F, 0xFC, 0x05, 0x01, 0x54, 0x01, 0x00, 0xF0};
+	u8 wifi_patch_query_evt[] = {0xE4, 0x05, 0x02, 0x54, 0x01, 0x00};
+	u8 wifi_patch_enable_cmd[] = {0x6F, 0xFC, 0x05, 0x01, 0x54, 0x01, 0x00, 0xF1};
+	u8 wifi_patch_enable_evt[] = {0xE4, 0x05, 0x02, 0x54, 0x01, 0x00, 0x00};
+
+	retry = 20;
+	do {
+		err = btmtk_main_send_cmd(data, wifi_patch_query_cmd, sizeof(wifi_patch_query_cmd),
+			wifi_patch_query_evt, sizeof(wifi_patch_query_evt), 20, 20, BTMTK_EP_TYPE_OUT_CMD);
+		if (err < 0) {
+			usb_debug("%s: send wmd dl cmd failed, terminate!\n", __func__);
+			return PATCH_ERR;
+		}
+		if (data->recv_evt_len >= sizeof(wifi_patch_query_evt))
+			patch_status = data->io_buf[PATCH_STATUS];
+		usb_debug("%s: patch_status %d\n", __func__, patch_status);
+		if (patch_status > BUZZARD_PATCH_READY || patch_status == PATCH_ERR) {
+			usb_debug("%s: patch_status error\n", __func__);
+			err = 0;
+			return err;
+		} else if (patch_status == BUZZARD_PATCH_READY) {
+			usb_debug("%s: no need to load rom patch section\n", __func__);
+			err = 0;
+			return err;
+		} else if (patch_status == BUZZARD_PATCH_IS_DOWNLOAD_BY_OTHER) {
+			MTK_MDELAY(100);
+			retry--;
+		} else if (patch_status == BUZZARD_PATCH_NEED_DOWNLOAD) {
+			break;	/* Download ROM patch directly */
+		}
+	} while (retry > 0);
+
+	if (patch_status == BUZZARD_PATCH_IS_DOWNLOAD_BY_OTHER) {
+		usb_debug("%s: Hold by another fun more than 2 seconds\n", __func__);
+		err = 0;
+		return err;
+	}
+	err = btmtk_load_rom_patch_connac3(data, WIFI_DOWNLOAD);
+	if (err < 0) {
+		usb_debug("%s: btmtk_load_rom_patch_79xx wifi patch failed!\n", __func__);
+		err = 0;
+		return err;
+	}
+	err = btmtk_main_send_cmd(data, wifi_patch_enable_cmd, sizeof(wifi_patch_enable_cmd),
+		wifi_patch_enable_evt, sizeof(wifi_patch_enable_evt), 20, 20, BTMTK_EP_TYPE_OUT_CMD);
+	if (err < 0) {
+		usb_debug("%s: send wifi patch enable failed!\n", __func__);
+		return PATCH_ERR;
+	}
+	usb_debug("%s: wifi patch download end\n", __func__);
+	return 0;
 }
 
 static int btmtk_usb_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct *save_content,
@@ -2081,12 +2374,16 @@ static int btmtk_usb_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct 
 			memset(temp, 0, sizeof(temp));
 			search_result = strstr(search_result, "0x");
 			if (search_result == NULL) {
-				usb_debug("%s: search_result is NULL", __func__);
+				usb_debug("%s: search_result is NULL!", __func__);
 				return -1;
 			}
 
 			/* find next line as end of this command line, if NULL means last line */
 			next_block = strstr(search_result, ":");
+			if (next_block == NULL) {
+				usb_debug("%s: find no matched block, check fw cfg!", __func__);
+				return -1;
+			}
 
 			do {
 				search_end = strstr(search_result, ",");
@@ -2103,7 +2400,7 @@ static int btmtk_usb_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct 
 				memset(number, 0, sizeof(number));
 				memcpy(number, search_result, CHAR2HEX_SIZE);
 
-				temp[temp_len++] = strtol(number, &number, 0);
+				temp[temp_len++] = simple_strtol(number, (char **)&number, 0);
 				search_result = strstr(search_end, "0x");
 				if (search_result == NULL) {
 					usb_debug("%s: search_result is NULL", __func__);
@@ -2117,7 +2414,7 @@ static int btmtk_usb_load_fw_cfg_setting(char *block_name, struct fw_cfg_struct 
 			save_content[i].content = os_kzalloc(temp_len, MTK_GFP_ATOMIC);
 			if (save_content[i].content == NULL) {
 				usb_debug("Allocate memory fail(%d)\n", i);
-				return -ENOMEM;
+				return -BT_LD_ERROR_NO_MEM;
 			}
 			memcpy(save_content[i].content, temp, temp_len);
 			save_content[i].length = temp_len;
@@ -2134,7 +2431,7 @@ int btmtk_usb_load_woble_setting(struct LD_btmtk_usb_data *data)
 	BOOL wake_on_ble_conf = FALSE;
 
 	if (!data)
-		return -EINVAL;
+		return -BT_LD_ERROR_INVALID;
 
 	/* For woble_setting.bin */
 	if (data->setting_file != NULL) {
@@ -2235,13 +2532,13 @@ LOAD_ERR:
 	}
 
 	if (woble_setting_bin == FALSE && wake_on_ble_conf == FALSE)
-		return -ENOENT;
+		return -BT_LD_ERROR_NO_FILE;
 	return 0;
 }
 
 static int btmtk_usb_set_unify_woble(struct LD_btmtk_usb_data *data)
 {
-	int ret = -1;
+	int ret = 0;
 	u8 *radio_off = NULL;
 	int length = 0;
 	// Filter Index: 0x5A
@@ -2250,7 +2547,7 @@ static int btmtk_usb_set_unify_woble(struct LD_btmtk_usb_data *data)
 		0x41, 0x0F};
 	u8 event[] = { 0xE6, 0x02, 0x08, 0x00 };
 
-	if (is_mt7961(data)) {
+	if (is_mt7961(data) || is_mt7902(data) || is_mt6639(data)) {
 		cmd[FIDX_OFFSET_RADIO_OFF] = BUZZARD_FIDX;
 	}
 
@@ -2261,7 +2558,7 @@ static int btmtk_usb_set_unify_woble(struct LD_btmtk_usb_data *data)
 		radio_off = os_kzalloc(length, MTK_GFP_ATOMIC);
 		if (!radio_off) {
 			usb_debug("alloc memory fail (radio_off)\n");
-			ret = -ENOMEM;
+			ret = -BT_LD_ERROR_NO_MEM;
 			return ret;
 		}
 
@@ -2281,14 +2578,17 @@ static int btmtk_usb_set_unify_woble(struct LD_btmtk_usb_data *data)
 				data->woble_setting_radio_off_comp_event.length);
 		if (ret < 0) {
 			usb_debug("btmtk_usb_send_hci_cmd return fail %d\n", ret);
-			return ret;
+			goto exit;
 		}
-	}else { /* use default */
+	} else { /* use default */
 		usb_debug("use default radio off cmd\n");
 		ret = btmtk_usb_send_hci_cmd(data, cmd, sizeof(cmd), event, sizeof(event));
 		if (ret < 0)
 			usb_debug("Failed(%d)\n", ret);
 	}
+exit:
+	if (radio_off)
+		os_kfree(radio_off);
 	return ret;
 }
 
@@ -2328,7 +2628,6 @@ static void btmtk_usb_free_setting_file(struct LD_btmtk_usb_data *data)
 static int btmtk_usb_parse_bt_cfg_file(char *item_name, char *text, u8 *searchcontent)
 {
 	int ret = 0;
-	int temp_len = 0;
 	char search[32];
 	char *ptr = NULL, *p = NULL;
 	char *temp = text;
@@ -2374,7 +2673,6 @@ static int btmtk_usb_parse_bt_cfg_file(char *item_name, char *text, u8 *searchco
 	}
 
 textdone:
-	temp_len = p - ptr;
 	*temp = '\0';
 
 out:
@@ -2389,7 +2687,7 @@ static int btmtk_usb_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content, u8 *
 	memset(text, 0, sizeof(text));
 	ret = btmtk_usb_parse_bt_cfg_file(BT_UNIFY_WOBLE, text, searchcontent);
 	if (!ret) {
-		bt_cfg_content->support_unify_woble = strtol(text, &text, 10);
+		bt_cfg_content->support_unify_woble = simple_strtol(text, (char **)&text, 10);
 		usb_debug("bt_cfg_content->support_unify_woble = %d\n", bt_cfg_content->support_unify_woble);
 	} else {
 		usb_debug("search item %s is invalid!\n", BT_UNIFY_WOBLE);
@@ -2397,7 +2695,7 @@ static int btmtk_usb_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content, u8 *
 
 	ret = btmtk_usb_parse_bt_cfg_file(BT_UNIFY_WOBLE_TYPE, text, searchcontent);
 	if (!ret) {
-		bt_cfg_content->unify_woble_type = strtol(text, &text, 10);
+		bt_cfg_content->unify_woble_type = simple_strtol(text, (char **)&text, 10);
 		usb_debug("bt_cfg_content->unify_woble_type = %d\n", bt_cfg_content->unify_woble_type);
 	} else {
 		usb_debug("search item %s is invalid!\n", BT_UNIFY_WOBLE_TYPE);
@@ -2411,7 +2709,7 @@ static int btmtk_usb_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content, u8 *
 	/* Little driver co-DL wifi*/
 	ret = btmtk_usb_parse_bt_cfg_file(BT_LD_DL_WIFI_ENABLE, text, searchcontent);
 	if (!ret) {
-		bt_cfg_content->support_wifi_dl = strtol(text, &text, 10);
+		bt_cfg_content->support_wifi_dl = simple_strtol(text, (char **)&text, 10);
 		usb_debug("bt_cfg_content->support_wifi_dl = %d\n", bt_cfg_content->support_wifi_dl);
 	} else {
 		usb_debug("search item %s is invalid!\n", BT_LD_DL_WIFI_ENABLE);
@@ -2426,7 +2724,7 @@ static int btmtk_usb_load_bt_cfg(char *cfg_name, struct LD_btmtk_usb_data *data)
 	char bt_cfg_name[MAX_BIN_FILE_NAME_LEN] = {'\0'};
 
 	if (!data)
-		return -EINVAL;
+		return -BT_LD_ERROR_INVALID;
 
 	/* For woble_setting.bin */
 	if (data->setting_file != NULL) {
@@ -2435,21 +2733,16 @@ static int btmtk_usb_load_bt_cfg(char *cfg_name, struct LD_btmtk_usb_data *data)
 	}
 	data->setting_file_len = 0;
 
-	if ((data->chip_id & 0xFF00) == 0x7900) {
-		if (data->flavor && !is_mt7902(data))
-			(void)sprintf(bt_cfg_name, "%s%x_1a_%x.%s",
-					BT_CFG_NAME_PREFIX, data->chip_id & 0xffff,
-					(data->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
-		else
-			(void)sprintf(bt_cfg_name, "%s%x_1_%x.%s",
-					BT_CFG_NAME_PREFIX, data->chip_id & 0xffff,
-					(data->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
-	} else if ((data->chip_id & 0xFF00) == 0x7600)
-		(void)sprintf(bt_cfg_name, "%s%x.%s", BT_CFG_NAME_PREFIX_76XX,
-				data->chip_id & 0xffff, BT_CFG_NAME_SUFFIX);
+	if (data->flavor && !is_mt7902(data))
+		(void)snprintf(bt_cfg_name, MAX_BIN_FILE_NAME_LEN,
+				"%s%x_%xa_%x.%s", BT_CFG_NAME_PREFIX,
+				data->chip_id & 0xffff, (data->proj & 0xff) + 1,
+				(data->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
 	else
-		(void)sprintf(bt_cfg_name, "bt.cfg");
-
+		(void)snprintf(bt_cfg_name, MAX_BIN_FILE_NAME_LEN,
+				"%s%x_%x_%x.%s", BT_CFG_NAME_PREFIX,
+				data->chip_id & 0xffff, (data->proj & 0xff) + 1,
+				(data->fw_version & 0xff) + 1, BT_CFG_NAME_SUFFIX);
 	LD_load_code_from_bin(&data->setting_file, bt_cfg_name, NULL, data->udev, &data->setting_file_len);
 
 	if (data->setting_file == NULL || data->setting_file_len == 0) {
@@ -2459,7 +2752,7 @@ static int btmtk_usb_load_bt_cfg(char *cfg_name, struct LD_btmtk_usb_data *data)
 		if (data->setting_file == NULL || data->setting_file_len == 0) {
 			usb_debug("%s not exist in the /vendor/firmware\n", BT_CFG_NAME);
 			usb_debug("Please make sure %s or %s in the /vendor/firmware\n", bt_cfg_name, BT_CFG_NAME);
-			return -ENOMEM;
+			return -BT_LD_ERROR_NO_MEM;
 		}
 	}
 
@@ -2494,7 +2787,7 @@ static void btmtk_usb_initialize_cfg_items(struct LD_btmtk_usb_data *data)
 /*============================================================================*/
 int  Ldbtusb_getBtWakeT(struct LD_btmtk_usb_data *data){
 	//struct LD_btmtk_usb_data *data = BT_INST(dev)->priv_data;
-	int ret = -1;
+	int ret = 0;
 	if (!data) {
 		usb_debug("btmtk data NULL!\n");
 		return ret;
@@ -2524,6 +2817,7 @@ int  Ldbtusb_getBtWakeT(struct LD_btmtk_usb_data *data){
 			if (ret < 0) {
 				usb_debug("event get failed: %d\n", ret);
 			}
+
 			if (returnEvent == data->io_buf[0]) {//get response from fw
 				usb_debug("mode %d\n",data->io_buf[WOBLE_LOG_OFFSET_76XX]);
 				if(data->io_buf[WOBLE_LOG_OFFSET_76XX] == WOBLE_LOG_VALUE_76XX) {//get soundmode bt wake type
@@ -2588,7 +2882,7 @@ u8 LD_btmtk_usb_getWoBTW(void)
 void LD_btmtk_usb_SetWoble(mtkbt_dev_t *dev)
 {
 	struct LD_btmtk_usb_data *data = BT_INST(dev)->priv_data;
-	int ret = -1;
+	int ret = 0;
 	u8WoBTW = PM_SOURCE_DISABLE;
 
 	usb_debug("\n");
@@ -2613,7 +2907,7 @@ void LD_btmtk_usb_SetWoble(mtkbt_dev_t *dev)
 			}
 
 			/* Unify WoBLE flow */
-			if (is_mt7961(data) || is_mt7902(data))
+			if (is_mt7961(data) || is_mt7902(data) || is_mt6639(data))
 				btmtk_usb_send_apcf_reserved_79xx(data);
 
 			btmtk_usb_send_read_bdaddr(data);
@@ -2659,7 +2953,7 @@ int LD_btmtk_usb_probe(mtkbt_dev_t *dev,int flag)
 	data = os_kzalloc(sizeof(*data), MTK_GFP_ATOMIC);
 	if (!data) {
 		usb_debug("[ERR] end Error 1\n");
-		return -ENOMEM;
+		return -BT_LD_ERROR_NO_MEM;
 	}
 
 	data->hcif = BT_INST(dev)->hci_if;
@@ -2676,7 +2970,7 @@ int LD_btmtk_usb_probe(mtkbt_dev_t *dev,int flag)
 	if (!data->io_buf) {
 		usb_debug("Can't allocate memory io_buf\n");
 		os_kfree(data);
-		return -ENOMEM;
+		return -BT_LD_ERROR_NO_MEM;
 	}
 
 	data->rom_patch_bin_file_name = os_kzalloc(MAX_BIN_FILE_NAME_LEN, MTK_GFP_ATOMIC);
@@ -2684,8 +2978,9 @@ int LD_btmtk_usb_probe(mtkbt_dev_t *dev,int flag)
 		usb_debug("Can't allocate memory rom_patch_bin_file_name\n");
 		os_kfree(data->io_buf);
 		os_kfree(data);
-		return -ENOMEM;
+		return -BT_LD_ERROR_NO_MEM;
 	}
+	memset(data->rom_patch_bin_file_name, 0, MAX_BIN_FILE_NAME_LEN);
 
 	if (data->woble_setting_file_name == NULL) {
 		data->woble_setting_file_name = os_kzalloc(MAX_BIN_FILE_NAME_LEN, MTK_GFP_ATOMIC);
@@ -2694,7 +2989,7 @@ int LD_btmtk_usb_probe(mtkbt_dev_t *dev,int flag)
 			os_kfree(data->rom_patch_bin_file_name);
 			os_kfree(data->io_buf);
 			os_kfree(data);
-			return -ENOMEM;
+			return -BT_LD_ERROR_NO_MEM;
 		}
 	}
 
@@ -2705,11 +3000,13 @@ int LD_btmtk_usb_probe(mtkbt_dev_t *dev,int flag)
 	usb_debug("data address = %p\n", data);
 	btmtk_usb_cap_init(data);
 
-	if(flag == 1){
+	if(flag == 1) {
 		ret = Ldbtusb_getBtWakeT(data);
 		os_kfree(data->woble_setting_file_name);
 		os_kfree(data->rom_patch_bin_file_name);
 		os_kfree(data->io_buf);
+		if ((is_mt7630(data) || is_mt7650(data)) && data->fw_bin_file_name)
+			os_kfree(data->fw_bin_file_name);
 		os_kfree(data);
 		return ret;
 	}
@@ -2720,18 +3017,22 @@ int LD_btmtk_usb_probe(mtkbt_dev_t *dev,int flag)
 	if (data->need_load_rom_patch) {
 		if (is_mt7668(data) || is_mt7663(data))
 			err = btmtk_usb_load_rom_patch_7668(data);
-		else if (is_mt7961(data) || is_mt7902(data)) {
+		else if (is_mt7961(data) || is_mt7902(data) || is_mt6639(data)) {
 			if (data->bt_cfg.support_wifi_dl) {
-				err = btmtk_load_rom_patch_79xx(data, WIFI_DOWNLOAD);
+				if (is_mt6639(data)) {
+					err = btmtk_load_rom_patch_connac3(data, BT_DOWNLOAD);
+					(void)btmtk_load_wifi_patch_connac3(data, WIFI_DOWNLOAD);
+				} else {
+					(void)btmtk_load_rom_patch_connac3(data, WIFI_DOWNLOAD);
+					err = btmtk_load_rom_patch_connac3(data, BT_DOWNLOAD);
+				}
 				if (err < 0) {
-					usb_debug("%s: btmtk_load_rom_patch_79xx wifi patch failed!", __func__);
+					usb_debug("%s: load wifi patch failed!", __func__);
 					err = 0;
 				}
 			}
-			err = btmtk_load_rom_patch_79xx(data, BT_DOWNLOAD);
 		} else
 			err = btmtk_usb_load_rom_patch(data);
-		//btmtk_usb_send_hci_suspend_cmd(data);
 		if (err < 0) {
 			if (data->io_buf) os_kfree(data->io_buf);
 			if (data->rom_patch_bin_file_name) os_kfree(data->rom_patch_bin_file_name);

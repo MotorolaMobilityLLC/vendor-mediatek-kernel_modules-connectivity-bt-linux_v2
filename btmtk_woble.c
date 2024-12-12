@@ -51,18 +51,6 @@ void btmtk_woble_wake_unlock(struct btmtk_dev *bdev)
 	}
 }
 
-#if WAKEUP_BT_IRQ
-void btmtk_sdio_irq_wake_lock_timeout(struct btmtk_dev *bdev)
-{
-	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-
-	BTMTK_INFO("%s: enter", __func__);
-	__pm_wakeup_event(bmain_info->irq_ws, WAIT_POWERKEY_TIMEOUT);
-	BTMTK_INFO("%s: exit", __func__);
-}
-#endif
-
-
 int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 {
 	int ret = 0;
@@ -85,6 +73,112 @@ exit:
 	return ret;
 }
 
+static int btmtk_load_woble_setting(char *bin_name,
+		struct device *dev, u32 *code_len, struct btmtk_woble *bt_woble)
+{
+	int err;
+	struct btmtk_dev *bdev = bt_woble->bdev;
+
+	*code_len = 0;
+
+	err = btmtk_load_code_from_setting_files(bin_name, dev, code_len, bdev);
+	if (err) {
+		BTMTK_ERR("woble_setting btmtk_load_code_from_setting_files failed!!");
+		goto LOAD_END;
+	}
+
+	err = btmtk_load_fw_cfg_setting("APCF",
+			bt_woble->woble_setting_apcf, WOBLE_SETTING_COUNT, bdev->setting_file, FW_CFG_INX_LEN_2);
+	if (err)
+		goto LOAD_END;
+
+	err = btmtk_load_fw_cfg_setting("APCF_ADD_MAC",
+			bt_woble->woble_setting_apcf_fill_mac, WOBLE_SETTING_COUNT,
+			bdev->setting_file, FW_CFG_INX_LEN_2);
+	if (err)
+		goto LOAD_END;
+
+	err = btmtk_load_fw_cfg_setting("APCF_ADD_MAC_LOCATION",
+			bt_woble->woble_setting_apcf_fill_mac_location, WOBLE_SETTING_COUNT,
+			bdev->setting_file, FW_CFG_INX_LEN_2);
+	if (err)
+		goto LOAD_END;
+
+	err = btmtk_load_fw_cfg_setting("RADIOOFF", &bt_woble->woble_setting_radio_off, 1,
+			bdev->setting_file, FW_CFG_INX_LEN_2);
+	if (err)
+		goto LOAD_END;
+
+	switch (bdev->bt_cfg.unify_woble_type) {
+	case 0:
+		err = btmtk_load_fw_cfg_setting("WAKEUP_TYPE_LEGACY", &bt_woble->woble_setting_wakeup_type, 1,
+			bdev->setting_file, FW_CFG_INX_LEN_2);
+		break;
+	case 1:
+		err = btmtk_load_fw_cfg_setting("WAKEUP_TYPE_WAVEFORM", &bt_woble->woble_setting_wakeup_type, 1,
+			bdev->setting_file, FW_CFG_INX_LEN_2);
+		break;
+	case 2:
+		err = btmtk_load_fw_cfg_setting("WAKEUP_TYPE_IR", &bt_woble->woble_setting_wakeup_type, 1,
+			bdev->setting_file, FW_CFG_INX_LEN_2);
+		break;
+	default:
+		BTMTK_WARN("%s: unify_woble_type unknown(%d)", __func__, bdev->bt_cfg.unify_woble_type);
+	}
+	if (err)
+		BTMTK_WARN("%s: Parse unify_woble_type(%d) failed", __func__, bdev->bt_cfg.unify_woble_type);
+
+	err = btmtk_load_fw_cfg_setting("RADIOOFF_STATUS_EVENT",
+			&bt_woble->woble_setting_radio_off_status_event, 1, bdev->setting_file, FW_CFG_INX_LEN_2);
+	if (err)
+		goto LOAD_END;
+
+	err = btmtk_load_fw_cfg_setting("RADIOOFF_COMPLETE_EVENT",
+			&bt_woble->woble_setting_radio_off_comp_event, 1, bdev->setting_file, FW_CFG_INX_LEN_2);
+	if (err)
+		goto LOAD_END;
+
+	err = btmtk_load_fw_cfg_setting("RADIOON",
+			&bt_woble->woble_setting_radio_on, 1, bdev->setting_file, FW_CFG_INX_LEN_2);
+	if (err)
+		goto LOAD_END;
+
+	err = btmtk_load_fw_cfg_setting("RADIOON_STATUS_EVENT",
+			&bt_woble->woble_setting_radio_on_status_event, 1, bdev->setting_file, FW_CFG_INX_LEN_2);
+	if (err)
+		goto LOAD_END;
+
+	err = btmtk_load_fw_cfg_setting("RADIOON_COMPLETE_EVENT",
+			&bt_woble->woble_setting_radio_on_comp_event, 1, bdev->setting_file, FW_CFG_INX_LEN_2);
+	if (err)
+		goto LOAD_END;
+
+	err = btmtk_load_fw_cfg_setting("APCF_RESUME",
+			bt_woble->woble_setting_apcf_resume, WOBLE_SETTING_COUNT, bdev->setting_file, FW_CFG_INX_LEN_2);
+
+LOAD_END:
+	/* release setting file memory */
+	if (bdev) {
+		kfree(bdev->setting_file);
+		bdev->setting_file = NULL;
+	}
+
+	if (err)
+		BTMTK_ERR("%s: error return %d", __func__, err);
+
+	return err;
+}
+
+#if WAKEUP_BT_IRQ
+void btmtk_sdio_irq_wake_lock_timeout(struct btmtk_dev *bdev)
+{
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
+	BTMTK_INFO("%s: enter", __func__);
+	__pm_wakeup_event(bmain_info->irq_ws, WAIT_POWERKEY_TIMEOUT);
+	BTMTK_INFO("%s: exit", __func__);
+}
+#else
 static int btmtk_send_woble_read_BDADDR_cmd(struct btmtk_dev *bdev)
 {
 	int i;
@@ -180,7 +274,7 @@ static int btmtk_send_woble_resume_cmd(struct btmtk_dev *bdev)
 
 static int btmtk_set_Woble_APCF_filter_parameter(struct btmtk_dev *bdev)
 {
-	int ret = -1;
+	int ret = 0;
 
 	BTMTK_INFO("%s: begin", __func__);
 	ret = btmtk_send_cmd_to_fw(bdev,
@@ -311,7 +405,7 @@ Finish:
 
 static int btmtk_set_Woble_Radio_On(struct btmtk_woble *bt_woble)
 {
-	int ret = -1;
+	int ret = 0;
 	struct btmtk_dev *bdev = bt_woble->bdev;
 
 	BTMTK_INFO("%s: woble_setting_radio_on.length %d", __func__,
@@ -360,7 +454,7 @@ static int btmtk_set_Woble_APCF_Resume(struct btmtk_woble *bt_woble)
 
 	BTMTK_INFO("%s, enter, bt_woble->woble_setting_apcf_resume[0].length= %d",
 			__func__, bt_woble->woble_setting_apcf_resume[0].length);
-	btmtk_get_cmd_or_event(bdev, APCF_RESUME_EVT, &event);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, APCF_RESUME_EVT, event);
 
 	if (bt_woble->woble_setting_apcf_resume[0].length) {
 		BTMTK_INFO("%s: handle leave woble apcf from file", __func__);
@@ -392,106 +486,9 @@ static int btmtk_set_Woble_APCF_Resume(struct btmtk_woble *bt_woble)
 	return ret;
 }
 
-
-static int btmtk_load_woble_setting(char *bin_name,
-		struct device *dev, u32 *code_len, struct btmtk_woble *bt_woble)
-{
-	int err;
-	struct btmtk_dev *bdev = bt_woble->bdev;
-
-	*code_len = 0;
-
-	err = btmtk_load_code_from_setting_files(bin_name, dev, code_len, bdev);
-	if (err) {
-		BTMTK_ERR("woble_setting btmtk_load_code_from_setting_files failed!!");
-		goto LOAD_END;
-	}
-
-	err = btmtk_load_fw_cfg_setting("APCF",
-			bt_woble->woble_setting_apcf, WOBLE_SETTING_COUNT, bdev->setting_file, FW_CFG_INX_LEN_2);
-	if (err)
-		goto LOAD_END;
-
-	err = btmtk_load_fw_cfg_setting("APCF_ADD_MAC",
-			bt_woble->woble_setting_apcf_fill_mac, WOBLE_SETTING_COUNT,
-			bdev->setting_file, FW_CFG_INX_LEN_2);
-	if (err)
-		goto LOAD_END;
-
-	err = btmtk_load_fw_cfg_setting("APCF_ADD_MAC_LOCATION",
-			bt_woble->woble_setting_apcf_fill_mac_location, WOBLE_SETTING_COUNT,
-			bdev->setting_file, FW_CFG_INX_LEN_2);
-	if (err)
-		goto LOAD_END;
-
-	err = btmtk_load_fw_cfg_setting("RADIOOFF", &bt_woble->woble_setting_radio_off, 1,
-			bdev->setting_file, FW_CFG_INX_LEN_2);
-	if (err)
-		goto LOAD_END;
-
-	switch (bdev->bt_cfg.unify_woble_type) {
-	case 0:
-		err = btmtk_load_fw_cfg_setting("WAKEUP_TYPE_LEGACY", &bt_woble->woble_setting_wakeup_type, 1,
-			bdev->setting_file, FW_CFG_INX_LEN_2);
-		break;
-	case 1:
-		err = btmtk_load_fw_cfg_setting("WAKEUP_TYPE_WAVEFORM", &bt_woble->woble_setting_wakeup_type, 1,
-			bdev->setting_file, FW_CFG_INX_LEN_2);
-		break;
-	case 2:
-		err = btmtk_load_fw_cfg_setting("WAKEUP_TYPE_IR", &bt_woble->woble_setting_wakeup_type, 1,
-			bdev->setting_file, FW_CFG_INX_LEN_2);
-		break;
-	default:
-		BTMTK_WARN("%s: unify_woble_type unknown(%d)", __func__, bdev->bt_cfg.unify_woble_type);
-	}
-	if (err)
-		BTMTK_WARN("%s: Parse unify_woble_type(%d) failed", __func__, bdev->bt_cfg.unify_woble_type);
-
-	err = btmtk_load_fw_cfg_setting("RADIOOFF_STATUS_EVENT",
-			&bt_woble->woble_setting_radio_off_status_event, 1, bdev->setting_file, FW_CFG_INX_LEN_2);
-	if (err)
-		goto LOAD_END;
-
-	err = btmtk_load_fw_cfg_setting("RADIOOFF_COMPLETE_EVENT",
-			&bt_woble->woble_setting_radio_off_comp_event, 1, bdev->setting_file, FW_CFG_INX_LEN_2);
-	if (err)
-		goto LOAD_END;
-
-	err = btmtk_load_fw_cfg_setting("RADIOON",
-			&bt_woble->woble_setting_radio_on, 1, bdev->setting_file, FW_CFG_INX_LEN_2);
-	if (err)
-		goto LOAD_END;
-
-	err = btmtk_load_fw_cfg_setting("RADIOON_STATUS_EVENT",
-			&bt_woble->woble_setting_radio_on_status_event, 1, bdev->setting_file, FW_CFG_INX_LEN_2);
-	if (err)
-		goto LOAD_END;
-
-	err = btmtk_load_fw_cfg_setting("RADIOON_COMPLETE_EVENT",
-			&bt_woble->woble_setting_radio_on_comp_event, 1, bdev->setting_file, FW_CFG_INX_LEN_2);
-	if (err)
-		goto LOAD_END;
-
-	err = btmtk_load_fw_cfg_setting("APCF_RESUME",
-			bt_woble->woble_setting_apcf_resume, WOBLE_SETTING_COUNT, bdev->setting_file, FW_CFG_INX_LEN_2);
-
-LOAD_END:
-	/* release setting file memory */
-	if (bdev) {
-		kfree(bdev->setting_file);
-		bdev->setting_file = NULL;
-	}
-
-	if (err)
-		BTMTK_ERR("%s: error return %d", __func__, err);
-
-	return err;
-}
-
 static void btmtk_check_wobx_debug_log(struct btmtk_dev *bdev)
 {
-	int ret = -1;
+	int ret = 0;
 
 	BTMTK_INFO("%s: begin", __func__);
 
@@ -505,14 +502,16 @@ static void btmtk_check_wobx_debug_log(struct btmtk_dev *bdev)
 	 * Please reference wiki to know what it is.
 	 */
 }
-
+#endif
 
 static int btmtk_handle_leaving_WoBLE_state(struct btmtk_woble *bt_woble)
 {
+#if !WAKEUP_BT_IRQ
 	int ret = 0;
 	unsigned char fstate = 0;
 	struct btmtk_dev *bdev = bt_woble->bdev;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+#endif
 
 	BTMTK_INFO("%s: begin", __func__);
 
@@ -520,8 +519,7 @@ static int btmtk_handle_leaving_WoBLE_state(struct btmtk_woble *bt_woble)
 	/* Can't enter woble mode */
 	BTMTK_INFO("not support woble mode for wakeup bt irq");
 	return 0;
-#endif
-
+#else
 	fstate = btmtk_fops_get_state(bdev);
 	if (!bdev->bt_cfg.support_woble_for_bt_disable) {
 		if (fstate != BTMTK_FOPS_STATE_OPENED) {
@@ -584,23 +582,25 @@ Finish:
 exit:
 	BTMTK_INFO("%s: end", __func__);
 	return ret;
+#endif
 }
 
 static int btmtk_handle_entering_WoBLE_state(struct btmtk_woble *bt_woble)
 {
+#if !WAKEUP_BT_IRQ
 	int ret = 0;
 	unsigned char fstate = 0;
 	int state = 0;
 	struct btmtk_dev *bdev = bt_woble->bdev;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+#endif
 
 	BTMTK_INFO("%s: begin", __func__);
 #if WAKEUP_BT_IRQ
 	/* Can't enter woble mode */
 	BTMTK_INFO("not support woble mode for wakeup bt irq");
 	return 0;
-#endif
-
+#else
 	fstate = btmtk_fops_get_state(bdev);
 	if (!bdev->bt_cfg.support_woble_for_bt_disable) {
 		if (fstate != BTMTK_FOPS_STATE_OPENED) {
@@ -694,6 +694,7 @@ Finish:
 
 	BTMTK_INFO("%s: end ret = %d, power_state =%d", __func__, ret, bdev->power_state);
 	return ret;
+#endif
 }
 
 int btmtk_woble_suspend(struct btmtk_woble *bt_woble)
@@ -755,7 +756,7 @@ exit:
 int btmtk_woble_resume(struct btmtk_woble *bt_woble)
 {
 	int ret = 0;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	unsigned char fstate = BTMTK_FOPS_STATE_UNKNOWN;
 	struct btmtk_dev *bdev = bt_woble->bdev;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
@@ -794,7 +795,7 @@ int btmtk_woble_resume(struct btmtk_woble *bt_woble)
 		&& fstate == BTMTK_FOPS_STATE_OPENED)
 		bmain_info->reset_stack_flag = HW_ERR_CODE_RESET_STACK_AFTER_WOBLE;
 
-	btmtk_send_hw_err_to_host(bdev);
+	(void)btmtk_send_hw_err_to_host(bdev);
 	BTMTK_INFO("%s: end(%d), reset_stack_flag = %d, fstate = %d", __func__, ret,
 			bmain_info->reset_stack_flag, fstate);
 

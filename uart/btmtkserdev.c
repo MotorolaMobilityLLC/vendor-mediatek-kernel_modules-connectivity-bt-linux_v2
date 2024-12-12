@@ -424,7 +424,7 @@ static int btmtk_cif_suspend(struct device *dev)
 	int ret = 0;
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
-	int state = BTMTK_STATE_INIT;
+	int state = BTMTK_STATE_UNKNOWN;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_uart_dev *cif_dev = NULL;
 	struct serdev_device *serdev = NULL;

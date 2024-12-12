@@ -125,6 +125,9 @@
 #define PATCH_DOWNLOAD_PHASE3_DELAY_TIME 20
 #define PATCH_DOWNLOAD_PHASE3_RETRY 20
 
+#define BT_LD_ERROR_NO_FILE 1
+#define BT_LD_ERROR_INVALID 2
+#define BT_LD_ERROR_NO_MEM 3
 
 enum {
 	BTMTK_EP_TYPE_OUT_CMD = 0,	/*EP type out for hci cmd and wmt cmd */

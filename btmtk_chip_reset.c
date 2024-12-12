@@ -63,10 +63,10 @@ void btmtk_reset_waker(struct work_struct *work)
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, reset_waker);
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
-	int state = BTMTK_STATE_INIT;
+	int state = BTMTK_STATE_UNKNOWN;
 	int cif_event = 0, err = 0;
 	int cur = 0;
-	unsigned char fstate = BTMTK_FOPS_STATE_INIT;
+	unsigned char fstate = BTMTK_FOPS_STATE_UNKNOWN;
 	int skip_subsys_reset = 0;
 
 	/* Check chip state is ok to do reset or not */
@@ -167,7 +167,7 @@ void btmtk_reset_waker(struct work_struct *work)
 				goto L0RESET;
 			}
 #endif
-			btmtk_send_hw_err_to_host(bdev);
+			(void)btmtk_send_hw_err_to_host(bdev);
 			btmtk_woble_wake_unlock(bdev);
 			if (bmain_info->hif_hook.chip_reset_notify)
 				bmain_info->hif_hook.chip_reset_notify(bdev);

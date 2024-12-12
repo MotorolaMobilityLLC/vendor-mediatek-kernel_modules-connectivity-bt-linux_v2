@@ -291,7 +291,7 @@ enum {
 
 /* Please keep sync with btmtk_set_state function */
 enum {
-	/* BTMTK_STATE_UNKNOWN = 0, */
+	BTMTK_STATE_UNKNOWN = 0,
 	BTMTK_STATE_INIT = 1,
 	BTMTK_STATE_DISCONNECT,
 	BTMTK_STATE_PROBE,
@@ -310,7 +310,7 @@ enum {
 
 /* Please keep sync with btmtk_fops_set_state function */
 enum {
-	/* BTMTK_FOPS_STATE_UNKNOWN = 0, */
+	BTMTK_FOPS_STATE_UNKNOWN = 0,
 	BTMTK_FOPS_STATE_INIT = 1,
 	BTMTK_FOPS_STATE_OPENING,	/* during opening */
 	BTMTK_FOPS_STATE_OPENED,	/* open in fops_open */
@@ -456,6 +456,16 @@ struct _Section_Map {
 	.lsize = 2, \
 	.maxlen = HCI_MAX_FRAME_SIZE
 
+#define STP_MAX_HDR_LEN 6
+#define STP_MAX_PKT_LEN 2048
+#define STP_HDR_PREFIX 0x80
+#define STP_HDR_OFFSET 2
+struct btmtk_stp_info {
+	int dlen;
+	int cursor;
+	unsigned char data[STP_MAX_HDR_LEN];
+};
+
 struct btmtk_dev {
 	struct hci_dev	*hdev;
 	unsigned long	hdev_flags;
@@ -549,6 +559,7 @@ struct btmtk_dev {
 	unsigned char	chip_reset_signal;
 #endif
 
+	struct btmtk_stp_info stp_info;
 };
 
 #if (USE_DEVICE_NODE == 1)
@@ -814,7 +825,7 @@ struct btmtk_main_info *btmtk_get_main_info(void);
 int btmtk_get_interface_num(void);
 int btmtk_reset_power_on(struct btmtk_dev *bdev);
 
-void btmtk_send_hw_err_to_host(struct btmtk_dev *bdev);
+int btmtk_send_hw_err_to_host(struct btmtk_dev *bdev);
 void btmtk_free_setting_file(struct btmtk_dev *bdev);
 
 unsigned char btmtk_fops_get_state(struct btmtk_dev *bdev);

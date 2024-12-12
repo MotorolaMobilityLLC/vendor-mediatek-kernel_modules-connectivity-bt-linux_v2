@@ -110,8 +110,7 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason)
 static int btmtk_post_chip_rst_handler(void)
 {
 	BTMTK_INFO("%s", __func__);
-	btmtk_send_hw_err_to_host(NULL);
-	return 0;
+	return btmtk_send_hw_err_to_host(NULL);
 }
 
 struct connv3_whole_chip_rst_cb btmtk_whole_chip_rst_cb = {

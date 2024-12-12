@@ -318,6 +318,10 @@ void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev)
 
 	btmtk_buffer_mode.bdev = bdev;
 	ret = btmtk_load_code_from_setting_files(BUFFER_MODE_SWITCH_FILE, bdev->intf_dev, &code_len, bdev);
+	if (ret < 0) {
+		BTMTK_ERR("load code failed");
+		return;
+	}
 
 	btmtk_buffer_mode.efuse_mode = btmtk_buffer_mode_parse_mode(bdev->setting_file, code_len);
 	if (btmtk_buffer_mode.efuse_mode == EFUSE_MODE)
@@ -442,7 +446,7 @@ void btmtk_buffer_mode_initialize(struct btmtk_dev *bdev)
 			memcpy(btmtk_buffer_mode.bt1_ant0_pwr_offset, &bdev->setting_file[BT1_CAL_ANT0_OFFSET],
 					BUFFER_MODE_CAL_LENGTH);
 		else
-			BTMTK_ERR("%s: error address, %x", __func__, BT1_CAL_ANT0_OFFSET);	
+			BTMTK_ERR("%s: error address, %x", __func__, BT1_CAL_ANT0_OFFSET);
 
 		if(BT1_CAL_ANT1_OFFSET + BUFFER_MODE_CAL_LENGTH <= code_len)
 			memcpy(btmtk_buffer_mode.bt1_ant1_pwr_offset, &bdev->setting_file[BT1_CAL_ANT1_OFFSET],

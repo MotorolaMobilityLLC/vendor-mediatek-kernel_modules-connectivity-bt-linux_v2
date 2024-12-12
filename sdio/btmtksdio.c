@@ -600,7 +600,7 @@ int btmtk_sdio_read_wifi_mcu_pc(u8 PcLogSel, u32 *val)
 {
 	int ret = 0;
 	unsigned int value = 0;
-	int state = BTMTK_STATE_INIT;
+	int state = BTMTK_STATE_UNKNOWN;
 
 	if (!g_sdio_dev.func) {
 		BTMTK_ERR("%s g_sdio_dev.func is NULL!", __func__);
@@ -2145,7 +2145,7 @@ static int btmtk_cif_suspend(struct device *dev)
 	int ret = 0;
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
-	int state = BTMTK_STATE_INIT;
+	int state = BTMTK_STATE_UNKNOWN;
 	struct sdio_func *func = NULL;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_sdio_dev *cif_dev = NULL;
