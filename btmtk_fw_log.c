@@ -635,7 +635,8 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 		if (bdev == NULL || bdev->hdev == NULL)
 			continue;
 
-		if (hci_dev != NULL && strncmp(bdev->hdev->name, hci_dev, strlen(hci_dev)) != 0)
+		if (hci_dev != NULL && bdev->hdev->name &&
+				strncmp(bdev->hdev->name, hci_dev, strlen(hci_dev)) != 0)
 			continue;
 
 		ptr = NULL;
@@ -653,8 +654,8 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 		if (ptr != NULL) {
 			BTMTK_INFO_DEV(bdev, " %s whole chip reset start", bdev->hdev->name);
 			if (bdev->assert_reason[0] == '\0') {
-					memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
-					strncpy(bdev->assert_reason, "FW_LOG_BT trigger whole chip reset", strlen("FW_LOG_BT trigger whole chip reset") + 1);
+				memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
+				strncpy(bdev->assert_reason, "FW_LOG_BT trigger whole chip reset", strlen("FW_LOG_BT trigger whole chip reset") + 1);
 			}
 			bdev->main_info.chip_reset_flag = 1;
 			btmtk_reset_trigger(bdev);
@@ -856,6 +857,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	char *p_hci = NULL;
 	char hci_dev[8] = {0};
 	u8 hci_len = 0;
+	int hci_start_offset = 0;
 
 	i_fwlog_buf = kmalloc(HCI_MAX_COMMAND_BUF_SIZE, GFP_KERNEL);
 	if (!i_fwlog_buf) {
@@ -893,12 +895,22 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 
 	p_hci = strstr(i_fwlog_buf, "hci");
 	if (p_hci != NULL) {
-		hci_len = ((strstr(p_hci, " ") - p_hci) > (sizeof(hci_dev) - 1))
-				? sizeof(hci_dev) - 1 : (strstr(p_hci, " ") - p_hci);
+		char *p = strstr(p_hci, " ");
+		if (p == NULL) {
+			BTMTK_ERR("%s: hci string compare failed, can't find blank, input: %s", __func__, i_fwlog_buf);
+			goto exit;
+		}
+		if ((p - p_hci) > (sizeof(hci_dev) - 1)) {
+			BTMTK_ERR("%s: hci string compare failed, input: %s", __func__, i_fwlog_buf);
+			goto exit;
+		}
+		hci_len = p - p_hci;
 		memcpy(hci_dev, p_hci, hci_len);
 		hci_dev[hci_len] = '\0';
+		hci_start_offset = p_hci - (char *)i_fwlog_buf;
 		p_hci = hci_dev;
-		BTMTK_INFO("%s, set hci dev(%d): %s, cmd: %s", __func__, hci_len, p_hci, i_fwlog_buf + hci_len);
+		BTMTK_INFO("%s, set hci dev(%d): %s, cmd: %s",
+			__func__, hci_len, p_hci, i_fwlog_buf + hci_start_offset + hci_len);
 	} else {
 		BTMTK_INFO("%s, set all hci dev", __func__);
 		hci_len = 0;
@@ -912,7 +924,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 	/* hci input command format : echo 01 be fc 01 05 > /dev/stpbtfwlog */
 	/* We take the data from index three to end. */
 	for (i = 0; i < count - hci_len; i++) {
-		char *pos = i_fwlog_buf + hci_len + i;
+		char *pos = i_fwlog_buf + hci_start_offset + hci_len + i;
 		char temp_str[3] = {'\0'};
 		long res = 0;
 
@@ -923,7 +935,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 			continue;
 		} else if (!(*pos >= '0' && *pos <= '9') && !(*pos >= 'A' && *pos <= 'F')
 			&& !(*pos >= 'a' && *pos <= 'f')) {
-			BTMTK_ERR("%s: There is an invalid input(%x)", __func__, *pos);
+			BTMTK_ERR("%s: There is an invalid input(%c)", __func__, *pos);
 			goto exit;
 		} else if (len + 1 >= HCI_MAX_COMMAND_SIZE) {
 			BTMTK_ERR("%s: input data exceed maximum command length (%d)", __func__, len);
@@ -936,8 +948,10 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		ret = kstrtol(temp_str, 16, &res);
 		if (ret == 0)
 			o_fwlog_buf[len++] = (u8)res;
-		else
+		else {
 			BTMTK_ERR_DEV(pp_bdev[hci_idx], "%s: Convert %s failed(%d)", __func__, temp_str, ret);
+			goto exit;
+		}
 	}
 
 	if (o_fwlog_buf[0] != HCI_COMMAND_PKT && o_fwlog_buf[0] != FWLOG_TYPE) {
