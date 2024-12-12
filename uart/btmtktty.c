@@ -1341,8 +1341,7 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 		BTMTK_INFO("%s mtk8250_uart_hub_assert_bit_ctrl(0)", __func__);
 	}
 #endif
-	/* temp comment for skyhawk fpga */
-	// btmtk_read_pmic_state(bdev);
+	btmtk_read_pmic_state(bdev);
 #endif
 
 #if (SLEEP_ENABLE == 1)

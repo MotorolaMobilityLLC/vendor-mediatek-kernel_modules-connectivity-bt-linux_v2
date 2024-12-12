@@ -963,9 +963,10 @@ int btmtk_read_pmic_state(struct btmtk_dev *bdev)
 	u8 read_pmic_state_cmd[] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x16, 0x01, 0x00, 0x01 };
 	u8 read_pmic_state_event[] = { 0x04, 0xE4, 0x35, 0x02, 0x16, 0x31, 0x00, 0x00 };
 
-	if (bdev->chip_id == 6653) {
+	if (bdev->chip_id == 0x6653) {
+		BTMTK_INFO("%s bdev->chip_id = 0x%04x", __func__, bdev->chip_id);
 		read_pmic_state_event[2] = 0xF5;
-		read_pmic_state_event[5] = 0x35;
+		read_pmic_state_event[5] = 0xF1;
 	}
 
 	BTMTK_INFO("%s enter", __func__);
