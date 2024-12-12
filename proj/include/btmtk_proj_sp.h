@@ -59,6 +59,13 @@ typedef void (*UARTHUB_IRQ_CB)(unsigned int err_type);
 typedef void (*UART_WAKEUP_CB)(void *);
 extern int mtk8250_wakeup_callback_register(UART_WAKEUP_CB wakeup_cb, void *wakeup_param);
 #endif // CFG_UART_WAKEUP_SUPPORT
+
+#if defined(CFG_INBAND_SUPPORT)
+/* inband irq related */
+extern int mtk8250_uart_hub_inband_is_support(void);
+extern int mtk8250_uart_hub_inband_enable_ctrl(int enable);
+#endif // CFG_INBAND_SUPPORT
+
 extern int mtk8250_uart_hub_reset_flow_ctrl(void);
 extern int mtk8250_uart_hub_enable_bypass_mode(int bypass);
 extern int mtk8250_uart_hub_is_ready(void);

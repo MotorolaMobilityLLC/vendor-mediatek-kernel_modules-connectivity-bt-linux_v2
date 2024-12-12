@@ -140,6 +140,21 @@ struct btmtk_uart_data {
 	const char *fwname;
 };
 
+struct btmtk_fw_uart_settings {
+	u32	max_baudrate;
+	union {
+		u8	hub_setting_byte;
+			struct {
+				u8	crc_support : 1;			// last bit[0]
+				u8	rhw_support : 1;			// last bit[1]
+				u8	inband_support : 1;			// last bit[2]
+				u8	reserve : 1;				// last bit[3]
+				u8	hub_mode_support : 1;			// last bit[4]
+			} hub_setting_detail;
+		};
+		u8	query_status;
+};
+
 struct btmtk_uart_dev {
 	struct hci_dev	   *hdev;
 	struct tty_struct *tty;
@@ -185,6 +200,10 @@ struct btmtk_uart_dev {
 	u8			crc_en;
 	u8			rhw_en;
 	u8			fw_dl_ready;
+	int			inband_en;
+
+	/* For uarthub setting */
+	struct btmtk_fw_uart_settings	fw_uart_settings;
 
 	/* driver,fw own */
 	bool			no_fw_own;

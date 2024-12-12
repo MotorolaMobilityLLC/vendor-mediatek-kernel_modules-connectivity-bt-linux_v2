@@ -704,7 +704,8 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 	}
 #endif
 
-	cmd[hub_crc_rhw_offset] = (cif_dev->fw_hub_mode << 4 | !cif_dev->rhw_en << 1 | !cif_dev->crc_en << 0);
+	cmd[hub_crc_rhw_offset] = (cif_dev->fw_hub_mode << 4 | !cif_dev->rhw_en << 1 | !cif_dev->crc_en << 0 |
+					cif_dev->inband_en << 2);
 
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, cmd_len, event, SETBAUD_EVT_LEN, 0,
@@ -1123,6 +1124,65 @@ static int btmtk_uart_driver_own_cmd(struct btmtk_dev *bdev)
 	return ret;
 }
 
+static int btmtk_query_fw_uart_settings_cmd(struct btmtk_dev *bdev)
+{
+	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x04, 0x01, 0x00, 0x22 };
+	u8 evt[] = { 0x04, 0xE4, 0x0B, 0x02, 0x04, 0x07, 0x00};
+	struct btmtk_uart_dev *cif_dev = NULL;
+	int ret = 0;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	memset(bdev->io_buf, 0, IO_BUF_SIZE);
+
+	ret = btmtk_main_send_cmd(bdev, cmd, sizeof(cmd), evt, sizeof(evt),
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NEED_FILTER);
+
+	if (ret < 0) {
+		BTMTK_ERR("%s: failed, ret[%d]", __func__, ret);
+		return ret;
+	}
+
+	/*	record fw setting
+	 *	evt format: {0x04, 0xE4, 0x0B, 0x02, 0x04, 0x07, 0x00, 0xDD, 0x22, 0xAA, 0xAA, 0xAA, 0xAA, 0xCC}
+	 *		DD:
+	 *			Status (0 for success)
+	 *		AA AA AA AA:
+	 *			Max supported baudrate
+	 *		CC:
+	 *			[0] CRC suuported
+	 *			[1] RHW suuported
+	 *			[2] inband suuported
+	 *			[4] hub mode suuported
+	 */
+	memcpy(&cif_dev->fw_uart_settings.max_baudrate, &bdev->io_buf[9],
+			sizeof(cif_dev->fw_uart_settings.max_baudrate));
+	cif_dev->fw_uart_settings.query_status = bdev->io_buf[7];
+	cif_dev->fw_uart_settings.hub_setting_byte = bdev->io_buf[13];
+
+	BTMTK_INFO("%s: max_baudrate[%u], hub_setting_byte[%x], query_status[%d]",
+			__func__, cif_dev->fw_uart_settings.max_baudrate,
+			cif_dev->fw_uart_settings.hub_setting_byte,
+			cif_dev->fw_uart_settings.query_status);
+	BTMTK_INFO("%s: crc_support[%d], rhw_support[%d], inband_support[%d], hub_mode_support[%d]",
+			__func__, cif_dev->fw_uart_settings.hub_setting_detail.crc_support,
+			cif_dev->fw_uart_settings.hub_setting_detail.rhw_support,
+			cif_dev->fw_uart_settings.hub_setting_detail.inband_support,
+			cif_dev->fw_uart_settings.hub_setting_detail.hub_mode_support);
+
+	return ret;
+}
+
 static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 {
 	struct ktermios new_termios;
@@ -1310,12 +1370,28 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		/* uarhub setting */
 		cif_dev->fw_hub_mode = 1;
 		cif_dev->crc_en = 1;
+#if defined(CFG_INBAND_SUPPORT)
+		/* check UARTHUB support inband cmd or not */
+		if (mtk8250_uart_hub_inband_is_support() == 1)
+			cif_dev->inband_en = 1;
+		BTMTK_INFO("%s mtk8250_uart_hub_inband_is_support, ret[%d]", __func__, cif_dev->inband_en);
+#endif // CFG_INBAND_SUPPORT
 	} else
 		BTMTK_INFO("%s hub_bypass_only, not send hub_en to fw", __func__);
 #endif
 
+	/* setting after fw download ready */
 	cif_dev->fw_dl_ready = 1;
 	cif_dev->rhw_en = 1;
+
+#if defined(CFG_INBAND_SUPPORT)
+	/* check FW support inband cmd or not */
+	btmtk_query_fw_uart_settings_cmd(bdev);
+	if (!cif_dev->fw_uart_settings.hub_setting_detail.inband_support) {
+		BTMTK_INFO("%s fw not suuport inband", __func__);
+		cif_dev->inband_en = 0;
+	}
+#endif // CFG_INBAND_SUPPORT
 
 	/* set chip baud and flowcontrol to config setting */
 	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
@@ -1329,9 +1405,15 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		/* after fw dl, use uarthub multi-host mode */
 		ret = mtk8250_uart_hub_enable_bypass_mode(0);
 		BTMTK_INFO("%s after fw dl, mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
+#if defined(CFG_INBAND_SUPPORT)
+		if (cif_dev->inband_en) {
+			ret = mtk8250_uart_hub_inband_enable_ctrl(1);
+			BTMTK_INFO("%s mtk8250_uart_hub_inband_enable_ctrl(1) ret[%d]", __func__, ret);
+		}
+#endif // CFG_INBAND_SUPPORT
 	} else
 		BTMTK_INFO("%s: hub_bypass_only, not set mtk8250_uart_hub_enable_bypass_mode(0)", __func__);
-#endif
+#endif // CONFIG_MTK_UARTHUB
 
 	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
 	if (ret < 0) {
