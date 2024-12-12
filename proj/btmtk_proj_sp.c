@@ -11,6 +11,8 @@
 #include "btmtk_main.h"
 #include "conninfra.h"
 #include "connfem.h"
+#include "connfem_api.h"
+#include "connfem_sku.h"
 #include "btmtk_proj_sp.h"
 #include "btmtk_proj_sp_platform.h"
 #include "btmtk_uart_tty.h"
@@ -981,7 +983,107 @@ int btmtk_read_pmic_state(struct btmtk_dev *bdev)
 	return ret;
 }
 
-int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
+static int btmtk_send_connfem_new(struct btmtk_dev *bdev)
+{
+	const struct connfem_sku *fem_info;
+	uint32_t i = 0, j = 0, fem_id = 0;
+	uint16_t offset = 0, cmd_len = 0;
+	uint8_t value = 0;
+	uint8_t *cmd = NULL;
+	uint8_t cmd_header[] = {0x02, 0x6F, 0xFC, 0x00, 0x00, 0x01, 0x55, 0x00,
+			0x00, 0x01, 0x00};
+	uint8_t event[] = {0x04, 0xE4, 0x06, 0x02, 0x55, 0x02, 0x00, 0x00, 0x01};
+	int32_t ret = 0;
+	const uint32_t pin_struct_size = sizeof(struct connfem_sku_pinmap);
+
+	/* Get data from connfem_api */
+	connfem_sku_data(&fem_info);
+
+	cmd = vmalloc(HCI_MAX_ACL_SIZE);
+
+	memcpy(cmd, cmd_header, sizeof(cmd_header));
+	offset = sizeof(cmd_header);
+	connfem_sku_flag_u8(CONNFEM_SUBSYS_BT, "efem-mode", &value);
+	cmd[offset++] = value;
+	connfem_sku_flag_u8(CONNFEM_SUBSYS_BT, "rx-mode", &value);
+	cmd[offset++] = value;
+	connfem_sku_flag_u8(CONNFEM_SUBSYS_NONE, "fe-ant-cnt", &value);
+	cmd[offset++] = value;
+	connfem_sku_flag_u8(CONNFEM_SUBSYS_NONE, "fe-conn-dpdt-sp3t", &value);
+	cmd[offset++] = value;
+	connfem_sku_flag_u8(CONNFEM_SUBSYS_NONE, "fe-conn-spdt", &value);
+	cmd[offset++] = value;
+	connfem_sku_flag_u8(CONNFEM_SUBSYS_NONE, "fe-bt-wf-usage", &value);
+	cmd[offset++] = value;
+	connfem_sku_flag_u8(CONNFEM_SUBSYS_NONE, "fe-conn-spdt-2", &value);
+	cmd[offset++] = value;
+
+	/* spdt info */
+	cmd[offset++] = fem_info->spdt.pin_count;
+	for (i = 0; i < fem_info->spdt.pin_count; i++) {
+		memcpy(&cmd[offset], &fem_info->spdt.pinmap[i], pin_struct_size);
+		offset += pin_struct_size;
+	}
+
+	/* eFem array info */
+	cmd[offset++] = fem_info->fem_count;
+	for (i = 0; i < fem_info->fem_count; i++) {
+		fem_id = ((fem_info->fem[i].info.vid << 16) | fem_info->fem[i].info.pid);
+		memcpy(&cmd[offset], &fem_id, 4);
+		offset += 4;
+		memcpy(&cmd[offset], &fem_info->fem[i].info.flag, 4);
+		offset += 4;
+		cmd[offset++] = fem_info->fem[i].ctrl_pin.count;
+		cmd[offset++] = fem_info->fem[i].tt.logic_count;
+	}
+
+	for (i = 0; i < fem_info->fem_count; i++)
+		for (j = 0; j < fem_info->fem[i].ctrl_pin.count; j++)
+			cmd[offset++] = fem_info->fem[i].ctrl_pin.id[j];
+
+	for (i = 0; i < fem_info->fem_count; i++)
+		for (j = 0; j < fem_info->fem[i].tt.logic_count; j++) {
+			cmd[offset++] = fem_info->fem[i].tt.logic[j].op;
+			cmd[offset++] = fem_info->fem[i].tt.logic[j].binary;
+		}
+
+	/* layout usage array info */
+	memcpy(&cmd[offset], &fem_info->layout_flag, sizeof(uint32_t));
+	offset += sizeof(uint32_t);
+	cmd[offset++] = fem_info->layout_count;
+
+	for (i = 0; i < fem_info->layout_count; i++) {
+		cmd[offset++] = fem_info->layout[i].bandpath[CONNFEM_SUBSYS_WIFI];
+		cmd[offset++] = fem_info->layout[i].bandpath[CONNFEM_SUBSYS_BT];
+		cmd[offset++] = fem_info->layout[i].fem_idx;
+		cmd[offset++] = fem_info->layout[i].pin_count;
+	}
+
+	for (i = 0; i < fem_info->layout_count; i++)
+		for (j = 0; j < fem_info->layout[i].pin_count; j++) {
+			memcpy(&cmd[offset], &fem_info->layout[i].pinmap[j], pin_struct_size);
+			offset += pin_struct_size;
+		}
+
+	/* assign WMT over ACL command length */
+	cmd_len = offset - 5;
+	memcpy(&cmd[3], &cmd_len, 2);
+
+	/* assign payload length */
+	cmd_len = offset - 9;
+	memcpy(&cmd[7], &cmd_len, 2);
+
+	BTMTK_DBG_RAW(cmd, offset, "%s: Send: ", __func__);
+
+	ret = btmtk_main_send_cmd(bdev, cmd, offset,
+			event, sizeof(event), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
+
+	vfree(cmd);
+	return 0;
+
+}
+
+int btmtk_send_connfem_legacy(struct btmtk_dev *bdev)
 {
 	struct connfem_epaelna_fem_info fem_info;
 	struct connfem_epaelna_fem_info bt_fem_info;
@@ -1085,6 +1187,19 @@ int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
 	vfree(cmd);
 	return 0;
 }
+
+int btmtk_send_connfem_cmd(struct btmtk_dev *bdev)
+{
+	if (connfem_is_available(CONNFEM_TYPE_EPAELNA))
+		return btmtk_send_connfem_legacy(bdev);
+	else if (connfem_is_available(CONNFEM_TYPE_SKU))
+		return btmtk_send_connfem_new(bdev);
+	else
+		BTMTK_ERR("Not valid FEM data");
+
+	return -1;
+}
+
 
 int btmtk_set_pcm_pin_mux(void)
 {
