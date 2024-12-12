@@ -2541,7 +2541,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					skb->data[6] == 0x00 && skb->data[7] == 0x00) {
 				/* return evt to upper layered */
 				evt_skb = skb_copy(skb, GFP_KERNEL);
-				if (!evt_skb){
+				if (!evt_skb) {
 					BTMTK_ERR("%s skb_copy failed", __func__);
 					return -ENOMEM;
 				}
@@ -2566,7 +2566,7 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 					skb->data[4] == 0xff && skb->data[5] == 0x03 &&
 					skb->data[6] == 0x00 && skb->data[7] == 0x00 && skb->data[9] == 0x00) {
 				evt_skb = skb_copy(skb, GFP_KERNEL);
-				if (!evt_skb){
+				if (!evt_skb) {
 					BTMTK_ERR("%s skb_copy failed", __func__);
 					return -ENOMEM;
 				}
@@ -4473,9 +4473,7 @@ int btmtk_usb_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 		if (memcmp(skb->data, &read_address_event[1], READ_ADDRESS_EVT_HDR_LEN - 1) == 0
 			&& (skb->len == (READ_ADDRESS_EVT_HDR_LEN - 1 + BD_ADDRESS_SIZE))) {
 			memcpy(bdev->bdaddr, &skb->data[READ_ADDRESS_EVT_PAYLOAD_OFFSET - 1], BD_ADDRESS_SIZE);
-			BTMTK_INFO("GET BDADDR = %02X:%02X:%02X:%02X:%02X:%02X",
-				bdev->bdaddr[0], bdev->bdaddr[1], bdev->bdaddr[2],
-				bdev->bdaddr[3], bdev->bdaddr[4], bdev->bdaddr[5]);
+			BTMTK_INFO("%s: GET BDADDR = "MACSTR, __func__, MAC2STR(bdev->bdaddr));
 
 			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
 		} else if (memcmp(skb->data, event_need_compare,
