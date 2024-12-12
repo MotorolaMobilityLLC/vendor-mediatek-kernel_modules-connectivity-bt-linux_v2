@@ -17,13 +17,7 @@
 #include "btmtk_main.h"
 #include "btmtk_define.h"
 
-#define BACK_UP_CMD_LEN 10
-
-/* calibration backup & restore */
-#define CAL_DATA_EVNET_LEN 9
-#define CAL_DATA_CMD_LEN 10
 #define BT_RESET_REG_CONNAC3 0x70028610
-
 
 int btmtk_cif_chip_commonv3_register(void);
 

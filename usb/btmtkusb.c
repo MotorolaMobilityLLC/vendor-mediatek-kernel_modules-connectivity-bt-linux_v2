@@ -3133,13 +3133,10 @@ static int btusb_probe(struct usb_interface *intf,
 	btmtk_assert_wake_unlock();
 
 #if CFG_SUPPORT_BLUEZ
-	if (is_mt7925(bdev->chip_id)) {
-		btmtk_dynamic_load_rom_patch(bdev, 1);
-		err = btmtk_send_cmd_to_fw(bdev,
-				SET_EFEM1_CMD, SET_EFEM1_EVT,
-				WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+	if (bmain_info->hif_hook_chip.bt_open_handler) {
+		err = bmain_info->hif_hook_chip.bt_open_handler(bdev);
 		if (err < 0) {
-			BTMTK_ERR("%s, set efem failed, err = %d", __func__, err);
+			BTMTK_ERR("bt_open_handler fail");
 			goto free_setting;
 		}
 	}
