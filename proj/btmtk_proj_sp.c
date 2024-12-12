@@ -30,10 +30,10 @@
 #define READ_PMIC_STATE_EVENT_LEN	16
 
 
-#define DFD_CB_INFRA_INFO_LEN		784
+#define DFD_CB_INFRA_INFO_LEN		768
 #define DFD_CB_INFRA_SRAM_LEN		1024
 #define DFD_CB_INFRA_BT_SRAM_LEN	(1024 * 4)
-#define DFD_BT_DEBUG_INFO_LEN		(768 * 16)
+#define DFD_BT_DEBUG_INFO_LEN		(768 + 16)
 
 #define DEFAULT_STATE_PINCTRL_NAME	("bt_combo_gpio_init")
 #define PRE_ON_PINCTRL_NAME		("bt_combo_gpio_pre_on")
