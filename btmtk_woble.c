@@ -77,7 +77,13 @@ static int btmtk_load_woble_setting(char *bin_name,
 		struct device *dev, u32 *code_len, struct btmtk_woble *bt_woble)
 {
 	int err;
-	struct btmtk_dev *bdev = bt_woble->bdev;
+	struct btmtk_dev *bdev = NULL;
+
+	if (bt_woble == NULL || bt_woble->bdev == NULL) {
+		BTMTK_ERR("%s, bdev is invalid!", __func__);
+		return -ENODEV;
+	}
+	bdev = bt_woble->bdev;
 
 	*code_len = 0;
 

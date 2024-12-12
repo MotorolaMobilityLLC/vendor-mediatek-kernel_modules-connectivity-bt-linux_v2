@@ -5146,13 +5146,11 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 
 #if BTMTK_RUNTIME_ENABLE
 	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
-	if (cif_dev == NULL) {
-		BTMTK_INFO_DEV(bdev, "%s: cif_dev is NULL", __func__);
-	}
-
-	ret = usb_autopm_get_interface(cif_dev->intf);
-	if (ret < 0) {
-		BTMTK_INFO_DEV(bdev, "%s: usb autopm get interface fail", __func__);
+	if (cif_dev) {
+		ret = usb_autopm_get_interface(cif_dev->intf);
+		if (ret < 0) {
+			BTMTK_INFO_DEV(bdev, "%s: usb autopm get interface fail", __func__);
+		}
 	}
 #endif
 
@@ -5248,7 +5246,8 @@ exit:
 		btmtk_set_chip_state(bdev, BTMTK_STATE_SEND_ASSERT);
 
 #if BTMTK_RUNTIME_ENABLE
-	usb_autopm_put_interface(cif_dev->intf);
+	if (cif_dev)
+		usb_autopm_put_interface(cif_dev->intf);
 #endif
 
 	return ret;

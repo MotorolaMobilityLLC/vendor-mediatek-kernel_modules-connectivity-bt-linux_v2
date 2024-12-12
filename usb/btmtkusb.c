@@ -113,13 +113,15 @@ static int btmtk_usb_set_isoc_interface(bool close)
 {
 	int ret = -1, i = 0;
 	struct usb_endpoint_descriptor *ep_desc;
-	struct btmtk_usb_dev *cif_dev = (struct btmtk_usb_dev *)g_sco->bdev->cif_dev;
-	struct usb_interface *intf = cif_dev->isoc;
+	struct btmtk_usb_dev *cif_dev = NULL;
+	struct usb_interface *intf = NULL;
 
-	if (g_sco == NULL) {
+	if (!g_sco || !g_sco->bdev || !g_sco->bdev->cif_dev) {
 		BTMTK_ERR("%s: ERROR, g_data is NULL!", __func__);
 		return -ENXIO;
 	}
+	cif_dev = (struct btmtk_usb_dev *)g_sco->bdev->cif_dev;
+	intf = cif_dev->isoc;
 
 	if ((sco_handle && g_sco->isoc_urb_submitted && close == false)
 			|| (sco_handle == 0 && g_sco->isoc_urb_submitted == 0)) {
