@@ -40,7 +40,7 @@
 #define FILTER_CMD_NUM_LOCK(bdev)	mutex_lock(&bdev->btmtk_filter_cmd_num_mutex)
 #define FILTER_CMD_NUM_UNLOCK(bdev)	mutex_unlock(&bdev->btmtk_filter_cmd_num_mutex)
 
-#define SECTION_NUM_MAX 10
+#define SECTION_NUM_MAX 11
 
 /**
  * Global parameters(mtkbt_)
@@ -2410,7 +2410,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 	} while (++loop_count < section_num);
 
 	if (loop_count == section_num) {
-		BTMTK_ERR_DEV(bdev, "%s: bin_info 0x%08x is not found", __func__, binInfo);
+		BTMTK_WARN_DEV(bdev, "%s: bin_info 0x%08x is not found", __func__, binInfo);
 		ret = 0;
 		goto exit;
 	}
@@ -2435,7 +2435,8 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 
 /* dynamic dl with uart hif is too slow, stack will timeout when startup */
 #if !defined(CHIP_IF_UART_TTY) || (USE_DEVICE_NODE == 1)
-	if (mode == DOWNLOAD_BY_INDEX) {
+	/* If state is not working, it means DOWNLOAD_BY_INDEX during BT on.*/
+	if (mode == DOWNLOAD_BY_INDEX && btmtk_get_chip_state(bdev) == BTMTK_STATE_WORKING) {
 		/* dynamic download need downloaded by wmt cmd */
 		dma_flag = PATCH_DOWNLOAD_USING_WMT;
 	}
@@ -2760,6 +2761,8 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int patch_flag)
 	int i = 0;
 	u32 bt_bin_type[BT_BIN_TYP_NUM] = {0x00000000, 0x00000002, 0x00000003, 0x00000080,
 			0x00000090, 0x00010000};
+	u8 sysram_code_bin_index = 3;
+
 	//u32 wf_bin_type[] = {0x00000100};
 
 	if (!bdev) {
@@ -2877,6 +2880,16 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int patch_flag)
 						bdev->main_info.hif_hook_chip.backup_free(bdev);
 					continue;
 				}
+			}
+		}
+		/* download sysram code by driver */
+		if (bdev->chip_id == 0x6653) {
+			BTMTK_INFO_DEV(bdev, "%s, download sysram code by driver", __func__);
+			ret = btmtk_load_fw_by_bin_info(bdev, rom_patch, sysram_code_bin_index, DOWNLOAD_BY_INDEX);
+			if (ret < 0) {
+				BTMTK_ERR_DEV(bdev, "%s, download sysram code by driver failed!, bin index is 0x%08x",
+					__func__, sysram_code_bin_index);
+				goto err;
 			}
 		}
 	}
