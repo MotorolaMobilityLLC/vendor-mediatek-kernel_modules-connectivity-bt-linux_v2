@@ -126,7 +126,7 @@ __weak int btmtk_uart_launcher_deinit(void)
 }
 
 extern struct btmtk_dev *g_sbdev;
-void fw_log_bt_state_cb(uint8_t state)
+void fw_log_bt_state_cb(struct btmtk_dev *bdev, uint8_t state)
 {
 	uint8_t on_off;
 
@@ -586,7 +586,7 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 
 	for (i = 0; i < btmtk_mcu_num; i++) {
 		bdev = pp_bdev[i];
-		if (bdev->hdev == NULL)
+		if (bdev == NULL || bdev->hdev == NULL)
 			continue;
 
 		if (hci_dev != NULL && strncmp(bdev->hdev->name, hci_dev, strlen(hci_dev)) != 0)
@@ -976,6 +976,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 			// 0xFCF5 is get iso perf link info command.
 			if (*(uint16_t *)(o_fwlog_buf + 1) != 0xFC26) {
 #endif
+#if (USE_DEVICE_NODE == 0)
 				skb_opcode = alloc_skb(len + FWLOG_PRSV_LEN, GFP_ATOMIC);
 				if (!skb_opcode) {
 					BTMTK_ERR_DEV(bdev, "%s allocate skb failed!!", __func__);
@@ -986,7 +987,8 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 				BTMTK_INFO_DEV(bdev, "opcode is %02x,%02x",
 						skb_opcode->data[0], skb_opcode->data[1]);
 				skb_queue_tail(&g_fwlog->usr_opcode_queue, skb_opcode);
-#if defined(DRV_RETURN_SPECIFIC_HCE_ONLY) && (DRV_RETURN_SPECIFIC_HCE_ONLY == 1)
+#endif
+#if defined(DRV_RETURN_SPECIFIC_HCE_ONLY) && (DRV_RETURN_SPECIFIC_HCE_ONLY == 1) && (USE_DEVICE_NODE == 0)
 			}
 #endif
 		}
@@ -1122,7 +1124,7 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 	/* mutex with bt open/close/disconnect flow */
 	for (i = 0; i < btmtk_mcu_num; i++) {
 		bdev = pp_bdev[i];
-		if (bdev->hdev == NULL)
+		if (bdev == NULL || bdev->hdev == NULL)
 			continue;
 
 		if (bdev->main_info.hif_hook.cif_mutex_lock)
@@ -1219,7 +1221,7 @@ unsigned int btmtk_fops_pollfwlog(struct file *file, poll_table *wait)
 
 	for (i = 0; i < btmtk_mcu_num; i++) {
 		bdev = pp_bdev[i];
-		if (bdev->hdev == NULL)
+		if (bdev == NULL || bdev->hdev == NULL)
 			continue;
 
 		if (bdev->main_info.hif_hook.log_get_buf_size) {
@@ -1768,8 +1770,8 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 			btmtk_sp_coredump_start();
 
 			btmtk_set_chip_state(bdev, BTMTK_STATE_FW_DUMP);
-			if (!btmtk_assert_wake_lock_check())
-				btmtk_assert_wake_lock();
+			if (!btmtk_assert_wake_lock_check(bdev))
+				btmtk_assert_wake_lock(bdev);
 			if (!btmtk_reset_timer_check(bdev))
 				btmtk_reset_timer_update(bdev);
 			line = __LINE__;
@@ -1778,7 +1780,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 				drv = CONNV3_DRV_TYPE_MAX;
 
 			ret = connv3_coredump_start(
-					bdev->hif_hook.coredump_handler, drv,
+					bdev->main_info.hif_hook.coredump_handler, drv,
 					bdev->assert_reason, skb->data, bdev->main_info.fw_version_str);
 
 			if(ret == CONNV3_COREDUMP_ERR_CHIP_RESET_ONLY) {
@@ -1892,7 +1894,7 @@ coredump_fail_unlock:
 				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
 				skb->data[1] == 0x06 && bdev->main_info.hif_hook.met_log_handler) {
 		skb_pull(skb, 4);
-		bdev->main_infohif_hook.met_log_handler(bdev, skb->data, skb->len);
+		bdev->main_info.hif_hook.met_log_handler(bdev, skb->data, skb->len);
 		return 1;
 	} else if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
 				skb->len > 7 && skb->data[0] == 0xFF &&
@@ -1903,7 +1905,7 @@ coredump_fail_unlock:
 	} else if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
 				skb->len > 7 && skb->data[0] == 0xFF &&
 				skb->data[1] == 0x02 && skb->data[2] == 0x20) {
-		BTMTK_INFO_RAW(skb->data, skb->len, "%s: Tx power abnormal Event:", __func__);
+		BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: Tx power abnormal Event:", __func__);
 		switch (skb->data[3]) {
 		case 0x00:
 			BTMTK_INFO_DEV(bdev, "%s: RF0 TSSI offset too large", __func__);
@@ -1934,18 +1936,18 @@ coredump_fail_unlock:
 		return 1;
 	} else if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
 		skb->data[0] == 0xFF && skb->data[2] == 0x21) {
-		BTMTK_INFO_RAW(skb->data, skb->len, "%s: Tx power abnormal Event 2:", __func__);
+		BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: Tx power abnormal Event 2:", __func__);
 		switch (skb->data[3] & 0x0F) {
 		case 0x00:
-			BTMTK_INFO_RAW(skb->data, skb->len, "%s: [0x00] power abnormal Event", __func__);
+			BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: [0x00] power abnormal Event", __func__);
 			conn_dbg_add_log(CONN_DBG_LOG_TYPE_HW_ERR, "[bt] RF0 TSSI offset too large");
 			break;
 		case 0x01:
-			BTMTK_INFO_RAW(skb->data, skb->len, "%s: [0x01] power abnormal Event", __func__);
+			BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: [0x01] power abnormal Event", __func__);
 			conn_dbg_add_log(CONN_DBG_LOG_TYPE_HW_ERR, "[bt] RF1 TSSI offset too large");
 			break;
 		case 0x02:
-			BTMTK_INFO_RAW(skb->data, skb->len, "%s: [0x02] power abnormal Event", __func__);
+			BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: [0x02] power abnormal Event", __func__);
 			conn_dbg_add_log(CONN_DBG_LOG_TYPE_HW_ERR, "[bt] RF0 TX chipout power abnormal");
 			break;
 		}

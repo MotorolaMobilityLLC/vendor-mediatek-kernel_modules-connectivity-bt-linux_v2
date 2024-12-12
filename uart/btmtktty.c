@@ -63,6 +63,8 @@ static char event_compare_status;
 static struct tty_struct *g_tty;
 static struct tty_ldisc_ops btmtk_uart_ldisc;
 extern struct btmtk_dev *g_sbdev;
+static struct platform_device *btmtk_uart_device;
+
 #if (USE_DEVICE_NODE == 1)
 static CONNXO_CFG_PARAM_STRUCT sConnxo_cfg;
 #endif
@@ -2489,7 +2491,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 
 	/* record data from tty */
 	btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_EVT_HIF, data, count);
-	BTMTK_DBG_RAW(bdev, data, count, "%s: len[%d]", __func__, count);
+	BTMTK_DBG_RAW(bdev, data, count, "%s: len[%zu]", __func__, count);
 
 #if (SLEEP_ENABLE == 1)
 	//BTMTK_INFO_RAW(bdev, data, count, "%s: count[%d]", __func__, count);
@@ -3041,7 +3043,7 @@ static int btmtk_pm_notification(struct notifier_block *this, unsigned long even
 			btmtk_picus_enable(g_sbdev, 0);
 		}
 #else
-		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_WORKING)
+		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_WORKING) {
 			bthost_debug_print();
 			btmtk_query_fw_schedule_info(g_sbdev);
 		}
@@ -3156,9 +3158,9 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 		/* notify stack to restart BT */
 		bdev->main_info.reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 		btmtk_send_hw_err_to_host(bdev);
-	}else
+	} else {
 		btmtk_set_chip_state((void *)bdev, cif_state->ops_enter);
-
+	}
 	/* Init completion */
 	init_completion(&bdev->dump_comp);
 	init_completion(&bdev->dump_dfd_comp);
@@ -3176,6 +3178,10 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 #else
 	bt_trx_wakelock = wakeup_source_register(NULL, "bt_drv_trx");
 #endif
+
+
+	if (bdev->main_info.hif_hook.init)
+		bdev->main_info.hif_hook.init();
 
 #if (USE_DEVICE_NODE == 1)
 	btmtk_connv3_sub_drv_init(bdev);
@@ -3231,7 +3237,7 @@ static void btmtk_cif_disconnect(struct tty_struct *tty)
 #if (USE_DEVICE_NODE == 1)
 	/* update fw log bt state */
 	if (bdev->main_info.hif_hook.fw_log_state)
-		bdev->main_info.hif_hook.fw_log_state(BTMTK_FOPS_STATE_CLOSED);
+		bdev->main_info.hif_hook.fw_log_state(bdev, BTMTK_FOPS_STATE_CLOSED);
 	cancel_work_sync(&bdev->pwr_on_uds_work);
 #endif
 
@@ -3367,13 +3373,9 @@ static const struct dev_pm_ops btmtk_uart_pm_ops = {
 	SET_RUNTIME_PM_OPS(btmtk_uart_runtime_suspend, btmtk_uart_runtime_resume, NULL)
 };
 
-static struct platform_device *btmtk_uart_device;
 
 static int btmtk_uart_driver_probe(struct platform_device *pdev) {
 	BTMTK_DBG("%s", __func__);
-#if (USE_DEVICE_NODE == 1)
-	btmtk_uart_device = pdev;
-#endif
 	return 0;
 }
 
@@ -3418,6 +3420,11 @@ void btmtk_platform_driver_deinit(void) {
 	BTMTK_INFO("%s", __func__);
 	platform_device_unregister(btmtk_uart_device);
 	platform_driver_unregister(&btmtk_uart_driver);
+}
+
+struct platform_device *btmtk_get_uart_device(void)
+{
+	return btmtk_uart_device;
 }
 
 int btmtk_cif_register(void)

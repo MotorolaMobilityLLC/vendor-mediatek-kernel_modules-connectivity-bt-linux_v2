@@ -3838,8 +3838,9 @@ static int btmtk_send_set_stp1_cmd(struct btmtk_dev *bdev)
 int btmtk_cap_init(struct btmtk_dev *bdev)
 {
 	int ret = 0;
+#if (USE_DEVICE_NODE == 0)
 	char flavor[4] = {0};
-
+#endif
 	BTMTK_DBG_DEV(bdev, "%s start", __func__);
 	if (!bdev) {
 		BTMTK_ERR_DEV(bdev, "%s, bdev is NULL!", __func__);
@@ -5835,8 +5836,9 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 		return -1;
 	}
 
-#if (USE_DEVICE_NODE == 0)
 	btmtk_init_node();
+
+#if (USE_DEVICE_NODE == 0)
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_INIT);
 #endif
 	btmtk_reset_timer_add(bdev);
@@ -6171,13 +6173,6 @@ int __init main_driver_init(void)
 		main_exit();
 		return ret;
 	}
-	for (i = 0; i < btmtk_mcu_num; i++) {
-		if (g_bdev[i]->main_info.hif_hook.init)
-			ret = g_bdev[i]->main_info.hif_hook.init();
-	}
-#if (USE_DEVICE_NODE == 1)
-	btmtk_init_node();
-#endif
 
 	BTMTK_DBG("%s: Done", __func__);
 	return ret;

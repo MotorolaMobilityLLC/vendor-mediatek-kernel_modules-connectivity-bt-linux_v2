@@ -434,7 +434,7 @@ int _ioctl_copy_evt_to_buf(uint8_t *buf, int len)
 	memset(ioc_buf, 0x00, sizeof(ioc_buf));
 	ioc_buf[0] = 0x04; // evt packet type
 	memcpy(ioc_buf + 1, buf, len); // copy evt to ioctl buffer
-	BTMTK_INFO_RAW(ioc_buf, len + 1, "%s: len[%d] RX: ", __func__, len + 1);
+	BTMTK_INFO_RAW(g_sbdev, ioc_buf, (len + 1), "%s: len[%d] RX: ", __func__, len + 1);
 	return 0;
 }
 
@@ -467,7 +467,7 @@ static long BT_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long
 		if (copy_from_user(ioc_buf, (uint8_t __user *)arg, IOCTL_BT_HOST_INTTRX_SIZE))
 			retval = -EFAULT;
 		else {
-			BTMTK_INFO_RAW(ioc_buf, ioc_buf[3] + 4, "%s: len[%d] TX: ", __func__, ioc_buf[3] + 4);
+			BTMTK_INFO_RAW(g_sbdev, ioc_buf, ioc_buf[3] + 4, "%s: len[%d] TX: ", __func__, ioc_buf[3] + 4);
 			/* DynamicAdjustTxPower function */
 			if (ioc_buf[0] == 0x01 && ioc_buf[1] == 0x2D && ioc_buf[2] == 0xFC) {
 				if (ioc_buf[4] == HCI_CMD_DY_ADJ_PWR_QUERY)
@@ -613,6 +613,8 @@ int BT_init(void)
 	int32_t alloc_err = 0;
 	int32_t cdv_err = 0;
 	dev_t dev = MKDEV(BT_major, 0);
+
+	BTMTK_INFO("%s start node name(%s)", __func__, BT_DRIVER_NODE_NAME);
 
 	sema_init(&wr_mtx, 1);
 	sema_init(&rd_mtx, 1);

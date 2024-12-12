@@ -65,7 +65,7 @@ struct btmtk_fops_fwlog {
 void btmtk_init_node(void);
 void btmtk_deinit_node(void);
 void fw_log_bt_event_cb(void);
-void fw_log_bt_state_cb(uint8_t state);
+void fw_log_bt_state_cb(struct btmtk_dev *bdev, uint8_t state);
 /** file_operations: stpbtfwlog */
 int btmtk_fops_openfwlog(struct inode *inode, struct file *file);
 int btmtk_fops_closefwlog(struct inode *inode, struct file *file);

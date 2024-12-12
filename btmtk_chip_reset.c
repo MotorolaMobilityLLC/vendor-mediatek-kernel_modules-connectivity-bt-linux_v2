@@ -123,7 +123,7 @@ bool btmtk_reset_timer_check(struct btmtk_dev *bdev)
 void btmtk_reset_waker(struct work_struct *work)
 {
 	struct btmtk_dev *bt0 = container_of(work, struct btmtk_dev, reset_waker);
-	struct btmtk_dev *bdev = bt0, *bt1 = NULL;
+	struct btmtk_dev *bdev = bt0;
 	int state = 0;
 	int err = 0;
 	int cur = 0;
@@ -132,6 +132,7 @@ void btmtk_reset_waker(struct work_struct *work)
 	int set_chip_state_flag = 0;
 	int cif_event = 0;
 	struct btmtk_cif_state *cif_state = NULL;
+	struct btmtk_dev *bt1 = NULL;
 #else
 	unsigned char fstate = 0;
 #endif

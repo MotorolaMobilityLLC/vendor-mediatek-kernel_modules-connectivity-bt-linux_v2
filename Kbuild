@@ -1,4 +1,4 @@
-$(info [bt_drv] linux_v2/makefile start)
+$(info [bt_drv] linux_v2/kbuild start DEVICE_MODULES_PATH[$(DEVICE_MODULES_PATH)])
 # Support GKI mixed build
 ifeq ($(DEVICE_MODULES_PATH),)
    DEVICE_MODULES_PATH = $(DEVICE_MODULES_PATH)
