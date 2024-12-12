@@ -998,12 +998,27 @@ int btmtk_dump_end(void *priv_data){
 	return 0;
 }
 
-int btmtk_hif_dump_start(enum connv3_drv_type from_drv, void *priv_data){
+int btmtk_hif_dump_start(enum connv3_drv_type from_drv, void *priv_data)
+{
 	return btmtk_dump_start(priv_data, TRUE);
 }
 
-int btmtk_hif_dump_end(enum connv3_drv_type from_drv, void *priv_data){
+int btmtk_hif_dump_end(enum connv3_drv_type from_drv, void *priv_data)
+{
 	return btmtk_dump_end(priv_data);
+}
+
+int btmtk_pre_fmd(void)
+{
+	BTMTK_INFO("%s start", __func__);
+	return btmtk_set_powered_off_finder_mode(1);
+}
+
+int btmtk_post_fmd(void)
+{
+	BTMTK_INFO("%s: set poweroff_finder_mode to 0", __func__);
+	atomic_set(&g_sbdev->poweroff_finder_mode, 0);
+	return 0;
 }
 
 struct connv3_whole_chip_rst_cb btmtk_whole_chip_rst_cb = {
@@ -1033,6 +1048,15 @@ struct connv3_pre_calibration_cb btmtk_pre_cal_cb = {
 struct connv3_power_dump_cb btmtk_pwr_dump_cb = {
 	.power_dump_start = btmtk_dump_start,
 	.power_dump_end = btmtk_dump_end,
+};
+
+/*
+ * FMD mode
+ */
+
+struct connv3_fmd_cb btmtk_fmd_cb = {
+	.pre_fmd_cb = btmtk_pre_fmd,
+	.post_fmd_cb = btmtk_post_fmd,
 };
 
 /*
@@ -1611,6 +1635,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	btmtk_drv_cbs.cr_cb = btmtk_connv3_cr_cb;
 	btmtk_drv_cbs.pwr_dump_cb = btmtk_pwr_dump_cb;
 	btmtk_drv_cbs.hif_dump_cb = btmtk_hif_dump_cb;
+	btmtk_drv_cbs.fmd_cb = btmtk_fmd_cb;
 
 	BTMTK_DBG("%s start", __func__);
 	if (!bdev) {

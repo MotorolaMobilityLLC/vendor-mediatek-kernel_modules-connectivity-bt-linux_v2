@@ -4116,8 +4116,21 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s: poweroff_finder_mode = %d, bdev = %p", __func__, atomic_read(&bdev->poweroff_finder_mode), bdev);
 	if (atomic_read(&bdev->poweroff_finder_mode)) {
-		btmtk_set_powered_off_finder_mode(atomic_read(&bdev->poweroff_finder_mode));
-		BTMTK_WARN("%s: FMD enable, do not sent power off, return directly", __func__);
+		u8 retry = 20;
+		u8 count = 0;
+
+		ret = connv3_enter_fmd_mode();
+		if (ret != 0)
+			BTMTK_ERR("%s: connv3_enter_fmd_mode failed", __func__);
+
+		/* connv3 will callback in pre_fmd_cb => btmtk_set_powered_off_finder_mode */
+		BTMTK_WARN("%s: FMD enable, do not sent power off", __func__);
+
+		/* wait poweroff_finder_mode set to 0 in post_fmd_cb and for up to 10s */
+		while (atomic_read(&bdev->poweroff_finder_mode) && ++count <= retry) {
+			BTMTK_WARN("%s: poweroff_finder_mode = %d", __func__, atomic_read(&bdev->poweroff_finder_mode));
+			mdelay(500);
+		}
 		return 0;
 	}
 #endif
