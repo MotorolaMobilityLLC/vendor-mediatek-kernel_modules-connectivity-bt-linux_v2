@@ -1391,7 +1391,11 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 
 static const struct h4_recv_pkt mtk_recv_pkts[] = {
 	{ H4_RECV_ACL,      .recv = btmtk_recv_acl },
+#if (USE_DEVICE_NODE == 1)
+	{ H4_RECV_SCO,      .recv = btmtk_recv_sco },
+#else
 	{ H4_RECV_SCO,      .recv = hci_recv_frame },
+#endif
 	{ H4_RECV_EVENT,    .recv = btmtk_recv_event },
 	{ H4_RECV_ISO,      .recv = btmtk_recv_iso },
 #if (USE_DEVICE_NODE == 1)
@@ -1715,6 +1719,31 @@ int btmtk_recv_iso(struct hci_dev *hdev, struct sk_buff *skb)
 }
 
 #if (USE_DEVICE_NODE == 1)
+int btmtk_recv_sco(struct hci_dev *hdev, struct sk_buff *skb)
+{
+	struct btmtk_dev *bdev = NULL;
+
+	if (hdev == NULL || skb == NULL) {
+		BTMTK_ERR("%s, invalid parameters!", __func__);
+		return -EINVAL;
+	}
+
+	bdev = hci_get_drvdata(hdev);
+	if (bdev == NULL || bdev->workqueue == NULL) {
+		BTMTK_ERR("%s, bdev or workqueue is invalid!", __func__);
+		kfree_skb(skb);
+		skb = NULL;
+		return -EINVAL;
+	}
+
+	BTMTK_DBG_RAW(skb->data, skb->len, "%s:", __func__);
+
+	skb_queue_tail(&bdev->rx_q, skb);
+	queue_work(bdev->workqueue, &bdev->rx_work);
+
+	return 0;
+}
+
 int btmtk_recv_rhw(struct hci_dev *hdev, struct sk_buff *skb)
 {
 	struct btmtk_dev *bdev = NULL;
@@ -5278,6 +5307,28 @@ static void btmtk_rx_work(struct work_struct *work)
 			kfree_skb(skb);
 			skb = NULL;
 			continue;
+		} else if (hci_skb_pkt_type(skb) == MTK_HCI_SCODATA_PKT) {
+			/* for VTS SOC data loopback test workaround
+			 * Uarthub and BT uart SOC format not sync
+			 *
+			 * rearrange: 03 AA LL+2 LL+1 BB PP PP PP
+			 * original:  03 AA BB   LL 	  PP PP PP
+			 */
+			u8 original_soc_hd[] = { 0x00, 0x00, 0x00 };
+			original_soc_hd[0] = skb->data[0];
+			original_soc_hd[1] = skb->data[3];
+			original_soc_hd[2] = skb->data[1] - 2;
+
+			BTMTK_INFO_RAW(skb->data, skb->len, "%s: VTS RX before rearrange[%d]: %02x",
+					__func__, skb->len + 1, hci_skb_pkt_type(skb));
+
+			/* remove 1 byte */
+			skb_pull(skb, 1);
+			memcpy(skb->data, original_soc_hd, sizeof(original_soc_hd));
+
+			BTMTK_INFO_RAW(skb->data, skb->len, "%s: VTS RX after rearrange[%d]: %02x",
+					__func__, skb->len + 1, hci_skb_pkt_type(skb));
+
 #endif
 		}
 
