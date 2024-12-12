@@ -2231,7 +2231,7 @@ int btmtk_send_hw_err_to_host(struct btmtk_dev *bdev)
 	BTMTK_ERR("%s reset_stack_flag = %d!!", __func__, main_info.reset_stack_flag);
 
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, HWERR_EVT, hwerr_event);
-	if (hwerr_event.len < MTK_HCI_EVENT_HEAD_SIZE) {
+	if (hwerr_event.len < MTK_HCI_EVENT_HEAD_SIZE || hwerr_event.len > HCI_MAX_FRAME_SIZE) {
 		BTMTK_INFO_RAW(hwerr_event.content, hwerr_event.len, "%s: get hw err event failed:", __func__);
 		return -1;
 	}

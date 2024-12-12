@@ -791,7 +791,7 @@ static int btmtk_set_audio_pin_mux_common(struct btmtk_dev *bdev)
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, WRITE_PINMUX_EVT, write_pinmux_event);
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, AUDIO_PINMUX_NUM, write_pinmux_pin_num);
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, AUDIO_PINMUX_MODE, write_pinmux_pin_mode);
-	if (write_pinmux_cmd.len < MTK_HCI_CMD_HEAD_SIZE) {
+	if (write_pinmux_cmd.len < MTK_HCI_CMD_HEAD_SIZE || write_pinmux_cmd.len > HCI_MAX_FRAME_SIZE) {
 		BTMTK_INFO_RAW(write_pinmux_cmd.content, write_pinmux_cmd.len, "%s: get write pinmux cmd failed:", __func__);
 		return -1;
 	}
