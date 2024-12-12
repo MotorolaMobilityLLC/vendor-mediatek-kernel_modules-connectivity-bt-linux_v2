@@ -706,10 +706,12 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 #endif
 		}
 #if (USE_DEVICE_NODE == 0)
-		} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
-			btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_TX_ACL_STACK, skb->data, skb->len);
-		} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
-			btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_TX_ISO_STACK, skb->data, skb->len);
+	} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
+		btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_TX_ACL_STACK, skb->data, skb->len);
+	} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
+		btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_TX_ISO_STACK, skb->data, skb->len);
+	} else if (hci_skb_pkt_type(skb) == HCI_SCODATA_PKT) {
+		btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_TX_SCO_STACK, skb->data, skb->len);
 #else
 		} else if (hci_skb_pkt_type(skb) == MTK_HCI_SCODATA_PKT) {
 			/* for VTS SOC data loopback test workaround

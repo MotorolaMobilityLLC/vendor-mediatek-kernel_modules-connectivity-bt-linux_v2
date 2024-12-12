@@ -2324,6 +2324,7 @@ static int btusb_recv_isoc(struct btmtk_dev *bdev, void *buffer, int count)
 			if (!hci_skb_expect(skb)) {
 				/* Complete frame */
 				hci_recv_frame(bdev->hdev, skb);
+				skb = NULL;
 			}
 		} else {
 			BTMTK_INFO_DEV(bdev, "%s: the size of skb is too small", __func__);
@@ -2368,7 +2369,7 @@ static void btusb_intr_complete(struct urb *urb)
 		return;
 	}
 
-	BTMTK_DBG_DEV(bdev, "urb %p status %d count %d", urb, urb->status,
+	BTMTK_DBG_DEV(bdev, "%s: urb %p status %d count %d", __func__, urb, urb->status,
 		   urb->actual_length);
 
 	if (urb->status != 0 && intr_blocking_usb_warn < 10) {
@@ -2586,7 +2587,7 @@ static void btusb_mtk_wmt_recv(struct urb *urb)
 
 	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 
-	BTMTK_DBG_DEV(bdev, "%s : urb %p status %d count %d", __func__, urb, urb->status,
+	BTMTK_DBG_DEV(bdev, "%s: urb %p status %d count %d", __func__, urb, urb->status,
 		   urb->actual_length);
 
 	if (urb->status == 0 && urb->actual_length > 0) {
@@ -2908,7 +2909,7 @@ static void btusb_bulk_complete(struct urb *urb)
 		}
 	} else if (urb->status == -ENOENT) {
 		/* Avoid suspend failed when usb_kill_urb */
-		BTMTK_INFO_DEV(bdev, "urb %p status %d count %d", urb, urb->status,
+		BTMTK_INFO_DEV(bdev, "%s: urb %p status %d count %d", __func__, urb, urb->status,
 			urb->actual_length);
 		return;
 	}
@@ -3221,21 +3222,24 @@ static void btusb_isoc_complete(struct urb *urb)
 	}
 
 
-	BTMTK_DBG_DEV(bdev, "urb %p status %d count %d", urb, urb->status,
+	BTMTK_DBG_DEV(bdev, "%s: urb %p status %d count %d", __func__, urb, urb->status,
 		   urb->actual_length);
 
 	if (!test_bit(HCI_RUNNING, &hdev->flags))
 		return;
 
-	if (urb->status == 0) {
+	if (urb->status == 0 && urb->actual_length > 0) {
 		for (i = 0; i < urb->number_of_packets; i++) {
 			unsigned int offset = urb->iso_frame_desc[i].offset;
 			unsigned int length = urb->iso_frame_desc[i].actual_length;
 
-			if (urb->iso_frame_desc[i].status)
+			if (urb->iso_frame_desc[i].status || length == 0)
 				continue;
 
 			hdev->stat.byte_rx += length;
+
+			btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_RX_SCO_HIF,
+					urb->transfer_buffer + offset, length);
 
 			if (btusb_recv_isoc(bdev, urb->transfer_buffer + offset,
 						length) < 0) {
@@ -3392,7 +3396,7 @@ static void btusb_tx_complete(struct urb *urb)
 		return;
 	}
 
-	BTMTK_DBG_DEV(bdev, "urb %p status %d count %d", urb, urb->status,
+	BTMTK_DBG_DEV(bdev, "%s: urb %p status %d count %d", __func__, urb, urb->status,
 		   urb->actual_length);
 
 	if (!test_bit(HCI_RUNNING, &hdev->flags))
@@ -3419,7 +3423,7 @@ static void btusb_isoc_tx_complete(struct urb *urb)
 	struct hci_dev *hdev = (struct hci_dev *)skb->dev;
 	struct btmtk_dev *bdev = hci_get_drvdata(hdev);
 
-	BTMTK_DBG_DEV(bdev, "urb %p status %d count %d", urb, urb->status,
+	BTMTK_DBG_DEV(bdev, "%s: urb %p status %d count %d", __func__, urb, urb->status,
 		   urb->actual_length);
 
 	if (!test_bit(HCI_RUNNING, &hdev->flags))
@@ -3814,6 +3818,8 @@ static int submit_tx_urb(struct hci_dev *hdev, struct urb *urb, int type)
 			urb->transfer_buffer, urb->transfer_buffer_length);
 		break;
 	case HCI_SCODATA_PKT:
+		btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_TX_SCO_HIF,
+			urb->transfer_buffer, urb->transfer_buffer_length);
 		break;
 	case HCI_ISO_PKT:
 		btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_TX_ISO_HIF,
@@ -4394,9 +4400,7 @@ static void btusb_work(struct work_struct *work)
 			set_bit(BTUSB_DID_ISO_RESUME, &bdev->flags);
 		}
 
-#if CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT
-		new_alts = cif_dev->new_isoc_altsetting;
-#else
+#if CFG_SUPPORT_BLUEZ
 		if (hdev->voice_setting & 0x0020) {
 			static const int alts[3] = { 2, 4, 5 };
 
@@ -4404,7 +4408,9 @@ static void btusb_work(struct work_struct *work)
 		} else {
 			new_alts = bdev->sco_num;
 		}
-#endif /* CFG_SUPPORT_DVT || CFG_SUPPORT_HW_DVT */
+#else
+		new_alts = cif_dev->new_isoc_altsetting;
+#endif
 
 		clear_bit(BTUSB_ISOC_RUNNING, &bdev->flags);
 		usb_kill_anchored_urbs(&cif_dev->isoc_anchor);
@@ -6418,13 +6424,23 @@ void btmtk_usb_chip_reset_notify(struct btmtk_dev *bdev)
 int btmtk_usb_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
 	struct data_struct read_address_event = {0};
+	struct btmtk_usb_dev *cif_dev = NULL;
 
-	if (bdev == NULL) {
+	if (bdev == NULL || bdev->hdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
 		return -1;
 	}
 
 	BTMTK_DBG_DEV(bdev, "%s enter", __func__);
+
+	if (skb->data[0] == 0x2c) {
+		bdev->hdev->conn_hash.sco_num = 1;
+		bdev->sco_num = bdev->hdev->conn_hash.sco_num;
+		cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
+		cif_dev->new_isoc_altsetting = 6;
+		BTMTK_INFO("%s: sco link created, set alt setting to 6 for MSBC", __func__);
+		schedule_work(&bdev->work);
+	}
 
 	if (bdev->event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		skb->len >= bdev->event_need_compare_len) {

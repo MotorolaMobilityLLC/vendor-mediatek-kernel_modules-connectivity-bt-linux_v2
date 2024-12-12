@@ -971,7 +971,11 @@ void btmtk_hci_snoop_print_to_log(struct btmtk_dev *bdev)
 		"TX ISO from stack",
 		"TX ISO to FW",
 		"RX ISO to stack",
-		"RX ISO From FW"
+		"RX ISO From FW",
+		"TX SCO from stack",
+		"TX SCO to FW",
+		"RX SCO to stack",
+		"RX SCO From FW"
 #else
 		"Tx_CMD_from_Stack",
 		"Tx_from_Drv",		/* for sp uart */
@@ -988,7 +992,11 @@ void btmtk_hci_snoop_print_to_log(struct btmtk_dev *bdev)
 		"Tx_ISO_from_Stack",
 		"Tx_to_TTY",		/* for sp uart */
 		"Rx_ISO_to_Stack",
-		"Rx_ISO_from_FW"
+		"Rx_ISO_from_FW",
+		"TX SCO from stack",
+		"TX SCO to FW",
+		"RX SCO to stack",
+		"RX SCO From FW"
 #endif
 		};
 
@@ -5494,8 +5502,10 @@ static void btmtk_rx_work(struct work_struct *work)
 
 		} else if (hci_skb_pkt_type(skb) == HCI_ISO_PKT) {
 			btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_RX_ISO_STACK, skb->data, skb->len);
-
-#if (USE_DEVICE_NODE == 1)
+#if (USE_DEVICE_NODE == 0)
+		} else if (hci_skb_pkt_type(skb) == HCI_SCODATA_PKT) {
+			btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_RX_SCO_STACK, skb->data, skb->len);
+#else
 		} else if (hci_skb_pkt_type(skb) == RHW_WRITE_TYPE
 					|| hci_skb_pkt_type(skb) == RHW_READ_TYPE) {
 			bdev->main_info.hif_hook.event_filter(bdev, skb);
