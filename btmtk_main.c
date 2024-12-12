@@ -977,10 +977,10 @@ void btmtk_hci_snoop_print_to_log(struct btmtk_dev *bdev)
 #else
 		"Tx_CMD_from_Stack",
 		"Tx_from_Drv",		/* for sp uart */
-		"Rx_EVT_to_Stack",
-		"Rx_from_TTY",		/* for sp uart */
+		"Rx_EVT_to_Driver",
+		"Rx_from_TTY_new",		/* for sp uart */
 		"ADV_EVT_to_Stack",
-		"ADV_EVT_from_FW",
+		"Rx_EVT_to_Stack",
 		"NOCP_EVT_to_Stack",
 		"NOCP_EVT_from_FW",
 		"Tx_ACL_from_Stack",
@@ -5550,6 +5550,8 @@ static void btmtk_rx_work(struct work_struct *work)
 				skb = NULL;
 				continue;
 			}
+			/* record event to stack */
+			btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_ADV_EVT_HIF, skb->data, skb->len);
 #endif
 		} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
 			/* calibration backup */

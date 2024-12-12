@@ -2636,6 +2636,9 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 		return;
 	}
 
+	/* record data from tty */
+	btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_EVT_HIF, data, count);
+
 	fstate = btmtk_fops_get_state(bdev);
 	state = btmtk_get_chip_state(bdev);
 	if (fstate == BTMTK_FOPS_STATE_CLOSED
@@ -2652,8 +2655,6 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 
-	/* record data from tty */
-	btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_EVT_HIF, data, count);
 #if (KERNEL_VERSION(6, 6, 0) > LINUX_VERSION_CODE)
 	BTMTK_DBG_RAW_ALL(bdev, data, count, "%s: len[%d]", __func__, count);
 #else
