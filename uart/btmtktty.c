@@ -835,6 +835,13 @@ static int btmtk_uart_tty_ioctl(struct tty_struct *tty, struct file *file,
 			BTMTK_ERR("%s: Set HCIUARTLOADPATCH command failed (%d)", __func__, err);
 			btmtk_set_chip_state((void *)bdev, cif_state->ops_error);
 		}
+
+		err = btmtk_woble_initialize(bdev, &cif_dev->bt_woble);
+		if (err < 0)
+			BTMTK_ERR("btmtk_woble_initialize failed!");
+		else
+			BTMTK_ERR("btmtk_woble_initialize");
+
 		break;
 	case HCIUARTINIT:
 		BTMTK_INFO("%s: <!!> Set HCIUARTINIT <!!>", __func__);
