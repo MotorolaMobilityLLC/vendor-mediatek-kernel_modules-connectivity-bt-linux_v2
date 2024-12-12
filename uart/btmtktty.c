@@ -1776,6 +1776,10 @@ static int btmtk_uart_tty_compat_ioctl(struct tty_struct *tty, struct file *file
 		else
 			BTMTK_ERR("btmtk_woble_initialize");
 
+		err = btmtk_register_hci_device(bdev);
+		if (err < 0) {
+			BTMTK_ERR("btmtk_register_hci_device failed!");
+		}
 		break;
 	case HCIUARTINIT:
 		BTMTK_INFO("%s: <!!> Set HCIUARTINIT <!!>", __func__);
