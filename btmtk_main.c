@@ -2282,6 +2282,10 @@ int btmtk_dynamic_load_rom_patch(struct btmtk_dev *bdev, u32 binInfo)
 							"BT_RAM_CODE_MT6639_1_1_hdr.bin");
 							//"BT_RAM_CODE_MT6639_1_1_nonenc_hdr.bin");
 #endif
+	else if (is_mt7925(bdev->chip_id))
+		(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
+							"BT_RAM_CODE_MT7925_1_1_hdr.bin");
+
 
 	BTMTK_INFO("%s: rom patch file name is %s", __func__,
 		bdev->rom_patch_bin_file_name);
@@ -2339,7 +2343,7 @@ int btmtk_load_rom_patch_connac3(struct btmtk_dev *bdev, int  patch_flag)
 					"WIFI_MT%04x_patch_mcu_1_%x_hdr.bin",
 					bdev->chip_id & 0xffff, (bdev->fw_version & 0xff) + 1);
 
-		if (is_mt6639(bdev->chip_id))
+		if (is_mt6639(bdev->chip_id) || is_mt7925(bdev->chip_id))
 			(void)snprintf(bdev->rom_patch_bin_file_name, MAX_BIN_FILE_NAME_LEN,
 					"WIFI_MT%04x_PATCH_MCU_%x_%x_hdr.bin",
 					bdev->chip_id & 0xffff, (bdev->proj & 0xff) + 1, (bdev->fw_version & 0xff) + 1);
