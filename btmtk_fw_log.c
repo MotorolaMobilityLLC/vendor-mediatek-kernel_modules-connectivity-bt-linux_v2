@@ -109,19 +109,25 @@ static const struct proc_ops BT_proc_uart_launcher_notify_fops = {
 
 __weak int32_t btmtk_intcmd_wmt_utc_sync(void)
 {
-	BTMTK_ERR("weak function %s not implement", __func__);
+	BTMTK_WARN("weak function %s not implement", __func__);
 	return -1;
 }
 
 __weak int32_t btmtk_intcmd_set_fw_log(struct btmtk_dev *bdev, uint8_t flag)
 {
-	BTMTK_ERR("weak function %s not implement", __func__);
+	BTMTK_WARN("weak function %s not implement", __func__);
 	return -1;
 }
 
 __weak int btmtk_uart_launcher_deinit(void)
 {
-	BTMTK_ERR("weak function %s not implement", __func__);
+	BTMTK_WARN("weak function %s not implement", __func__);
+	return -1;
+}
+
+__weak int btmtk_intcmd_wmt_blank_status(unsigned char blank_state)
+{
+	BTMTK_WARN("weak function %s not implement", __func__);
 	return -1;
 }
 
@@ -132,7 +138,8 @@ void fw_log_bt_state_cb(struct btmtk_dev *bdev, uint8_t state)
 
 	/* sp use BTMTK_FOPS_STATE_OPENED to judge state */
 	on_off = (state == FUNC_ON) ? BT_FWLOG_ON : BT_FWLOG_OFF;
-	BTMTK_INFO("%s: current_bt_on(0x%x) state_cb(%d) need_on_off(0x%x)", __func__, g_bt_on, state, on_off);
+	BTMTK_INFO_LIMITTED("%s: current_log(0x%x) current_bt_on(0x%x) state_cb(%d) need_on_off(0x%x)",
+				__func__, g_log_current, g_bt_on, state, on_off);
 
 	if (g_bt_on != on_off) {
 		// changed
@@ -146,8 +153,10 @@ void fw_log_bt_state_cb(struct btmtk_dev *bdev, uint8_t state)
 			g_bt_on = BT_FWLOG_ON;
 			if (g_log_current) {
 				btmtk_intcmd_set_fw_log(g_sbdev, g_log_current);
-				btmtk_intcmd_wmt_utc_sync();
 			}
+			/* if bt open or reset when screen off, still need to notify fw blank status */
+			btmtk_intcmd_wmt_blank_status(atomic_read(&g_sbdev->blank_state));
+			btmtk_intcmd_wmt_utc_sync();
 		}
 	}
 	g_sbdev->main_info.fw_log_on = g_log_current;

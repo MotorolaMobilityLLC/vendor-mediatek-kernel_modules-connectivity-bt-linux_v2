@@ -785,6 +785,8 @@ struct btmtk_main_info {
 	int bk_rs_flag;
 	u8	dbg_send;
 	u8	dbg_send_opcode[2];
+
+	atomic_t suspend_entry;
 };
 
 enum {
@@ -883,7 +885,7 @@ struct btmtk_dev {
 	unsigned char	power_state;
 	unsigned char	fops_state;
 	unsigned char	interface_state;
-	unsigned char	blank_state;
+	atomic_t	blank_state;
 	struct btmtk_cif_state *cif_state;
 
 	/* io buffer for usb control transfer */
@@ -929,6 +931,12 @@ struct btmtk_dev {
 
 	/* UDS work for only wifi on*/
 	struct work_struct  pwr_on_uds_work;
+
+	/* notify fw screen on/off state */
+	struct work_struct  blank_state_work;
+
+	/* notify fw suspend/resume state */
+	struct work_struct  system_state_work;
 
 #if KERNEL_VERSION(6, 4, 0) <= LINUX_VERSION_CODE
 	struct gpio_desc *gpio_cs;

@@ -20,7 +20,6 @@
 #include <linux/of_device.h>
 #include "btmtk_fw_log.h"
 #include "btmtk_queue.h"
-extern void bthost_debug_print(void);
 #else
 #include "btmtk_proj_ce.h"
 #endif
@@ -2517,18 +2516,21 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	}
 #endif
 	if (data != NULL && (count > 1 || data[0] != 0x00) && cif_dev->own_state != BTMTK_FW_OWNING) {
+		if (
 #if (USE_DEVICE_NODE == 0)
-		/* Drop driver own request from FW when enter suspend */
-		if (btmtk_get_chip_state(bdev) != BTMTK_STATE_SUSPEND) {
+			/* Drop driver own request from FW when enter suspend */
+			btmtk_get_chip_state(bdev) != BTMTK_STATE_SUSPEND
+#else
+			/* Drop driver own request from FW when during suspend */
+			!atomic_read(&bdev->main_info.suspend_entry)
 #endif
-		atomic_set(&cif_dev->need_drv_own, 1);
-		atomic_set(&cif_dev->fw_wake, 1);
-		wake_up_interruptible(&tx_wait_q);
-#if (USE_DEVICE_NODE == 0)
+			) {
+			atomic_set(&cif_dev->need_drv_own, 1);
+			atomic_set(&cif_dev->fw_wake, 1);
+			wake_up_interruptible(&tx_wait_q);
 		} else {
 			BTMTK_INFO_RAW(bdev, data, count, "%s: drop driver own request when suspend,", __func__);
 		}
-#endif
 	}
 #endif
 
@@ -2699,6 +2701,9 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 			btmtk_release_uarthub(false);
 		}
 #endif
+		/* no need to judge suspend_entry here
+		 * wakelock itself has a detection count mechanism
+		 */
 #if (USE_DEVICE_NODE == 0)
 		if (bdev->bt_cfg.drv_own_wakelock_enable)
 #endif
@@ -2706,6 +2711,11 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		BTMTK_DBG("%s success, cmd[9] = 0x%02x", __func__, cmd[9]);
 	}
 unlock:
+	/* use fw own mutex to protect flag
+	 * fw log may appear during suspend,
+	 * which may also cause driver own at the same time
+	 */
+	atomic_set(&g_sbdev->main_info.suspend_entry, 0);
 	UART_OWN_MUTEX_UNLOCK();
 	return ret;
 }
@@ -2732,10 +2742,20 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	}
 
 	cif_dev->own_state = BTMTK_DRV_OWNING;
+
+	/* get wakelock */
 #if (USE_DEVICE_NODE == 0)
 	if (bdev->bt_cfg.drv_own_wakelock_enable)
+#else
+	/* notify fw suspend state feature */
+	/* if during suspend, skip get wakelock */
+	if (!atomic_read(&bdev->main_info.suspend_entry))
 #endif
 		__pm_stay_awake(bt_trx_wakelock);
+	else
+		BTMTK_INFO_DEV(bdev, "%s: skip get wakelock", __func__);
+
+	/* wait uart resume done */
 	while (bdev->suspend_state && --wait_uart_resume_cnt) {
 		usleep_range(1000, 1100);
 		BTMTK_DBG("%s wait uart resume", __func__);
@@ -2764,12 +2784,13 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	retry = BTMTK_MAX_WAKEUP_RETRY;
 	/* if fw already coredump, no need to send drv own cmd */
 	if (cif_dev->sleep_en && btmtk_get_chip_state(bdev) != BTMTK_STATE_FW_DUMP) {
-#if (USE_DEVICE_NODE == 1)
+
 		/* if fw already wake, no need to send 0xFF and wait 6ms before clr fw own */
-		if (atomic_read(&cif_dev->fw_wake) && !cif_dev->sleep_flow_hw_mech_en) {
-#else
-		if (atomic_read(&cif_dev->fw_wake)) {
+		if (atomic_read(&cif_dev->fw_wake)
+#if (USE_DEVICE_NODE == 1)
+			&& !cif_dev->sleep_flow_hw_mech_en
 #endif
+		) {
 			/* wait a while for avoid rx pkt error */
 			usleep_range(4000, 4100);
 		} else {
@@ -3028,6 +3049,15 @@ static int btmtk_pm_notification(struct notifier_block *this, unsigned long even
 
 		ret = btmtk_uart_fw_own(g_sbdev);
 		BTMTK_WARN("%s: set fw own %d", __func__, ret);
+#else
+#if (CFG_SUPPORT_FWLOG_OFF_WHEN_SUSPEND == 1)
+		/* Do not take wakelock to avoid interruption the suspend flow */
+		atomic_set(&g_sbdev->main_info.suspend_entry, 1);
+		/* notify fw suspend mode */
+		btmtk_intcmd_system_status(WMT_PARA_SUSPEND);
+		/* do fw own immediately */
+		btmtk_uart_fw_own(g_sbdev);
+#endif // CFG_SUPPORT_FWLOG_OFF_WHEN_SUSPEND
 #endif
 		break;
 	case PM_POST_SUSPEND:
@@ -3041,10 +3071,12 @@ static int btmtk_pm_notification(struct notifier_block *this, unsigned long even
 			btmtk_picus_enable(g_sbdev, 0);
 		}
 #else
-		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_WORKING) {
-			bthost_debug_print();
-			btmtk_query_fw_schedule_info(g_sbdev);
-		}
+		if (btmtk_fops_get_state(g_sbdev) == BTMTK_FOPS_STATE_OPENED) {
+			ret = schedule_work(&g_sbdev->system_state_work);
+			BTMTK_INFO("%s: ret[%d]", __func__, ret);
+			ret = NOTIFY_DONE;
+		} else
+			BTMTK_INFO("%s: fops[%d], not send resume cmd", __func__, btmtk_fops_get_state(g_sbdev));
 #endif
 		break;
 	default:
@@ -3190,6 +3222,7 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 	/* Init coredump */
 	bdev->main_info.hif_hook.coredump_handler = connv3_coredump_init(CONNV3_DEBUG_TYPE_BT, NULL);
 #endif
+
 	err = register_pm_notifier(&btmtk_pm_notifier);
 	if (err) {
 		BTMTK_ERR("Register pm notifier failed. (%d)", err);

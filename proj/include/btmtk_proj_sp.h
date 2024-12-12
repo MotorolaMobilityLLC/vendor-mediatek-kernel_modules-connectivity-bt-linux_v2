@@ -20,6 +20,12 @@
 
 #define QUERY_FW_SCHEDULE_INTERVAL	(60 * 60 * 1000)	// 1 HR interval
 
+enum wmt_system_state {
+	// wmt parameter: 0(AP suspend) / 1(AP resume)
+	WMT_PARA_SUSPEND = 0,
+	WMT_PARA_RESUME = 1
+};
+
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 /* uarthub API */
 
@@ -219,6 +225,10 @@ void btmtk_dump_gpio_state(void);
 void btmtk_dump_gpio_state_unmap(void);
 
 int btmtk_uart_launcher_deinit(void);
+
+/* suspend/resume */
+int btmtk_intcmd_system_status(unsigned char system_state);
+void bthost_debug_print(void);
 
 #endif // (USE_DEVICE_NODE == 1)
 #endif
