@@ -1,4 +1,8 @@
-export KERNEL_SRC := /lib/modules/$(shell uname -r)/build
+ifeq ($(LINUX_SRC), )
+	export KERNEL_SRC := /lib/modules/$(shell uname -r)/build
+else
+	export KERNEL_SRC := $(LINUX_SRC)
+endif
 #################### Configurations ####################
 # Compile Options for bt driver configuration.
 CONFIG_SUPPORT_BT_DL_WIFI_PATCH=y
@@ -7,6 +11,14 @@ CONFIG_SUPPORT_BLUEZ=n
 CONFIG_SUPPORT_DVT=n
 CONFIG_SUPPORT_HW_DVT=n
 CONFIG_SUPPORT_MULTI_DEV_NODE=n
+
+ifeq ($(CONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT), y)
+    ccflags-y += -DCONFIG_MP_WAKEUP_SOURCE_SYSFS_STAT
+endif
+
+ifeq ($(CONFIG_DISABLE_SYMBOL_GET_SET), y)
+    ccflags-y += -DCONFIG_DISABLE_SYMBOL_GET_SET
+endif
 
 ifneq ($(TARGET_BUILD_VARIANT), user)
     ccflags-y += -DBUILD_QA_DBG=1
@@ -52,6 +64,13 @@ ifeq ($(CONFIG_SUPPORT_MULTI_DEV_NODE), y)
     ccflags-y += -DCFG_SUPPORT_MULTI_DEV_NODE=1
 else
     ccflags-y += -DCFG_SUPPORT_MULTI_DEV_NODE=0
+endif
+
+ifeq ($(CONFIG_SUPPORT_BMR_RX_CLK), y)
+    ccflags-y += -DCFG_SUPPORT_BMR_RX_CLK=1
+    ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/
+else
+    ccflags-y += -DCFG_SUPPORT_BMR_RX_CLK=0
 endif
 
 #################### Configurations ####################

@@ -73,6 +73,173 @@ static const struct btmtk_cif_state g_cif_state[] = {
 	{BTMTK_STATE_FW_DUMP, BTMTK_STATE_FW_DUMP, BTMTK_STATE_FW_DUMP},
 };
 
+#if CFG_SUPPORT_BMR_RX_CLK
+void btmtk_bmr_getrawtime(struct timeval *tv)
+{
+	struct timespec64 ts;
+
+#if (KERNEL_VERSION(4, 18, 0) > LINUX_VERSION_CODE)
+	getrawmonotonic64(&ts);
+#else
+	ktime_get_raw_ts64(&ts);
+#endif
+	tv->tv_sec = ts.tv_sec;
+	tv->tv_usec = ts.tv_nsec/1000;
+}
+
+#if ENABLE_DEINT_IRQ
+static int btmtk_bmr_rxclk_irq_handler(int irq, void *dev)
+{
+	/* Get sys clk */
+	struct timeval tv;
+
+	if (main_info.bmr_sysclk == 0 || main_info.bmr_irq_cnt == 0) {
+		btmtk_bmr_getrawtime(&tv);
+		main_info.bmr_sysclk = (u64)tv.tv_sec * 1000000L + tv.tv_usec;
+	}
+	main_info.bmr_irq_cnt++;
+	mtk_deint_ack(irq);
+	return 0;
+}
+#endif
+static int btmtk_bmr_rxclk_enable(struct btmtk_dev *bdev, u8 irq_en, u8 trigger_type)
+{
+#define BMR_CLK_EN_CMD_LEN 8
+#define BMR_CLK_EN_EVT_LEN 7
+#define BMR_CLK_EN_OFFSET_METHOD 5
+#define BMR_CLK_EN_OFFSET_GPIO_NUM 6
+#define BMR_CLK_EN_OFFSET_TRIGGER_TYPE 7
+	int ret = 0;
+	u8 cmd[BMR_CLK_EN_CMD_LEN] = { 0x01, 0x03, 0xFD, 0x04, 0x00, 0x00, 0x00, 0x00 };
+	u8 event[BMR_CLK_EN_EVT_LEN] = { 0x04, 0x0E, 0x04, 0x01, 0x03, 0xFD, 0x00 };
+
+	BTMTK_INFO("%s enter", __func__);
+
+	if (irq_en)
+		cmd[BMR_CLK_EN_OFFSET_METHOD] = 0x01;
+	else
+		cmd[BMR_CLK_EN_OFFSET_METHOD] = 0x03;
+	cmd[BMR_CLK_EN_OFFSET_GPIO_NUM] = 0x03;
+	if (trigger_type == IRQF_TRIGGER_RISING || trigger_type == IRQF_TRIGGER_HIGH)
+		cmd[BMR_CLK_EN_OFFSET_TRIGGER_TYPE] = 0x01; /* default low, active high */
+	else
+		cmd[BMR_CLK_EN_OFFSET_TRIGGER_TYPE] = 0x00; /* default high, active low */
+
+	BTMTK_INFO_RAW(cmd, BMR_CLK_EN_CMD_LEN, "%s: enable clk, ", __func__);
+	ret = btmtk_main_send_cmd(bdev, cmd, BMR_CLK_EN_CMD_LEN,
+			event, BMR_CLK_EN_EVT_LEN, 0, 0, BTMTK_TX_PKT_FROM_HOST);
+	if (ret < 0)
+		BTMTK_ERR("%s: failed(%d)", __func__, ret);
+
+	BTMTK_INFO("%s exit", __func__);
+	return ret;
+}
+
+static int btmtk_bmr_rxclk_init(struct btmtk_dev *bdev)
+{
+	int ret = 0;
+	struct device_node *node;
+	int interrupts[3];
+	int deint[3];
+
+	/* Get irq info from dts */
+	BTMTK_INFO("%s: enter", __func__);
+	if (main_info.bmr_irq <= 0) {
+		node = of_find_compatible_node(NULL, NULL, "mediatek,connectivity-combo");
+		if (node) {
+			main_info.bmr_irq = irq_of_parse_and_map(node, 0);
+			BTMTK_INFO("%s: bmr_irq %d", __func__, main_info.bmr_irq);
+			if (main_info.bmr_irq > 0) {
+				of_property_read_u32_array(node, "interrupts",
+							interrupts, ARRAY_SIZE(interrupts));
+#if ENABLE_DEINT_IRQ
+				ret = request_irq(main_info.bmr_irq, (irq_handler_t)btmtk_bmr_rxclk_irq_handler,
+								IRQF_TRIGGER_NONE, "BTRX_CLK_ISR_Handler", bdev);
+				if (ret) {
+					BTMTK_ERR("%s: request_irq fail(%d)!!! irq_number=%d",
+								__func__, ret, main_info.bmr_irq);
+					main_info.bmr_irq = -1;
+				}
+#else
+				ret = mt_secure_call(MTK_SIP_BT_FIQ_REG, interrupts[1], interrupts[2], 0, 0);
+				BTMTK_INFO("%s: SMC call ret(%d), num(%d), type(%d)",
+							__func__, ret, interrupts[1], interrupts[2]);
+#endif
+				of_property_read_u32_array(node, "deint",
+							   deint, ARRAY_SIZE(deint));
+				mtk_deint_enable(deint[0], deint[1], deint[2]);
+			} else {
+				BTMTK_INFO("%s: can't find bmr_irq irq_number=%d", __func__, main_info.bmr_irq);
+				main_info.bmr_irq = -1;
+			}
+		} else {
+			BTMTK_INFO("%s: of_find_compatible_node fail!!!", __func__);
+			main_info.bmr_irq = -1;
+		}
+	}
+	btmtk_bmr_rxclk_enable(bdev, main_info.bmr_irq > 0 ? true : false, deint[2]);
+	main_info.bmr_irq_cnt = 0;
+	main_info.bmr_sysclk = 0;
+	main_info.bmr_irq_flag = 1;
+	return main_info.bmr_irq;
+}
+
+static void btmtk_bmr_rxclk_deinit(struct btmtk_dev *bdev)
+{
+	BTMTK_INFO("%s: enter", __func__);
+#if ENABLE_DEINT_IRQ
+	if (main_info.bmr_irq != -1) {
+		free_irq(main_info.bmr_irq, bdev);
+		main_info.bmr_irq = -1;
+	}
+#endif
+}
+
+static void btmtk_bmr_rxclk_evt_handler(struct btmtk_dev *bdev, struct sk_buff *skb)
+{
+#define RXCLK_SYS_TIME_POS 14
+	if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
+			skb->data[0] == 0x0E &&
+			skb->data[1] == 0x0C &&
+			skb->data[3] == 0x03 &&
+			skb->data[4] == 0xFD) {
+		if (main_info.bmr_irq_flag != 0 &&
+			main_info.bmr_irq > 0 &&
+			main_info.bmr_sysclk != 0 &&
+			main_info.bmr_irq_cnt == 1) {
+#if ENABLE_DEINT_IRQ
+#else
+			main_info.bmr_sysclk =
+				mt_secure_call(MTK_SIP_BT_GET_CLK, 0, 0, 0, 0);
+			BTMTK_INFO("%s: sysclk(%llu)", __func__, main_info.bmr_sysclk);
+			mtk_deint_ack(main_info.bmr_irq);
+#endif
+		} else {
+			struct timeval tv;
+
+			btmtk_bmr_getrawtime(&tv);
+			main_info.bmr_sysclk = (u64)tv.tv_sec * 1000000L + tv.tv_usec;
+		}
+		/* Add SYS_CLOCK to tail
+		 * OLD format: 0E LEN(1) 01 03 FD 00 HANDLE(2) BITCNT(2) BTCLK(4)
+		 * NEW format: 0E LEN(1) 01 03 FD 00 HANDLE(2) BITCNT(2) BTCLK(4) SYSCLK(4)
+		 */
+		skb_put(skb, 4);
+		skb->data[1] += 4;
+		skb->data[RXCLK_SYS_TIME_POS] = main_info.bmr_sysclk & 0xFF;
+		skb->data[RXCLK_SYS_TIME_POS + 1] = (main_info.bmr_sysclk >> 8) & 0xFF;
+		skb->data[RXCLK_SYS_TIME_POS + 2] = (main_info.bmr_sysclk >> 16) & 0xFF;
+		skb->data[RXCLK_SYS_TIME_POS + 3] = (main_info.bmr_sysclk >> 24) & 0xFF;
+		main_info.bmr_sysclk = 0;
+#if ENABLE_DEINT_IRQ
+		if (main_info.bmr_irq_cnt != 1)
+			BTMTK_ERR("%s: bmr_irq_cnt(%d)", __func__, main_info.bmr_irq_cnt);
+		main_info.bmr_irq_cnt = 0;
+#endif
+	}
+}
+#endif
+
 __weak int btmtk_cif_register(void)
 {
 	BTMTK_WARN("weak function %s not implement", __func__);
@@ -380,6 +547,7 @@ static void btmtk_fops_set_state(struct btmtk_dev *bdev, u8 new_state)
 
 void *btmtk_kallsyms_lookup_name(const char *name)
 {
+#ifndef CONFIG_DISABLE_SYMBOL_GET_SET
 	void *addr = __symbol_get(name);
 
 	if (addr) {
@@ -392,6 +560,8 @@ void *btmtk_kallsyms_lookup_name(const char *name)
 		__symbol_put(name);
 	}
 	return addr;
+#endif
+	return NULL;
 }
 
 static void btmtk_main_info_initialize(void)
@@ -3755,6 +3925,9 @@ err:
 	main_info.reset_stack_flag = HW_ERR_NONE;
 	bdev->get_hci_reset = 0;
 
+#if CFG_SUPPORT_BMR_RX_CLK
+	btmtk_bmr_rxclk_deinit(bdev);
+#endif
 	BTMTK_INFO("%s: end, reset_stack_flag = %d", __func__, main_info.reset_stack_flag);
 	return 0;
 }
@@ -3865,6 +4038,9 @@ static int bt_open(struct hci_dev *hdev)
 			btmtk_load_country_table(bdev);
 	}
 
+#if CFG_SUPPORT_BMR_RX_CLK
+	btmtk_bmr_rxclk_init(bdev);
+#endif
 	DUMP_TIME_STAMP("open_end");
 	return 0;
 
@@ -4042,6 +4218,9 @@ static void btmtk_rx_work(struct work_struct *work)
 				kfree_skb(skb);
 				continue;
 			}
+#if CFG_SUPPORT_BMR_RX_CLK
+			btmtk_bmr_rxclk_evt_handler(bdev, skb);
+#endif
 		}
 
 		if (hci_skb_pkt_type(skb) == HCI_EVENT_PKT) {

@@ -412,6 +412,17 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
+#if CFG_SUPPORT_BMR_RX_CLK
+	if (strncmp(i_fwlog_buf, "bmr_irq=", strlen("bmr_irq=")) == 0) {
+		u8 val = *(i_fwlog_buf + strlen("bmr_irq=")) - '0';
+
+		bmain_info->bmr_irq_flag = val;
+		BTMTK_INFO("%s: set rxclk_irq_flag to %d", __func__, bmain_info->bmr_irq_flag);
+		ret = count;
+		goto exit;
+	}
+#endif
+
 	/* For bperf, EX: echo bperf=1 > /dev/stpbtfwlog */
 	if (strncmp(i_fwlog_buf, "bperf=", strlen("bperf=")) == 0) {
 		u8 val = *(i_fwlog_buf + strlen("bperf=")) - '0';

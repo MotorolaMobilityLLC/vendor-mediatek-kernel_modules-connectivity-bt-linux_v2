@@ -859,6 +859,15 @@ static void btusb_ble_isoc_complete(struct urb *urb)
 		}
 
 		isoc_pkt_len = get_pkt_len(HCI_ISO_PKT, isoc_buf);
+		if (isoc_pkt_len > bdev->iso_threshold) {
+			BTMTK_ERR("%s iso_pkt_len(%d) > iso_threshold(%d), discard the packet!!!",
+				__func__, isoc_pkt_len, bdev->iso_threshold);
+			BTMTK_INFO_RAW(urb->transfer_buffer,
+				urb->actual_length,
+				"%s: raw data is :", __func__);
+			goto ble_iso_resub;
+		}
+
 		/* Skip padding */
 		BTMTK_DBG("%s: isoc_pkt_len = %d, urb->actual_length = %d", __func__, isoc_pkt_len, urb->actual_length);
 		if (isoc_pkt_len == HCI_ISO_PKT_HEADER_SIZE) {

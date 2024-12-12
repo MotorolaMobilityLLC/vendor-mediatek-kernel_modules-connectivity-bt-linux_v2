@@ -43,7 +43,7 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2022040801"
+#define VERSION "7.0.2022040802"
 #define SUBVER ":turnkey"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ
@@ -385,6 +385,15 @@ void btmtk_getUTCtime(struct bt_utc_struct *utc);
 	} while (0)
 #else
 #define DUMP_TIME_STAMP(__str)
+#endif
+
+#if CFG_SUPPORT_BMR_RX_CLK
+#define ENABLE_DEINT_IRQ 1
+#include <mt-plat/mtk_secure_api.h>
+extern int mtk_deint_enable(unsigned int eint_num, unsigned int spi_num, unsigned long type);
+extern int mtk_deint_ack(unsigned int irq);
+#define MTK_SIP_BT_FIQ_REG (0x82000523 | MTK_SIP_SMC_AARCH_BIT)
+#define MTK_SIP_BT_GET_CLK (0x82000524 | MTK_SIP_SMC_AARCH_BIT)
 #endif
 
 #endif /* __BTMTK_DEFINE_H__ */
