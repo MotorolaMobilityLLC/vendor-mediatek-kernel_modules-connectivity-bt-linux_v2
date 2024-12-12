@@ -177,6 +177,8 @@ struct btmtk_uart_dev {
 	u32			flush_en;
 	u8			hub_bypass_only;
 	u32			assert_state;
+	phys_addr_t		base;
+	size_t			size;
 
 	/* For uarthub setting */
 	u8			fw_hub_mode;

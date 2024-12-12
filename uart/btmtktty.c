@@ -2908,6 +2908,30 @@ unlock:
 }
 #endif
 
+static void btmtk_get_save_emi(u64 *base, size_t *size)
+{
+	struct btmtk_uart_dev *cif_dev = NULL;
+	BTMTK_INFO("%s enter", __func__);
+
+	if (!g_sbdev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
+	if (!cif_dev) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return;
+	}
+
+	*base = cif_dev->base;
+	*size = cif_dev->size;
+
+	BTMTK_INFO("%s success", __func__);
+
+	return;
+}
+
 #if (USE_DEVICE_NODE == 0)
 static int btmtk_cif_suspend(void)
 {
@@ -3192,6 +3216,9 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_dev *bdev = NULL;
 	struct btmtk_uart_dev *cif_dev = NULL;
+#if (USE_DEVICE_NODE == 1)
+	struct connv3_coredump_event_cb cb;
+#endif
 
 	/* Mediatek Driver Version */
 	BTMTK_INFO("%s: MTK BT Driver Version: %s", __func__, VERSION);
@@ -3266,6 +3293,8 @@ static int btmtk_cif_probe(struct tty_struct *tty)
 #if (USE_DEVICE_NODE == 1)
 	btmtk_connv3_sub_drv_init(bdev);
 	btmtk_pwrctrl_register_evt();
+
+	cb.get_save_emi = btmtk_get_save_emi;
 
 	/* Init coredump */
 	bdev->main_info.hif_hook.coredump_handler = connv3_coredump_init(CONNV3_DEBUG_TYPE_BT, NULL);

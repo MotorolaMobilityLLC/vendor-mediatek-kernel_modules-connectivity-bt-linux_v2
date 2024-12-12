@@ -21,6 +21,9 @@
 #include <linux/of_gpio.h>
 #include <linux/gpio.h>
 #include <linux/interrupt.h>
+#include <linux/of_irq.h>
+#include <linux/of_reserved_mem.h>
+#include <linux/of.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 #include "mtk_disp_notify.h"
 #endif
@@ -1700,6 +1703,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	struct tty_struct *tty = NULL;
 	struct connv3_sub_drv_ops_cb btmtk_drv_cbs;
 	int ret;
+	struct reserved_mem *rmem = NULL;
 
 	btmtk_drv_cbs.pwr_on_cb = btmtk_pwr_on_cb;
 	btmtk_drv_cbs.rst_cb = btmtk_whole_chip_rst_cb;
@@ -1742,6 +1746,27 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	if (ret < 0)
 		BTMTK_ERR("[ERR] %s: mediatek,mt6991-conn_scp dfd-value-size ret[%d]", __func__, ret);
 	BTMTK_INFO("%s: dfd-value-size =  0x%04x", __func__, bdev->dfd_value_size);
+
+	tty->dev->of_node = of_find_compatible_node(NULL, NULL, "mediatek,bt-coredump-reserve-memory");
+	if (!tty->dev->of_node) {
+		BTMTK_ERR("[ERR] %s: mediatek,bt-coredump-reserve-memory of_node not found", __func__);
+
+	} else {
+		rmem = of_reserved_mem_lookup(tty->dev->of_node);
+		if (!rmem) {
+			BTMTK_ERR("[ERR] %s: of_reserved_mem_lookup failed.", __func__);
+		} else {
+			cif_dev->base = rmem->base;
+			cif_dev->size = rmem->size;
+			BTMTK_INFO("%s: Coredump EMI base=%llx, size=0x%zx", __func__, cif_dev->base, cif_dev->size);
+		}
+	}
+
+	/*
+	tty->dev->of_node = of_parse_phandle(tty->dev->of_node, "memory-region", 0);
+	if (!tty->dev->of_node)
+		BTMTK_ERR("[ERR] %s: memory-region not found", __func__);
+	*/
 
 	tty->dev->of_node = of_find_compatible_node(NULL, NULL, "mediatek,bt");
 	if (!tty->dev->of_node)
