@@ -63,8 +63,20 @@ void btmtk_reset_waker(struct work_struct *work)
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, reset_waker);
 	struct btmtk_cif_state *cif_state = NULL;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	int state = BTMTK_STATE_INIT;
 	int cif_event = 0, err = 0;
 	int cur = 0;
+
+	/* Check chip state is ok to do reset or not */
+	state = btmtk_get_chip_state(bdev);
+	if (state == BTMTK_STATE_SUSPEND) {
+		BTMTK_INFO("%s suspend state don't do chip reset!", __func__);
+		return;
+	}
+	if (state == BTMTK_STATE_PROBE) {
+		bmain_info->chip_reset_flag = 1;
+		BTMTK_INFO("%s just do whole chip reset in probe stage!", __func__);
+	}
 
 	btmtk_reset_timer_del(bdev);
 
@@ -177,7 +189,6 @@ void btmtk_reset_waker(struct work_struct *work)
 
 void btmtk_reset_trigger(struct btmtk_dev *bdev)
 {
-	int state = BTMTK_STATE_INIT;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	if (atomic_read(&bmain_info->chip_reset) ||
@@ -185,16 +196,6 @@ void btmtk_reset_trigger(struct btmtk_dev *bdev)
 		BTMTK_INFO("%s return, chip_reset = %d, subsys_reset = %d!", __func__,
 			atomic_read(&bmain_info->chip_reset), atomic_read(&bmain_info->subsys_reset));
 		return;
-	}
-
-	state = btmtk_get_chip_state(bdev);
-	if (state == BTMTK_STATE_SUSPEND) {
-		BTMTK_INFO("%s suspend state don't do chip reset!", __func__);
-		return;
-	}
-	if (state == BTMTK_STATE_PROBE) {
-		bmain_info->chip_reset_flag = 1;
-		BTMTK_INFO("%s just do whole chip reset in probe stage!", __func__);
 	}
 
 	schedule_work(&bdev->reset_waker);
