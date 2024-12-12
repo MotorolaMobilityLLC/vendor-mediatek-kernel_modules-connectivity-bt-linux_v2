@@ -808,11 +808,13 @@ void btmtk_uart_sp_dump_debug_sop(struct btmtk_dev *bdev)
 	}
 
 	state = btmtk_get_chip_state(bdev);
-	BTMTK_INFO("%s: start, bt assert_state[%d] rhw_en[%d] bt_state[%d]",
-				__func__, atomic_read(&bdev->assert_state), cif_dev->rhw_en, state);
+	BTMTK_INFO("%s: start, bt assert_state[%d] rhw_bypss[%d] bt_state[%d]",
+				__func__, atomic_read(&bdev->assert_state),
+				cif_dev->ap_cfg.detail.rhw_bypass, state);
 
-	if (cif_dev->rhw_en && state < BTMTK_STATE_PROBE && state > BTMTK_STATE_SEND_ASSERT) {
-		BTMTK_ERR("%s: not trigger debug_sop", __func__);
+	if (cif_dev->ap_cfg.detail.rhw_bypass ||
+			state < BTMTK_STATE_PROBE || state > BTMTK_STATE_SEND_ASSERT) {
+		BTMTK_ERR("%s: not trigger debug_sop, chip_state[%d]", __func__, state);
 		return;
 	}
 

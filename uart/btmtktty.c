@@ -692,20 +692,22 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 	 * If disable uarthub, fw will trigger EINT to notify host
 	 * If enable uarthub, fw will send 0xFF and 0xF0 to host
 	 */
-	cif_dev->fw_hub_mode = 1;
-#else
-	/* uarthub setting
-	 * ex: thes last byte means hub enable, rhw disable, crc disable
-	 * DX-4: need to tell connsys using new/old sleep flow
-	 */
-	if (!cif_dev->sleep_flow_hw_mech_en) {
-		BTMTK_INFO("%s sleep_flow_hw_mech_en: %d, old sleep flow", __func__, cif_dev->sleep_flow_hw_mech_en);
-		cif_dev->fw_hub_mode = 3;
-	}
+	cif_dev->ap_cfg.detail.hub_mode_en = 1;
 #endif
 
-	cmd[hub_crc_rhw_offset] = (cif_dev->fw_hub_mode << 4 | !cif_dev->rhw_en << 1 | !cif_dev->crc_en << 0 |
-					cif_dev->inband_en << 2);
+	/* setting config */
+	{
+		/* inband enable & fw inband picus enable*/
+		cif_dev->ap_cfg.detail.inband_picus_fc_en =
+			(cif_dev->ap_cfg.detail.inband_en & cif_dev->fw_cfg.detail.inband_picus_fc_en);
+		/* host register uart callback & fw feature enable */
+		cif_dev->ap_cfg.detail.wakeup_enh_en =
+			(cif_dev->uart_wakeup_cb_en & cif_dev->fw_cfg.detail.wakeup_enh_en);
+		/* control by fw */
+		cif_dev->ap_cfg.detail.picus_fc_en = cif_dev->fw_cfg.detail.picus_fc_en;
+	}
+
+	cmd[hub_crc_rhw_offset] = cif_dev->ap_cfg.setting_byte;
 
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, cmd_len, event, SETBAUD_EVT_LEN, 0,
@@ -717,7 +719,8 @@ int btmtk_uart_send_set_uart_cmd(struct hci_dev *hdev, struct UART_CONFIG *uart_
 	}
 
 	cif_dev->uart_baudrate_set = 1;
-	BTMTK_INFO("%s done, fc_offset[%d], hub_crc_rhw_offset[%d]", __func__, fc_offset, hub_crc_rhw_offset);
+	BTMTK_INFO("%s done, fc_offset[%d], hub_crc_rhw_offset[%d], setting_byte[0x%x]",
+			__func__, fc_offset, hub_crc_rhw_offset, cmd[hub_crc_rhw_offset]);
 
 	return 0;
 }
@@ -1071,7 +1074,7 @@ static void btmtk_uart_trigger_assert(struct btmtk_dev *bdev)
 	BTMTK_INFO("%s: set bt assert_state[1]", __func__);
 	atomic_set(&bdev->assert_state, BTMTK_ASSERT_START);
 
-	if (cif_dev->rhw_en == 0) {
+	if (cif_dev->ap_cfg.detail.rhw_bypass) {
 		/* not enable rhw yet, do hif dump */
 		if (bdev->main_info.hif_hook.dump_hif_debug_sop)
 			bdev->main_info.hif_hook.dump_hif_debug_sop(bdev);
@@ -1160,25 +1163,29 @@ static int btmtk_query_fw_uart_settings_cmd(struct btmtk_dev *bdev)
 	 *		AA AA AA AA:
 	 *			Max supported baudrate
 	 *		CC:
-	 *			[0] CRC suuported
-	 *			[1] RHW suuported
-	 *			[2] inband suuported
-	 *			[4] hub mode suuported
+	 *			[0] CRC supported
+	 *			[1] RHW supported
+	 *			[2] inband supported
+	 *			[3] wakeup enhance supported
+	 *			[4] hub mode supported
+	 *			[5] RSV (hw mode bypass)
+	 *			[6] picus flow control supported
+	 *			[7] inband picus flow control supported
 	 */
-	memcpy(&cif_dev->fw_uart_settings.max_baudrate, &bdev->io_buf[9],
-			sizeof(cif_dev->fw_uart_settings.max_baudrate));
-	cif_dev->fw_uart_settings.query_status = bdev->io_buf[7];
-	cif_dev->fw_uart_settings.hub_setting_byte = bdev->io_buf[13];
+	memcpy(&cif_dev->fw_cfg.max_baudrate, &bdev->io_buf[9],
+			sizeof(cif_dev->fw_cfg.max_baudrate));
+	cif_dev->fw_cfg.query_status = bdev->io_buf[7];
+	cif_dev->fw_cfg.setting_byte = bdev->io_buf[13];
 
-	BTMTK_INFO("%s: max_baudrate[%u], hub_setting_byte[%x], query_status[%d]",
-			__func__, cif_dev->fw_uart_settings.max_baudrate,
-			cif_dev->fw_uart_settings.hub_setting_byte,
-			cif_dev->fw_uart_settings.query_status);
-	BTMTK_INFO("%s: crc_support[%d], rhw_support[%d], inband_support[%d], hub_mode_support[%d]",
-			__func__, cif_dev->fw_uart_settings.hub_setting_detail.crc_support,
-			cif_dev->fw_uart_settings.hub_setting_detail.rhw_support,
-			cif_dev->fw_uart_settings.hub_setting_detail.inband_support,
-			cif_dev->fw_uart_settings.hub_setting_detail.hub_mode_support);
+	BTMTK_INFO("%s: max_baudrate[%u], setting_byte[0x%x], query_status[%d]",
+			__func__, cif_dev->fw_cfg.max_baudrate,
+			cif_dev->fw_cfg.setting_byte,
+			cif_dev->fw_cfg.query_status);
+
+	BTMTK_INFO("%s: inband_en[%d], wakeup_enh_en[%d], hub_mode_en[%d]",
+			__func__, cif_dev->fw_cfg.detail.inband_en,
+			cif_dev->fw_cfg.detail.wakeup_enh_en,
+			cif_dev->fw_cfg.detail.hub_mode_en);
 
 	return ret;
 }
@@ -1251,6 +1258,8 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	reinit_completion(&bdev->dump_dfd_comp);
 	bdev->is_whole_chip_reset = FALSE;
 	bdev->main_info.dbg_send = 0;
+	cif_dev->ap_cfg.setting_byte = 0;
+	cif_dev->fw_cfg.setting_byte = 0;
 
 	/* set tty host baud and flowcontrol to default value */
 	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);
@@ -1264,14 +1273,18 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		uart_cfg.iBaudrate = cif_dev->baudrate;
 
 	/* uarhub setting */
-	cif_dev->fw_hub_mode = 0;
-	cif_dev->rhw_en = 0;
-	cif_dev->crc_en = 0;
+	cif_dev->ap_cfg.detail.hub_mode_en = 0;
+	cif_dev->ap_cfg.detail.rhw_bypass = 1;
+	cif_dev->ap_cfg.detail.crc_bypass = 1;
 	cif_dev->fw_dl_ready = 0;
 	cif_dev->flush_en = 1;
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	cif_dev->sleep_flow_hw_mech_en = (mtk8250_uart_hub_get_bt_sleep_flow_hw_mech_en() <= 0) ? 0 : mtk8250_uart_hub_get_bt_sleep_flow_hw_mech_en();
 	BTMTK_INFO("sleep_flow_hw_mech_en: %d", cif_dev->sleep_flow_hw_mech_en);
+
+	/* for set uart cmd, old wakeup flow use 1 */
+	if (!cif_dev->sleep_flow_hw_mech_en)
+		cif_dev->ap_cfg.detail.hw_mode_bypass = 1;
 #endif
 	/* Flush any pending characters in the driver and discipline. */
 	tty_ldisc_flush(tty);
@@ -1365,33 +1378,43 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		goto exit;
 	}
 
+	/* after fw download */
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	if (cif_dev->hub_en && !cif_dev->hub_bypass_only) {
 		/* uarhub setting */
-		cif_dev->fw_hub_mode = 1;
-		cif_dev->crc_en = 1;
+		cif_dev->ap_cfg.detail.hub_mode_en = 1;
+		cif_dev->ap_cfg.detail.crc_bypass = 0;
+
 #if defined(CFG_INBAND_SUPPORT)
 		/* check UARTHUB support inband cmd or not */
 		if (mtk8250_uart_hub_inband_is_support() == 1)
-			cif_dev->inband_en = 1;
-		BTMTK_INFO("%s mtk8250_uart_hub_inband_is_support, ret[%d]", __func__, cif_dev->inband_en);
+			cif_dev->ap_cfg.detail.inband_en = 1;
+		BTMTK_INFO("%s mtk8250_uart_hub_inband_is_support, ret[%d]",
+				__func__, cif_dev->ap_cfg.detail.inband_en);
 #endif // CFG_INBAND_SUPPORT
+
 	} else
 		BTMTK_INFO("%s hub_bypass_only, not send hub_en to fw", __func__);
 #endif
 
 	/* setting after fw download ready */
 	cif_dev->fw_dl_ready = 1;
-	cif_dev->rhw_en = 1;
+	cif_dev->ap_cfg.detail.rhw_bypass = 0;
 
-#if defined(CFG_INBAND_SUPPORT)
-	/* check FW support inband cmd or not */
+	/* query fw feature configs */
 	btmtk_query_fw_uart_settings_cmd(bdev);
-	if (!cif_dev->fw_uart_settings.hub_setting_detail.inband_support) {
-		BTMTK_INFO("%s fw not suuport inband", __func__);
-		cif_dev->inband_en = 0;
+
+	/* check support inband or not */
+	if (!cif_dev->fw_cfg.detail.inband_en) {
+		BTMTK_INFO("%s fw not support inband", __func__);
+		cif_dev->ap_cfg.detail.inband_en = 0;
 	}
-#endif // CFG_INBAND_SUPPORT
+
+#if !defined(CFG_INBAND_SUPPORT)
+	/* disable inband config */
+	BTMTK_INFO("%s inband config not enable", __func__);
+	cif_dev->ap_cfg.detail.inband_en = 0;
+#endif // ! CFG_INBAND_SUPPORT
 
 	/* set chip baud and flowcontrol to config setting */
 	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
@@ -1406,7 +1429,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		ret = mtk8250_uart_hub_enable_bypass_mode(0);
 		BTMTK_INFO("%s after fw dl, mtk8250_uart_hub_enable_bypass_mode(0) ret[%d]", __func__, ret);
 #if defined(CFG_INBAND_SUPPORT)
-		if (cif_dev->inband_en) {
+		if (cif_dev->ap_cfg.detail.inband_en) {
 			ret = mtk8250_uart_hub_inband_enable_ctrl(1);
 			BTMTK_INFO("%s mtk8250_uart_hub_inband_enable_ctrl(1) ret[%d]", __func__, ret);
 		}

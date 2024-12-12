@@ -1863,6 +1863,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 #if defined(CFG_UART_WAKEUP_SUPPORT)
 		ret = mtk8250_wakeup_callback_register(btmtk_uart_wakeup_cb, bdev);
 		BTMTK_INFO("%s mtk8250_wakeup_callback_register ret[%d]", __func__, ret);
+		cif_dev->uart_wakeup_cb_en = 1;
 #endif // CFG_UART_WAKEUP_SUPPORT
 	}
 #endif // CONFIG_MTK_UARTHUB

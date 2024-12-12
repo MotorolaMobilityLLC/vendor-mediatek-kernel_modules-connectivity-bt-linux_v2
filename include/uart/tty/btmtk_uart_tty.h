@@ -140,19 +140,22 @@ struct btmtk_uart_data {
 	const char *fwname;
 };
 
-struct btmtk_fw_uart_settings {
+struct btmtk_uart_settings {
 	u32	max_baudrate;
+	u8	query_status;
 	union {
-		u8	hub_setting_byte;
+		u8	setting_byte;
 			struct {
-				u8	crc_support : 1;			// last bit[0]
-				u8	rhw_support : 1;			// last bit[1]
-				u8	inband_support : 1;			// last bit[2]
-				u8	reserve : 1;				// last bit[3]
-				u8	hub_mode_support : 1;			// last bit[4]
-			} hub_setting_detail;
+				u8	crc_bypass : 1;			// bit[0] : CRC bypass
+				u8	rhw_bypass : 1;			// bit[1] : RHW bypass
+				u8	inband_en : 1;			// bit[2] : inband enable
+				u8	wakeup_enh_en : 1;		// bit[3] : wakeup enhance enable
+				u8	hub_mode_en : 1;		// bit[4] : hub mode enable
+				u8	hw_mode_bypass : 1;		// bit[5] : hw mode bypass
+				u8	picus_fc_en : 1;		// bit[6] : picus flow control enable
+				u8	inband_picus_fc_en : 1;		// bit[7] : inband picus flow control
+			} detail;
 		};
-		u8	query_status;
 };
 
 struct btmtk_uart_dev {
@@ -195,15 +198,15 @@ struct btmtk_uart_dev {
 	phys_addr_t		base;
 	size_t			size;
 
-	/* For uarthub setting */
-	u8			fw_hub_mode;
-	u8			crc_en;
-	u8			rhw_en;
+	/* fw download state */
 	u8			fw_dl_ready;
-	int			inband_en;
 
-	/* For uarthub setting */
-	struct btmtk_fw_uart_settings	fw_uart_settings;
+	/* For uart setting */
+	struct btmtk_uart_settings	fw_cfg;
+	struct btmtk_uart_settings	ap_cfg;
+
+	/* wakeup enhance feature, used to replace 0xff wakeup */
+	u8			uart_wakeup_cb_en;
 
 	/* driver,fw own */
 	bool			no_fw_own;
