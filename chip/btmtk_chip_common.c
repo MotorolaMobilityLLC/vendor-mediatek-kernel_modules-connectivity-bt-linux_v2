@@ -638,12 +638,18 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 {
 	int ret = 0;
 	/* parsing commands */
-	struct data_struct reset_cmd = {0}, fw_coredump_cmd = {0};
+	struct data_struct reset_cmd = {0}, fw_coredump_cmd = {0}, picus_cmd = {0};
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s bdev is NULL", __func__);
+		return -1;
+	}
 
 	BTMTK_DBG_DEV(bdev, "%s enter", __func__);
 
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, HCI_RESET_CMD, reset_cmd);
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, FD5B_ASSERT_CMD, fw_coredump_cmd);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, PICUS_ENABLE_CMD, picus_cmd);
 
 	/* +1 byte for not include pkt_type */
 	btmtk_dispatch_fwlog_bluetooth_kpi(bdev, skb->data + 1, skb->len - 1, hci_skb_pkt_type(skb));
@@ -704,6 +710,11 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 #else
 			BTMTK_INFO_DEV(bdev, "%s: got command: 0x03 0C 00 (HCI_RESET)", __func__);
 #endif
+		} else if (skb->len == picus_cmd.len &&
+			!memcmp(skb->data, picus_cmd.content, picus_cmd.len - 1)) {
+			/* set fw log level from host */
+			bdev->main_info.fw_log_on = skb->data[picus_cmd.len - 1];
+			BTMTK_INFO_DEV(bdev, "%s: set fw log level from host[%d]", __func__, bdev->main_info.fw_log_on);
 		}
 #if (USE_DEVICE_NODE == 0)
 	} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
