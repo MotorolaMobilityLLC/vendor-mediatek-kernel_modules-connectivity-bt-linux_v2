@@ -42,8 +42,12 @@
 #include <linux/vmalloc.h>
 #include <linux/rtc.h>
 
+#ifdef CFG_CHIP_RESET_KO_SUPPORT
+#include "reset.h"
+#endif
+
 /** Driver version */
-#define VERSION "7.0.2022052401"
+#define VERSION "7.0.2022062001"
 #define SUBVER ":turnkey"
 
 #ifdef CFG_SUPPORT_WAKEUP_IRQ

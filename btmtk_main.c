@@ -271,6 +271,24 @@ __weak int btmtk_send_apcf_reserved(struct btmtk_dev *bdev)
 	return -1;
 }
 
+#ifdef CFG_CHIP_RESET_KO_SUPPORT
+void btmtk_reset_ko_register(void)
+{
+#ifdef CHIP_IF_SDIO
+	struct BT_NOTIFY_DESC bt_notify_desc;
+
+	bt_notify_desc.WifiNotifyBtSubResetStep1 = btmtk_sdio_set_driver_own_for_subsys_reset;
+	bt_notify_desc.WifiNotifyReadBtMcuPc = btmtk_sdio_read_bt_mcu_pc;
+	bt_notify_desc.WifiNotifyReadWifiMcuPc = btmtk_sdio_read_wifi_mcu_pc;
+	register_bt_notify_callback(&bt_notify_desc);
+#elif defined(CHIP_IF_USB)
+
+#endif
+	BTMTK_INFO(" %s done", __func__);
+
+}
+#endif
+
 #if 0
 void btmtk_do_gettimeofday(struct timeval *tv)
 {
@@ -4406,7 +4424,7 @@ int btmtk_register_hci_device(struct btmtk_dev *bdev)
 	}
 
 #if CFG_SUPPORT_BLUEZ
-
+	UNUSED(ret);
 #else
 	/* why need to clear flag HCI_SETUP? */
 	/* reason: if don't clearflag HCI_SETUP, bluedroid do open will return at
@@ -4797,8 +4815,17 @@ int __init main_driver_init(void)
 		return ret;
 	}
 
+#ifdef CFG_CHIP_RESET_KO_SUPPORT
+	btmtk_reset_ko_register();
+#endif
+
 	if (main_info.hif_hook.init)
 		ret = main_info.hif_hook.init();
+
+#ifdef CFG_CHIP_RESET_KO_SUPPORT
+	/* notify reset ko module BT insmod ok */
+	rstNotifyWholeChipRstStatus(RST_MODULE_BT, RST_MODULE_STATE_KO_INSMOD, NULL);
+#endif
 
 	BTMTK_INFO("%s: Done", __func__);
 	return ret;
@@ -4815,6 +4842,17 @@ void __exit main_driver_exit(void)
 	btmtk_cif_deregister();
 
 	main_exit();
+
+#ifdef CFG_CHIP_RESET_KO_SUPPORT
+	/* notify reset ko module BT rmmod */
+	rstNotifyWholeChipRstStatus(RST_MODULE_BT, RST_MODULE_STATE_KO_RMMOD, NULL);
+#ifdef CHIP_IF_SDIO
+	unregister_bt_notify_callback();
+#elif defined(CHIP_IF_USB)
+
+#endif
+
+#endif
 }
 
 module_init(main_driver_init);

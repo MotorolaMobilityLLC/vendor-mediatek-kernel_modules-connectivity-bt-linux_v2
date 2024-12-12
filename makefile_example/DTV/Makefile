@@ -22,15 +22,40 @@ CURRENT_DIR=$(PWD)/../../../linux_mts/ko_modules/bt_driver_linux_v2
 #################### Configurations ####################
 # Compile Options for bt driver configuration.
 CONFIG_SUPPORT_BT_DL_WIFI_PATCH=y
+CONFIG_SUPPORT_BT_DL_ZB_PATCH=y
 CONFIG_SUPPORT_BLUEZ=n
 CONFIG_SUPPORT_DVT=n
 CONFIG_SUPPORT_HW_DVT=n
 CONFIG_SUPPORT_MULTI_DEV_NODE=n
+CONFIG_GKI_SUPPORT=y
+
+ifeq ($(CONFIG_GKI_SUPPORT), y)
+ccflags-y += -DCFG_CHIP_RESET_KO_SUPPORT
+ccflags-y += -I$(src)/../../wlan_mt7961_reset.ko_intermediates/LINKED/reset/include/
+ccflags-y += -I$(src)/../wlan/mtk/gen4m_mt7961/reset/include/
+
+RESET_DIR = $(shell pwd)/../../KERNEL_MODULES/wlan_mt7961_reset.ko_intermediates/LINKED/Module.symvers
+$(warning bt driver unify1111 RESET_DIR=$(RESET_DIR))
+$(info 'RESET_DIR=' $(RESET_DIR))
+KBUILD_EXTRA_SYMBOLS += $(RESET_DIR)
+endif
+
+ifneq ($(TARGET_BUILD_VARIANT), user)
+    ccflags-y += -DBUILD_QA_DBG=1
+else
+    ccflags-y += -DBUILD_QA_DBG=0
+endif
 
 ifeq ($(CONFIG_SUPPORT_BT_DL_WIFI_PATCH), y)
     ccflags-y += -DCFG_SUPPORT_BT_DL_WIFI_PATCH=1
 else
     ccflags-y += -DCFG_SUPPORT_BT_DL_WIFI_PATCH=0
+endif
+
+ifeq ($(CONFIG_SUPPORT_BT_DL_ZB_PATCH), y)
+    ccflags-y += -DCFG_SUPPORT_BT_DL_ZB_PATCH=1
+else
+    ccflags-y += -DCFG_SUPPORT_BT_DL_ZB_PATCH=0
 endif
 
 ifeq ($(CONFIG_SUPPORT_BLUEZ), y)
@@ -61,6 +86,8 @@ else
     ccflags-y += -DCFG_SUPPORT_MULTI_DEV_NODE=0
 endif
 
+ccflags-y += -DDEBUG_DUMP_TIME
+
 #################### Configurations ####################
 # For chip interface, driver supports "usb", "sdio", "uart_tty", "uart_serdev" and "btif"
 MTK_CHIP_IF := usb
@@ -74,7 +101,7 @@ ifeq ($(MTK_CHIP_IF), sdio)
 else ifeq ($(MTK_CHIP_IF), usb)
     MOD_NAME = btmtk_usb_unify
     CFILES := usb/btmtkusb.c btmtk_woble.c btmtk_chip_reset.c
-    ccflags-y += -DCHIP_IF_USB
+    ccflags-y += -DCHIP_IF_USB -DBTMTK_ISOC_TEST=1
     ccflags-y += -I$(src)/include/usb
 else ifeq ($(MTK_CHIP_IF), uart_tty)
     MOD_NAME = btmtk_uart_unify
@@ -97,12 +124,14 @@ CFILES += btmtk_main.c btmtk_fw_log.c
 
 ccflags-y += -I$(src)/include/ -I$(KERNEL_SRC)/include/ -I$(KERNEL_SRC)/drivers/bluetooth
 
-ccflags-y += -Werror
-
+ccflags-y += -DANDROID_OS
 $(MOD_NAME)-objs := $(CFILES:.c=.o)
 
 obj-m += $(MOD_NAME).o
 
+ifneq ($(TARGET_BUILD_VARIANT), user)
+ccflags-y += -DBTMTK_DEBUG_SOP
+endif
 
 #VPATH = /opt/toolchains/gcc-linaro-aarch64-linux-gnu-4.9-2014.09_linux
 #UART_MOD_NAME = btmtk_uart
