@@ -615,6 +615,7 @@ struct btmtk_main_info {
 	atomic_t chip_reset;
 	atomic_t subsys_reset_count;
 	atomic_t whole_reset_count;
+	atomic_t subsys_reset_conti_count;
 
 	u8 reset_stack_flag;
 	struct wakeup_source *fwdump_ws;

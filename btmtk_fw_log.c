@@ -922,6 +922,7 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 	} else if (memcmp(skb->data, &hci_reset_event[1], HCI_RESET_EVT_LEN - 1) == 0) {
 		BTMTK_INFO("%s: Get RESET_EVENT", __func__);
 		bdev->get_hci_reset = 1;
+		atomic_set(&bmain_info->subsys_reset_conti_count, 0);
 	}
 	return 0;
 }
