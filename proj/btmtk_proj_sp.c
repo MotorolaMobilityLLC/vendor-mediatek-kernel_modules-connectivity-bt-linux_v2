@@ -315,7 +315,7 @@ void btmtk_release_uarthub(bool force)
 	}
 
 	/* Clr TX,RX request, let uarthub can sleep */
-	if (cif_dev->sleep_en || force) {
+	if ((cif_dev->sleep_en || force) && (btmtk_get_chip_state(g_sbdev) != BTMTK_STATE_DISCONNECT)) {
 		ret =  mtk8250_uart_hub_dev0_clear_rx_request(cif_dev->tty);
 		BTMTK_DBG("%s mtk8250_uart_hub_dev0_clear_rx_request ret[%d]", __func__, ret);
 		if (ret)
