@@ -556,7 +556,7 @@ void btmtk_resetko_reset(void);
 void btmtk_resetko_notify(unsigned int event, void *data);
 extern enum ReturnStatus resetko_register_module(enum ModuleType module,
 						char *name,
-#if defined(RESETKO_API_VERSION) && (RESETKO_API_VERSION != 2)
+#if !defined(RESETKO_API_VERSION) || (RESETKO_API_VERSION == 1)
 						enum TriggerResetApiType resetApiType,
 						void *resetFunc,
 #endif
