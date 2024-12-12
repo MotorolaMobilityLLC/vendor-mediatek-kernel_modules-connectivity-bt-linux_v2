@@ -1536,15 +1536,6 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 		BTMTK_ERR("[ERR] %s: mediatek,mt6989-conn_scp dfd-value-size ret[%d]", __func__, ret);
 	BTMTK_INFO("%s: dfd-value-size =  0x%04x", __func__, bdev->dfd_value_size);
 
-	bdev->dfd_value_addr_remap_base = ioremap(bdev->dfd_value_addr, bdev->dfd_value_size);
-	if (bdev->dfd_value_addr_remap_base == NULL) {
-		BTMTK_ERR("%s: dfd_value_addr_remap_base failed", __func__);
-	} else {
-		memcpy_fromio(bdev->temp_buf, (char *)bdev->dfd_value_addr_remap_base, bdev->dfd_value_size);
-		BTMTK_INFO("%s: bdev->temp_buf[0] =  0x%02x, bdev->temp_buf[1] =  0x%02x", __func__, bdev->temp_buf[0], bdev->temp_buf[1]);
-		iounmap(bdev->dfd_value_addr_remap_base);
-	}
-
 	tty->dev->of_node = of_find_compatible_node(NULL, NULL, "mediatek,bt");
 	if (!tty->dev->of_node)
 		BTMTK_ERR("[ERR] %s: mediatek,bt of_node not found", __func__);
