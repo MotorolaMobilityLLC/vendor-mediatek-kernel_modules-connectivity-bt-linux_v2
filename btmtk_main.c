@@ -386,10 +386,17 @@ static void btmtk_main_info_initialize(void)
 	main_info.fwdump_ws = wakeup_source_register(NULL, "btmtk_fwdump_wakelock");
 	main_info.woble_ws = wakeup_source_register(NULL, "btmtk_woble_wakelock");
 	main_info.eint_ws = wakeup_source_register(NULL, "btevent_eint");
+#if WAKEUP_BT_IRQ
+	main_info.irq_ws = wakeup_source_register(NULL, "btevent_irq");
+#endif
 #else
 	main_info.fwdump_ws = wakeup_source_register("btmtk_fwdump_wakelock");
 	main_info.woble_ws = wakeup_source_register("btmtk_woble_wakelock");
 	main_info.eint_ws = wakeup_source_register("btevent_eint");
+#if WAKEUP_BT_IRQ
+	main_info.irq_ws = wakeup_source_register("btevent_irq");
+#endif
+
 #endif
 
 	main_info.wmt_over_hci_header[0] = HCI_COMMAND_PKT;
@@ -4070,6 +4077,9 @@ static int main_exit(void)
 	wakeup_source_unregister(main_info.fwdump_ws);
 	wakeup_source_unregister(main_info.woble_ws);
 	wakeup_source_unregister(main_info.eint_ws);
+#if WAKEUP_BT_IRQ
+	wakeup_source_unregister(main_info.irq_ws);
+#endif
 
 	for (i = 0; i < btmtk_intf_num; i++) {
 		if (g_bdev[i] != NULL)

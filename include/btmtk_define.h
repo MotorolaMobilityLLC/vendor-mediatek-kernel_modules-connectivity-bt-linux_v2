@@ -43,8 +43,14 @@
 #include <linux/rtc.h>
 
 /** Driver version */
-#define VERSION "7.0.2021081102"
+#define VERSION "7.0.2021081801"
 #define SUBVER ":turnkey"
+
+#ifdef CFG_SUPPORT_WAKEUP_IRQ
+#define WAKEUP_BT_IRQ 1
+#else
+#define WAKEUP_BT_IRQ 0
+#endif
 
 #define ENABLESTP FALSE
 #define BTMTKUART_TX_STATE_ACTIVE	1

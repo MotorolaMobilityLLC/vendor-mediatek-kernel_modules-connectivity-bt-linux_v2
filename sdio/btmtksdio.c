@@ -2295,6 +2295,10 @@ static int btmtk_cif_resume(struct device *dev)
 
 	BTMTK_INFO("%s, enter", __func__);
 
+#if WAKEUP_BT_IRQ
+	btmtk_sdio_irq_wake_lock_timeout(NULL);
+#endif
+
 	if (!dev)
 		return 0;
 	func = dev_to_sdio_func(dev);

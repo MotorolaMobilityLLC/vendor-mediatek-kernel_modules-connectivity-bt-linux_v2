@@ -620,6 +620,9 @@ struct btmtk_main_info {
 	struct wakeup_source *fwdump_ws;
 	struct wakeup_source *woble_ws;
 	struct wakeup_source *eint_ws;
+#if WAKEUP_BT_IRQ
+	struct wakeup_source *irq_ws;
+#endif
 	struct hif_hook_ptr hif_hook;
 	struct bt_power_setting PWS;
 	/* save Hci Snoop for debug*/
