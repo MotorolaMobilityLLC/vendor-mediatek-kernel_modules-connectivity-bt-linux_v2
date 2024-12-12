@@ -2183,7 +2183,6 @@ end:
 	btmtk_assert_wake_unlock();
 
 exit:
-exit:
 	if (cap_init_fail == 1) {
 		bmain_info->chip_reset_flag = 1;
 		cap_init_fail = 0;
