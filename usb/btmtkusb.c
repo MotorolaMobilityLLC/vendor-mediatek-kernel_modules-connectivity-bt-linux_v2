@@ -2717,7 +2717,7 @@ exit:
 					return ret;
 				}
 			} else {
-				BTMTK_WARN("btusb_send_frame send iso data, but iso channel not exit, %d %d", cif_dev->iso_channel, bdev->iso_threshold);
+				BTMTK_WARN("btusb_send_frame send iso data, but iso channel not exit, %d", bdev->iso_threshold);
 				/* if iso channel not exist, we need to drop iso data then free the skb */
 				kfree_skb(skb);
 				skb = NULL;
@@ -2762,6 +2762,8 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 	u32 value = 0;
 	s32 sent_len;
 	int retry = WMT_DELAY_TIMES;
+	int delay = 0;
+	u32 reg_value = 0;
 	u8 dl_done_cmd[LD_PATCH_CMD_LEN] = {0x01, 0x6F, 0xFC, 0x05, 0x01, 0x01, 0x01, 0x00, PATCH_PHASE3};
 	u8 event[LD_PATCH_EVT_LEN] = {0x04, 0xE4, 0x05, 0x02, 0x01, 0x01, 0x00, 0x00}; /* event[7] is status*/
 
@@ -2797,10 +2799,19 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			break;
 	}
 
+
+	if (is_mt7922(bdev->chip_id)) {
+		delay = PATCH_DOWNLOAD_PHASE3_SECURE_BOOT_DELAY_TIME;
+		reg_value = BT_GDMA_DONE_7922_VALUE_W;
+	} else {
+		delay = DELAY_TIMES;
+		reg_value = BT_GDMA_DONE_7921_VALUE_W;
+	}
+
 	/* Poll the register until dma dl is completed */
 	if (is_mt7961(bdev->chip_id) || is_mt7922(bdev->chip_id)) {
 		do {
-			btmtk_cif_write_uhw_register(bdev, BT_GDMA_DONE_ADDR_W, BT_GDMA_DONE_VALUE_W);
+			btmtk_cif_write_uhw_register(bdev, BT_GDMA_DONE_ADDR_W, reg_value);
 			btmtk_cif_read_uhw_register(bdev, BT_GDMA_DONE_ADDR_R, &value);
 			if ((value & BT_GDMA_DONE_VALUE_R) == value)
 				break;
@@ -2813,13 +2824,12 @@ static int btmtk_usb_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 			btmtk_send_assert_cmd(bdev);
 			goto exit;
 		}
-	} else
-		msleep(100);
+	}
 
 	BTMTK_INFO_RAW(dl_done_cmd, LD_PATCH_CMD_LEN, "%s: send dl cmd - ", __func__);
 	ret = btmtk_main_send_cmd(bdev, dl_done_cmd, LD_PATCH_CMD_LEN,
 			event, LD_PATCH_EVT_LEN,
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
+			delay, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
 	if (ret < 0)
 		BTMTK_ERR("%s: send wmd dl cmd failed, terminate!", __func__);
 	BTMTK_INFO("%s: loading rom patch... Done", __func__);
