@@ -11,8 +11,8 @@
  *  See http://www.gnu.org/licenses/gpl-2.0.html for more details.
  */
 
-#ifndef _BTMTK_CHIP_6639_H_
-#define _BTMTK_CHIP_6639_H_
+#ifndef _BTMTK_CHIP_COMMON_CONNAC3_H_
+#define _BTMTK_CHIP_COMMON_CONNAC3_H_
 
 #include "btmtk_main.h"
 #include "btmtk_define.h"
@@ -22,9 +22,9 @@
 /* calibration backup & restore */
 #define CAL_DATA_EVNET_LEN 9
 #define CAL_DATA_CMD_LEN 10
-#define BT_RESET_REG_6639 0x70028610
+#define BT_RESET_REG_CONNAC3 0x70028610
 
 
-int btmtk_cif_chip_6639_register(void);
+int btmtk_cif_chip_commonv3_register(void);
 
-#endif /* __BTMTK_CHIP_6639_H__ */
+#endif /* __BTMTK_CHIP_COMMON_CONNAC3_H__ */

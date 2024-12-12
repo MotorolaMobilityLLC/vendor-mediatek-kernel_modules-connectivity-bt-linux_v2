@@ -11,7 +11,7 @@
  *  See http://www.gnu.org/licenses/gpl-2.0.html for more details.
  */
 
-#include "btmtk_chip_6639.h"
+#include "btmtk_chip_connac3.h"
 #include "btmtk_chip_common.h"
 
 
@@ -400,27 +400,27 @@ static int btmtk_subsys_reset(struct btmtk_dev *bdev)
 	u32 mcu_init_done = MCU_BT0_INIT_DONE;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
-	bmain_info->hif_hook.read_uhw_register(bdev, BT_RESET_REG_6639, &val);
+	bmain_info->hif_hook.read_uhw_register(bdev, BT_RESET_REG_CONNAC3, &val);
 	BTMTK_INFO("%s:read Reset CR : 0x%08x", __func__, val);
 	val |= (1 << 5);
 	BTMTK_INFO("%s:write to Reset CR : 0x%08x", __func__, val);
-	bmain_info->hif_hook.write_uhw_register(bdev, BT_RESET_REG_6639, val);
-	bmain_info->hif_hook.read_uhw_register(bdev, BT_RESET_REG_6639, &val);
+	bmain_info->hif_hook.write_uhw_register(bdev, BT_RESET_REG_CONNAC3, val);
+	bmain_info->hif_hook.read_uhw_register(bdev, BT_RESET_REG_CONNAC3, &val);
 	BTMTK_INFO("%s:read Reset CR : 0x%08x", __func__, val);
 	val &= 0xFFFF00FF;
 	val |= (1 << 13);
 	BTMTK_INFO("%s:write to Reset CR : 0x%08x", __func__, val);
-	bmain_info->hif_hook.write_uhw_register(bdev, BT_RESET_REG_6639, val);
+	bmain_info->hif_hook.write_uhw_register(bdev, BT_RESET_REG_CONNAC3, val);
 
 	/* For reset */
 	bmain_info->hif_hook.write_uhw_register(bdev, BT_EP_RST_OPT, EP_RST_IN_OUT_OPT);
 	/* Write Reset CR to 1 */
-	bmain_info->hif_hook.read_uhw_register(bdev, BT_RESET_REG_6639, &val);
+	bmain_info->hif_hook.read_uhw_register(bdev, BT_RESET_REG_CONNAC3, &val);
 	BTMTK_INFO("%s: read Reset CR : 0x%08x", __func__, val);
 	val |= (1 << 0);
 	BTMTK_INFO("%s: write 1 to Reset CR : 0x%08x", __func__, val);
 
-	bmain_info->hif_hook.write_uhw_register(bdev, BT_RESET_REG_6639, val);
+	bmain_info->hif_hook.write_uhw_register(bdev, BT_RESET_REG_CONNAC3, val);
 	bmain_info->hif_hook.write_uhw_register(bdev, UDMA_INT_STA_BT, 0x000000FF);
 	bmain_info->hif_hook.read_uhw_register(bdev, UDMA_INT_STA_BT, &val);
 	bmain_info->hif_hook.write_uhw_register(bdev, UDMA_INT_STA_BT1, 0x000000FF);
@@ -451,7 +451,7 @@ Finish:
 	return 0;
 }
 
-int btmtk_cif_chip_6639_register(void)
+int btmtk_cif_chip_commonv3_register(void)
 {
 	int retval = 0;
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();

@@ -3263,8 +3263,14 @@ int btmtk_cap_init(struct btmtk_dev *bdev)
 		goto exit;
 	}
 
+	if (is_connac3(bdev->chip_id))
+		btmtk_cif_chip_commonv3_register(); /* load connac3 default hook func */
+
 	ret = btmtk_cif_chip_register(bdev);
-	if (ret < 0) {
+	if (ret == -ENOENT) {
+		BTMTK_ERR("btmtk_cif_chip_register failed: no such file");
+		goto exit;
+	} else	if (ret < 0) {
 		BTMTK_ERR("btmtk_cif_chip_register failed");
 		ret = -EIO;
 		goto exit;

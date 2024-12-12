@@ -817,6 +817,21 @@ static inline int is_mt66xx(u32 chip_id)
 	return 0;
 }
 
+static inline int is_connac2(u32 chip_id)
+{
+	if (is_mt7961(chip_id) || is_mt7922(chip_id) || is_mt7902(chip_id))
+		return 1;
+	return 0;
+}
+
+static inline int is_connac3(u32 chip_id)
+{
+	if (is_mt6639(chip_id) || is_mt7925(chip_id))
+		return 1;
+	return 0;
+}
+
+
 /* Get BT whole packet length except hci type */
 static inline unsigned int get_pkt_len(unsigned char type, unsigned char *buf)
 {

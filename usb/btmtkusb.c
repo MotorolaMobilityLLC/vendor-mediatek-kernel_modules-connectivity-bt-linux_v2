@@ -2321,7 +2321,8 @@ static int btusb_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 
 		if (BTMTK_IS_BT_0_INTF(ifnum_base)) {
 			if ((is_mt6639(bdev->chip_id) || is_mt7902(bdev->chip_id)
-					|| is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)) &&
+					|| is_mt7922(bdev->chip_id) || is_mt7961(bdev->chip_id)
+					|| is_mt7925(bdev->chip_id)) &&
 					cif_dev->bulk_cmd_tx_ep)
 				urb = alloc_bulk_cmd_urb(hdev, skb);
 			else
@@ -3152,7 +3153,7 @@ free_mem:
 	btmtk_cif_free_memory(cif_dev);
 end:
 	atomic_set(&bmain_info->chip_reset, BTMTK_RESET_DONE);
-	return 0;
+	return err;
 }
 
 static void btusb_disconnect(struct usb_interface *intf)
