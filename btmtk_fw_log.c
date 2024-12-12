@@ -1538,6 +1538,20 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 
 				if (bmain_info->hif_hook.waker_notify)
 					bmain_info->hif_hook.waker_notify(bdev);
+			} else {
+				BTMTK_INFO("%s: coredump end, but not call coredump_end here, DFD pre-dump", __func__);
+				BTMTK_INFO("%s: dfd-value-size =  0x%04x, bdev->temp_buf[0] =  0x%02x, bdev->temp_buf[1] =  0x%02x", __func__, bdev->dfd_value_size, bdev->temp_buf[0], bdev->temp_buf[1]);
+
+				ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "PRED", bdev->temp_buf, bdev->dfd_value_size);
+				if (ret) {
+					BTMTK_ERR("%s: connv3_coredump_send failed, ret = %d", __func__, ret);
+					goto coredump_fail_unlock;
+				}
+
+				BTMTK_INFO("%s: DFD pre-dump, set bt assert_state end", __func__);
+				atomic_set(&bdev->assert_state, BTMTK_ASSERT_END);
+				BTMTK_INFO("%s: DFD pre-dump, complete dump_comp , coredump_end", __func__);
+				complete_all(&bdev->dump_comp);
 			}
 		}
 

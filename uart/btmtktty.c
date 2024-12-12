@@ -1047,7 +1047,9 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	new_termios = tty->termios;
 
 	btmtk_pwrctrl_pre_on(bdev);
-	if (!cif_dev->is_pre_cal && bdev->reset_type != CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
+
+	BTMTK_INFO("%s: bdev->is_dfd_done: %d, bdev->reset_type = %d", __func__, bdev->is_dfd_done, bdev->reset_type);
+	if (!cif_dev->is_pre_cal && (bdev->is_dfd_done || bdev->reset_type != CONNV3_CHIP_RST_TYPE_DFD_DUMP)) {
 		ret = connv3_pwr_on(CONNV3_DRV_TYPE_BT);
 		if(ret) {
 			BTMTK_ERR("%s: ConnInfra power on failed, ret[%d]", __func__, ret);
@@ -1115,9 +1117,10 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	tty_ldisc_flush(tty);
 
 	/* If DFD, return */
-	if (bdev->reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
-		BTMTK_INFO("%s: DFD", __func__);
-		bdev->reset_type = 0;
+	if (bdev->reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP && !bdev->is_dfd_done) {
+		/* set is_dfd_done */
+		bdev->is_dfd_done = TRUE;
+		BTMTK_INFO("%s: DFD done, return", __func__);
 		return 0;
 	}
 
@@ -2307,6 +2310,13 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	fstate = btmtk_fops_get_state(bdev);
 	if (fstate == BTMTK_FOPS_STATE_CLOSED) {
 		BTMTK_INFO_RAW(data, count, "[SKIP] CLOSED %s: count[%d]", __func__, count);
+#if (USE_DEVICE_NODE == 1)
+		/* check opcode, for dfd post dump evt, and only copy payload */
+		if (data[4] == 0x18) {
+			BTMTK_INFO("%s: For dfd post dump evt, copy to bdev->dfd_pstd", __func__);
+			memcpy(bdev->dfd_pstd, &data[8], count - 8);
+		}
+#endif
 		return;
 	}
 

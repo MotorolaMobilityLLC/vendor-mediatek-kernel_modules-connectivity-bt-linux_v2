@@ -5186,7 +5186,7 @@ static void btmtk_rx_work(struct work_struct *work)
 
 #if (USE_DEVICE_NODE == 1)
 		/* is_whole_chip_reset need to send hw err event after bt close */
-		if (fstate != BTMTK_FOPS_STATE_OPENED && !bdev->is_whole_chip_reset) {
+		if (fstate != BTMTK_FOPS_STATE_OPENED && !bdev->is_whole_chip_reset && bdev->reset_type != CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
 #else
 		if (fstate != BTMTK_FOPS_STATE_OPENED && state != BTMTK_STATE_FW_DUMP) {
 #endif

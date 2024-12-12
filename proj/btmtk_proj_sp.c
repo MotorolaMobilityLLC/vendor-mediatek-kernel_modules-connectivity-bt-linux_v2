@@ -322,23 +322,6 @@ void btmtk_release_uarthub(bool force)
 
 #endif
 
-#if CFG_MTK_BT_DFD_DUMP_SUPPORT
-void btmtk_coredump_post_start(void)
-{
-	/* dump DFD post data */
-	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x09, 0x01, 0x18, 0x05, 0x00, 0x07, 0x00, 0x00, 0x04, 0x00 };
-	//u8 evt[] = { 0x04, 0xE4, 0x09, 0x02, 0x18, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00};
-	int ret = 0;
-	BTMTK_INFO("%s", __func__);
-
-	ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd), NULL, 0, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
-	if (ret < 0)
-		BTMTK_ERR("%s: failed, ret[%d]", __func__, ret);
-
-	return;
-}
-#endif
-
 void btmtk_sp_coredump_start(void)
 {
 
@@ -601,12 +584,14 @@ int btmtk_sp_close(void)
 		BTMTK_WARN("%s: wait dump_comp , can't close yet", __func__);
 		if (!wait_for_completion_timeout(&g_sbdev->dump_comp, msecs_to_jiffies(WAIT_FW_DUMP_TIMEOUT))) {
 			BTMTK_ERR("%s: uanble to finish dump_comp in 15s", __func__);
-			btmtk_sp_coredump_end();
+			if (g_sbdev->reset_type != CONNV3_CHIP_RST_TYPE_DFD_DUMP)
+				btmtk_sp_coredump_end();
 		}
 	}
 	if (atomic_read(&g_sbdev->assert_state) == BTMTK_ASSERT_START) {
 		BTMTK_WARN("%s: coredump not complete and without wait 15s", __func__);
-		btmtk_sp_coredump_end();
+		if (g_sbdev->reset_type != CONNV3_CHIP_RST_TYPE_DFD_DUMP)
+			btmtk_sp_coredump_end();
 	}
 
 	cancel_work_sync(&g_sbdev->reset_waker);
@@ -681,6 +666,7 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason, un
 		2. Coredump, don't call coredump end
 		*/
 		g_sbdev->reset_type = reset_type;
+		g_sbdev->is_dfd_done = FALSE;
 		BTMTK_INFO("%s: reset type = %d", __func__, g_sbdev->reset_type);
 	}
 
@@ -699,7 +685,7 @@ static int btmtk_post_chip_rst_handler(void)
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	BTMTK_INFO("%s: state[%d]", __func__, g_bt_state);
-	if (g_sbdev->is_whole_chip_reset) {
+	if (g_sbdev->is_whole_chip_reset || g_sbdev->reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
 		/* for let hw err evt can send event */
 		bmain_info->reset_stack_flag = HW_ERR_CODE_CHIP_RESET;
 		btmtk_send_hw_err_to_host(g_sbdev);
@@ -728,22 +714,41 @@ static int btmtk_post_chip_rst_on_handler(unsigned int type)
 {
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 	int ret = 0;
+	u32 length = 0;
+	/* dump DFD post data, last 2 bytes are length */
+	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x09, 0x01, 0x18, 0x05, 0x00, 0x07, 0x00, 0x00, 0x20, 0x00 };
+	/* evt[7] is status */
+	// u8 evt[] = { 0x04, 0xE4, 0x09, 0x02, 0x18, 0x05, 0x00, 0x00};
 	BTMTK_INFO("%s: type[%d]", __func__, type);
 
 	if (g_sbdev->reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
+		btmtk_pre_power_on_handler();
+
+		BTMTK_INFO("%s: g_sbdev->reset_type = %d !", __func__, g_sbdev->reset_type);
 		// config pre_pwr_on related (GPIO, baudrate, uarthub, tx_thread)
 		ret = bmain_info->hif_hook.pre_open(g_sbdev);
 		if (ret != 0)
 			BTMTK_ERR("%s: btmtk_sp_pre_open failed", __func__);
 
 		// dump DFD post data
-		btmtk_coredump_post_start();
+		ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd), NULL, 0, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
+		BTMTK_INFO("%s, dump DFD post data, ret = %d", __func__, ret);
+		if (ret < 0)
+			BTMTK_ERR("%s: failed, ret[%d]", __func__, ret);
+
+		// delay 30ms for dfd data rx
+		mdelay(30);
+
+		length = cmd[12] | cmd[11];
+		BTMTK_INFO("%s, 0x%02x, 0x%02x, 0x%02x, 0x%02x", __func__, g_sbdev->dfd_pstd[0], g_sbdev->dfd_pstd[1], g_sbdev->dfd_pstd[2], g_sbdev->dfd_pstd[3]);
+
+		ret = connv3_coredump_send(bmain_info->hif_hook.coredump_handler, "PSTD", g_sbdev->dfd_pstd, length);
+		if (ret) {
+			BTMTK_ERR("%s: connv3_coredump_send fail, ret = %d", __func__, ret);
+		}
 
 		// end coredump
 		btmtk_sp_coredump_end();
-
-		BTMTK_INFO("%s: complete dump_comp , coredump_end", __func__);
-		complete_all(&g_sbdev->dump_comp);
 	}
 
 	return 0;
@@ -1478,6 +1483,30 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	if (!tty) {
 		BTMTK_ERR("[ERR] tty is NULL");
 		return -1;
+	}
+
+	bdev->dfd_value_addr_remap_base = NULL;
+	tty->dev->of_node = of_find_compatible_node(NULL, NULL, "mediatek,mt6989-conn_scp");
+	if (!tty->dev->of_node)
+		BTMTK_ERR("[ERR] %s: mediatek,mt6989-conn_scp of_node not found", __func__);
+
+	ret = of_property_read_u64(tty->dev->of_node, "dfd-value-addr", &bdev->dfd_value_addr);
+	if (ret < 0)
+		BTMTK_ERR("[ERR] %s: mediatek,mt6989-conn_scp dfd-value-addr ret[%d]", __func__, ret);
+	BTMTK_INFO("%s: dfd-value-addr =  %llu", __func__, bdev->dfd_value_addr);
+
+	ret = of_property_read_u32(tty->dev->of_node, "dfd-value-size", &bdev->dfd_value_size);
+	if (ret < 0)
+		BTMTK_ERR("[ERR] %s: mediatek,mt6989-conn_scp dfd-value-size ret[%d]", __func__, ret);
+	BTMTK_INFO("%s: dfd-value-size =  0x%04x", __func__, bdev->dfd_value_size);
+
+	bdev->dfd_value_addr_remap_base = ioremap(bdev->dfd_value_addr, bdev->dfd_value_size);
+	if (bdev->dfd_value_addr_remap_base == NULL) {
+		BTMTK_ERR("%s: dfd_value_addr_remap_base failed", __func__);
+	} else {
+		memcpy_fromio(bdev->temp_buf, (char *)bdev->dfd_value_addr_remap_base, bdev->dfd_value_size);
+		BTMTK_INFO("%s: bdev->temp_buf[0] =  0x%02x, bdev->temp_buf[1] =  0x%02x", __func__, bdev->temp_buf[0], bdev->temp_buf[1]);
+		iounmap(bdev->dfd_value_addr_remap_base);
 	}
 
 	tty->dev->of_node = of_find_compatible_node(NULL, NULL, "mediatek,bt");
