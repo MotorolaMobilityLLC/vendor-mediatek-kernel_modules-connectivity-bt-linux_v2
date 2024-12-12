@@ -16,8 +16,7 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *  along with this program;
  *
  */
 
@@ -2890,7 +2889,7 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 			BTMTK_INFO("%s: read init CR failed, retry = %d", __func__, retry);
 		} else if ((val & mcu_init_done) == mcu_init_done) {
 			/* L0.5 reset done */
-			BTMTK_INFO("%s: Do L0.5 reset sucessfully.", __func__);
+			BTMTK_INFO("%s: Do L0.5 reset successfully.", __func__);
 			goto Finish;
 		} else {
 			BTMTK_INFO("%s: polling MCU-init done CR", __func__);

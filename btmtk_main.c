@@ -2591,7 +2591,7 @@ retry_again:
 			break;
 		case 2:			 /* TODO:retry */
 			if (retry > 0) {
-				/* comment from fw, we need to retry a sec until power on sucessfully. */
+				/* comment from fw, we need to retry a sec until power on successfully. */
 				retry--;
 				BTMTK_INFO("%s: need to try again", __func__);
 				msleep(50);
