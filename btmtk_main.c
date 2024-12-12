@@ -5891,9 +5891,8 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 		return -1;
 	}
 
-	btmtk_init_node();
-
 #if (USE_DEVICE_NODE == 0)
+	btmtk_init_node();
 	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_INIT);
 #endif
 	btmtk_reset_timer_add(bdev);
@@ -6228,6 +6227,10 @@ int __init main_driver_init(void)
 		main_exit();
 		return ret;
 	}
+
+#if (USE_DEVICE_NODE == 1)
+	btmtk_init_node();
+#endif
 
 	BTMTK_DBG("%s: Done", __func__);
 	return ret;

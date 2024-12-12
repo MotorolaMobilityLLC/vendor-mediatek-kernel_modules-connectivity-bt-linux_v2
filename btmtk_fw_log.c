@@ -107,6 +107,34 @@ static const struct proc_ops BT_proc_uart_launcher_notify_fops = {
 
 #endif
 
+#if (CFG_SUPPORT_CONNSYSLOGGER_FWLOG == 1)
+void btmtk_connsys_log_init(void (*log_event_cb)(void))
+{
+	if (connv3_log_init(CONNV3_DEBUG_TYPE_BT, 2048, 2048, log_event_cb))
+		BTMTK_ERR("*** %s fail! ***", __func__);
+}
+
+void btmtk_connsys_log_deinit(void)
+{
+	connv3_log_deinit(CONNV3_DEBUG_TYPE_BT);
+}
+
+int btmtk_connsys_log_handler(u8 *buf, u32 size)
+{
+	return connv3_log_handler(CONNV3_DEBUG_TYPE_BT, CONNV3_LOG_TYPE_PRIMARY, buf, size);
+}
+
+ssize_t btmtk_connsys_log_read_to_user(char __user *buf, size_t count)
+{
+	return connv3_log_read_to_user(CONNV3_DEBUG_TYPE_BT, buf, count);
+}
+
+unsigned int btmtk_connsys_log_get_buf_size(void)
+{
+	return connv3_log_get_buf_size(CONNV3_DEBUG_TYPE_BT);
+}
+#endif // CFG_SUPPORT_CONNSYSLOGGER_FWLOG
+
 __weak int32_t btmtk_intcmd_wmt_utc_sync(void)
 {
 	BTMTK_WARN("weak function %s not implement", __func__);
@@ -355,19 +383,18 @@ static int btmtk_fops_initfwlog(void)
 		if (bdev == NULL)
 			continue;
 
-		if (bdev->main_info.hif_hook.log_init) {
-			bdev->main_info.hif_hook.log_init(fw_log_bt_event_cb);
-			//bdev->main_info.hif_hook.log_register_cb(fw_log_bt_event_cb);
-			init_waitqueue_head(&BT_log_wq);
-		} else {
-			spin_lock_init(&g_fwlog->fwlog_lock);
-			skb_queue_head_init(&g_fwlog->fwlog_queue);
-			skb_queue_head_init(&g_fwlog->dumplog_queue_first);
-			skb_queue_head_init(&g_fwlog->dumplog_queue_latest);
-			skb_queue_head_init(&g_fwlog->dumplog_queue_wf);
-			skb_queue_head_init(&g_fwlog->usr_opcode_queue);//opcode
-			init_waitqueue_head(&(g_fwlog->fw_log_inq));
-		}
+#if (CFG_SUPPORT_CONNSYSLOGGER_FWLOG == 1)
+		btmtk_connsys_log_init(fw_log_bt_event_cb);
+		init_waitqueue_head(&BT_log_wq);
+#else
+		spin_lock_init(&g_fwlog->fwlog_lock);
+		skb_queue_head_init(&g_fwlog->fwlog_queue);
+		skb_queue_head_init(&g_fwlog->dumplog_queue_first);
+		skb_queue_head_init(&g_fwlog->dumplog_queue_latest);
+		skb_queue_head_init(&g_fwlog->dumplog_queue_wf);
+		skb_queue_head_init(&g_fwlog->usr_opcode_queue);//opcode
+		init_waitqueue_head(&(g_fwlog->fw_log_inq));
+#endif
 		atomic_set(&bdev->main_info.fwlog_ref_cnt, 0);
 	}
 
@@ -413,8 +440,9 @@ static int btmtk_fops_exitfwlog(void)
 		if (bdev->hdev == NULL)
 			continue;
 
-		if (bdev->main_info.hif_hook.log_deinit)
-			bdev->main_info.hif_hook.log_deinit();
+#if (CFG_SUPPORT_CONNSYSLOGGER_FWLOG == 1)
+		btmtk_connsys_log_deinit();
+#endif // CFG_SUPPORT_CONNSYSLOGGER_FWLOG
 	}
 
 #if (STPBTFWLOG_ENABLE == 1)
@@ -476,11 +504,10 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 		bdev = pp_bdev[i];
 		if (bdev->hdev == NULL)
 			continue;
-
-		if (bdev->main_info.hif_hook.log_read_to_user) {
-			copyLen = bdev->main_info.hif_hook.log_read_to_user(buf, count);
-			return copyLen;
-		}
+#if (CFG_SUPPORT_CONNSYSLOGGER_FWLOG == 1)
+		copyLen = btmtk_connsys_log_read_to_user(buf, count);
+		return copyLen;
+#endif // CFG_SUPPORT_CONNSYSLOGGER_FWLOG
 	}
 
 	/* picus read coredump first */
@@ -1245,18 +1272,18 @@ unsigned int btmtk_fops_pollfwlog(struct file *file, poll_table *wait)
 		if (bdev == NULL || bdev->hdev == NULL)
 			continue;
 
-		if (bdev->main_info.hif_hook.log_get_buf_size) {
-			poll_wait(file, &BT_log_wq, wait);
-			if (bdev->main_info.hif_hook.log_get_buf_size() > 0)
-				mask = (POLLIN | POLLRDNORM);
-		} else {
-			poll_wait(file, &g_fwlog->fw_log_inq, wait);
-			if (skb_queue_len(&g_fwlog->fwlog_queue) > 0 ||
-					skb_queue_len(&g_fwlog->dumplog_queue_first) > 0 ||
-					skb_queue_len(&g_fwlog->dumplog_queue_latest) > 0 ||
-					skb_queue_len(&g_fwlog->dumplog_queue_wf) > 0)
-				mask |= POLLIN | POLLRDNORM;			/* readable */
-		}
+#if (CFG_SUPPORT_CONNSYSLOGGER_FWLOG == 1)
+		poll_wait(file, &BT_log_wq, wait);
+		if (btmtk_connsys_log_get_buf_size() > 0)
+			mask = (POLLIN | POLLRDNORM);
+#else
+		poll_wait(file, &g_fwlog->fw_log_inq, wait);
+		if (skb_queue_len(&g_fwlog->fwlog_queue) > 0 ||
+				skb_queue_len(&g_fwlog->dumplog_queue_first) > 0 ||
+				skb_queue_len(&g_fwlog->dumplog_queue_latest) > 0 ||
+				skb_queue_len(&g_fwlog->dumplog_queue_wf) > 0)
+			mask |= POLLIN | POLLRDNORM;			/* readable */
+#endif
 	}
 
 	return mask;
@@ -1901,16 +1928,17 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 coredump_fail_unlock:
 		BTMTK_ERR_DEV(bdev, "%s: coredump API fail ret[%d] line[%d]", __func__, ret, line);
 		return 1;
+#if (CFG_SUPPORT_CONNSYSLOGGER_FWLOG == 1)
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
-				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
-				skb->data[1] == 0x05 && bdev->main_info.hif_hook.log_handler) {
+				(skb->data[0] == 0xff || skb->data[0] == 0xfe) && skb->data[1] == 0x05) {
 		/* picus or syslog */
 		/* remove acl header (FF 05 LL LL)*/
 		skb_pull(skb, 4);
 		fwlog_count++;
 		BTMTK_INFO_LIMITTED("fw log counter[%d]", fwlog_count);
-		bdev->main_info.hif_hook.log_handler(skb->data, skb->len);
+		btmtk_connsys_log_handler(skb->data, skb->len);
 		return 1;
+#endif // CFG_SUPPORT_CONNSYSLOGGER_FWLOG
 	} else if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 				(skb->data[0] == 0xff || skb->data[0] == 0xfe) &&
 				skb->data[1] == 0x06 && bdev->main_info.hif_hook.met_log_handler) {

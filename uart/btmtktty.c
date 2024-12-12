@@ -3112,11 +3112,6 @@ static void btmtk_cif_hook_register(struct btmtk_dev *bdev)
 #if (USE_DEVICE_NODE == 1)
 	rx_queue_initialize();
 	hook.fw_log_state = fw_log_bt_state_cb;
-	hook.log_init = btmtk_connsys_log_init;
-	hook.log_read_to_user = btmtk_connsys_log_read_to_user;
-	hook.log_get_buf_size = btmtk_connsys_log_get_buf_size;
-	hook.log_deinit = btmtk_connsys_log_deinit;
-	hook.log_handler = btmtk_connsys_log_handler;
 	hook.met_log_handler = btmtk_met_log_handler;
 	hook.init = btmtk_chardev_init;
 	hook.dump_debug_sop = btmtk_uart_sp_dump_debug_sop;
@@ -3509,32 +3504,6 @@ int btmtk_cif_deregister(void)
 }
 
 #if (USE_DEVICE_NODE == 1)
-void btmtk_connsys_log_init(void (*log_event_cb)(void))
-{
-	if (connv3_log_init(CONNV3_DEBUG_TYPE_BT, 2048, 2048, log_event_cb))
-		BTMTK_ERR("*** %s fail! ***", __func__);
-}
-
-void btmtk_connsys_log_deinit(void)
-{
-	connv3_log_deinit(CONNV3_DEBUG_TYPE_BT);
-}
-
-int btmtk_connsys_log_handler(u8 *buf, u32 size)
-{
-	return connv3_log_handler(CONNV3_DEBUG_TYPE_BT, CONNV3_LOG_TYPE_PRIMARY, buf, size);
-}
-
-ssize_t btmtk_connsys_log_read_to_user(char __user *buf, size_t count)
-{
-	return connv3_log_read_to_user(CONNV3_DEBUG_TYPE_BT, buf, count);
-}
-
-unsigned int btmtk_connsys_log_get_buf_size(void)
-{
-	return connv3_log_get_buf_size(CONNV3_DEBUG_TYPE_BT);
-}
-
 #define MET_LOG_MAX_BUF_SIZE (512 * 2 + 64)
 int btmtk_met_log_handler(struct btmtk_dev *bdev, u8 *buf, u32 size)
 {
