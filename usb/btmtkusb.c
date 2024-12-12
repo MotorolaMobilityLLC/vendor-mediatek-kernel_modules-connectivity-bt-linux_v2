@@ -254,7 +254,6 @@ static int btusb_recv_isoc(struct btmtk_dev *bdev, void *buffer, int count)
 		if (!hci_skb_expect(skb)) {
 			/* Complete frame */
 			hci_recv_frame(bdev->hdev, skb);
-			skb = NULL;
 		}
 	}
 
