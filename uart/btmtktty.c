@@ -3416,6 +3416,7 @@ void btmtk_platform_driver_init(void) {
 
 void btmtk_platform_driver_deinit(void) {
 	BTMTK_INFO("%s", __func__);
+	platform_device_unregister(btmtk_uart_device);
 	platform_driver_unregister(&btmtk_uart_driver);
 }
 
