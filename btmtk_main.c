@@ -4066,6 +4066,11 @@ static int btmtk_reboot_notify(struct notifier_block *nb,
 
 	BTMTK_INFO("%s: btmtk_reboot_notify(%d)", __func__, (int)event);
 
+	if (event == SYS_POWER_OFF && main_info.hif_hook.enter_standby != NULL) {
+		BTMTK_DBG("%s: set woble for standby", __func__);
+		main_info.hif_hook.enter_standby();
+	}
+
 	if (event == SYS_RESTART) {
 		BTMTK_INFO("%s: enter", __func__);
 		for (i = 0; i < btmtk_intf_num; i++) {

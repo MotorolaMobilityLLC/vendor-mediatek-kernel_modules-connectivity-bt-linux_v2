@@ -3039,6 +3039,7 @@ int btmtk_cif_register(void)
 	hook.cif_mutex_unlock = btmtk_usb_cif_mutex_unlock;
 	hook.dl_dma = btmtk_usb_load_fw_patch_using_dma;
 	hook.dump_debug_sop = btmtk_usb_dump_debug_sop;
+	hook.enter_standby = btmtk_usb_enter_standby;
 	btmtk_reg_hif_hook(&hook);
 
 	retval = usb_register(&btusb_driver);
