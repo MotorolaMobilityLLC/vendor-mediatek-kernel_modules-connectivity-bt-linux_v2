@@ -2490,7 +2490,6 @@ int btmtk_usb_load_bt_cfg(char *cfg_name, struct LD_btmtk_usb_data *data)
 	ret = btmtk_usb_load_bt_cfg_item(&data->bt_cfg, data->setting_file);
 	if (ret) {
 		usb_debug("btmtk_usb_load_bt_cfg_item error return %d\n", ret);
-		return ret;
 	}
 
 	/* release setting file memory */
