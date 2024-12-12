@@ -457,6 +457,28 @@ ssize_t btmtk_fops_readfwlog(struct file *filp, char __user *buf, size_t count, 
 	skb = NULL;
 	return copyLen;
 }
+
+int btmtk_cmd_length_check(u8 *data, u16 length, u8 type)
+{
+	int data_len = 0;
+
+	if (type == HCI_COMMAND_PKT) {
+		data_len = data[3] + 4;
+		if (data_len != length) {
+			BTMTK_DBG("CMD length check fail, recv len = 0x%04x, data len = 0x%04x, type is 0x%02x", length, data_len, HCI_COMMAND_PKT);
+			return -1;
+		}
+	} else if (type == FWLOG_TYPE) {
+		data_len = data[1] + ((data[2] << 8) & 0xff00) + 3;
+		if (data_len != length) {
+			BTMTK_DBG("CMD length check fail, recv len = 0x%04x, data len = 0x%04x, type is 0x%02x", length, data_len, FWLOG_TYPE);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
 ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos)
 {
 #if (CFG_ENABLE_DEBUG_WRITE == 0)
@@ -746,6 +768,12 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		ret = -EPROTONOSUPPORT;
 		goto exit;
 	}
+
+	if (btmtk_cmd_length_check(o_fwlog_buf, len, o_fwlog_buf[0])) {
+		ret = -EPROTONOSUPPORT;
+		goto exit;
+	}
+
 	/* check HCI command length */
 	if (len < HCI_CMD_HEADER_SIZE) {
 		BTMTK_ERR("%s: command is too short for hci cmd, length = %d", __func__, len);
@@ -868,7 +896,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		BTMTK_ERR("%s failed!!", __func__);
 		goto free_skb;
 	} else
-		BTMTK_INFO("%s: OK", __func__);
+		BTMTK_DBG("%s: OK", __func__);
 
 	BTMTK_INFO("%s: Write end(len: %d)", __func__, len);
 	ret = count;
@@ -913,7 +941,7 @@ int btmtk_fops_openfwlog(struct inode *inode, struct file *file)
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	atomic_inc(&bmain_info->fwlog_ref_cnt);
-	BTMTK_INFO("%s: Start.", __func__);
+	BTMTK_DBG("%s: Start.", __func__);
 
 	return 0;
 }
@@ -923,7 +951,7 @@ int btmtk_fops_closefwlog(struct inode *inode, struct file *file)
 	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
 
 	atomic_dec(&bmain_info->fwlog_ref_cnt);
-	BTMTK_INFO("%s: Start.", __func__);
+	BTMTK_DBG("%s: Start.", __func__);
 
 	return 0;
 }
