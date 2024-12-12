@@ -708,6 +708,11 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 		ptr = strstr(cmd, "direct trigger whole chip reset");
 		if (ptr != NULL) {
 			BTMTK_INFO_DEV(bdev, "direct trigger whole chip reset");
+			if (bdev->assert_reason[0] == '\0') {
+				memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
+				strncpy(bdev->assert_reason, "FW_LOG_BT direct trigger whole chip reset",
+						strlen("FW_LOG_BT direct trigger whole chip reset") + 1);
+			}
 			if (bdev->main_info.hif_hook.whole_reset)
 				bdev->main_info.hif_hook.whole_reset(bdev);
 			else
@@ -724,22 +729,32 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 			continue;
 		}
 
+#if (USE_DEVICE_NODE == 1)
 		ptr = strstr(cmd, "FindMyPhone=");
 		if (ptr != NULL) {
-			val = *(ptr + strlen("FindMyPhone=")) - '0';
-			BTMTK_INFO_DEV(bdev, "%s: FindMyPhone[%u][%u]",
-					__func__, bdev->main_info.find_my_phone_mode, val);
+			ret = kstrtou32(ptr + strlen("FindMyPhone="), 0, &bdev->main_info.find_my_phone_mode);
+
+			if (ret) {
+				BTMTK_WARN_DEV(bdev, "%s: convert string failed ret[%d]", __func__, ret);
+				continue;
+			}
+
+			BTMTK_INFO_DEV(bdev, "%s: FindMyPhone[%u]", __func__, bdev->main_info.find_my_phone_mode);
 			continue;
 		}
 
-		ptr = strstr(cmd, "FindMyPhoneCliff=");
+		ptr = strstr(cmd, "PowerOffFinderMode=");
 		if (ptr != NULL) {
-			val = *(ptr + strlen("FindMyPhoneCliff=")) - '0';
-			BTMTK_INFO_DEV(bdev, "%s: FindMyPhoneCliff[%u][%u]",
-					__func__, bdev->main_info.find_my_phone_mode, val);
+			val = *(ptr + strlen("PowerOffFinderMode=")) - '0';
+			val = !!val;
+
+			atomic_set(&bdev->poweroff_finder_mode, val);
+
+			BTMTK_INFO_DEV(bdev, "%s: set PowerOffFinderMode[%u]", __func__,
+						atomic_read(&bdev->poweroff_finder_mode));
 			continue;
 		}
-
+#endif
 		ptr = strstr(cmd, "hif_debug_sop");
 		if (ptr != NULL) {
 			state = btmtk_get_chip_state(bdev);
@@ -2044,13 +2059,13 @@ coredump_fail_unlock:
 				skb->data[3] == bdev->main_info.dbg_send_opcode[0] &&
 				skb->data[4] == bdev->main_info.dbg_send_opcode[1]) {
 		bdev->main_info.dbg_send = 0;
-		BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: dbg_node_event len[%d] %02x", __func__,
+		BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: dbg_node_event len[%d] %02x ", __func__,
 					skb->len + 1, hci_skb_pkt_type(skb));
 		return 1;
 	} else if (bt_cb(skb)->pkt_type == HCI_EVENT_PKT && skb->len > 4
 				&& skb->data[0] == 0xE4 && skb->data[1] == 0x05 &&
 				skb->data[2] == 0x02 &&  skb->data[3] == 0x56 && bdev->main_info.hif_hook.fw_sleep_handler) {
-		BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: fw_sleep_event len[%d] %02x", __func__,
+		BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: fw_sleep_event len[%d] %02x ", __func__,
 					skb->len + 1, hci_skb_pkt_type(skb));
 		bdev->main_info.hif_hook.fw_sleep_handler(bdev);
 		return 1;

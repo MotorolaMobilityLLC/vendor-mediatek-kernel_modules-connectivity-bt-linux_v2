@@ -776,7 +776,6 @@ struct btmtk_main_info {
 	u8	fwlog_flow_ctrl_data_len;
 
 	u32 find_my_phone_mode;
-	u32 find_my_phone_mode_extend;
 	int bk_rs_flag;
 	u8	dbg_send;
 	u8	dbg_send_opcode[2];
