@@ -288,10 +288,12 @@ static void btmtk_initialize_cfg_items(struct btmtk_dev *bdev)
 	bdev->bt_cfg.support_auto_picus = 0;
 	bdev->bt_cfg.support_picus_to_host = 0;
 	bdev->bt_cfg.support_bt_single_sku = 0;
+	bdev->bt_cfg.support_audio_setting = 0;
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_filter, 1);
 	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.picus_enable, 1);
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.phase1_wmt_cmd, PHASE1_WMT_CMD_COUNT);
 	btmtk_free_fw_cfg_struct(bdev->bt_cfg.vendor_cmd, VENDOR_CMD_COUNT);
+	btmtk_free_fw_cfg_struct(&bdev->bt_cfg.audio_cmd, 1);
 
 	BTMTK_INFO("%s end", __func__);
 }
@@ -912,8 +914,16 @@ static int btmtk_set_audio_slave(struct btmtk_dev *bdev)
 	int ret = 0;
 	u8 audio_cmd[AUDIO_SETTING_CMD_LEN] = { 0x01, 0x72, 0xFC, 0x04, 0x49, 0x00, 0x80, 0x00 };
 	u8 audio_event[AUDIO_SETTING_EVT_LEN] = { 0x04, 0x0E, 0x04, 0x01, 0x72, 0xFC, 0x00 };
+	struct fw_cfg_struct *audio_setting = &bdev->bt_cfg.audio_cmd;
 
 	BTMTK_INFO("%s enter", __func__);
+	if (audio_setting->content && audio_setting->length) {
+		BTMTK_INFO("%s load audio setting from bt.cfg", __func__);
+		memcpy((audio_cmd + 4), audio_setting->content, audio_setting->length);
+	} else {
+		BTMTK_INFO("%s load default audio cmd", __func__);
+	}
+	BTMTK_INFO_RAW(audio_cmd, AUDIO_SETTING_CMD_LEN, "%s: Send CMD:", __func__);
 	ret = btmtk_main_send_cmd(bdev, audio_cmd, AUDIO_SETTING_CMD_LEN,
 			audio_event, AUDIO_SETTING_EVT_LEN, 0, 0, BTMTK_TX_PKT_FROM_HOST);
 	if (ret < 0)
@@ -1027,16 +1037,18 @@ static int btmtk_set_audio_setting(struct btmtk_dev *bdev)
 {
 	int ret = 0;
 
-	ret = btmtk_set_audio_slave(bdev);
-	if (ret) {
-		BTMTK_ERR("%s, btmtk_sdio_set_audio_slave error(%d)", __func__, ret);
-		return ret;
-	}
+	if (bdev->bt_cfg.support_audio_setting == true) {
+		ret = btmtk_set_audio_slave(bdev);
+		if (ret) {
+			BTMTK_ERR("%s, btmtk_sdio_set_audio_slave error(%d)", __func__, ret);
+			return ret;
+		}
 
-	ret = btmtk_set_audio_pin_mux(bdev);
-	if (ret) {
-		BTMTK_ERR("%s, btmtk_sdio_set_audio_pin_mux error(%d)", __func__, ret);
-		return ret;
+		ret = btmtk_set_audio_pin_mux(bdev);
+		if (ret) {
+			BTMTK_ERR("%s, btmtk_sdio_set_audio_pin_mux error(%d)", __func__, ret);
+			return ret;
+		}
 	}
 
 	return ret;
@@ -2460,6 +2472,21 @@ static void btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 				bt_cfg_content->support_bt_single_sku);
 	} else {
 		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_SINGLE_SKU);
+	}
+
+	ret = btmtk_parse_bt_cfg_file(BT_AUDIO_SET, text, searchcontent);
+	if (ret) {
+		btmtk_bt_cfg_item_value_to_bool(text, &bt_cfg_content->support_audio_setting);
+		BTMTK_INFO("%s: bt_cfg_content->support_audio_setting = %d", __func__,
+				bt_cfg_content->support_audio_setting);
+		if (bt_cfg_content->support_audio_setting == true) {
+			ret = btmtk_load_fw_cfg_setting(BT_AUDIO_ENABLE_CMD,
+					&bt_cfg_content->audio_cmd, 1, searchcontent, FW_CFG_INX_LEN_NONE);
+			if (ret)
+				BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_AUDIO_ENABLE_CMD);
+		}
+	} else {
+		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_AUDIO_SET);
 	}
 
 	ret = btmtk_load_fw_cfg_setting(BT_PHASE1_WMT_CMD, bt_cfg_content->phase1_wmt_cmd,
