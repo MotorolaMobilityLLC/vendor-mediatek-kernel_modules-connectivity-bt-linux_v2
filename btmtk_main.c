@@ -199,7 +199,7 @@ int32_t btmtk_intcmd_set_fw_log(struct btmtk_dev *bdev, uint8_t flag)
 	BTMTK_INFO_DEV(bdev, "%s log level[0x%02X]", __func__, flag);
 	fw_log_cmd[7] = flag;
 
-	while (bdev->dynamic_fwdl_start && --retry) {
+	while (atomic_read(&bdev->dynamic_fwdl_start) && --retry) {
 		BTMTK_INFO_DEV(bdev, "%s: re-download on-goning, wait(%d)", __func__, retry);
 		msleep(50);
 	}
@@ -5341,14 +5341,14 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 #endif
 
 	/* avoid host send data during re-download */
-	while (bdev->dynamic_fwdl_start && retry--) {
+	while (atomic_read(&bdev->dynamic_fwdl_start) && retry--) {
 		BTMTK_INFO_DEV(bdev, "%s: re-download on-goning, wait(%d)", __func__, retry);
 		msleep(50);
 	}
 	/* avoid dynamic_fwdl_start flag keep blocking every cmd if something wrong. */
-	if (bdev->dynamic_fwdl_start && retry == 0) {
+	if (atomic_read(&bdev->dynamic_fwdl_start) && retry == 0) {
 		BTMTK_INFO_DEV(bdev, "%s: wait re-download more than 1s, reset dynamic_fwdl_start flag", __func__);
-		bdev->dynamic_fwdl_start = false;
+		atomic_set(&bdev->dynamic_fwdl_start, 0);
 	}
 
 	if (bdev->main_info.hif_hook_chip.bt_tx_frame_handler) {
@@ -5464,8 +5464,11 @@ static void btmtk_dynamic_fwdl_work(struct work_struct *work)
 	struct btmtk_dev *bdev = container_of(work, struct btmtk_dev, dynamic_fwdl_work);
 
 	BTMTK_INFO_DEV(bdev, "%s enter", __func__);
+
+	atomic_set(&bdev->dynamic_fwdl_start, 1);
 	btmtk_dynamic_load_rom_patch(bdev, bdev->fw_bin_info);
-	bdev->dynamic_fwdl_start = false;
+	atomic_set(&bdev->dynamic_fwdl_start, 0);
+	BTMTK_INFO_DEV(bdev, "%s end", __func__);
 }
 
 static void btmtk_rx_work(struct work_struct *work)
@@ -5508,7 +5511,6 @@ static void btmtk_rx_work(struct work_struct *work)
 				 * blocking rx_work thread means waited event won't be handled in
 				 * rx_work thread, so here we create a new thread for dynamic fwdl.
 				 */
-				bdev->dynamic_fwdl_start = true;
 				BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: Get dynamic DL EVENT- ", __func__);
 				schedule_work(&bdev->dynamic_fwdl_work);
 

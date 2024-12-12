@@ -912,7 +912,7 @@ struct btmtk_dev {
 	/* dynamic fw download */
 	struct work_struct  dynamic_fwdl_work;
 	unsigned int		fw_bin_info;
-	bool dynamic_fwdl_start;
+	atomic_t dynamic_fwdl_start;
 	struct cali_data_s cali_backup;
 
 	/* fw onw sleep evt */

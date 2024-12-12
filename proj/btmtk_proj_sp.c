@@ -1440,7 +1440,7 @@ int btmtk_intcmd_system_status(unsigned char system_state)
 		return 0;
 	}
 
-	if (g_sbdev->dynamic_fwdl_start) {
+	if (atomic_read(&g_sbdev->dynamic_fwdl_start)) {
 		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
 		return 0;
 	}
@@ -1500,7 +1500,7 @@ int btmtk_intcmd_wmt_blank_status(unsigned char blank_state)
 		return 0;
 	}
 
-	if (g_sbdev->dynamic_fwdl_start) {
+	if (atomic_read(&g_sbdev->dynamic_fwdl_start)) {
 		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
 		return 0;
 	}
@@ -1846,7 +1846,7 @@ static void btmtk_send_set_tx_power_cmd(struct btmtk_dev *bdev)
 		return;
 	}
 
-	if (g_sbdev->dynamic_fwdl_start) {
+	if (atomic_read(&g_sbdev->dynamic_fwdl_start)) {
 		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
 		return;
 	}
@@ -1944,7 +1944,7 @@ int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb)
 		return -1;
 	}
 
-	if (g_sbdev->dynamic_fwdl_start) {
+	if (atomic_read(&g_sbdev->dynamic_fwdl_start)) {
 		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
 		return 0;
 	}
@@ -2137,7 +2137,7 @@ int32_t btmtk_intcmd_wmt_utc_sync(void)
 	memcpy(cmd + 6, &utc.sec, sizeof(uint32_t));
 	memcpy(cmd + 6 + sizeof(uint32_t), &utc.usec, sizeof(uint32_t));
 
-	if (g_sbdev->dynamic_fwdl_start) {
+	if (atomic_read(&g_sbdev->dynamic_fwdl_start)) {
 		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
 		return 0;
 	}
@@ -2157,7 +2157,7 @@ int32_t btmtk_send_finder_eids(uint8_t *buf, uint32_t len)
 	uint8_t evt[] = {0x04, 0x0E, 0x04, 0x01, 0x64, 0xFD};
 
 	BTMTK_INFO("%s ", __func__);
-	if (g_sbdev->dynamic_fwdl_start) {
+	if (atomic_read(&g_sbdev->dynamic_fwdl_start)) {
 		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
 		return 0;
 	}
@@ -2433,7 +2433,7 @@ int btmtk_find_my_phone_cmd(u32 hr)
 		cmd[14] = (hr >> 8) & 0xFF;
 	}
 
-	if (g_sbdev->dynamic_fwdl_start) {
+	if (atomic_read(&g_sbdev->dynamic_fwdl_start)) {
 		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
 		return 0;
 	}
@@ -2454,7 +2454,7 @@ int btmtk_set_powered_off_finder_mode(bool enable)
 
 	BTMTK_INFO("%s enable[%d]", __func__, enable);
 
-	if (g_sbdev->dynamic_fwdl_start) {
+	if (atomic_read(&g_sbdev->dynamic_fwdl_start)) {
 		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
 		return 0;
 	}

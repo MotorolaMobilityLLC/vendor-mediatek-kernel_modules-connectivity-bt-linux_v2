@@ -212,7 +212,7 @@ int WMT_WRITE(uint32_t addr, uint32_t val)
 		return -1;
 	}
 
-	if (g_sbdev->dynamic_fwdl_start) {
+	if (atomic_read(&g_sbdev->dynamic_fwdl_start)) {
 		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
 		return -1;
 	}
@@ -256,7 +256,7 @@ int WMT_READ(uint32_t addr, uint32_t *val)
 		return -1;
 	}
 
-	if (g_sbdev->dynamic_fwdl_start) {
+	if (atomic_read(&g_sbdev->dynamic_fwdl_start)) {
 		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
 		return -1;
 	}
