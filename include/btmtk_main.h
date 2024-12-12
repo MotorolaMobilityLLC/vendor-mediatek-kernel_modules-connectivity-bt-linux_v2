@@ -597,6 +597,8 @@ typedef void (*cif_open_done_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_close_ptr)(struct hci_dev *hdev);
 typedef int (*cif_reg_read_ptr)(struct btmtk_dev *bdev, u32 reg, u32 *val);
 typedef int (*cif_reg_write_ptr)(struct btmtk_dev *bdev, u32 reg, u32 val);
+typedef int (*cif_probe_hdl_ptr)(struct btmtk_dev *bdev);
+typedef int (*cif_disc_hdl_ptr)(void);
 typedef int (*cif_send_cmd_ptr)(struct btmtk_dev *bdev, struct sk_buff *skb,
 		int delay, int retry, int pkt_type);
 typedef int (*cif_send_and_recv_ptr)(struct btmtk_dev *bdev,
@@ -638,6 +640,8 @@ struct hif_hook_ptr {
 	cif_close_ptr			close;
 	cif_reg_read_ptr		reg_read;
 	cif_reg_write_ptr		reg_write;
+	cif_probe_hdl_ptr		probe_handler;
+	cif_disc_hdl_ptr		disc_handler;
 	cif_send_cmd_ptr		send_cmd;
 	cif_send_and_recv_ptr		send_and_recv;
 	cif_event_filter_ptr		event_filter;
@@ -670,7 +674,8 @@ typedef int (*cif_bt_cal_backup_send_ptr)(struct btmtk_dev *bdev);
 typedef int (*cif_bt_cal_backup_save_ptr)(struct btmtk_dev *bdev, struct sk_buff *skb);
 typedef void (*cif_bt_cal_backup_free_ptr)(struct btmtk_dev *bdev);
 /* ******* */
-
+typedef int (*cif_bt_probe_handler)(struct btmtk_dev *bdev);
+typedef int (*cif_bt_disc_handler)(struct btmtk_dev *bdev);
 typedef int (*cif_bt_load_rom_patch)(struct btmtk_dev *bdev);
 typedef void (*cif_bt_recv_error_handler)(struct hci_dev *hdev, const u8 *buf, u32 len, const u8 *dbg_buf, u32 dbg_len);
 typedef int (*cif_bt_rx_packet_handler)(struct btmtk_dev *bdev,  struct sk_buff *skb);
@@ -691,6 +696,8 @@ typedef int (*cif_bt_read_infra_pc)(void *func, u32 *val);
 #endif
 
 struct hif_hook_chip_ptr {
+	cif_bt_probe_handler			probe_handler;
+	cif_bt_disc_handler				disc_handler;
 	cif_bt_load_rom_patch			load_patch;
 	cif_bt_recv_error_handler		err_handler;
 	cif_bt_rx_packet_handler		rx_handler;
@@ -874,7 +881,7 @@ void btmtk_free_setting_file(struct btmtk_dev *bdev);
 
 unsigned char btmtk_fops_get_state(struct btmtk_dev *bdev);
 
-void btmtk_hci_snoop_save(unsigned int type, u8 *buf, u32 len);
+void btmtk_hci_snoop_save(unsigned int type, const u8 *buf, u32 len);
 void btmtk_hci_snoop_print(const u8 *buf, u32 len);
 void btmtk_hci_snoop_print_to_log(void);
 void *btmtk_kallsyms_lookup_name(const char *name);

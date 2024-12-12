@@ -27,6 +27,8 @@
 #if (USE_DEVICE_NODE == 1)
 #include "btmtk_queue.h"
 #include "btmtk_proj_sp.h"
+#else
+#include "btmtk_proj_ce.h"
 #endif
 
 #define MTKBT_UNSLEEPABLE_LOCK(x, y)	spin_lock_irqsave(x, y)
@@ -774,12 +776,12 @@ void btmtk_hci_snoop_print_to_log(void)
 	}
 }
 
-void btmtk_hci_snoop_save(unsigned int type, u8 *buf, u32 len)
+void btmtk_hci_snoop_save(unsigned int type, const u8 *buf, u32 len)
 {
 	u32 copy_len = HCI_SNOOP_BUF_SIZE;
 	u32 copy_tail_len = HCI_SNOOP_BUF_SIZE;
 	u8 separator_char[SEPARATOR_LEN] = {0xA5, 0xA5};
-	u8 *copy_tail_buf;
+	const u8 *copy_tail_buf;
 
 	if (!buf || len == 0 || type >= HCI_SNOOP_TYPE_MAX) {
 		BTMTK_ERR("%s, invalid parameters!", __func__);
@@ -4104,7 +4106,8 @@ int bt_open(struct hci_dev *hdev)
 	}
 
 	state = btmtk_get_chip_state(bdev);
-	if (state == BTMTK_STATE_INIT || state == BTMTK_STATE_DISCONNECT) {
+	if (state == BTMTK_STATE_INIT || state == BTMTK_STATE_DISCONNECT
+		|| state == BTMTK_STATE_PROBE) {
 		BTMTK_WARN("%s: chip_state[%d] is init or disconnect!", __func__, state);
 		return -EAGAIN;
 	}
@@ -4732,6 +4735,7 @@ int btmtk_main_cif_initialize(struct btmtk_dev *bdev, int hci_bus)
 	int err = 0;
 
 	btmtk_init_node();
+	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_INIT);
 
 	btmtk_reset_timer_add(bdev);
 

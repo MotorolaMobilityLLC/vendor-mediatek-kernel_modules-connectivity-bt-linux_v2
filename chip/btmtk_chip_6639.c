@@ -291,6 +291,34 @@ exit:
 
 }
 
+int btmtk_probe_handler(struct btmtk_dev *bdev)
+{
+	int ret = 0;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	if (bmain_info->hif_hook.probe_handler) {
+		ret = bmain_info->hif_hook.probe_handler(bdev);
+		if (ret < 0) {
+			BTMTK_ERR("%s: probe handle failed!", __func__);
+			return ret;
+		}
+	}
+	return ret;
+}
+
+int btmtk_disconnect_handler(struct btmtk_dev *bdev)
+{
+	int ret = 0;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+	if (bmain_info->hif_hook.disc_handler) {
+		ret = bmain_info->hif_hook.disc_handler();
+		if (ret < 0) {
+			BTMTK_ERR("%s: disconnect handle failed!", __func__);
+			return ret;
+		}
+	}
+	return ret;
+}
+
 int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 {
 	int err = 0;
@@ -430,6 +458,8 @@ int btmtk_cif_chip_6639_register(void)
 
 	BTMTK_INFO("%s", __func__);
 
+	bmain_info->hif_hook_chip.probe_handler = btmtk_probe_handler;
+	bmain_info->hif_hook_chip.disc_handler = btmtk_disconnect_handler;
 	bmain_info->hif_hook_chip.cap_init = btmtk_chip_reg_init;
 	bmain_info->hif_hook_chip.restore = btmtk_cif_connac3_calibration_restore;
 	bmain_info->hif_hook_chip.backup_send = btmtk_cif_connac3_calibration_backup_send;

@@ -23,10 +23,13 @@
 #include <linux/tty.h>
 #include <linux/tty_driver.h>
 #include <linux/serial.h>
+#include <linux/of.h>
 #include <linux/of_device.h>
+#include <linux/of_gpio.h>
 #include <linux/regulator/consumer.h>
 #include <linux/gpio/consumer.h>
 #include <linux/pinctrl/consumer.h>
+#include <linux/regulator/consumer.h>
 #include <linux/clk.h>
 #include <linux/suspend.h>
 #if (USE_DEVICE_NODE == 1)
