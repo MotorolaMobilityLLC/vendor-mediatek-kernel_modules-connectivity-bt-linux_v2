@@ -314,8 +314,6 @@ struct bt_cmds_s command_raw_data[4][BTMTK_CMD_NUM];
 
 int btmtk_common_data_initialize(struct btmtk_dev *bdev)
 {
-	int i;
-
 	if (bdev->dongle_index >= 4) {
 		BTMTK_ERR("%s: dongle_index must smaller than 4 (%d)", __func__, bdev->dongle_index);
 		return -1;
