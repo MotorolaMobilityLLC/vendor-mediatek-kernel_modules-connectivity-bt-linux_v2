@@ -316,6 +316,8 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 #if (USE_DEVICE_NODE == 0)
 	const u8 read_address_event[READ_ADDRESS_EVT_HDR_LEN] = { 0x4, 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00 };
 	const u8 get_baudrate_event[GETBAUD_EVT_LEN] = { 0x04, 0xE4, 0x0A, 0x02, 0x04, 0x06, 0x00, 0x00, 0x02 };
+#else
+	struct btmtk_main_info bmain_info = g_sbdev->main_info;
 #endif
 
 	if (bdev == NULL) {
@@ -326,7 +328,32 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		skb->len >= event_need_compare_len) {
 		memset(bdev->io_buf, 0, IO_BUF_SIZE);
-#if (USE_DEVICE_NODE == 0)
+#if (USE_DEVICE_NODE == 1)
+		/* cmd from stack would pass 0x01, 0xXX, 0xXX as event_need_compare */
+		if (event_need_compare_len == 2 && skb->len > 5 &&
+				memcmp(&skb->data[3], event_need_compare, event_need_compare_len) == 0) {
+			BTMTK_INFO("%s: compare opcode[0x%02X%02X] from stack success",
+					__func__, skb->data[4], skb->data[3]);
+			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+			/* return 0 not drop event by driver */
+			return 0;
+		}
+		if (skb->data[2] == 0x02 && skb->data[3] == 0x18) {
+			int ret = 0;
+			BTMTK_INFO("match DFD event");
+			if (skb->data[6] == 0x00) {
+				event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+				memcpy(bdev->dfd_pstd, &skb->data[7], skb->len - 7);
+				ret = connv3_coredump_send(bmain_info.hif_hook.coredump_handler, "PSTD", &g_sbdev->dfd_pstd[0], skb->len - 7);
+				if (ret)
+					BTMTK_ERR("%s: connv3_coredump_send fail, ret = %d", __func__, ret);
+				return 1;
+			} else {
+				BTMTK_ERR("%s compare fail!!!", __func__);
+				BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: skb->data:", __func__);
+			}
+		}
+#else // (USE_DEVICE_NODE == 0)
 		if ((skb->len == (GETBAUD_EVT_LEN - HCI_TYPE_SIZE + BAUD_SIZE)) &&
 			memcmp(skb->data, &get_baudrate_event[1], GETBAUD_EVT_LEN - 1) == 0) {
 			BTMTK_INFO("%s: GET BAUD = %02X %02X %02X, FC = %02X", __func__,
@@ -2458,20 +2485,6 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 #else
 		BTMTK_INFO_RAW(bdev, data, count, "[SKIP] %s: count[%zu]", __func__, count);
 #endif
-
-#if (USE_DEVICE_NODE == 1)
-		/* check opcode, for dfd post dump evt, and only copy payload */
-		if (data[4] == 0x18 && count > 7) {
-			if (data[7] != 0) {
-				BTMTK_WARN("%s: For dfd post dump evt, evt status = %d, data is over or invalid evt", __func__, data[7]);
-			} else {
-				BTMTK_INFO("%s: For dfd post dump evt, copy to bdev->dfd_pstd", __func__);
-			}
-			if (&bdev->dfd_pstd[0] != NULL)
-				memcpy(bdev->dfd_pstd, &data[7], count - 7);
-		}
-#endif
-		return;
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;

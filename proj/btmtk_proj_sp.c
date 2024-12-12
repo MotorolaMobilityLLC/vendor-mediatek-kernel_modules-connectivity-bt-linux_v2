@@ -716,7 +716,7 @@ static int btmtk_post_chip_rst_on_handler(unsigned int type)
 	/* dump DFD post data, last 2 bytes are length, cmd[8] is Flag */
 	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x09, 0x01, 0x18, 0x05, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00 };
 	/* evt[7] is status */
-	// u8 evt[] = { 0x04, 0xE4, 0x09, 0x02, 0x18, 0x05, 0x00, 0x00};
+	u8 evt[] = { 0x04, 0xE4, 0xF5, 0x02, 0x18, 0xF1, 0x00, 0x00};
 	BTMTK_INFO("%s: type[%d]", __func__, type);
 
 	if (g_sbdev->reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP) {
@@ -734,48 +734,44 @@ static int btmtk_post_chip_rst_on_handler(unsigned int type)
 			BTMTK_INFO("%s: region[%d]", __func__, region);
 			switch (region) {
 			case 1:
-				BTMTK_INFO("%s: dump DFD_CB_INFRA_INFO", __func__);
+				BTMTK_WARN("%s: dump DFD_CB_INFRA_INFO", __func__);
 				cmd[8] = 0x01;
 				total_length = DFD_CB_INFRA_INFO_LEN;
-				// DFD_CB_INFRA_INFO_ADDR 0x74000000
-				// reset offset to 0
-				cmd[9] = 0;
-				cmd[10] = 0;
+				/* DFD_CB_INFRA_INFO_ADDR 0x74000000 */
+				/* reset offset to 0 */
+				offset = 0;
 				break;
 
 			case 2:
-				BTMTK_INFO("%s: dump DFD_CB_INFRA_SRAM", __func__);
+				BTMTK_WARN("%s: dump DFD_CB_INFRA_SRAM", __func__);
 				cmd[8] = 0x02;
 				total_length = DFD_CB_INFRA_SRAM_LEN;
-				// DFD_CB_INFRA_SRAM_ADDR 0x74004000
-				// reset offset to 0
-				cmd[9] = 0;
-				cmd[10] = 0;
-				//reset length to 0
+				/* DFD_CB_INFRA_SRAM_ADDR 0x74004000 */
+				/* reset offset to 0 */
+				offset = 0;
+				/* reset length to 0 */
 				length = 0;
 				break;
 
 			case 3:
-				BTMTK_INFO("%s: dump DFD_CB_INFRA_BT_SRAM", __func__);
+				BTMTK_WARN("%s: dump DFD_CB_INFRA_BT_SRAM", __func__);
 				cmd[8] = 0x04;
 				total_length = DFD_CB_INFRA_BT_SRAM_LEN;
-				// DFD_CB_INFRA_BT_SRAM_ADDR 0x74005400
-				// reset offset to 0
-				cmd[9] = 0;
-				cmd[10] = 0;
-				//reset length to 0
+				/* DFD_CB_INFRA_BT_SRAM_ADDR 0x74005400 */
+				/* reset offset to 0 */
+				offset = 0;
+				/* reset length to 0 */
 				length = 0;
 				break;
 
 			case 4:
-				BTMTK_INFO("%s: dump DFD_BT_DEBUG_INFO", __func__);
+				BTMTK_WARN("%s: dump DFD_BT_DEBUG_INFO", __func__);
 				cmd[8] = 0x07;
 				total_length = DFD_BT_DEBUG_INFO_LEN;
-				// DFD_BT_DEBUG_INFO_ADDR 0x7405B580
-				// reset offset to 0
-				cmd[9] = 0;
-				cmd[10] = 0;
-				//reset length to 0
+				/* DFD_BT_DEBUG_INFO_ADDR 0x7405B580 */
+				/* reset offset to 0 */
+				offset = 0;
+				/* reset length to 0 */
 				length = 0;
 				break;
 
@@ -798,52 +794,44 @@ static int btmtk_post_chip_rst_on_handler(unsigned int type)
 			if (total_length > DFD_CB_INFRA_BT_SRAM_LEN)
 				total_length = DFD_CB_INFRA_BT_SRAM_LEN;
 
-			do {
+			while (total_length >= 0) {
 				if (total_length <= 0) {
 					BTMTK_WARN("%s, total_length: %d", __func__, total_length);
 					break;
 				}
 
-				// offset: cmd[10] | cmd[9]
-				offset = cmd[10] | cmd[9] + length;
+				/* offset: cmd[10] | cmd[9] */
 				cmd[10] = (offset >> 8) & 0xFF;
 				cmd[9] = offset & 0xFF;
 
-				// length: cmd[12] | cmd[11], 0xF0 is max length FW can support
+				/* length: cmd[12] | cmd[11], 0xF0 is max length FW can support */
 				length = (total_length >= 0xF0) ? 0xF0 : total_length;
 				cmd[12] = (length >> 8) & 0xFF;
 				cmd[11] = length & 0xFF;
 				length = cmd[12] | cmd[11];
 
-				BTMTK_INFO("%s, 0x%02x, 0x%02x, 0x%02x, 0x%02x", __func__, cmd[9], cmd[10], cmd[11], cmd[12]);
+				BTMTK_INFO("%s, length = %d, offset = %04x", __func__, length, offset);
 
-				// dump DFD post data
-				ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd), NULL, 0, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
+				/* dump DFD post data */
+				ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd), evt, sizeof(evt), DELAY_TIMES,
+						RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
 				BTMTK_INFO("%s, dump DFD post data, ret = %d", __func__, ret);
 				if (ret < 0) {
 					BTMTK_ERR("%s: failed, ret[%d]", __func__, ret);
 					goto end;
 				}
-				// delay 20ms for dfd data rx
-				mdelay(20);
+				/* delay 40ms for dfd data rx */
+				mdelay(40);
 
+				/* update total length */
 				total_length -= length;
-				BTMTK_INFO("%s, 0x%02x, 0x%02x, 0x%02x, 0x%02x, evt status = %d, total_length = %d", __func__, g_sbdev->dfd_pstd[1], g_sbdev->dfd_pstd[2], g_sbdev->dfd_pstd[3], g_sbdev->dfd_pstd[4], g_sbdev->dfd_pstd[0], total_length);
-				if (g_sbdev->dfd_pstd[0] != 0) {
-					BTMTK_ERR("%s: evt status is not 0, g_sbdev->dfd_pstd[0] = %d", __func__, g_sbdev->dfd_pstd[0]);
-					break;
-				}
 
-				ret = connv3_coredump_send(bmain_info.hif_hook.coredump_handler, "PSTD",
-						&g_sbdev->dfd_pstd[1], length);
-				if (ret) {
-					BTMTK_ERR("%s: connv3_coredump_send fail, ret = %d", __func__, ret);
-					goto end;
-				}
-			} while (total_length >= 0);
-		} //end for
+				/* update offset */
+				offset += length;
+			} /* end while */
+		} /* end for */
 end:
-		// end coredump
+		/* end coredump */
 		btmtk_sp_coredump_end();
 
 		// reset UART pin?
