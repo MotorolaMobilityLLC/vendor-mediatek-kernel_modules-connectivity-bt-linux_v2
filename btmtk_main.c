@@ -1783,6 +1783,7 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwb
 	struct _Global_Descr *globalDesrc = NULL;
 	u8 *fw_version = NULL;
 	u32 fw_version_len = 0;
+	u8 build_time[16] = {0};
 
 	if (fwbuf == NULL) {
 		BTMTK_WARN("%s, fwbuf is NULL!", __func__);
@@ -1806,7 +1807,9 @@ static void btmtk_print_bt_patch_info(struct btmtk_dev *bdev, u8 *fwbuf, u32 fwb
 	}
 
 	if (patchHdr) {
-		BTMTK_INFO("[btmtk] Built Time = %s", patchHdr->ucDateTime);
+		build_time[15] = '\0';
+		memcpy(build_time, patchHdr->ucDateTime, 15);
+		BTMTK_INFO("[btmtk] Built Time = %s", build_time);
 		BTMTK_INFO("[btmtk] Hw Ver = 0x%04x", patchHdr->u2HwVer);
 		BTMTK_INFO("[btmtk] Sw Ver = 0x%04x", patchHdr->u2SwVer);
 		BTMTK_INFO("[btmtk] Magic Number = 0x%08x", patchHdr->u4MagicNum);
@@ -1831,6 +1834,7 @@ static void btmtk_print_wifi_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
 {
 	struct _PATCH_HEADER *patchHdr = NULL;
 	struct _Global_Descr *globalDesrc = NULL;
+	u8 build_time[16] = {0};
 
 	if (fwbuf == NULL) {
 		BTMTK_WARN("%s, fwbuf is NULL!", __func__);
@@ -1845,7 +1849,9 @@ static void btmtk_print_wifi_patch_info(struct btmtk_dev *bdev, u8 *fwbuf)
 
 	BTMTK_INFO("[btmtk] =============== Wifi Patch Info ==============");
 	if (patchHdr) {
-		BTMTK_INFO("[btmtk] Built Time = %s", patchHdr->ucDateTime);
+		build_time[15] = '\0';
+		memcpy(build_time, patchHdr->ucDateTime, 15);
+		BTMTK_INFO("[btmtk] Built Time = %s", build_time);
 		BTMTK_INFO("[btmtk] Hw Ver = 0x%04x",
 			((patchHdr->u2HwVer & 0x00ff) << 8) | ((patchHdr->u2HwVer & 0xff00) >> 8));
 		BTMTK_INFO("[btmtk] Sw Ver = 0x%04x",
