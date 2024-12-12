@@ -2285,7 +2285,6 @@ static int btmtk_usb_enter_standby(void)
 		/* Find valid dev for already probe interface. */
 		if (pp_bdev[i]->hdev != NULL) {
 			bdev = pp_bdev[i];
-			btmtk_fops_get_state(bdev);
 			state = btmtk_get_chip_state(bdev);
 			if (state != BTMTK_STATE_WORKING) {
 				BTMTK_WARN("%s: not in working(%d).", __func__, state);
