@@ -81,6 +81,7 @@ MODULE_DEVICE_TABLE(usb, btusb_table);
 #define BTUSB_DID_ISO_RESUME	4
 #define BTUSB_BLE_ISOC_RUNNING	5
 #define BTUSB_WMT_RUNNING	6
+#define BTUSB_OPENED		7
 
 #define DEVICE_VENDOR_REQUEST_IN	0xc0
 #define DEVICE_CLASS_REQUEST_OUT	0x20
@@ -1755,6 +1756,11 @@ static int btmtk_usb_open(struct hci_dev *hdev)
 	unsigned int ifnum_base;
 	unsigned char state = 0;
 
+	if (test_bit(BTUSB_OPENED, &bdev->flags)) {
+		BTMTK_INFO("%s: usb is opened, return", __func__);
+		return -EBUSY;
+	}
+
 	BTMTK_INFO("%s enter!", __func__);
 
 	BTMTK_DBG("%s", hdev->name);
@@ -1825,6 +1831,7 @@ static int btmtk_usb_open(struct hci_dev *hdev)
 	}
 
 	set_bit(BTUSB_BULK_RUNNING, &bdev->flags);
+	set_bit(BTUSB_OPENED, &bdev->flags);
 
 done:
 	if (state != BTMTK_STATE_SUSPEND
@@ -1876,6 +1883,7 @@ static int btmtk_usb_close(struct hci_dev *hdev)
 	clear_bit(BTUSB_BULK_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_WMT_RUNNING, &bdev->flags);
+	clear_bit(BTUSB_OPENED, &bdev->flags);
 
 	btusb_stop_traffic(cif_dev);
 	btusb_free_frags(bdev);
@@ -2835,6 +2843,7 @@ static int btmtk_usb_subsys_reset(struct btmtk_dev *bdev)
 	clear_bit(BTUSB_INTR_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_WMT_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_SUSPENDING, &bdev->flags);
+	clear_bit(BTUSB_OPENED, &bdev->flags);
 	bdev->sco_num = 0;
 
 	btusb_stop_traffic((struct btmtk_usb_dev *)bdev->cif_dev);
@@ -3504,6 +3513,7 @@ static void btmtk_cif_disconnect(struct usb_interface *intf)
 	clear_bit(BTUSB_BLE_ISOC_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_WMT_RUNNING, &bdev->flags);
 	clear_bit(BTUSB_SUSPENDING, &bdev->flags);
+	clear_bit(BTUSB_OPENED, &bdev->flags);
 
 	btusb_stop_traffic(cif_dev);
 
