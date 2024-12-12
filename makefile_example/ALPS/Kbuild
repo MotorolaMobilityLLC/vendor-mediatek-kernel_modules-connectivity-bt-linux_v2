@@ -107,13 +107,6 @@ else
 endif
 
 ccflags-y += -DDEBUG_DUMP_TIME
-ifeq ($(CONFIG_SUPPORT_BMR_RX_CLK), y)
-    ccflags-y += -DCFG_SUPPORT_BMR_RX_CLK=1
-    ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/
-else
-    ccflags-y += -DCFG_SUPPORT_BMR_RX_CLK=0
-endif
-
 ccflags-y += -DBTMTK_ISOC_TEST=0
 
 #################### Configurations ####################

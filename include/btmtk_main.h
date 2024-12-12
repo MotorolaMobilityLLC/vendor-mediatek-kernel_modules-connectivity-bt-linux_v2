@@ -497,6 +497,15 @@ struct btmtk_stp_info {
 	unsigned char data[STP_MAX_HDR_LEN];
 };
 
+#if CFG_SUPPORT_LEAUDIO_CLK
+struct le_audio {
+	int irq;
+	u32 irq_type;
+	u32 irq_cnt;
+	u64 sysclk;
+};
+#endif
+
 struct btmtk_dev {
 	struct hci_dev	*hdev;
 	unsigned long	hdev_flags;
@@ -618,6 +627,10 @@ struct btmtk_dev {
 
 	struct btmtk_stp_info stp_info;
 	int dump_cnt;
+
+#if CFG_SUPPORT_LEAUDIO_CLK
+	struct le_audio le_aud;
+#endif
 };
 
 #if (USE_DEVICE_NODE == 1)

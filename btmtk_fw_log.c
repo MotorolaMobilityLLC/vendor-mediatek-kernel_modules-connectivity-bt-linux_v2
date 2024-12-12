@@ -522,6 +522,17 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
+#if CFG_SUPPORT_LEAUDIO_CLK
+	if (strncmp(i_fwlog_buf, "le_audio_clk=", strlen("le_audio_clk=")) == 0) {
+		u8 val = *(i_fwlog_buf + strlen("le_audio_clk=")) - '0';
+
+		pp_bdev[hci_idx]->bt_cfg.le_audio_clk_fw_gpio = val;
+		BTMTK_INFO("%s: set le_audio_irq to %d", __func__, pp_bdev[hci_idx]->bt_cfg.le_audio_clk_fw_gpio);
+		ret = count;
+		goto exit;
+	}
+#endif
+
 	/* For bperf, EX: echo bperf=1 > /dev/stpbtfwlog */
 	if (strncmp(i_fwlog_buf, "bperf=", strlen("bperf=")) == 0) {
 		u8 val = *(i_fwlog_buf + strlen("bperf=")) - '0';
