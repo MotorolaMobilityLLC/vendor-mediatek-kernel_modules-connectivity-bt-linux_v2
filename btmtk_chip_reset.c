@@ -254,7 +254,9 @@ L0RESET:
 		 * test, then found the final solution.
 		 */
 		/* msleep(2000); */
+#if (USE_DEVICE_NODE == 0)
 		if (bdev->bt_cfg.support_dongle_whole_reset) {
+#endif
 			if (bmain_info->hif_hook.whole_reset) {
 				cur = atomic_cmpxchg(&bmain_info->chip_reset, BTMTK_RESET_DONE, BTMTK_RESET_DOING);
 				if (cur == BTMTK_RESET_DOING) {
@@ -281,9 +283,11 @@ L0RESET:
 				btmtk_send_hw_err_to_host(bdev);
 #endif
 			}
+#if (USE_DEVICE_NODE == 0)
 		} else {
 			BTMTK_INFO("%s: Not support whole chip reset", __func__);
 		}
+#endif
 	}
 
 Finish:
