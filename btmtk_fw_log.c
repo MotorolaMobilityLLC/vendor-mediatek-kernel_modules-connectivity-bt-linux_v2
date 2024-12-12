@@ -187,22 +187,23 @@ static void btmtk_proc_create_new_entry(void)
 
 	BTMTK_DBG("%s, proc initialized", __func__);
 
-	bmain_info->proc_dir = proc_mkdir("stpbt", NULL);
+	bmain_info->proc_dir = proc_mkdir(PROC_ROOT_DIR, NULL);
 	if (bmain_info->proc_dir == NULL) {
-		BTMTK_ERR("Unable to creat dir");
+		BTMTK_ERR("Unable to creat %s dir", PROC_ROOT_DIR);
 		return;
 	}
-	proc_show_entry =  proc_create("bt_fw_version", 0600, bmain_info->proc_dir, &BT_proc_fops);
+
+	proc_show_entry =  proc_create(PROC_BT_FW_VERSION, 0600, bmain_info->proc_dir, &BT_proc_fops);
 	if (proc_show_entry == NULL) {
-		BTMTK_ERR("Unable to creat bt_fw_version node");
-		remove_proc_entry("stpbt", NULL);
+		BTMTK_ERR("Unable to creat %s node", PROC_BT_FW_VERSION);
+		remove_proc_entry(PROC_ROOT_DIR, NULL);
 	}
 
 #if (USE_DEVICE_NODE == 1)
 	proc_show_entry =  proc_create(PROC_BT_UART_LAUNCHER_NOTIFY, 0640, bmain_info->proc_dir, &BT_proc_uart_launcher_notify_fops);
 	if (proc_show_entry == NULL) {
-		BTMTK_ERR("Unable to creat bt_uart_launcher_notify node");
-		remove_proc_entry("stpbt", NULL);
+		BTMTK_ERR("Unable to creat %s node", PROC_BT_UART_LAUNCHER_NOTIFY);
+		remove_proc_entry(PROC_ROOT_DIR, NULL);
 	}
 #endif
 
@@ -222,7 +223,7 @@ static void btmtk_proc_delete_entry(void)
 	if (bmain_info->proc_dir == NULL)
 		return;
 
-	remove_proc_entry("bt_fw_version", bmain_info->proc_dir);
+	remove_proc_entry(PROC_BT_FW_VERSION, bmain_info->proc_dir);
 	BTMTK_INFO("%s, proc device node and folder removed!!", __func__);
 	remove_proc_entry(PROC_BT_CHIP_RESET_COUNT, bmain_info->proc_dir);
 	BTMTK_INFO("%s, proc device node and folder %s removed!!", __func__, PROC_BT_CHIP_RESET_COUNT);
