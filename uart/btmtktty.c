@@ -316,9 +316,6 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 #if (USE_DEVICE_NODE == 0)
 	const u8 read_address_event[READ_ADDRESS_EVT_HDR_LEN] = { 0x4, 0x0E, 0x0A, 0x01, 0x09, 0x10, 0x00 };
 	const u8 get_baudrate_event[GETBAUD_EVT_LEN] = { 0x04, 0xE4, 0x0A, 0x02, 0x04, 0x06, 0x00, 0x00, 0x02 };
-#else
-	/* picus event include blank event/system status event */
-	u8 picus_evt[] = {0x04, 0x0E, 0x07, 0x01, 0x5D, 0xFC};
 #endif
 
 	if (bdev == NULL) {
