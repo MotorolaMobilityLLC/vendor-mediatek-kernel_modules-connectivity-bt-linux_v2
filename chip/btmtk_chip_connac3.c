@@ -275,8 +275,6 @@ static int btmtk_bt_open(struct btmtk_dev *bdev)
 
 	BTMTK_INFO("%s", __func__);
 
-	btmtk_dynamic_load_rom_patch(bdev, 1);
-
 	ret = btmtk_send_cmd_to_fw(bdev,
 			SET_EFEM1_CMD, SET_EFEM1_EVT,
 			WMT_DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV);
