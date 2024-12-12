@@ -748,6 +748,11 @@ static int btmtk_uart_send_xo_param_cmd(struct hci_dev *hdev, CONNXO_CFG_PARAM_S
 	uint32_t size = 0;
 
 	cmd = vmalloc(HCI_MAX_ACL_SIZE);
+	if (cmd == NULL) {
+		BTMTK_ERR("%s: vmalloc failed!!", __func__);
+		return -1;
+	}
+
 	memcpy(cmd, cmd_header, sizeof(cmd_header));
 	offset = sizeof(cmd_header);
 
@@ -769,6 +774,12 @@ static int btmtk_uart_send_xo_param_cmd(struct hci_dev *hdev, CONNXO_CFG_PARAM_S
 	memcpy(&cmd[offset], &connxo_cfg_param->ucFreqC1Axm52m, 25);
 
 	data = connv3_get_plat_config(&size);
+	if (data == NULL) {
+		BTMTK_ERR("%s: data is NULL", __func__);
+		ret = -1;
+		goto exit;
+	}
+
 	BTMTK_INFO("%s: 0x%02x, 0x%02x, 0x%02x, 0x%02x", __func__, data[0], data[1], data[2], data[3]);
 	// platform customized config, total 64 bytes, 60~63 bytes
 	memcpy(&cmd[offset + 60], data, 4);
@@ -785,8 +796,9 @@ static int btmtk_uart_send_xo_param_cmd(struct hci_dev *hdev, CONNXO_CFG_PARAM_S
 		return ret;
 	}
 #endif
-	vfree(cmd);
 	BTMTK_INFO("%s done", __func__);
+exit:
+	vfree(cmd);
 	return ret;
 }
 #endif
