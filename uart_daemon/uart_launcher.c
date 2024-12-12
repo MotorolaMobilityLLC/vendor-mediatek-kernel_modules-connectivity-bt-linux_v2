@@ -66,12 +66,8 @@
 static int set_speed(int fd, struct termios *ti, int speed);
 int setup_uart_param (int hComPort, int iBaudrate, struct UART_CONFIG *sUartConfig);
 
-#ifdef __ANDROID__
-static int notifyFd = -1;
-#endif
 static int gTtyFd = -1;
 static int cont = 1;    /** loop continue running */
-struct flock fl;
 
 //---------------------------------------------------------------------------
 /* Used as host uart param setup callback */
@@ -258,7 +254,7 @@ int osi_system(const char *cmd)
 //---------------------------------------------------------------------------
 static void uart_launcher_sig_handler(int signum)
 {
-    BPRINT_I("%s: sig[%d] fd[%d]", __func__, signum, gTtyFd);
+    BPRINT_I("%s: %d", __func__, signum);
     cont = 0;
 }
 
@@ -278,6 +274,7 @@ int main(int argc, char *argv[])
     char *tty_path = "/dev/ttyUSB0";
     struct UART_CONFIG sUartConfig;
     struct sigaction sigact;
+    struct flock fl;
 
     memset(&sUartConfig, 0, sizeof(struct UART_CONFIG));
     memset(&fds, 0, sizeof(struct pollfd));
@@ -290,9 +287,7 @@ int main(int argc, char *argv[])
     sigaction(SIGINT, &sigact, NULL);
     sigaction(SIGTERM, &sigact, NULL);
     sigaction(SIGQUIT, &sigact, NULL);
-    /* SIGKILL, SIGSTOP may not be catched */
     sigaction(SIGKILL, &sigact, NULL);
-    sigaction(SIGSTOP, &sigact, NULL);
     init_flock(&fl);
     ld = N_MTK;
 
@@ -358,26 +353,6 @@ int main(int argc, char *argv[])
             break;
     }
 
-#ifdef __ANDROID__
-    /* open bt_uart_launcher_notify */
-    BPRINT_I("open /proc/stpbt/bt_uart_launcher_notify");
-    /* node may not ready, retry 20 times */
-    while (1) {
-        notifyFd= open("/proc/stpbt/bt_uart_launcher_notify", O_RDONLY);
-        BPRINT_I("open done bt_uart_launcher_notify fd[%d]", notifyFd);
-        if (notifyFd < 0) {
-            if (retry > 20) {
-                BPRINT_E("bt_uart_launcher_notify %d, error", notifyFd);
-	        break;
-            } else {
-                retry++;
-                (void)usleep(1000 * 100);
-            }
-        } else
-            break;
-    }
-#endif
-
     /* flock the device node */
     BPRINT_I("flock the device node");
     if (fcntl(gTtyFd, F_SETLK, &fl) < 0) {
@@ -412,13 +387,13 @@ restart:
     err = ioctl(gTtyFd, HCIUARTINIT, NULL);
     if (err < 0) {
         BPRINT_E("set HCIUARTINIT error %d", err);
-        goto exit;
+        return 0;
     }
 
     err = ioctl(gTtyFd, HCIUARTGETBAUD, NULL);
     if (err < 0) {
         BPRINT_E("set HCIUARTGETBAUD error %d", err);
-        goto exit;
+        return 0;
     }
 
     /* chang baud rate */
@@ -428,7 +403,7 @@ restart:
         err = ioctl(gTtyFd, HCIUARTSETBAUD, &sUartConfig);
         if (err < 0) {
             BPRINT_E("set HCIUARTSETBAUD error %d", err);
-            goto exit;
+            return 0;
         }
 
         BPRINT_I("set baudtate %d", baudrate);
@@ -437,21 +412,17 @@ restart:
         err = ioctl(gTtyFd, HCIUARTSETWAKEUP, NULL);
         if (err < 0) {
             BPRINT_E("set HCIUARTSETWAKEUP error %d", err);
-            goto exit;
+            return 0;
         }
     }
 
     if (ioctl(gTtyFd, HCIUARTLOADPATCH, NULL) < 0) {
         BPRINT_E("set HCIUARTLOADPATCH error");
-        goto exit;
+        return 0;
     }
 
     while (cont) {
-#ifdef __ANDROID__
-        err = poll(&fds, fd_num, 20000);
-#else
         err = poll(&fds, fd_num, 2000);
-#endif
         if (err < 0) {
             if (errno == EINTR) {
                 continue;
@@ -470,19 +441,14 @@ restart:
         goto restart;
     }
 
-    BPRINT_I("%s: deinit flow fd[%d]", __func__, gTtyFd);
-
-    if (gTtyFd < 0)
-        goto exit;
-
     /* before exit daemon, return baud to default */
     if (chang_baud_rate | flow_control) {
         sUartConfig.iBaudrate = CUST_BAUDRATE_DFT;
         sUartConfig.fc = UART_DISABLE_FC;
         err = ioctl(gTtyFd, HCIUARTSETBAUD, &sUartConfig);
         if (err < 0) {
-            BPRINT_E("ioctl HCIUARTSETBAUD error:[%d] %s", errno, strerror(errno));
-            goto exit;
+            BPRINT_E("set HCIUARTSETBAUD error %d", err);
+            return 0;
         }
 
         BPRINT_I("set baudtate %d", CUST_BAUDRATE_DFT);
@@ -490,34 +456,17 @@ restart:
 
         err = ioctl(gTtyFd, HCIUARTSETWAKEUP, NULL);
         if (err < 0) {
-            BPRINT_E("ioctl HCIUARTSETWAKEUP error:[%d] %s", errno, strerror(errno));
-            goto exit;
+            BPRINT_E("set HCIUARTSETWAKEUP error %d", err);
+            return 0;
         }
     }
 
 exit:
-#ifdef __ANDROID__
-    BPRINT_I("%s: exit notifyFd[%d]", __func__, notifyFd);
-    if (notifyFd > 0) {
-        close(notifyFd);
-        notifyFd= -1;
-    }
-#endif
-
-    BPRINT_I("%s: exit ttyFd[%d]", __func__, gTtyFd);
-
     /* unlock ttyFd */
     if (gTtyFd > 0) {
-        err = ioctl(gTtyFd, HCIUARTDEINIT, NULL);
-        if (err < 0) {
-            BPRINT_E("ioctl HCIUARTDEINIT error:[%d] %s", errno, strerror(errno));
-            BPRINT_I("deinit fail, wait...");
-            (void)usleep(1000 * 1000);
-        }
         BPRINT_I("unlock_flock");
         unlock_flock(gTtyFd, &fl, F_UNLCK, SEEK_SET);
         close(gTtyFd);
-        gTtyFd = -1;
     }
     BPRINT_I("uart_launcher stop");
     return 0;
