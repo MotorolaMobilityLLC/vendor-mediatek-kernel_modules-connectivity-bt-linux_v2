@@ -1276,6 +1276,13 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 		}
 
 		length = min_t(uint, hci_skb_expect(skb) - skb->len, size);
+		if (length <= 0) {
+			BTMTK_ERR("%s, length = %d!", __func__, length);
+			kfree_skb(skb);
+			skb = NULL;
+			return ERR_PTR(-EINVAL);
+		}
+
 		skb_tmp = skb_put(skb, length);
 		if (!skb_tmp) {
 			BTMTK_ERR("%s, skb_put failed. Len = %d!", __func__, length);

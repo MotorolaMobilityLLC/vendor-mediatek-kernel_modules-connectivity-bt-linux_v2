@@ -1587,7 +1587,7 @@ static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev, bool do_flus
 static int btmtk_uart_load_fw_patch_using_dma(struct btmtk_dev *bdev, u8 *image,
 		u8 *fwbuf, int section_dl_size, int section_offset, int patch_flag)
 {
-#define TX_RETRY 100
+#define TX_RETRY 200
 	int cur_len = 0;
 	int flush_retry = 0, max_pkt_cnt = 0;
 	int ret = -1;

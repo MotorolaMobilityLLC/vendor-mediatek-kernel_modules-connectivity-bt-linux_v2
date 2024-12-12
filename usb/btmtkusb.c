@@ -2335,7 +2335,7 @@ static void btusb_intr_complete(struct urb *urb)
 	} else if (urb->status == 0 && urb->actual_length != 0)
 		intr_blocking_usb_warn = 0;
 
-	if (urb->status == 0) {
+	if (urb->status == 0 && urb->actual_length > 0) {
 		buf = urb->transfer_buffer;
 		if (buf[0] == 0x3E)
 			btmtk_hci_snoop_save(HCI_SNOOP_TYPE_ADV_EVT_HIF,
@@ -2815,7 +2815,7 @@ static void btusb_bulk_complete(struct urb *urb)
 	 * if (!test_bit(HCI_RUNNING, &hdev->flags))
 	 * return;
 	 */
-	if (urb->status == 0) {
+	if (urb->status == 0 && urb->actual_length > 0) {
 		buf = urb->transfer_buffer;
 		if (!((buf[0] == 0x6f && buf[1] == 0xfc) ||
 			((buf[0] == 0xff || buf[0] == 0xfe) && buf[1] == 0x05)))
