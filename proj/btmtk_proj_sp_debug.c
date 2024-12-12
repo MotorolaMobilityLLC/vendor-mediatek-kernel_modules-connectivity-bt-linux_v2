@@ -2966,7 +2966,7 @@ void btmtk_hif_dump_work(struct work_struct *work)
 		break;
 	case 0x6653:
 		mt6653_hif_dumpReg();
-#if 0
+#if 1
 		/* HIF_MCU dump */
 		btmtk_hif_dump_bg_mcu_core_dx4();
 		btmtk_hif_dump_dsp_debug_flags_dx4();
