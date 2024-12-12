@@ -620,8 +620,8 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 
 	BTMTK_DBG("%s enter", __func__);
 
-	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, READ_PINMUX_CMD, reset_cmd);
-	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, READ_PINMUX_EVT, fw_coredump_cmd);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, HCI_RESET_CMD, reset_cmd);
+	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, FD5B_ASSERT_CMD, fw_coredump_cmd);
 
 	/* +1 byte for not include pkt_type */
 	btmtk_dispatch_fwlog_bluetooth_kpi(bdev, skb->data + 1, skb->len - 1, hci_skb_pkt_type(skb));
