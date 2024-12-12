@@ -405,10 +405,21 @@ int32_t btmtk_intcmd_set_fw_log(uint8_t flag)
 #else
 	u8 fw_log_cmd[8] = { 0x01, 0x5D, 0xFC, 0x04, 0x02, 0x00, 0x02, 0x03 };
 #endif
-	int ret;
+	int ret, retry = 20;
 
 	BTMTK_INFO("%s log level[0x%02X]", __func__, flag);
 	fw_log_cmd[7] = flag;
+
+	while (g_sbdev->dynamic_fwdl_start && --retry) {
+		BTMTK_INFO("%s: re-download on-goning, wait(%d)", __func__, retry);
+		msleep(50);
+	}
+
+	if (retry <= 0) {
+		BTMTK_WARN("%s re-download not done in 1s, skip", __func__);
+		return 0;
+	}
+
 	ret = btmtk_main_send_cmd(g_sbdev,
 #if (USE_DEVICE_NODE == 1)
 			fw_log_cmd, sizeof(fw_log_cmd), evt, sizeof(evt),
@@ -4956,7 +4967,7 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 	int ret = 0;
 	int state = 0;
 	unsigned char fstate = 0;
-	u8 fw_coredump_flag = 0;
+	u8 fw_coredump_flag = 0, retry = 20;
 #if (USE_DEVICE_NODE == 1)
 	/* parsing commands */
 	u8 fw_coredump_cmd[FW_COREDUMP_CMD_LEN] = { 0x01, 0x5B, 0xFD, 0x00 };
@@ -5037,6 +5048,17 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 #if ENABLESTP
 	skb = btmtk_add_stp(bdev, skb);
 #endif
+
+	/* avoid host send data during re-download */
+	while (bdev->dynamic_fwdl_start && retry--) {
+		BTMTK_INFO("%s: re-download on-goning, wait(%d)", __func__, retry);
+		msleep(50);
+	}
+	/* avoid dynamic_fwdl_start flag keep blocking every cmd if something wrong. */
+	if (bdev->dynamic_fwdl_start && retry == 0) {
+		BTMTK_INFO("%s: wait re-download more than 1s, reset dynamic_fwdl_start flag", __func__);
+		bdev->dynamic_fwdl_start = false;
+	}
 
 	if (main_info.hif_hook_chip.bt_tx_frame_handler) {
 		ret = main_info.hif_hook_chip.bt_tx_frame_handler(bdev, skb, &fw_coredump_flag);
@@ -5153,6 +5175,7 @@ static void btmtk_dynamic_fwdl_work(struct work_struct *work)
 
 	BTMTK_INFO("%s enter", __func__);
 	btmtk_dynamic_load_rom_patch(bdev, bdev->fw_bin_info);
+	bdev->dynamic_fwdl_start = false;
 }
 
 static void btmtk_rx_work(struct work_struct *work)
@@ -5197,8 +5220,10 @@ static void btmtk_rx_work(struct work_struct *work)
 				 * blocking rx_work thread means waited event won't be handled in
 				 * rx_work thread, so here we create a new thread for dynamic fwdl.
 				 */
-				schedule_work(&bdev->dynamic_fwdl_work);
+				bdev->dynamic_fwdl_start = true;
 				BTMTK_INFO_RAW(skb->data, skb->len, "%s: Get dynamic DL EVENT- ", __func__);
+				schedule_work(&bdev->dynamic_fwdl_work);
+
 				/* Drop by driver, don't send to stack */
 				kfree_skb(skb);
 				skb = NULL;

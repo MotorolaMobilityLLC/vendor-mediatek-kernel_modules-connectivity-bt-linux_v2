@@ -211,6 +211,11 @@ int WMT_WRITE(uint32_t addr, uint32_t val)
 		return -1;
 	}
 
+	if (g_sbdev->dynamic_fwdl_start) {
+		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
+		return -1;
+	}
+
 	BTMTK_DBG("%s: write addr[%x], value[0x%08x]", __func__, addr, val);
 	memcpy(&cmd[FW_CR_CMD_ADDR_OFFSET], &addr, FW_CR_ADDR_LEN);
 	memcpy(&cmd[FW_CR_CMD_DATA_OFFSET], &val, FW_CR_DATA_LEN);
@@ -247,6 +252,11 @@ int WMT_READ(uint32_t addr, uint32_t *val)
 			|| btmtk_fops_get_state(g_sbdev) != BTMTK_FOPS_STATE_OPENED) {
 		BTMTK_WARN("%s: not in working state(%d) fops(%d)"
 			, __func__, btmtk_get_chip_state(g_sbdev), btmtk_fops_get_state(g_sbdev));
+		return -1;
+	}
+
+	if (g_sbdev->dynamic_fwdl_start) {
+		BTMTK_INFO("%s: fw doing re-download, skip", __func__);
 		return -1;
 	}
 

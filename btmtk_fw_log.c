@@ -124,6 +124,8 @@ __weak int btmtk_uart_launcher_deinit(void)
 void fw_log_bt_state_cb(uint8_t state)
 {
 	uint8_t on_off;
+	struct btmtk_main_info *bmain_info = btmtk_get_main_info();
+
 	/* sp use BTMTK_FOPS_STATE_OPENED to judge state */
 	on_off = (state == FUNC_ON) ? BT_FWLOG_ON : BT_FWLOG_OFF;
 	BTMTK_INFO("%s: current_bt_on(0x%x) state_cb(%d) need_on_off(0x%x)", __func__, g_bt_on, state, on_off);
@@ -132,6 +134,7 @@ void fw_log_bt_state_cb(uint8_t state)
 		// changed
 		if (on_off == BT_FWLOG_OFF) { // should turn off
 			g_bt_on = BT_FWLOG_OFF;
+			g_log_current = g_log_on & g_log_level;
 			BTMTK_INFO("BT in off state, no need to send close fw log cmd");
 		} else {
 			g_bt_on = BT_FWLOG_ON;
@@ -141,6 +144,7 @@ void fw_log_bt_state_cb(uint8_t state)
 			}
 		}
 	}
+	bmain_info->fw_log_on = g_log_current;
 }
 
 void fw_log_bt_event_cb(void)
@@ -1028,6 +1032,8 @@ long btmtk_fops_unlocked_ioctlfwlog(struct file *filp, unsigned int cmd, unsigne
 		retval = -EOPNOTSUPP;
 		break;
 	}
+
+	bmain_info->fw_log_on = g_log_current;
 
 	if (bmain_info->hif_hook.cif_mutex_unlock)
 		bmain_info->hif_hook.cif_mutex_unlock(pp_bdev[hci_idx]);

@@ -629,7 +629,7 @@ struct btmtk_dev {
 	/* dynamic fw download */
 	struct work_struct  dynamic_fwdl_work;
 	unsigned int		fw_bin_info;
-
+        bool dynamic_fwdl_start;
 	struct cali_data_s cali_backup;
 
 #if (USE_DEVICE_NODE == 1)
@@ -863,7 +863,10 @@ struct btmtk_main_info {
 	struct proc_dir_entry *proc_dir;
 	char fw_version_str[FW_VERSION_BUF_SIZE];
 
+	/* fw log */
+	u8	fw_log_on;
 	atomic_t fwlog_ref_cnt;
+
 	u32 find_my_phone_mode;
 	int bk_rs_flag;
 };
