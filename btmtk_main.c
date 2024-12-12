@@ -3014,6 +3014,18 @@ static void btmtk_load_bt_cfg_item(struct bt_cfg_struct *bt_cfg_content,
 	unsigned long text_value = 0;
 
 	memset(text, 0, TEXT_LEN);
+	ret = btmtk_parse_bt_cfg_file(BT_LOG_LVL, text, searchcontent);
+	if (ret) {
+		if (kstrtoul(text, 10, &text_value) == 0)
+			btmtk_log_lvl = text_value;
+		else
+			BTMTK_WARN("%s: kstrtoul failed %s!", __func__, BT_LOG_LVL);
+	} else {
+		BTMTK_WARN("%s: search item %s is invalid!", __func__, BT_LOG_LVL);
+	}
+
+	BTMTK_INFO("%s: btmtk_log_lvl = %d", __func__,btmtk_log_lvl);
+
 	ret = btmtk_parse_bt_cfg_file(BT_UNIFY_WOBLE, text, searchcontent);
 	if (ret) {
 		btmtk_bt_cfg_item_value_to_bool(text, &bt_cfg_content->support_unify_woble);

@@ -146,42 +146,51 @@
 #define READ_ISO_PACKET_CMD_SIZE	4
 
 extern uint8_t btmtk_log_lvl;
+#if BTMTK_LOG_LVL
+#define PRINTF_INFO pr_emerg
+#define PRINTK_LIMITE_LVL KERN_EMERG
+#define PR_CONT(fmt, ...) printk(KERN_CONT KERN_EMERG fmt, ##__VA_ARGS__)
+#else
+#define PRINTF_INFO pr_warn
+#define PRINTK_LIMITE_LVL KERN_WARNING
+#define PR_CONT(fmt, ...) printk(KERN_CONT KERN_WARNING fmt, ##__VA_ARGS__)
+#endif
 
 struct btmtk_dev *bdev __attribute__((weak)) = NULL;
 
 #define BTMTK_ERR(fmt, ...)	 \
 	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR) { \
-		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') pr_warn("[btmtk_err] %s ***"fmt"***\n", bdev->hdev->name, ##__VA_ARGS__); \
-		else pr_warn("[btmtk_err] ***"fmt"***\n", ##__VA_ARGS__);} } while (0)
+		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') PRINTF_INFO("[btmtk_err] %s ***"fmt"***\n", bdev->hdev->name, ##__VA_ARGS__); \
+		else PRINTF_INFO("[btmtk_err] ***"fmt"***\n", ##__VA_ARGS__);} } while (0)
 #define BTMTK_WARN(fmt, ...)	\
 	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN) { \
-		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') pr_warn("[btmtk_warn] %s "fmt"\n", bdev->hdev->name, ##__VA_ARGS__); \
-		else pr_warn("[btmtk_warn] "fmt"\n", ##__VA_ARGS__);} } while (0)
+		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') PRINTF_INFO("[btmtk_warn] %s "fmt"\n", bdev->hdev->name, ##__VA_ARGS__); \
+		else PRINTF_INFO("[btmtk_warn] "fmt"\n", ##__VA_ARGS__);} } while (0)
 #define BTMTK_INFO(fmt, ...)	\
 	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) { \
-		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') pr_warn("[btmtk_info] %s "fmt"\n", bdev->hdev->name, ##__VA_ARGS__); \
-		else pr_warn("[btmtk_info] "fmt"\n", ##__VA_ARGS__);} } while (0)
+		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') PRINTF_INFO("[btmtk_info] %s "fmt"\n", bdev->hdev->name, ##__VA_ARGS__); \
+		else PRINTF_INFO("[btmtk_info] "fmt"\n", ##__VA_ARGS__);} } while (0)
 #define BTMTK_DBG(fmt, ...)	 \
 	do { if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) { \
-		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') pr_warn("[btmtk_dbg] %s "fmt"\n", bdev->hdev->name, ##__VA_ARGS__); \
-		else pr_warn("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__);} } while (0)
+		if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') PRINTF_INFO("[btmtk_dbg] %s "fmt"\n", bdev->hdev->name, ##__VA_ARGS__); \
+		else PRINTF_INFO("[btmtk_dbg] "fmt"\n", ##__VA_ARGS__);} } while (0)
 
 #define BTMTK_ERR_LIMITTED(fmt, ...)	\
 	do { \
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_ERR)	\
-			printk_ratelimited(KERN_WARNING "[btmtk_err_limit] "fmt"\n", ##__VA_ARGS__);	\
+			printk_ratelimited(PRINTK_LIMITE_LVL "[btmtk_err_limit] "fmt"\n", ##__VA_ARGS__);	\
 	} while (0)
 
 #define BTMTK_WARN_LIMITTED(fmt, ...)	\
 	do { \
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_WARN)	\
-			printk_ratelimited(KERN_WARNING "[btmtk_warn_limit] "fmt"\n", ##__VA_ARGS__);	\
+			printk_ratelimited(PRINTK_LIMITE_LVL "[btmtk_warn_limit] "fmt"\n", ##__VA_ARGS__);	\
 	} while (0)
 
 #define BTMTK_DBG_LIMITTED(fmt, ...)	\
 	do { \
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG)	\
-			printk_ratelimited(KERN_WARNING "[btmtk_dbg_limit] "fmt"\n", ##__VA_ARGS__);	\
+			printk_ratelimited(PRINTK_LIMITE_LVL "[btmtk_dbg_limit] "fmt"\n", ##__VA_ARGS__);	\
 	} while (0)
 
 extern uint8_t _raw_buf_[];
@@ -196,15 +205,15 @@ extern uint8_t _raw_buf_[];
 			_raw_buf_[3*cnt_] = '\0';	\
 			if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') { \
 				if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-					pr_cont("[btmtk_info] %s "fmt" %s\n", bdev->hdev->name, ##__VA_ARGS__, _raw_buf_);	\
+					PR_CONT("[btmtk_info] %s "fmt" %s\n", bdev->hdev->name, ##__VA_ARGS__, _raw_buf_);	\
 				} else {	\
-					pr_cont("[btmtk_info] %s "fmt" %s (prtail)\n", bdev->hdev->name, ##__VA_ARGS__, _raw_buf_);	\
+					PR_CONT("[btmtk_info] %s "fmt" %s (prtail)\n", bdev->hdev->name, ##__VA_ARGS__, _raw_buf_);	\
 				}	\
 			} else { \
 				if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
-					pr_cont("[btmtk_info] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
+					PR_CONT("[btmtk_info] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
 				} else {	\
-					pr_cont("[btmtk_info] "fmt" %s (prtail)\n", ##__VA_ARGS__, _raw_buf_);	\
+					PR_CONT("[btmtk_info] "fmt" %s (prtail)\n", ##__VA_ARGS__, _raw_buf_);	\
 				}	\
 			} \
 		}	\
@@ -223,9 +232,9 @@ extern uint8_t _raw_buf_[];
 				}	\
 				_raw_buf_[3*cnt_] = '\0';	\
 				if (bdev && bdev->hdev && bdev->hdev->name[0] != '\0') { \
-					pr_cont("[btmtk_debug] %s "fmt" %s\n", bdev->hdev->name, ##__VA_ARGS__, _raw_buf_);	\
+					PR_CONT("[btmtk_debug] %s "fmt" %s\n", bdev->hdev->name, ##__VA_ARGS__, _raw_buf_);	\
 				} else { \
-					pr_cont("[btmtk_debug] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
+					PR_CONT("[btmtk_debug] "fmt" %s\n", ##__VA_ARGS__, _raw_buf_);	\
 				} \
 			}	\
 		}	\
@@ -332,6 +341,7 @@ extern uint8_t _raw_buf_[];
 #define BT_AUDIO_ENABLE_CMD "AUDIO_ENABLE_CMD"
 #define BT_AUDIO_PINMUX_NUM "AUDIO_PINMUX_NUM"
 #define BT_AUDIO_PINMUX_MODE "AUDIO_PINMUX_MODE"
+#define BT_LOG_LVL "LOG_LVL"
 
 #define PM_KEY_BTW (0x0015) /* Notify PM the unify woble type */
 

@@ -183,6 +183,7 @@ ifeq ($(CONFIG_SUPPORT_DEVICE_NODE), y)
   ccflags-y += -I$(CONN_FEM_SRC)/include
 endif
 
+ccflags-y += -DBTMTK_LOG_LVL=0
 ccflags-y += -Werror
 
 $(MOD_NAME)-objs := $(CFILES:.c=.o)
