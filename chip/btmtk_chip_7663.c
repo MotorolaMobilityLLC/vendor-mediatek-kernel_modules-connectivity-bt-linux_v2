@@ -179,7 +179,7 @@ static int btmtk_usb_load_partial_rom_patch(struct btmtk_dev *bdev, u8 *rom_patc
 			break;
 		}
 	}
-
+	kfree(pos);
 exit:
 	BTMTK_INFO("btmtk_usb_load_partial_rom_patch end");
 	return ret;
@@ -191,7 +191,6 @@ static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 	u8 *rom_patch = NULL;
 	u32 patch_len = 0;
 	int ret = 0;
-	int err = 0;
 	int patch_status = 0;
 	int retry = 20;
 	unsigned int rom_patch_len = 0;
@@ -217,7 +216,7 @@ static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 	if (!pos) {
 		BTMTK_ERR("%s: alloc memory failed", __func__);
 		ret = -1;
-		goto exit;
+		goto err;
 	}
 
 	do {
@@ -227,7 +226,7 @@ static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 		if ((patch_status > PATCH_NEED_DOWNLOAD_7663) || (patch_status == PATCH_ERR_7663)) {
 			BTMTK_ERR("%s: patch_status error", __func__);
 			ret = -1;
-			goto exit;
+			goto err;
 		} else if (patch_status == PATCH_READY_7663) {
 			BTMTK_INFO("%s: no need to load rom patch", __func__);
 			goto patch_end;
@@ -238,7 +237,7 @@ static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 			ret = btmtk_usb_send_wmt_cfg(bdev);
 			if (ret < 0) {
 				BTMTK_ERR("%s: send wmt cmd failed(%d)", __func__, ret);
-				return ret;
+				goto err;
 			}
 
 			break;  /* Download ROM patch directly */
@@ -248,7 +247,7 @@ static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 	if (patch_status == PATCH_IS_DOWNLOAD_BY_OTHER_7663) {
 		BTMTK_WARN("%s: Hold by another fun more than 2 seconds", __func__);
 		ret = -1;
-		goto exit;
+		goto err;
 	}
 
 	tmp_str = rom_patch + 16;
@@ -278,8 +277,11 @@ patch_end:
 err:
 	if (rom_patch)
 		vfree(rom_patch);
+	if (pos)
+		kfree(pos);
+
 exit:
-	return err;
+	return ret;
 }
 
 
