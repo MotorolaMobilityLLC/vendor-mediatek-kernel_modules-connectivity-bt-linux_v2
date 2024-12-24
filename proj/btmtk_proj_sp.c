@@ -2516,16 +2516,15 @@ int btmtk_uart_launcher_deinit(void)
 		}
 	}
 
-	ret = bt_close(g_sbdev->hdev);
-
-	if (ret) {
-		BTMTK_ERR("%s: BT turn off fail!", __func__);
-		return ret;
-	}
 	if (g_sbdev != NULL) {
+		ret = bt_close(g_sbdev->hdev);
+		if (ret) {
+			BTMTK_ERR("%s: BT turn off fail!", __func__);
+			return ret;
+		}
+
 		cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
-		if (cif_dev && cif_dev->tty && cif_dev->tty->port
-			&& cif_dev->tty->port->count == 0)
+		if (cif_dev && cif_dev->tty && cif_dev->tty->port && cif_dev->tty->port->count == 0)
 			cif_dev->tty->port->count = 1;
 	}
 
