@@ -1295,17 +1295,6 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	/* Flush any pending characters in the driver and discipline. */
 	tty_ldisc_flush(tty);
 
-	/* If DFD, return */
-	if (bdev->reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP && !bdev->is_dfd_done) {
-		/* set is_dfd_done */
-		bdev->is_dfd_done = TRUE;
-		BTMTK_INFO("%s: DFD done, return", __func__);
-		return 0;
-	}
-
-	/* for dfd, clear assert reason here */
-	memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
-
 	/* query cmd, make sure can communicate with fw */
 	do {
 		/* clean rx queues */
@@ -1371,6 +1360,17 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
 	if (ret < 0)
 		goto exit;
+
+	/* If DFD, return */
+	if (bdev->reset_type == CONNV3_CHIP_RST_TYPE_DFD_DUMP && !bdev->is_dfd_done) {
+		/* set is_dfd_done */
+		bdev->is_dfd_done = TRUE;
+		BTMTK_INFO("%s: DFD done, return", __func__);
+		return 0;
+	}
+
+	/* for dfd, clear assert reason here */
+	memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
 
 	/* send xo cal cmd */
 	ret = btmtk_uart_send_xo_param_cmd(bdev->hdev, &sConnxo_cfg);

@@ -2979,7 +2979,7 @@ void btmtk_hif_dump_work(struct work_struct *work)
 		BTMTK_ERR("%s: connv3_hif_dbg_start fail, ret[%d]", __func__, ret);
 		goto exit;
 	}
-	BTMTK_INFO("%s version = %s", UNIFIED_DBG_TAG, MT6653_BT_DEBUGSOP_DUMP_VERSION);
+	BTMTK_INFO("%s version=%s", UNIFIED_DBG_TAG, MT6653_BT_DEBUGSOP_DUMP_VERSION);
 
 	switch (bdev->chip_id) {
 	case 0x6635:
