@@ -21,12 +21,12 @@ ifneq ($(CONNECTIVITY_OUT_PATH),)
     ifneq ($(wildcard $(KERNEL_SRC)/$(DEVICE_MODULES_REL_DIR)/Makefile.include),)
         include $(KERNEL_SRC)/$(DEVICE_MODULES_REL_DIR)/Makefile.include
         extra_symbols := $(abspath $(OUT_DIR)/../vendor/mediatek/kernel_modules/connectivity/common/Module.symvers)
-        extra_symbols += $(abspath $(OUT_DIR)/../vendor/mediatek/kernel_modules/connectivity/connfem/Module.symvers)
+        extra_symbols +=  $(wildcard $(abspath $(OUT_DIR)/../vendor/mediatek/kernel_modules/connectivity/connfem/*Module.symvers))
         extra_symbols += $(abspath $(OUT_DIR)/../vendor/mediatek/kernel_modules/connectivity/conninfra/Module.symvers)
         M_OPTION := $(M)
     else
         extra_symbols := $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/common/Module.symvers)
-        extra_symbols += $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/connfem/Module.symvers)
+        extra_symbols +=  $(wildcard $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/connfem/*Module.symvers))
         extra_symbols += $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/conninfra/Module.symvers)
         M_OPTION := $(PWD)
     endif
