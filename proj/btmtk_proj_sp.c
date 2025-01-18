@@ -1772,18 +1772,18 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 
 	atomic_set(&bdev->poweroff_finder_mode, 0);
 	bdev->dfd_value_addr_remap_base = NULL;
-	tty->dev->of_node = of_find_compatible_node(NULL, NULL, "mediatek,mt6991-conn_scp");
+	tty->dev->of_node = of_find_node_by_name(NULL, "connscp");
 	if (!tty->dev->of_node)
-		BTMTK_ERR("[ERR] %s: mediatek,mt6991-conn_scp of_node not found", __func__);
+		BTMTK_ERR("[ERR] %s: connscp of_node not found", __func__);
 
 	ret = of_property_read_u64(tty->dev->of_node, "dfd-value-addr", &bdev->dfd_value_addr);
 	if (ret < 0)
-		BTMTK_ERR("[ERR] %s: mediatek,mt6991-conn_scp dfd-value-addr ret[%d]", __func__, ret);
+		BTMTK_ERR("[ERR] %s: connscp dfd-value-addr ret[%d]", __func__, ret);
 	BTMTK_INFO("%s: dfd-value-addr =  %llu", __func__, bdev->dfd_value_addr);
 
 	ret = of_property_read_u32(tty->dev->of_node, "dfd-value-size", &bdev->dfd_value_size);
 	if (ret < 0)
-		BTMTK_ERR("[ERR] %s: mediatek,mt6991-conn_scp dfd-value-size ret[%d]", __func__, ret);
+		BTMTK_ERR("[ERR] %s: connscp dfd-value-size ret[%d]", __func__, ret);
 	BTMTK_INFO("%s: dfd-value-size =  0x%04x", __func__, bdev->dfd_value_size);
 
 	tty->dev->of_node = of_find_compatible_node(NULL, NULL, "mediatek,bt-coredump-reserve-memory");
