@@ -717,9 +717,7 @@ static int btmtk_post_chip_rst_on_handler(unsigned int type)
 	u8 cmd[] = { 0x01, 0x6F, 0xFC, 0x09, 0x01, 0x18, 0x05, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00 };
 	/* evt[7] is status */
 	u8 evt[] = { 0x04, 0xE4, 0xF5, 0x02, 0x18, 0xF1, 0x00, 0x00};
-	u8 default_baudrate_cmd[] = { 0x01, 0x6F, 0xFC, 0x0A, 0x01, 0x04, 0x06, 0x00, 0x01, 0x01, 0xC2, 0x01, 0x00, 0x03 };
-	u8 default_baudrate_evt[] = {0x04, 0xE4, 0x06, 0x02, 0x04, 0x02, 0x00, 0x00, 0x01};
-	u8 wakeup_cmd[] = { 0xFF };
+	struct UART_CONFIG uart_cfg;
 
 	BTMTK_INFO("%s: type[%d]", __func__, type);
 
@@ -837,14 +835,11 @@ end:
 		btmtk_sp_coredump_end();
 
 		/* set default baudrate */
-		ret = btmtk_main_send_cmd(g_sbdev, default_baudrate_cmd, sizeof(default_baudrate_cmd), default_baudrate_evt, sizeof(default_baudrate_evt), DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
-		BTMTK_INFO("%s, set back default baudrate 115200, ret = %d", __func__, ret);
+		uart_cfg.fc = UART_DISABLE_FC;
+		uart_cfg.iBaudrate = BT_UART_DEFAULT_BAUD;
+		ret = btmtk_uart_set_ap_fw_uart_cfg(g_sbdev, &uart_cfg);
 		if (ret < 0)
-			BTMTK_ERR("%s: set back default baudrate failed, ret[%d]", __func__, ret);
-
-		ret = btmtk_main_send_cmd(g_sbdev, wakeup_cmd, 1, NULL, 0, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
-		if (ret < 0)
-			BTMTK_ERR("%s: wakeup_cmd failed, ret[%d]", __func__, ret);
+			return ret;
 	}
 
 	return ret;

@@ -273,6 +273,8 @@ struct btmtk_uart_dev {
 #define BTMTK_UARTHUB_BYPASS_ONLY	(1 << 2)
 
 struct platform_device *btmtk_get_uart_device(void);
+int btmtk_uart_set_tty_termios(struct btmtk_dev *bdev, int baudrate, enum UART_FC fc);
+int btmtk_uart_set_ap_fw_uart_cfg(struct btmtk_dev *bdev, struct UART_CONFIG *uart_cfg);
 
 //int btmtk_cif_send_calibration(struct hci_dev *hdev);
 #endif

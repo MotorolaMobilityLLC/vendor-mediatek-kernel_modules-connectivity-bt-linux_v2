@@ -961,6 +961,33 @@ int btmtk_uart_set_tty_termios(struct btmtk_dev *bdev, int baudrate, enum UART_F
 	return 0;
 }
 
+int btmtk_uart_set_ap_fw_uart_cfg(struct btmtk_dev *bdev, struct UART_CONFIG *uart_cfg) {
+	int ret = 0;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+
+	/* set chip baud and flowcontrol to config setting */
+	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, uart_cfg);
+	if (ret < 0) {
+		BTMTK_ERR("%s: btmtk_uart_send_set_uart_cmd fail", __func__);
+		return ret;
+	}
+
+	/* set tty host baud and flowcontrol to config setting */
+	btmtk_uart_set_tty_termios(bdev, uart_cfg->iBaudrate, uart_cfg->fc);
+
+	/* notify fw change baudrate and related setting */
+	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
+	if (ret < 0) {
+		BTMTK_ERR("%s: btmtk_uart_send_wakeup_cmd fail", __func__);
+		return ret;
+	}
+
+	return ret;
+}
 
 #if (USE_DEVICE_NODE == 0)
 static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
@@ -1383,16 +1410,8 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	if (ret < 0)
 		BTMTK_ERR("%s: btmtk_uart_read_chip_id_cmd failed", __func__);
 
-	/* set chip baud and flowcontrol to config setting */
-	ret = btmtk_uart_send_set_uart_cmd(bdev->hdev, &uart_cfg);
-	if (ret < 0)
-		goto exit;
-
-	/* set tty host baud and flowcontrol to config setting */
-	btmtk_uart_set_tty_termios(bdev, uart_cfg.iBaudrate, uart_cfg.fc);
-
-	/* notify fw change baudrate and related setting */
-	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
+	/* set AP/FW chip baud and flowcontrol to config setting */
+	ret = btmtk_uart_set_ap_fw_uart_cfg(bdev, &uart_cfg);
 	if (ret < 0)
 		goto exit;
 
