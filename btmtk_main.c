@@ -1079,6 +1079,11 @@ void btmtk_hci_snoop_print(struct btmtk_dev *bdev, const u8 *buf, u32 len)
 	u8 hci_snoop_buf[HCI_SNOOP_MAX_BUF_SIZE] = {0};
 	u16 hci_snoop_len = 0;
 
+	if (bdev == NULL || bdev->hdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL or bdev->hdev is NULL", __func__);
+		return;
+	}
+
 	if (buf && len > 0) {
 		if (len < HCI_SNOOP_BUF_SIZE) {
 			copy_len = len;

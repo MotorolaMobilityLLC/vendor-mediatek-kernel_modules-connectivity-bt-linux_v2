@@ -793,8 +793,6 @@ static int btmtk_post_chip_rst_on_handler(unsigned int type)
 				goto end;
 				break;
 			}
-			if (total_length > DFD_CB_INFRA_BT_SRAM_LEN)
-				total_length = DFD_CB_INFRA_BT_SRAM_LEN;
 
 			while (total_length >= 0) {
 				if (total_length <= 0) {

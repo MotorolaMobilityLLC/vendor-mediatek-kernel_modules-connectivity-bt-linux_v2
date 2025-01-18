@@ -74,6 +74,10 @@ void btmtk_reset_timer_add(struct btmtk_dev *bdev)
 	struct btmtk_dev *bt0 = btmtk_get_bt0(bdev);
 
 	BTMTK_DBG_DEV(bt0, "%s: create chip_reset timer", __func__);
+	if (bt0 == NULL) {
+		BTMTK_ERR("%s bt0 is NULL", __func__);
+		return;
+	}
 #if (KERNEL_VERSION(4, 15, 0) > LINUX_VERSION_CODE)
 	init_timer(&bt0->chip_reset_timer);
 	bt0->chip_reset_timer.function = btmtk_reset_timer;
@@ -87,6 +91,10 @@ void btmtk_reset_timer_update(struct btmtk_dev *bdev)
 {
 	struct btmtk_dev *bt0 = btmtk_get_bt0(bdev);
 
+	if (bt0 == NULL) {
+		BTMTK_ERR("%s bt0 is NULL", __func__);
+		return;
+	}
 	mod_timer(&bt0->chip_reset_timer, jiffies + CHIP_RESET_TIMEOUT * HZ);
 }
 
@@ -399,6 +407,11 @@ Finish:
 void btmtk_reset_trigger(struct btmtk_dev *bdev)
 {
 	struct btmtk_dev *bt0 = btmtk_get_bt0(bdev);
+
+	if (bt0 == NULL) {
+		BTMTK_ERR_DEV(bt0, "%s bt0 is NULL", __func__);
+		return;
+	}
 
 	if (atomic_read(&bt0->main_info.chip_reset) ||
 		atomic_read(&bt0->main_info.subsys_reset)) {

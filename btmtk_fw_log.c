@@ -930,6 +930,13 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 		goto exit;
 	}
 
+    /* Ensure that i_fwlog_buf is null-terminated */
+	if (count < HCI_MAX_COMMAND_BUF_SIZE) {
+		i_fwlog_buf[count] = '\0';
+	} else {
+		i_fwlog_buf[HCI_MAX_COMMAND_BUF_SIZE - 1] = '\0';
+	}
+
 	p_hci = strstr(i_fwlog_buf, "hci");
 	if (p_hci != NULL) {
 		char *p = strstr(p_hci, " ");
@@ -1788,6 +1795,11 @@ int btmtk_dispatch_fwlog(struct btmtk_dev *bdev, struct sk_buff *skb)
 	int ret = 0, line = 0;
 	static unsigned int fwlog_count;
 	int drv = CONNV3_DRV_TYPE_BT;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
 
 	if ((bt_cb(skb)->pkt_type == HCI_ACLDATA_PKT) &&
 			skb->data[0] == 0x6f &&
