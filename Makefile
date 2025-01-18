@@ -331,12 +331,24 @@ ifeq ($(MTK_PROJ_TYPE), sp)
   #KBUILD_EXTRA_SYMBOLS := /mfs/mtkslt1121/mtk24223/CAS_REAL/alps-dev-s0_bsp-connac3-1210--2022_03_08_12_00/merged/out_krn/target/product/mgk_64_k510/obj/ETC/conninfra.ko_intermediates/LINKED/Module.symvers
   CONN_INFRA_SRC := $(TOP)/vendor/mediatek/kernel_modules/connectivity/conninfra
   CONN_FEM_SRC := $(TOP)/vendor/mediatek/kernel_modules/connectivity/connfem
+  WIFI_SRC := $(TOP)/vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m
   ccflags-y += -I$(CONN_INFRA_SRC)/include
   ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility
   ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/include
   ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/connsyslog
   ccflags-y += -I$(CONN_INFRA_SRC)/conn_drv/connv3/debug_utility/coredump
   ccflags-y += -I$(CONN_FEM_SRC)/include
+
+  # TA-SAR feature
+  CFG_SUPPORT_TAS_HOST_CONTROL = y
+endif
+
+ifeq ($(CFG_SUPPORT_TAS_HOST_CONTROL), y)
+  $(info [bt_drv] linux_v2/makefile support TA-SAR feature)
+  ccflags-y += -DCFG_SUPPORT_TAS_HOST_CONTROL=1
+  CFILES += proj/btmtk_tasar.c
+else
+  ccflags-y += -DCFG_SUPPORT_TAS_HOST_CONTROL=0
 endif
 
 ccflags-y += -DBTMTK_LOG_LVL=0

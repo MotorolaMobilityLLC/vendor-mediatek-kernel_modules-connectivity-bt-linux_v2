@@ -4,6 +4,9 @@
  */
 
 #include "btmtk_chip_common.h"
+#if (CFG_SUPPORT_TAS_HOST_CONTROL == 1)
+#include "btmtk_tasar.h"
+#endif // CFG_SUPPORT_TAS_HOST_CONTROL
 
 char efuse_r_cmd[READ_EFUSE_CMD_LEN] = {0x01, 0x6F, 0xFC, 0x0E,
 			0x01, 0x0D, 0x0A, 0x00, 0x02, 0x04,
@@ -716,6 +719,33 @@ int btmtk_cif_tx_frame_handler_common(struct btmtk_dev *bdev, struct sk_buff *sk
 			bdev->main_info.fw_log_on = skb->data[picus_cmd.len - 1];
 			BTMTK_INFO_DEV(bdev, "%s: set fw log level from host[%d]", __func__, bdev->main_info.fw_log_on);
 		}
+#if (CFG_SUPPORT_TAS_HOST_CONTROL == 1)
+		else if (skb->len == HOST_ENABLE_TASAR_V3_CMD_LEN &&
+			skb->data[1] == 0x2D && skb->data[2] == 0xFC && skb->data[4] == 0x0D) {
+			/* TASAR 3.0: set countrycode and eci from host
+			 *   This cmd is only used between host and driver, for setting country and eci
+			 *   format(big endian)
+			 *     cmd => 01 2D FC 07 0D XX XX YY YY YY YY
+			 *     XX XX => country code, ex: TW:[54 57]
+			 *     YY YY YY YY YY => ECI. ex: 5:[00 00 00 05]
+			 */
+
+			unsigned short int countryCode = 0;
+			unsigned int eci = 0;
+
+			countryCode = skb->data[5] << 8 | skb->data[6];
+			eci = (skb->data[7] << 24 | skb->data[8] << 16 | skb->data[9] << 8 | skb->data[10]);
+
+			BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: host set TASAR, CC[0x%x], eci[%u] len[%d]:",
+					__func__, countryCode, eci, skb->len);
+
+			btmtk_set_tasar_from_host(bdev, countryCode, eci);
+
+			/* return 1 means data already handled */
+			return 1;
+		}
+#endif // CFG_SUPPORT_TAS_HOST_CONTROL
+
 #if (USE_DEVICE_NODE == 0)
 	} else if (hci_skb_pkt_type(skb) == HCI_ACLDATA_PKT) {
 		btmtk_hci_snoop_save(bdev, HCI_SNOOP_TYPE_TX_ACL_STACK, skb->data, skb->len);

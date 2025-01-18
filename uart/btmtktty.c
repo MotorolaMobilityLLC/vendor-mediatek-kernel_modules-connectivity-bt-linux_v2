@@ -20,6 +20,9 @@
 #include <linux/of_device.h>
 #include "btmtk_fw_log.h"
 #include "btmtk_queue.h"
+#if (CFG_SUPPORT_TAS_HOST_CONTROL == 1)
+#include "btmtk_tasar.h"
+#endif // CFG_SUPPORT_TAS_HOST_CONTROL
 #else
 #include "btmtk_proj_ce.h"
 #endif
@@ -1260,6 +1263,9 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	bdev->main_info.dbg_send = 0;
 	cif_dev->ap_cfg.setting_byte = 0;
 	cif_dev->fw_cfg.setting_byte = 0;
+#if (CFG_SUPPORT_TAS_HOST_CONTROL == 1)
+	btmtk_tasar_init();
+#endif // CFG_SUPPORT_TAS_HOST_CONTROL
 
 	/* set tty host baud and flowcontrol to default value */
 	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);

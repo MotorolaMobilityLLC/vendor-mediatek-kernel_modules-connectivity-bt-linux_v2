@@ -17,6 +17,10 @@
 #include "aee.h"
 #endif
 
+#if (CFG_SUPPORT_TAS_HOST_CONTROL == 1)
+#include "btmtk_tasar.h"
+#endif // CFG_SUPPORT_TAS_HOST_CONTROL
+
 /*
  * BT Logger Tool will turn on/off Firmware Picus log, and set 3 log levels (Low, SQC and Debug)
  * For extension capability, driver does not check the value range.
@@ -729,6 +733,39 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 					atomic_read(&bdev->main_info.whole_reset_count));
 			continue;
 		}
+
+#if (CFG_SUPPORT_TAS_HOST_CONTROL == 1)
+		/* tasar countryCode=TW, eci=*/
+		ptr = strstr(cmd, "tasar countrycode=");
+		if (ptr != NULL) {
+			unsigned short int countryCode = 0;
+			unsigned int eci = 0;
+
+			/* parse contry code */
+			ptr += strlen("tasar countrycode=");
+			countryCode = ptr[0] << 8 | ptr[1];
+			BTMTK_INFO_DEV(bdev, "%s: set countrycode[%c%c] = 0x%x",
+						__func__, ptr[0], ptr[1], countryCode);
+
+			/* parse eci */
+			ptr = strstr(cmd, "eci=");
+			if (ptr != NULL) {
+				ptr += strlen("eci=");
+				ret = kstrtou32(ptr, 0, &eci);
+				if (ret) {
+					BTMTK_WARN_DEV(bdev, "%s: convert eci string failed ret[%d]", __func__, ret);
+					continue;
+				}
+				BTMTK_INFO_DEV(bdev, "%s: set eci = %d", __func__, eci);
+				btmtk_set_tasar_from_host(bdev, countryCode, eci);
+				continue;
+			} else {
+				BTMTK_WARN_DEV(bdev, "%s: set countrycode without eci", __func__);
+				continue;
+			}
+		}
+#endif // CFG_SUPPORT_TAS_HOST_CONTROL
+
 
 #if (USE_DEVICE_NODE == 1)
 		ptr = strstr(cmd, "FindMyPhone=");
