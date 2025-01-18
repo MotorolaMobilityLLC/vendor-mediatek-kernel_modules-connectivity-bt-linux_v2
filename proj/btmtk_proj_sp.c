@@ -1465,8 +1465,13 @@ void btmtk_uart_wakeup_cb(void *para)
  */
 int btmtk_intcmd_system_status(unsigned char system_state)
 {
-	u8 cmd[] = { 0x01, 0x5D, 0xFC, 0x03, 0x00, 0x05, 0x00};
-	u8 evt[] = {0x04, 0x0E, 0x07, 0x01, 0x5D, 0xFC};
+	/* cmd[4]:
+	 *		0x00 command complete
+	 *		0x01 vendor specific event
+	 *		0x02 no event
+	 */
+	u8 cmd[] = { 0x01, 0x5D, 0xFC, 0x03, 0x02, 0x05, 0x00};
+	// u8 evt[] = {0x04, 0x0E, 0x07, 0x01, 0x5D, 0xFC};
 	int ret = 0;
 
 	BTMTK_INFO("%s: system_state[%d]", __func__, system_state);
@@ -1483,7 +1488,7 @@ int btmtk_intcmd_system_status(unsigned char system_state)
 
 	cmd[6] = system_state;
 	ret = btmtk_main_send_cmd(g_sbdev,
-			cmd, sizeof(cmd), evt, sizeof(evt),
+			cmd, sizeof(cmd), NULL, 0,
 			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
 
 	if (ret < 0)
