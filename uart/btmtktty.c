@@ -902,6 +902,66 @@ exit:
 }
 #endif
 
+int btmtk_uart_set_tty_termios(struct btmtk_dev *bdev, int baudrate, enum UART_FC fc) {
+
+	struct tty_struct *tty;
+	struct btmtk_uart_dev *cif_dev = NULL;
+	struct ktermios new_termios;
+
+	if (bdev == NULL) {
+		BTMTK_ERR("%s: bdev is NULL", __func__);
+		return -1;
+	}
+
+	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	tty = cif_dev->tty;
+
+	if (tty == NULL) {
+		BTMTK_ERR("%s: tty  is NULL", __func__);
+		return -1;
+	}
+
+	new_termios = tty->termios;
+
+	/* set tty host baud and flowcontrol to config setting */
+	BTMTK_INFO("set uart cfg: baud[%d]/fc[%d]", baudrate, fc);
+	tty_termios_encode_baud_rate(&new_termios, baudrate, baudrate);
+
+	switch (fc) {
+	/* HW FC Enable */
+	case UART_HW_FC:
+		new_termios.c_cflag |= CRTSCTS;
+		new_termios.c_iflag &= ~(NOFLSH);
+		break;
+	/* Linux Software FC */
+	case UART_LINUX_FC:
+		new_termios.c_iflag |= (IXON | IXOFF | IXANY);
+		new_termios.c_cflag &= ~(CRTSCTS);
+		new_termios.c_iflag &= ~(NOFLSH);
+		break;
+	/* MTK Software FC */
+	case UART_MTK_SW_FC:
+		new_termios.c_iflag |= CRTSCTS;
+		new_termios.c_cflag &= ~(NOFLSH);
+		break;
+	/* default disable flow control */
+	default:
+		new_termios.c_cflag &= ~(CRTSCTS);
+		new_termios.c_iflag &= ~(NOFLSH|CRTSCTS);
+	}
+
+	tty_set_termios(tty, &new_termios);
+
+	return 0;
+}
+
+
 #if (USE_DEVICE_NODE == 0)
 static int btmtk_uart_subsys_reset(struct btmtk_dev *bdev)
 {
@@ -1195,7 +1255,6 @@ static int btmtk_query_fw_uart_settings_cmd(struct btmtk_dev *bdev)
 
 static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 {
-	struct ktermios new_termios;
 	struct tty_struct *tty;
 	struct UART_CONFIG uart_cfg;
 	struct btmtk_uart_dev *cif_dev = NULL;
@@ -1210,9 +1269,15 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	}
 
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
+
+	if (cif_dev == NULL) {
+		BTMTK_ERR("%s: cif_dev is NULL", __func__);
+		return -1;
+	}
+
+	/* copy config for set ap/fw uart setting */
 	uart_cfg = cif_dev->uart_cfg;
 	tty = cif_dev->tty;
-	new_termios = tty->termios;
 
 	btmtk_pwrctrl_pre_on(bdev);
 
@@ -1268,11 +1333,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 #endif // CFG_SUPPORT_TAS_HOST_CONTROL
 
 	/* set tty host baud and flowcontrol to default value */
-	BTMTK_INFO("Set default baud: %d, disable flowcontrol", BT_UART_DEFAULT_BAUD);
-	tty_termios_encode_baud_rate(&new_termios, BT_UART_DEFAULT_BAUD, BT_UART_DEFAULT_BAUD);
-	new_termios.c_cflag &= ~(CRTSCTS);
-	new_termios.c_iflag &= ~(NOFLSH|CRTSCTS);
-	tty_set_termios(tty, &new_termios);
+	btmtk_uart_set_tty_termios(bdev, BT_UART_DEFAULT_BAUD, UART_DISABLE_FC);
 
 	/* update baurdrate from dts */
 	if (cif_dev->baudrate)
@@ -1328,35 +1389,9 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		goto exit;
 
 	/* set tty host baud and flowcontrol to config setting */
-	BTMTK_INFO("Set config baud: %d, flowcontrol: %d", uart_cfg.iBaudrate, uart_cfg.fc);
+	btmtk_uart_set_tty_termios(bdev, uart_cfg.iBaudrate, uart_cfg.fc);
 
-	tty_termios_encode_baud_rate(&new_termios, uart_cfg.iBaudrate, uart_cfg.iBaudrate);
-
-	switch (uart_cfg.fc) {
-	/* HW FC Enable */
-	case UART_HW_FC:
-		new_termios.c_cflag |= CRTSCTS;
-		new_termios.c_iflag &= ~(NOFLSH);
-		break;
-	/* Linux Software FC */
-	case UART_LINUX_FC:
-		new_termios.c_iflag |= (IXON | IXOFF | IXANY);
-		new_termios.c_cflag &= ~(CRTSCTS);
-		new_termios.c_iflag &= ~(NOFLSH);
-		break;
-	/* MTK Software FC */
-	case UART_MTK_SW_FC:
-		new_termios.c_iflag |= CRTSCTS;
-		new_termios.c_cflag &= ~(NOFLSH);
-		break;
-	/* default disable flow control */
-	default:
-		new_termios.c_cflag &= ~(CRTSCTS);
-		new_termios.c_iflag &= ~(NOFLSH|CRTSCTS);
-	}
-
-	tty_set_termios(tty, &new_termios);
-
+	/* notify fw change baudrate and related setting */
 	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
 	if (ret < 0)
 		goto exit;
@@ -1444,6 +1479,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		BTMTK_INFO("%s: hub_bypass_only, not set mtk8250_uart_hub_enable_bypass_mode(0)", __func__);
 #endif // CONFIG_MTK_UARTHUB
 
+	/* notify fw change baudrate and related setting */
 	ret = btmtk_uart_send_wakeup_cmd(bdev->hdev);
 	if (ret < 0) {
 		/* err handle for fw get dirty data trigger EINT */
