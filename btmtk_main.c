@@ -5047,7 +5047,7 @@ int bt_open(struct hci_dev *hdev)
 		/* mutex with bt close and disconnect */
 		if (bdev->main_info.hif_hook.cif_mutex_lock)
 			bdev->main_info.hif_hook.cif_mutex_lock(bdev);
-#if 0
+
 		fstate = btmtk_fops_get_state(bdev);
 		if (fstate == BTMTK_FOPS_STATE_OPENED) {
 			BTMTK_WARN_DEV(bdev, "%s: fops opened!", __func__);
@@ -5056,7 +5056,7 @@ int bt_open(struct hci_dev *hdev)
 				bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
 			return ret;
 		}
-#endif
+
 		if ((fstate == BTMTK_FOPS_STATE_CLOSING) ||
 			(fstate == BTMTK_FOPS_STATE_OPENING)) {
 			BTMTK_WARN_DEV(bdev, "%s: fops open/close is on-going !", __func__);
