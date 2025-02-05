@@ -238,7 +238,7 @@ void btmtk_tasar_init(void)
 	/* Reset to default status when BT on */
 	g_tasar.rTasarScenrio.u4RegTblIndex = TASAR_COUNTRY_TBL_SIZE;
 	g_tasar.rTasarScenrio.u2CountryCode = 0;
-	g_tasar.rTasarScenrio.u4Eci = 0;
+	g_tasar.rTasarScenrio.u4Eci = 0xFFFF;
 	g_tasar.is_enable = false;
 
 	BTMTK_INFO("%s: reg:%d, CC:0x%x, Eci:%d, enable:%d",
@@ -252,7 +252,7 @@ void btmtk_tasar_init(void)
 /* one shot para cmd */
 static int btmtk_tasar_init_para_cmd(struct btmtk_dev *bdev, struct btmtk_tasar *pTasar) {
 
-	u8 cmd[] = { 0x01, 0x2D, 0xFC, 0x33,
+	u8 cmd[] = { 0x01, 0x2D, 0xFC, 0x30,
 				 0x0D,					// sub opcode
 				 0x00, 0x00, 0x00, 0x00,		// conn_status_resend_interval
 				 0x00, 0x00, 0x00, 0x00,		// conn_status_resend_times
@@ -280,9 +280,9 @@ static int btmtk_tasar_init_para_cmd(struct btmtk_dev *bdev, struct btmtk_tasar 
 				 0x00, 0x00,				// scf_sub6_expire_thresh
 				 0x00,					// smooth_chg_speed_scale
 				 0x00,					// regulatory
-				 0x00, 0x00,				// max_scf_wf_flight
-				 0x00, 0x00,				// max_scf_bt_flight
-				 0x00, 0x00};				// max_scf_conn_flight
+				 0x00,					// max_scf_wf_flight
+				 0x00,					// max_scf_bt_flight
+				 0x00};					// max_scf_conn_flight
 
 	u8 evt[] = {0x04, 0x0E, 0x04, 0x01, 0x2D, 0xFC};
 	u8 *para_ptr = &cmd[5];
@@ -324,19 +324,9 @@ static int btmtk_tasar_init_para_cmd(struct btmtk_dev *bdev, struct btmtk_tasar 
 	LITTLE_TO_BIG_ENDIAN_COPY(para_ptr, pTasar->rTasarCfg.reg_specific.ucScfSub6ExpireThresh, TRUE);
 	LITTLE_TO_BIG_ENDIAN_COPY(para_ptr, &pTasar->rTasarCfg.reg_specific.ucSmoothChgSpeedScale, FALSE);
 	LITTLE_TO_BIG_ENDIAN_COPY(para_ptr, &pTasar->rTasarCfg.reg_specific.ucRegulatory, FALSE);
-
-	BTMTK_INFO("%s: ucMaxScfWfFlight[%u], ucMaxScfBTFlight[%u], ucMaxScfConnFlight[%u]",
-				__func__,
-				pTasar->rTasarCfg.reg_specific.ucMaxScfWfFlight,
-				pTasar->rTasarCfg.reg_specific.ucMaxScfBTFlight,
-				pTasar->rTasarCfg.reg_specific.ucMaxScfConnFlight);
-
-	/* flight mode */
-	TRANSFER_U115(pTasar->rTasarCfg.reg_specific.ucMaxScfWfFlight, para_ptr);
-	para_ptr += 2;
-	TRANSFER_U115(pTasar->rTasarCfg.reg_specific.ucMaxScfBTFlight, para_ptr);
-	para_ptr += 2;
-	TRANSFER_U115(pTasar->rTasarCfg.reg_specific.ucMaxScfConnFlight, para_ptr);
+	LITTLE_TO_BIG_ENDIAN_COPY(para_ptr, &pTasar->rTasarCfg.reg_specific.ucMaxScfWfFlight, FALSE);
+	LITTLE_TO_BIG_ENDIAN_COPY(para_ptr, &pTasar->rTasarCfg.reg_specific.ucMaxScfBTFlight, FALSE);
+	LITTLE_TO_BIG_ENDIAN_COPY(para_ptr, &pTasar->rTasarCfg.reg_specific.ucMaxScfConnFlight, FALSE);
 
 	BTMTK_INFO_RAW(bdev, cmd, sizeof(cmd), "%s: len[%lu]", __func__, sizeof(cmd));
 
