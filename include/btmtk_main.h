@@ -982,6 +982,7 @@ struct btmtk_dev {
 
 	struct btmtk_main_info main_info;
 
+	bool		is_evt_intercept_disable;
 };
 
 static inline int is_mt7663(u32 chip_id)

@@ -805,6 +805,19 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 			continue;
 		}
 
+		/* The spider tool hopes not to intercept these events */
+		ptr = strstr(cmd, "evt_intercept_disable=");
+		if (ptr != NULL) {
+			val = *(ptr + strlen("evt_intercept_disable=")) - '0';
+			val = !!val;
+
+			bdev->is_evt_intercept_disable = val;
+
+			BTMTK_INFO_DEV(bdev, "%s: set is_evt_intercept_disable[%d]", __func__,
+						bdev->is_evt_intercept_disable);
+			continue;
+		}
+
 		ptr = strstr(cmd, "bk-rs=");
 		if (ptr != NULL) {
 			val = *(ptr + strlen("bk-rs=")) - '0';
