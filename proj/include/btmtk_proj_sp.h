@@ -111,6 +111,7 @@ void btmtk_release_uarthub(bool force);
 extern int mtk8250_uart_dump(struct tty_struct *tty);
 void mtk8250_uart_start_record(struct tty_struct *tty);
 void mtk8250_uart_end_record(struct tty_struct *tty);
+extern void mtk8250_set_runtime_active_status(struct tty_struct *tty);
 #endif
 
 #define HCI_EVT_COMPLETE_EVT		0x0E

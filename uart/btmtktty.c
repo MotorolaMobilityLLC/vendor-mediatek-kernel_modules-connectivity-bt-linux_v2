@@ -1942,6 +1942,10 @@ int btmtk_cif_send_cmd(struct btmtk_dev *bdev, const uint8_t *cmd,
 			ret = -1;
 			break;
 		}
+#if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
+		/* set tty runtime_status = RPM_ACTIVE, avoid the problem from tty kworker scheduling */
+		mtk8250_set_runtime_active_status(cif_dev->tty);
+#endif
 		ret = cif_dev->tty->ops->write(cif_dev->tty, cmd + len, cmd_len - len);
 		if (ret == 0)
 			udelay(500);
