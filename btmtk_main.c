@@ -973,7 +973,8 @@ void btmtk_hci_snoop_print_to_log(struct btmtk_dev *bdev)
 		"TX SCO from stack",
 		"TX SCO to FW",
 		"RX SCO to stack",
-		"RX SCO From FW"
+		"RX SCO From FW",
+		"RX DATA to stack"
 #else
 		"Tx_CMD_from_Stack",
 		"Tx_from_Drv",		/* for sp uart */
@@ -994,7 +995,8 @@ void btmtk_hci_snoop_print_to_log(struct btmtk_dev *bdev)
 		"TX SCO from stack",
 		"TX SCO to FW",
 		"RX SCO to stack",
-		"RX SCO From FW"
+		"RX SCO From FW",
+		"RX_DATA_to_Stack" /* for sp uart */
 #endif
 		};
 

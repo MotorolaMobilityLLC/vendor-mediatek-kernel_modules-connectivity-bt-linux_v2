@@ -430,6 +430,9 @@ OUT:
 	if (!btmtk_rx_data_valid())
 		__pm_relax(bt_wakelock);
 
+	if (retval > 0)
+		btmtk_hci_snoop_save(g_sbdev, HCI_SNOOP_TYPE_RX_DATA_STACK, i_buf, retval);
+
 	return retval;
 }
 
