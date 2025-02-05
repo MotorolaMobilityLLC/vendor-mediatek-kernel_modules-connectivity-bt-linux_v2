@@ -2524,10 +2524,11 @@ int btmtk_find_my_phone_cmd(u32 hr)
 
 int btmtk_set_powered_off_finder_mode(bool enable)
 {
-	u8 cmd1[] = { 0x01, 0x64, 0xFD, 0x02, 0x01, 0x01 };
-	//u8 evt1[] = { 0x04, 0x0E, 0x04, 0x01, 0x64, 0xFD, 0x00 };
+	u8 cmd[] = { 0x01, 0x64, 0xFD, 0x02, 0x01, 0x01 };
+	//u8 evt[] = { 0x04, 0x0E, 0x05, 0x01, 0x64, 0xFD, 0x00 , 0x01};
 
 	int ret = 0;
+	int retry = 10;
 
 	BTMTK_INFO("%s enable[%d]", __func__, enable);
 
@@ -2536,12 +2537,28 @@ int btmtk_set_powered_off_finder_mode(bool enable)
 		return 0;
 	}
 
-	/* cmd1 */
-	ret = btmtk_main_send_cmd(g_sbdev, cmd1, sizeof(cmd1), NULL, 0,
+	g_sbdev->fmd_reset_state = FMD_RESET_STATE_START;
+
+	/* this cmd would trigger hci reset(dynamic download) flow, so not use send_anr_recv wait event */
+	ret = btmtk_main_send_cmd(g_sbdev, cmd, sizeof(cmd), NULL, 0,
 		DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
 	if (ret < 0) {
 		BTMTK_ERR("%s: cmd1 failed, ret[%d]", __func__, ret);
 		return ret;
+	}
+
+	/* wait event back because fw need do hci reset (dynamic download) */
+	while (g_sbdev->fmd_reset_state == FMD_RESET_STATE_START && retry) {
+		BTMTK_INFO("%s: wait for fmd_reset_state retry[%d]", __func__, retry);
+		msleep(100);
+		retry--;
+	}
+
+	/* timeout */
+	if (retry == 0) {
+		BTMTK_ERR("%s: wait for fmd_reset_state timeout", __func__);
+		/* reset state */
+		g_sbdev->fmd_reset_state = FMD_RESET_STATE_INIT;
 	}
 
 	return ret;

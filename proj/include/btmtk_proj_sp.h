@@ -31,6 +31,13 @@ enum dump_type {
 	DUMP_TYPE_HIF,
 };
 
+/* for PowerOffBLE(find my phone) reset state */
+enum finder_reset_state {
+	FMD_RESET_STATE_INIT = 0,
+	FMD_RESET_STATE_START = 1,
+	FMD_RESET_STATE_DONE = 2
+};
+
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 /* uarthub API */
 

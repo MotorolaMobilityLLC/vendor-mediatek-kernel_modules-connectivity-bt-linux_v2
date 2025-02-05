@@ -953,6 +953,7 @@ struct btmtk_dev {
 
 	/* BLE Finding function */
 	atomic_t poweroff_finder_mode;
+	u8 fmd_reset_state;
 #endif
 	/* completion */
 	struct completion	dump_comp;

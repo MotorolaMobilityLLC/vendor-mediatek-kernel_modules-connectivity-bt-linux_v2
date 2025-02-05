@@ -2179,8 +2179,14 @@ coredump_fail_unlock:
 				__func__, skb->len + 1, hci_skb_pkt_type(skb));
 
 		return 1;
+	} else if ((bt_cb(skb)->pkt_type == HCI_EVENT_PKT) &&
+				skb->len == 7 && skb->data[0] == 0x0E &&
+				skb->data[1] == 0x05 && skb->data[3] == 0x64 && skb->data[4] == 0xFD) {
+		BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: FW FMD reset complete event: %02x ",
+				__func__, hci_skb_pkt_type(skb));
+		bdev->fmd_reset_state = FMD_RESET_STATE_DONE;
+		return 1;
 	}
-
 	return 0;
 }
 #endif // #else (USE_DEVICE_NODE == 1)

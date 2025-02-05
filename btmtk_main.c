@@ -4199,7 +4199,8 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 
 		/* wait poweroff_finder_mode set to 0 in post_fmd_cb and for up to 10s */
 		while (atomic_read(&bdev->poweroff_finder_mode) && ++count <= retry) {
-			BTMTK_WARN("%s: poweroff_finder_mode = %d", __func__, atomic_read(&bdev->poweroff_finder_mode));
+			BTMTK_WARN("%s: poweroff_finder_mode = %d, wait[%d]", __func__,
+					atomic_read(&bdev->poweroff_finder_mode), count);
 			mdelay(500);
 		}
 		return 0;
