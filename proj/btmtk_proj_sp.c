@@ -1492,7 +1492,7 @@ int btmtk_intcmd_system_status(unsigned char system_state)
 	cmd[6] = system_state;
 	ret = btmtk_main_send_cmd(g_sbdev,
 			cmd, sizeof(cmd), NULL, 0,
-			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_NO_ASSERT, CMD_NO_NEED_FILTER);
+			DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT, CMD_NO_NEED_FILTER);
 
 	if (ret < 0)
 		BTMTK_WARN("%s fail to set system_state to fw", __func__);
