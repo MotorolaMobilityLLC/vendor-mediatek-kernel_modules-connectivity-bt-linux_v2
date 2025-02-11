@@ -662,7 +662,7 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason, un
 			if (ret)
 				BTMTK_ERR("%s: connv3_coredump_send failed, ret = %d", __func__, ret);
 		}
-
+		/* for the latter bt_close */
 		complete_all(&g_sbdev->dump_comp);
 	}
 

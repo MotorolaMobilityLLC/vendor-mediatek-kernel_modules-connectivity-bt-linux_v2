@@ -1423,6 +1423,9 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 		return 0;
 	}
 
+	/* avoid another reset start before BT open done */
+	bdev->reset_type = 0;
+
 	/* for dfd, clear assert reason here */
 	memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
 
@@ -1509,7 +1512,6 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 
 	/* bt on success, reset subsys count */
 	atomic_set(&bdev->main_info.subsys_reset_conti_count, 0);
-	bdev->reset_type = 0;
 
 	BTMTK_DBG("%s done", __func__);
 
