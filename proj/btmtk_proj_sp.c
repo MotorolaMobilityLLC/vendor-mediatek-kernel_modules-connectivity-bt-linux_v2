@@ -767,6 +767,7 @@ static int btmtk_pre_chip_rst_handler(enum connv3_drv_type drv, char *reason, un
 			}
 			iounmap(g_sbdev->dfd_value_addr_remap_base);
 		}
+		/* for the latter bt_close */
 		complete_all(&g_sbdev->dump_comp);
 	}
 
