@@ -569,7 +569,7 @@ int btmtk_set_tasar_from_host(struct btmtk_dev *bdev, unsigned short int country
 	if (g_tasar.is_enable)
 		btmtk_tasar_update_eci(bdev, &g_tasar, eci);
 	else {
-		struct tasar_scenrio_ctrl rScenrio;
+		struct tasar_scenrio_ctrl rScenrio = {0};
 
 		rScenrio.u2CountryCode = countryCode;
 		rScenrio.u4Eci = eci;
