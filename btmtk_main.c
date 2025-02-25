@@ -4286,7 +4286,11 @@ int btmtk_send_assert_cmd(struct btmtk_dev *bdev)
 	} else {
 		btmtk_reset_timer_update(bdev);
 		BTMTK_INFO_DEV(bdev, "%s: OK", __func__);
-		btmtk_set_chip_state(bdev, BTMTK_STATE_SEND_ASSERT);
+		/* Timing issue: prevent chip already dump state and then changeing it to assert state, causing coredump restart */
+		if (btmtk_get_chip_state(bdev) != BTMTK_STATE_FW_DUMP)
+			btmtk_set_chip_state(bdev, BTMTK_STATE_SEND_ASSERT);
+		else
+			BTMTK_INFO_DEV(bdev, "%s: chip state already fw dump state, skip set assert state", __func__);
 	}
 
 exit:
