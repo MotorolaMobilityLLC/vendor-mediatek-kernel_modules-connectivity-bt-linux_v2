@@ -20,14 +20,14 @@ ifneq ($(CONNECTIVITY_OUT_PATH),)
     MTK_PROJ_TYPE := sp
     ifneq ($(wildcard $(KERNEL_SRC)/$(DEVICE_MODULES_REL_DIR)/Makefile.include),)
         include $(KERNEL_SRC)/$(DEVICE_MODULES_REL_DIR)/Makefile.include
-        extra_symbols := $(abspath $(OUT_DIR)/../vendor/mediatek/kernel_modules/connectivity/common/Module.symvers)
+        extra_symbols := $(abspath $(OUT_DIR)/../vendor/mediatek/kernel_modules/connectivity/common/*Module.symvers)
         extra_symbols +=  $(wildcard $(abspath $(OUT_DIR)/../vendor/mediatek/kernel_modules/connectivity/connfem/*Module.symvers))
-        extra_symbols += $(abspath $(OUT_DIR)/../vendor/mediatek/kernel_modules/connectivity/conninfra/Module.symvers)
+        extra_symbols += $(abspath $(OUT_DIR)/../vendor/mediatek/kernel_modules/connectivity/conninfra/*Module.symvers)
         M_OPTION := $(M)
     else
-        extra_symbols := $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/common/Module.symvers)
+        extra_symbols := $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/common/*Module.symvers)
         extra_symbols +=  $(wildcard $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/connfem/*Module.symvers))
-        extra_symbols += $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/conninfra/Module.symvers)
+        extra_symbols += $(abspath $(O)/../vendor/mediatek/kernel_modules/connectivity/conninfra/*Module.symvers)
         M_OPTION := $(PWD)
     endif
 else
@@ -123,7 +123,7 @@ endif
 ifeq ($(CONFIG_RESET_KO_SUPPORT), y)
     ccflags-y += -DCFG_SUPPORT_CHIP_RESET_KO
     ccflags-y += -I$(src)/../wlan_driver/gen4m_connac3/reset/include/
-    RESET_DIR = $(shell pwd)/../../KERNEL_MODULES/mtreset.ko_intermediates/LINKED/Module.symvers
+    RESET_DIR = $(shell pwd)/../../KERNEL_MODULES/mtreset.ko_intermediates/LINKED/*Module.symvers
     $(warning bt driver unify1111 RESET_DIR=$(RESET_DIR))
     $(info 'RESET_DIR=' $(RESET_DIR))
     KBUILD_EXTRA_SYMBOLS += $(RESET_DIR)
