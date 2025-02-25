@@ -127,6 +127,7 @@ extern void mtk8250_set_runtime_active_status(struct tty_struct *tty);
 #define COMBO_IOCTL_BT_HOST_DEBUG	_IOW(COMBO_IOC_MAGIC, 4, void*)
 #define COMBO_IOCTL_BT_INTTRX		_IOW(COMBO_IOC_MAGIC, 5, void*)
 #define COMBO_IOCTL_BT_FINDER_MODE	_IOW(COMBO_IOC_MAGIC, 6, void*)
+#define COMBO_IOCTL_BT_RESET_MODE	_IOW(COMBO_IOC_MAGIC, 7, void*)
 #define IOCTL_BT_HOST_DEBUG_BUF_SIZE	(32)
 #define IOCTL_BT_HOST_INTTRX_SIZE		(256)
 

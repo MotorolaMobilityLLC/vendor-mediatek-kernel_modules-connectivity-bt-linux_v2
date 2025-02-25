@@ -4187,7 +4187,9 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 	if (bdev->main_info.find_my_phone_mode)
 		btmtk_find_my_phone_cmd(bdev->main_info.find_my_phone_mode);
 
-	BTMTK_INFO("%s: poweroff_finder_mode = %d, bdev = %p", __func__, atomic_read(&bdev->poweroff_finder_mode), bdev);
+	BTMTK_INFO("%s: poweroff_finder_mode = %d, meta_tst_reset_mode = %d, bdev = %p", __func__,
+		   atomic_read(&bdev->poweroff_finder_mode),
+		   atomic_read(&bdev->meta_tst_reset_mode), bdev);
 	if (atomic_read(&bdev->poweroff_finder_mode)) {
 		u8 retry = 20;
 		u8 count = 0;
@@ -4205,6 +4207,8 @@ int btmtk_send_deinit_cmds(struct btmtk_dev *bdev)
 					atomic_read(&bdev->poweroff_finder_mode), count);
 			mdelay(500);
 		}
+		return 0;
+	} else if(atomic_read(&bdev->meta_tst_reset_mode)) {
 		return 0;
 	}
 #endif

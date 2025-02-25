@@ -1774,6 +1774,7 @@ int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
 	}
 
 	atomic_set(&bdev->poweroff_finder_mode, 0);
+	atomic_set(&bdev->meta_tst_reset_mode, 0);
 	bdev->dfd_value_addr_remap_base = NULL;
 	tty->dev->of_node = of_find_node_by_name(NULL, "connscp");
 	if (!tty->dev->of_node)
