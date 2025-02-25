@@ -2526,7 +2526,7 @@ int btmtk_load_fw_by_bin_info(struct btmtk_dev *bdev,
 				goto err;
 			}
 		}
-		BTMTK_INFO_DEV(bdev, "%s end", __func__);
+		BTMTK_DBG_DEV(bdev, "%s end", __func__);
 	}
 
 err:

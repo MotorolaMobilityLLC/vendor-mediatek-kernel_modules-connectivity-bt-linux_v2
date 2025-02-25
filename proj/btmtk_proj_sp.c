@@ -224,7 +224,7 @@ void btmtk_release_uarthub(bool force)
 	/* Clear DEV0_HOST_AWAKE */
 	if (cif_dev->sleep_flow_hw_mech_en && cif_dev->sleep_en) {
 		ret = mtk8250_uart_hub_clear_host_awake_sta(0);
-		BTMTK_INFO("%s: Clear DEV0_HOST_AWAKE ret[%d]", __func__, ret);
+		BTMTK_DBG("%s: Clear DEV0_HOST_AWAKE ret[%d]", __func__, ret);
 	}
 
 	/* force is for only bt off flow */
@@ -1101,13 +1101,13 @@ int btmtk_read_pmic_state(struct btmtk_dev *bdev)
 	u8 read_pmic_state_cmd[] = { 0x01, 0x6F, 0xFC, 0x05, 0x01, 0x16, 0x01, 0x00, 0x01 };
 	u8 read_pmic_state_event[] = { 0x04, 0xE4, 0x35, 0x02, 0x16, 0x31, 0x00, 0x00 };
 
+	BTMTK_INFO("%s bdev->chip_id = 0x%04x", __func__, bdev->chip_id);
+
 	if (bdev->chip_id == 0x6653) {
-		BTMTK_INFO("%s bdev->chip_id = 0x%04x", __func__, bdev->chip_id);
 		read_pmic_state_event[2] = 0xF5;
 		read_pmic_state_event[5] = 0xF1;
 	}
 
-	BTMTK_INFO("%s enter", __func__);
 	ret = btmtk_main_send_cmd(bdev, read_pmic_state_cmd, sizeof(read_pmic_state_cmd),
 			read_pmic_state_event, sizeof(read_pmic_state_event), 0, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
 	if (ret < 0)
@@ -1448,7 +1448,7 @@ void btmtk_uart_wakeup_cb(void *para)
 {
 	struct btmtk_dev *bdev = (struct btmtk_dev *)para;
 
-	BTMTK_INFO("%s start", __func__);
+	BTMTK_DBG("%s start", __func__);
 
 	if (!bdev) {
 		BTMTK_WARN("%s: bdev is NULL", __func__);

@@ -827,7 +827,7 @@ int btmtk_uart_send_wakeup_cmd(struct hci_dev *hdev)
 		return ret;
 	}
 
-	BTMTK_INFO("%s done", __func__);
+	BTMTK_DBG("%s done", __func__);
 	return ret;
 }
 #if (USE_DEVICE_NODE == 1)
@@ -895,7 +895,7 @@ static int btmtk_uart_send_xo_param_cmd(struct hci_dev *hdev, CONNXO_CFG_PARAM_S
 		return ret;
 	}
 #endif
-	BTMTK_INFO("%s done", __func__);
+	BTMTK_DBG("%s done", __func__);
 exit:
 	vfree(cmd);
 	return ret;
@@ -1267,13 +1267,12 @@ static int btmtk_query_fw_uart_settings_cmd(struct btmtk_dev *bdev)
 	cif_dev->fw_cfg.query_status = bdev->io_buf[7];
 	cif_dev->fw_cfg.setting_byte = bdev->io_buf[13];
 
-	BTMTK_INFO("%s: max_baudrate[%u], setting_byte[0x%x], query_status[%d]",
+	BTMTK_INFO("%s: max_baudrate[%u], setting_byte[0x%x], query_status[%d], "
+				"inband_en[%d], wakeup_enh_en[%d], hub_mode_en[%d]",
 			__func__, cif_dev->fw_cfg.max_baudrate,
 			cif_dev->fw_cfg.setting_byte,
-			cif_dev->fw_cfg.query_status);
-
-	BTMTK_INFO("%s: inband_en[%d], wakeup_enh_en[%d], hub_mode_en[%d]",
-			__func__, cif_dev->fw_cfg.detail.inband_en,
+			cif_dev->fw_cfg.query_status,
+			cif_dev->fw_cfg.detail.inband_en,
 			cif_dev->fw_cfg.detail.wakeup_enh_en,
 			cif_dev->fw_cfg.detail.hub_mode_en);
 
@@ -1374,7 +1373,7 @@ static int btmtk_sp_pre_open(struct btmtk_dev *bdev)
 	cif_dev->flush_en = 1;
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 	cif_dev->sleep_flow_hw_mech_en = (mtk8250_uart_hub_get_bt_sleep_flow_hw_mech_en() <= 0) ? 0 : mtk8250_uart_hub_get_bt_sleep_flow_hw_mech_en();
-	BTMTK_INFO("sleep_flow_hw_mech_en: %d", cif_dev->sleep_flow_hw_mech_en);
+	BTMTK_DBG("sleep_flow_hw_mech_en: %d", cif_dev->sleep_flow_hw_mech_en);
 
 	/* for set uart cmd, old wakeup flow use 1 */
 	if (!cif_dev->sleep_flow_hw_mech_en)
@@ -3120,7 +3119,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 			} else {
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 				if (cif_dev->sleep_flow_hw_mech_en) {
-					u8 retry_cnt = 50;
+					int retry_cnt = 1000;
 
 					/* new wakeup flow */
 					/* 3. Set DEVx_HOST_AWAKE = 1 */
