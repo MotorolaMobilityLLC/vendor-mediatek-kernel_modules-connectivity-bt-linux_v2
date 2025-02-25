@@ -4061,7 +4061,7 @@ __attribute__((unused)) static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
 	}
 
 exit:
-	BTMTK_INFO_DEV(bdev, "%s exit", __func__);
+	BTMTK_DBG_DEV(bdev, "%s exit", __func__);
 	return ret;
 }
 #endif
@@ -4096,7 +4096,7 @@ static int btmtk_send_phase1_wmt_cfg(struct btmtk_dev *bdev)
 	}
 
 exit:
-	BTMTK_INFO_DEV(bdev, "%s exit", __func__);
+	BTMTK_DBG_DEV(bdev, "%s exit", __func__);
 	return ret;
 }
 
@@ -5398,7 +5398,7 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		}
 		if (ret == 1) {
 			ret = 0;
-			BTMTK_INFO_DEV(bdev, "%s bt_tx_frame_handler already handle data, skip", __func__);
+			BTMTK_DBG_DEV(bdev, "%s bt_tx_frame_handler already handle data, skip", __func__);
 			goto exit;
 		}
 	} else

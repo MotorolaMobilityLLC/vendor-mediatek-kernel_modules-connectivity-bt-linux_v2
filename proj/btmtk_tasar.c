@@ -124,20 +124,20 @@ static void btmtk_tasar_dump_config(struct tasar_config *rCfg)
 		return;
 	}
 
-	BTMTK_INFO("[TAS]tasar_config adr = %p, size:%lu",
+	BTMTK_DBG("[TAS]tasar_config adr = %p, size:%lu",
 		rCfg, sizeof(struct tasar_config));
-	BTMTK_INFO("[TAS]version adr = %p, size:%lu",
+	BTMTK_DBG("[TAS]version adr = %p, size:%lu",
 		&rCfg->version[0], sizeof(rCfg->version));
-	BTMTK_INFO("[TAS]common adr = %p, size:%lu",
+	BTMTK_DBG("[TAS]common adr = %p, size:%lu",
 		&rCfg->common, sizeof(rCfg->common));
-	BTMTK_INFO("[TAS]reg_specific adr = %p, size:%lu",
+	BTMTK_DBG("[TAS]reg_specific adr = %p, size:%lu",
 		&rCfg->reg_specific, sizeof(rCfg->reg_specific));
-	BTMTK_INFO("[TAS]chngrp[0] adr = %p, size:%lu",
+	BTMTK_DBG("[TAS]chngrp[0] adr = %p, size:%lu",
 		&rCfg->chngrp[0], sizeof(rCfg->chngrp[0]));
-	BTMTK_INFO("[TAS]plimit[0] adr = %p, size:%lu",
+	BTMTK_DBG("[TAS]plimit[0] adr = %p, size:%lu",
 		&rCfg->plimit[0], sizeof(rCfg->plimit[0]));
 
-	BTMTK_INFO("[TAS]version [%d]", TAS_VERSION(rCfg));
+	BTMTK_DBG("[TAS]version [%d]", TAS_VERSION(rCfg));
 }
 
 static bool btmtk_tasar_update_config(struct btmtk_tasar *pTasar, int8_t *pcFileName)
@@ -151,7 +151,7 @@ static bool btmtk_tasar_update_config(struct btmtk_tasar *pTasar, int8_t *pcFile
 	struct device *dev = NULL;
 	int err = 0;
 
-	BTMTK_INFO("%s: begin setting_file_name = %s", __func__, pcFileName);
+	BTMTK_DBG("%s: begin setting_file_name = %s", __func__, pcFileName);
 	err = request_firmware(&fw_entry, pcFileName, dev);
 	if (err != 0 || fw_entry == NULL) {
 		BTMTK_WARN("%s: request_firmware fail, maybe file %s not exist, err = %d, fw_entry = %p",
@@ -161,7 +161,7 @@ static bool btmtk_tasar_update_config(struct btmtk_tasar *pTasar, int8_t *pcFile
 		return FALSE;
 	}
 
-	BTMTK_INFO("%s: setting file request_firmware size %zu success", __func__, fw_entry->size);
+	BTMTK_DBG("%s: setting file request_firmware size %zu success", __func__, fw_entry->size);
 
 	pucConfigBuf = fw_entry->data;
 	u4ConfigReadLen = fw_entry->size;
@@ -171,8 +171,7 @@ static bool btmtk_tasar_update_config(struct btmtk_tasar *pTasar, int8_t *pcFile
 		return FALSE;
 	}
 
-	BTMTK_INFO("%s: [TAS] structure size/file size[%lu/%d]",
-		__func__, sizeof(pTasar->rTasarCfg), u4ConfigReadLen);
+	BTMTK_INFO("%s: [TAS] structure size/file size[%lu/%d]", __func__, sizeof(pTasar->rTasarCfg), u4ConfigReadLen);
 
 	if (sizeof (pTasar->rTasarCfg) != u4ConfigReadLen) {
 		BTMTK_INFO("%s: [TAS] invalid file size", __func__);
@@ -288,7 +287,7 @@ static int btmtk_tasar_init_para_cmd(struct btmtk_dev *bdev, struct btmtk_tasar 
 	u8 *para_ptr = &cmd[5];
 	int ret = 0;
 
-	BTMTK_INFO("%s", __func__);
+	BTMTK_DBG("%s", __func__);
 
 	if (btmtk_get_chip_state(bdev) != BTMTK_STATE_WORKING) {
 		BTMTK_INFO("%s: bt already closed, not send cmd", __func__);
@@ -372,8 +371,6 @@ static int btmtk_tasar_update_eci(struct btmtk_dev *bdev, struct btmtk_tasar *pT
 	u8 evt[] = {0x04, 0x0E, 0x04, 0x01, 0x2D, 0xFC};
 	int ret = 0, i = 0, pos = 0;
 
-	BTMTK_INFO("%s: newEci[%u]", __func__, newEci);
-
 	if (btmtk_get_chip_state(bdev) != BTMTK_STATE_WORKING) {
 		BTMTK_INFO("%s: bt already closed, not send cmd", __func__);
 		return 0;
@@ -389,7 +386,7 @@ static int btmtk_tasar_update_eci(struct btmtk_dev *bdev, struct btmtk_tasar *pT
 		return -1;
 	}
 
-	BTMTK_INFO("%s: ucBTCust[%u], ucWifiCust[%u], ucSub6Cust[%u], ucMmw6Cust[%u]",
+	BTMTK_DBG("%s: ucBTCust[%u], ucWifiCust[%u], ucSub6Cust[%u], ucMmw6Cust[%u]",
 				__func__,
 				pTasar->rTasarCfg.plimit[newEci].scf_factor.ucBTCust,
 				pTasar->rTasarCfg.plimit[newEci].scf_factor.ucWifiCust,
@@ -419,7 +416,9 @@ static int btmtk_tasar_update_eci(struct btmtk_dev *bdev, struct btmtk_tasar *pT
 		cmd[5] = MIN(cmd[5], cmd[pos + i]);
 	}
 
-	BTMTK_INFO_RAW(bdev, cmd, sizeof(cmd), "%s: len[%lu]", __func__, sizeof(cmd));
+	BTMTK_INFO_RAW(bdev, cmd, sizeof(cmd), "%s: TAS-version[0x%x] reg[%d] newEci[%u] len[%lu]",
+				__func__, TAS_VERSION((&pTasar->rTasarCfg)), pTasar->rTasarScenrio.u4RegTblIndex,
+				newEci, sizeof(cmd));
 
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, sizeof(cmd), evt, sizeof(evt),
@@ -456,10 +455,6 @@ static int btmtk_tasar_enable_cmd(struct btmtk_dev *bdev, struct btmtk_tasar *pT
 	u8 evt[] = {0x04, 0x0E, 0x04, 0x01, 0x2D, 0xFC};
 	int ret = 0;
 
-	BTMTK_INFO("%s: countryCode[%c%c=0x%x]",__func__,
-			(pTasar->rTasarScenrio.u2CountryCode >> 8) & 0xFF,
-			pTasar->rTasarScenrio.u2CountryCode & 0xFF,
-			pTasar->rTasarScenrio.u2CountryCode);
 
 	if (btmtk_get_chip_state(bdev) != BTMTK_STATE_WORKING) {
 		BTMTK_INFO("%s: bt already closed, not send cmd", __func__);
@@ -470,7 +465,12 @@ static int btmtk_tasar_enable_cmd(struct btmtk_dev *bdev, struct btmtk_tasar *pT
 	cmd[5] = pTasar->rTasarCfg.reg_specific.ucBtTaVer;
 	cmd[10] = pTasar->rTasarCfg.reg_specific.ucRegulatory;
 
-	BTMTK_INFO_RAW(bdev, cmd, sizeof(cmd), "%s: len[%lu]", __func__, sizeof(cmd));
+	BTMTK_INFO_RAW(bdev, cmd, sizeof(cmd), "%s: countryCode[%c%c=0x%x] len[%lu]",
+				__func__,
+				(pTasar->rTasarScenrio.u2CountryCode >> 8) & 0xFF,
+				pTasar->rTasarScenrio.u2CountryCode & 0xFF,
+				pTasar->rTasarScenrio.u2CountryCode,
+				sizeof(cmd));
 
 	ret = btmtk_main_send_cmd(bdev,
 			cmd, sizeof(cmd), evt, sizeof(evt),
@@ -541,7 +541,7 @@ void btmtk_tasar_update_reg(struct btmtk_dev *bdev, struct btmtk_tasar *pTasar, 
 	/* enable tasar */
 	btmtk_tasar_enable_cmd(bdev, pTasar);
 
-	BTMTK_INFO("%s: update reg:%d/CC:0x%x/Eci:%d",
+	BTMTK_DBG("%s: update reg:%d/CC:0x%x/Eci:%d",
 		__func__,
 		pTasar->rTasarScenrio.u4RegTblIndex,
 		pTasar->rTasarScenrio.u2CountryCode,

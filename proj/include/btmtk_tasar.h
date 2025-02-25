@@ -69,7 +69,7 @@ struct btmtk_tasar {
 
 /* VERSION */
 #define TAS_VERSION(_config) \
-    (ACC(_config->version))
+    (ACC((_config)->version))
 
 /* tasar_algorithm_common */
 #define CONN_STATUS_RESEND_INTERVAL(_config) \

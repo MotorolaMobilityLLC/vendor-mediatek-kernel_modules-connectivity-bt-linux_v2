@@ -1638,6 +1638,13 @@ static void btmtk_uart_open_done(struct btmtk_dev *bdev)
 	/* start fw own timer */
 	btmtk_uart_create_fw_own_timer(cif_dev);
 #endif
+
+#if (CFG_SUPPORT_TAS_HOST_CONTROL == 1)
+	/* for SQC test, let fw test feature in every scenario
+	 * use countrycode=TW, eci=0
+	 */
+	btmtk_set_tasar_from_host(bdev, 0x5457, 0);
+#endif // CFG_SUPPORT_TAS_HOST_CONTROL
 }
 
 
