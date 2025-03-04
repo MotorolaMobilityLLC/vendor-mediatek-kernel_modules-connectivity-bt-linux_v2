@@ -2506,18 +2506,21 @@ int btmtk_uart_launcher_deinit(void)
 	u8 count = 0;
 
 	BTMTK_INFO("%s: Start", __func__);
-	cancel_work_sync(&g_sbdev->pwr_on_uds_work);
 
 	if (g_sbdev != NULL) {
+		if (btmtk_get_chip_state(g_sbdev) == BTMTK_STATE_DISCONNECT) {
+			BTMTK_WARN("%s: uart disconnected", __func__);
+			return 0;
+		}
+
+		cancel_work_sync(&g_sbdev->pwr_on_uds_work);
 		/* wait poweroff_finder_mode set to 0 in post_fmd_cb and make sure BT state is not DISCONNECT */
 		while(atomic_read(&g_sbdev->poweroff_finder_mode) && (count <= retry)) {
 			BTMTK_WARN("%s: poweroff_finder_mode = %d", __func__, atomic_read(&g_sbdev->poweroff_finder_mode));
 			count++;
 			mdelay(200);
 		}
-	}
 
-	if (g_sbdev != NULL) {
 		ret = bt_close(g_sbdev->hdev);
 		if (ret) {
 			BTMTK_ERR("%s: BT turn off fail!", __func__);
