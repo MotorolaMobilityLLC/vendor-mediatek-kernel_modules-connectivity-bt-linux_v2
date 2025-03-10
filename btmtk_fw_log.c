@@ -2141,8 +2141,7 @@ coredump_fail_unlock:
 	} else if (bt_cb(skb)->pkt_type == HCI_EVENT_PKT && skb->len > 4
 				&& skb->data[0] == 0xE4 && skb->data[1] == 0x05 &&
 				skb->data[2] == 0x02 &&  skb->data[3] == 0x56 && bdev->main_info.hif_hook.fw_sleep_handler) {
-		BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: fw_sleep_event len[%d] %02x ", __func__,
-					skb->len + 1, hci_skb_pkt_type(skb));
+		BTMTK_INFO_LIMITTED("%s: fw_sleep_event len[%d] 04 E4 05 02 56 01 00 00", __func__, skb->len + 1);
 		bdev->main_info.hif_hook.fw_sleep_handler(bdev);
 		return 1;
 	} else if (bt_cb(skb)->pkt_type == HCI_EVENT_PKT && skb->data[0] == 0xE3 && skb->data[2] == 0x01) {
