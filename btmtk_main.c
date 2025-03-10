@@ -17,7 +17,7 @@
 #include "btmtk_chip_if.h"
 #include "btmtk_buffer_mode.h"
 #include "btmtk_chip_common.h"
-#include "include/btmtk_main.h"
+#include "btmtk_main.h"
 #if (USE_DEVICE_NODE == 1)
 #include "btmtk_queue.h"
 #include "btmtk_proj_sp.h"

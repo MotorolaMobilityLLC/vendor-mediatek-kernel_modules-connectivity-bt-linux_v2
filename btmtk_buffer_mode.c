@@ -3,7 +3,7 @@
  * Copyright (c) 2021 MediaTek Inc.
  */
 
-#include "include/btmtk_main.h"
+#include "btmtk_main.h"
 #include "btmtk_buffer_mode.h"
 
 static int btmtk_buffer_mode_check_auto_mode(struct btmtk_dev *bdev, struct st_buffer_mode *buffer_mode)

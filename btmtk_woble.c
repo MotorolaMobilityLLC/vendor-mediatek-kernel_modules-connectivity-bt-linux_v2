@@ -9,7 +9,7 @@
 #include <linux/input.h>
 #include <linux/pm_wakeup.h>
 #include <linux/interrupt.h>
-#include "include/btmtk_main.h"
+#include "btmtk_main.h"
 
 #include "btmtk_woble.h"
 #include "btmtk_chip_reset.h"

@@ -5,8 +5,8 @@
 
 #include <linux/device.h>
 #include <linux/pm_wakeup.h>
-#include "include/btmtk_define.h"
-#include "include/btmtk_main.h"
+#include "btmtk_define.h"
+#include "btmtk_main.h"
 
 #include "btmtk_chip_reset.h"
 
