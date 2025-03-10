@@ -963,8 +963,9 @@ int btmtk_dump_start(void *priv_data, unsigned int force_dump, enum dump_type du
 		btmtk_query_fw_schedule_info(g_sbdev);
 	}
 
-	if (!force_dump && cif_dev->own_state != BTMTK_DRV_OWN) {
-		BTMTK_WARN("%s: not in drv own, force_dump[%d], own_state[%d]", __func__, force_dump, cif_dev->own_state);
+	if (!force_dump && atomic_read(&cif_dev->own_state) != BTMTK_DRV_OWN) {
+		BTMTK_WARN("%s: not in drv own, force_dump[%d], own_state[%d]",
+			__func__, force_dump, atomic_read(&cif_dev->own_state));
 		return -1;
 	}
 
@@ -2551,7 +2552,7 @@ int btmtk_set_powered_off_finder_mode(bool enable)
 	/* wait event back because fw need do hci reset (dynamic download) */
 	while (g_sbdev->fmd_reset_state == FMD_RESET_STATE_START && retry) {
 		BTMTK_INFO("%s: wait for fmd_reset_state retry[%d]", __func__, retry);
-		msleep(100);
+		msleep(300);
 		retry--;
 	}
 
@@ -2579,7 +2580,7 @@ int btmtk_uart_launcher_deinit(void)
 	while (atomic_read(&g_sbdev->poweroff_finder_mode) && (count <= retry)) {
 		BTMTK_WARN("%s: poweroff_finder_mode = %d", __func__, atomic_read(&g_sbdev->poweroff_finder_mode));
 		count++;
-		mdelay(200);
+		msleep(200);
 	}
 
 	if (g_sbdev != NULL) {

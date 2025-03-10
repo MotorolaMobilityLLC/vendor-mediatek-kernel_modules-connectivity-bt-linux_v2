@@ -61,7 +61,7 @@ static struct wakeup_source *bt_trx_wakelock;
 
 static char event_need_compare[EVENT_COMPARE_SIZE] = {0};
 static char event_need_compare_len;
-static char event_compare_status;
+static atomic_t event_compare_status;
 static struct tty_struct *g_tty;
 static struct tty_ldisc_ops btmtk_uart_ldisc;
 extern struct btmtk_dev *g_sbdev;
@@ -328,7 +328,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 		return -1;
 	}
 
-	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
+	if (atomic_read(&event_compare_status) == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE &&
 		skb->len >= event_need_compare_len) {
 		memset(bdev->io_buf, 0, IO_BUF_SIZE);
 #if (USE_DEVICE_NODE == 1)
@@ -337,7 +337,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 				memcmp(&skb->data[3], event_need_compare, event_need_compare_len) == 0) {
 			BTMTK_INFO("%s: compare opcode[0x%02X%02X] from stack success",
 					__func__, skb->data[4], skb->data[3]);
-			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+			atomic_set(&event_compare_status, BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS);
 			/* return 0 not drop event by driver */
 			return 0;
 		}
@@ -345,7 +345,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			int ret = 0;
 			BTMTK_INFO("match DFD event");
 			if (skb->data[6] == 0x00) {
-				event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+				atomic_set(&event_compare_status, BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS);
 				memcpy(bdev->dfd_pstd, &skb->data[7], skb->len - 7);
 				ret = connv3_coredump_send(bdev->main_info.hif_hook.coredump_handler, "PSTD", &g_sbdev->dfd_pstd[0], skb->len - 7);
 				if (ret)
@@ -361,12 +361,12 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			memcmp(skb->data, &get_baudrate_event[1], GETBAUD_EVT_LEN - 1) == 0) {
 			BTMTK_INFO("%s: GET BAUD = %02X %02X %02X, FC = %02X", __func__,
 				skb->data[10], skb->data[9], skb->data[8], skb->data[11]);
-			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+			atomic_set(&event_compare_status, BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS);
 		} else if ((skb->len == (READ_ADDRESS_EVT_HDR_LEN - HCI_TYPE_SIZE + BD_ADDRESS_SIZE)) &&
 					memcmp(skb->data, &read_address_event[1], READ_ADDRESS_EVT_HDR_LEN - 1) == 0) {
 			memcpy(bdev->bdaddr, &skb->data[READ_ADDRESS_EVT_PAYLOAD_OFFSET - 1], BD_ADDRESS_SIZE);
 			BTMTK_DBG("%s: GET BDADDR = "MACSTR, __func__, MAC2STR(bdev->bdaddr));
-			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+			atomic_set(&event_compare_status, BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS);
 
 			/* SP project need to send to stack */
 			//return 0;
@@ -392,7 +392,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			msleep(IO_BUF_DELAY_TIME);
 #endif
 			bdev->recv_evt_len = skb->len;
-			event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+			atomic_set(&event_compare_status, BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS);
 			BTMTK_DBG("%s, compare success", __func__);
 		} else {
 			BTMTK_INFO("%s compare fail", __func__);
@@ -461,18 +461,18 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 			return -1;
 		}
 
-		event_compare_status = BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE;
+		atomic_set(&event_compare_status, BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE);
 		memcpy(event_need_compare, event + 1, event_len - 1);
 		event_need_compare_len = event_len - 1;
 
 		/* if send cmd without drv own, not direct send cmd incase of tx_thread cant not do drv own with send_and_recv */
 		if (pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT &&
-			(cif_dev->own_state != BTMTK_DRV_OWN ||
+			(atomic_read(&cif_dev->own_state) != BTMTK_DRV_OWN ||
 			atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_RUNNING ||
 			atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_DONE)) {
 
-			BTMTK_WARN("%s: wait driver own retry, own_state[%d]", __func__, cif_dev->own_state);
-			event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
+			BTMTK_WARN("%s: wait driver own retry, own_state[%d]", __func__, atomic_read(&cif_dev->own_state));
+			atomic_set(&event_compare_status, BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE);
 			up(&cif_dev->evt_comp_sem);
 			return -EAGAIN;
 		}
@@ -487,9 +487,9 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 		comp_event_timo = jiffies + msecs_to_jiffies(WOBLE_EVENT_INTERVAL_TIMO);
 #endif
 		BTMTK_DBG("event_need_compare_len %d, event_compare_status %d",
-			event_need_compare_len, event_compare_status);
+			event_need_compare_len, atomic_read(&event_compare_status));
 	} else {
-		event_compare_status = BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS;
+		atomic_set(&event_compare_status, BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS);
 	}
 
 #if IS_ENABLED(CONFIG_SUPPORT_UARTDBG)
@@ -515,7 +515,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 			ret = -1;
 
 			/* check if event_compare_success */
-			if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
+			if (atomic_read(&event_compare_status) == BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS) {
 				ret = 0;
 				break;
 			}
@@ -570,7 +570,7 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 
 
 exit:
-	event_compare_status = BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE;
+	atomic_set(&event_compare_status, BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE);
 	up(&cif_dev->evt_comp_sem);
 	/* control not trigger assert */
 	if (ret < 0 && pkt_type != BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT
@@ -1555,7 +1555,7 @@ static int btmtk_uart_pre_open(struct btmtk_dev *bdev)
 	 *   BT OFF -> enqueue power off cmd -> set DRV own -> send power off cmd
 	 *   -> delete FW own timer -> BT OFF done
 	 */
-	cif_dev->own_state = BTMTK_FW_OWN;
+	atomic_set(&cif_dev->own_state, BTMTK_FW_OWN);
 	atomic_set(&cif_dev->fw_wake, 0);
 	UART_OWN_MUTEX_LOCK();
 	cif_dev->no_fw_own = 1;
@@ -1570,7 +1570,7 @@ static int btmtk_uart_pre_open(struct btmtk_dev *bdev)
 	if (bdev->bt_cfg.drv_own_wakelock_enable)
 #endif
 		__pm_stay_awake(bt_trx_wakelock);
-	cif_dev->own_state = BTMTK_DRV_OWN;
+	atomic_set(&cif_dev->own_state, BTMTK_DRV_OWN);
 #endif
 
 	ret = btmtk_sp_pre_open(bdev);
@@ -2099,8 +2099,9 @@ static int btmtk_uart_tx_thread(void *data)
 #endif
 
 		if (thread_flag & BTMTK_THREAD_TX) {
-			if (cif_dev->own_state != BTMTK_DRV_OWN) {
-				BTMTK_WARN_LIMITTED("%s not in dirver_own state[%d] can not send cmd", __func__, cif_dev->own_state);
+			if (atomic_read(&cif_dev->own_state) != BTMTK_DRV_OWN) {
+				BTMTK_WARN_LIMITTED("%s not in dirver_own state[%d] can not send cmd",
+					__func__, atomic_read(&cif_dev->own_state));
 				skb_queue_purge(&cif_dev->tx_queue);
 			}
 			while (skb_queue_len(&cif_dev->tx_queue)) {
@@ -2239,8 +2240,8 @@ void btmtk_fwlog_flow_ctrl_work(struct work_struct *work)
 	}
 
 	/* if fw own or fw owning, skip, avoid trigger driver own */
-	if (cif_dev->own_state != BTMTK_DRV_OWN && cif_dev->own_state != BTMTK_DRV_OWNING) {
-		BTMTK_INFO_DEV(bdev, "%s: not in driver own[%d], skip", __func__, cif_dev->own_state);
+	if (atomic_read(&cif_dev->own_state) != BTMTK_DRV_OWN && atomic_read(&cif_dev->own_state) != BTMTK_DRV_OWNING) {
+		BTMTK_INFO_DEV(bdev, "%s: not in driver own[%d], skip", __func__, atomic_read(&cif_dev->own_state));
 		return;
 	}
 
@@ -2807,7 +2808,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 
 	/* if flag is BTMTK_FW_OWNING not set driver own , because data is fw own event */
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
-	if (cif_dev->own_state == BTMTK_FW_OWN &&
+	if (atomic_read(&cif_dev->own_state) == BTMTK_FW_OWN &&
 	    !atomic_read(&cif_dev->fw_wake) &&
 	    data != NULL && count > 0 && data[0] != 0xFF && cif_dev->sleep_en) {
 		unsigned int index = 0;
@@ -2828,7 +2829,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 		BTMTK_INFO_RAW(bdev, data, count, "%s: data after trim", __func__);
 	}
 	/* Filter 0x 0x 0x ... */
-	if (cif_dev->own_state == BTMTK_DRV_OWNING && count == 73 &&
+	if (atomic_read(&cif_dev->own_state) == BTMTK_DRV_OWNING && count == 73 &&
 		match_dirty_data(data, count) == 1 && cif_dev->sleep_en) {
 		BTMTK_INFO_RAW(bdev, data, count, "%s: recv 0x 0x 0x ...", __func__);
 		data = data + 63;
@@ -2837,7 +2838,7 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 		BTMTK_INFO_RAW(bdev, data, count, "%s: data after trim", __func__);
 	}
 #endif
-	if (data != NULL && (count > 1 || data[0] != 0x00) && cif_dev->own_state != BTMTK_FW_OWNING) {
+	if (data != NULL && (count > 1 || data[0] != 0x00) && atomic_read(&cif_dev->own_state) != BTMTK_FW_OWNING) {
 		if (
 #if (USE_DEVICE_NODE == 0)
 			/* Drop driver own request from FW when enter suspend */
@@ -2955,8 +2956,8 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 	UART_OWN_MUTEX_LOCK();
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
 	/* no need to compare BTMTK_FW_OWNING because the state must be fw_own/fail before leaving mutex */
-	if (cif_dev->own_state == BTMTK_FW_OWN || cif_dev->own_state == BTMTK_OWN_FAIL) {
-		BTMTK_WARN("Already at fw own state or error state[%d], skip", cif_dev->own_state);
+	if (atomic_read(&cif_dev->own_state) == BTMTK_FW_OWN || atomic_read(&cif_dev->own_state) == BTMTK_OWN_FAIL) {
+		BTMTK_WARN("Already at fw own state or error state[%d], skip", atomic_read(&cif_dev->own_state));
 		goto unlock;
 	}
 
@@ -2966,12 +2967,12 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 	}
 
 	BTMTK_DBG("%s: fw owning", __func__);
-	cif_dev->own_state = BTMTK_FW_OWNING;
-	if (event_compare_status == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE ||
+	atomic_set(&cif_dev->own_state, BTMTK_FW_OWNING);
+	if (atomic_read(&event_compare_status) == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE ||
 			!skb_queue_empty(&cif_dev->tx_queue)) {
 		BTMTK_WARN_DEV(bdev, "%s: during send_and_recv[%d] or tx queue have data[%d], keep drv own",
-				__func__, event_compare_status, !skb_queue_empty(&cif_dev->tx_queue));
-		cif_dev->own_state = BTMTK_DRV_OWN;
+				__func__, atomic_read(&event_compare_status), !skb_queue_empty(&cif_dev->tx_queue));
+		atomic_set(&cif_dev->own_state, BTMTK_DRV_OWN);
 		btmtk_uart_update_fw_own_timer(cif_dev);
 		goto unlock;
 	}
@@ -2990,14 +2991,14 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		ret = btmtk_main_send_cmd(bdev, cmd, FWOWN_CMD_LEN, evt, OWNTYPE_EVT_LEN - 3,
 				DELAY_TIMES, RETRY_TIMES, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
 		/* evt[7] = 1 for no sleep, evt[8] = 3 represent drv own evt */
-		if (bdev->io_buf[7] || bdev->io_buf[8] == 0x03) {
+		if (ret == 0 && (bdev->io_buf[7] || bdev->io_buf[8] == 0x03)) {
 			/* re-set tx request */
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 			if (cif_dev->hub_en)
 				btmtk_wakeup_uarthub();
 #endif
 			BTMTK_WARN("%s fw not allow sleep or receive drv own evt, keep drv own, cmd[9] = 0x%02x, evt[7] = %d, evt[8] = %d", __func__, cmd[9], evt[7], evt[8]);
-			cif_dev->own_state = BTMTK_DRV_OWN;
+			atomic_set(&cif_dev->own_state, BTMTK_DRV_OWN);
 			btmtk_uart_update_fw_own_timer(cif_dev);
 			goto unlock;
 		}
@@ -3005,7 +3006,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		ret = 0;
 
 	if (ret < 0) {
-		cif_dev->own_state = BTMTK_DRV_OWN;
+		atomic_set(&cif_dev->own_state, BTMTK_DRV_OWN);
 		BTMTK_ERR("%s: set fw own return fail, ret[%d]", __func__, ret);
 		if (bdev->assert_reason[0] == '\0') {
 			strncpy(bdev->assert_reason, "[BT_DRV assert] fw own failed",
@@ -3014,7 +3015,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 		}
 		goto unlock;
 	} else {
-		cif_dev->own_state = BTMTK_FW_OWN;
+		atomic_set(&cif_dev->own_state, BTMTK_FW_OWN);
 		atomic_set(&cif_dev->fw_wake, 0);
 
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
@@ -3065,13 +3066,13 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 	UART_OWN_MUTEX_LOCK();
 	cif_dev = (struct btmtk_uart_dev *)bdev->cif_dev;
-	if (cif_dev->own_state == BTMTK_DRV_OWN || cif_dev->own_state == BTMTK_OWN_FAIL) {
+	if (atomic_read(&cif_dev->own_state) == BTMTK_DRV_OWN || atomic_read(&cif_dev->own_state) == BTMTK_OWN_FAIL) {
 		//BTMTK_WARN("Already at driver own state or error state[%d], skip", cif_dev->own_state);
 		btmtk_uart_update_fw_own_timer(cif_dev);
 		goto unlock;
 	}
 
-	cif_dev->own_state = BTMTK_DRV_OWNING;
+	atomic_set(&cif_dev->own_state, BTMTK_DRV_OWNING);
 
 	/* get wakelock */
 #if (USE_DEVICE_NODE == 0)
@@ -3105,7 +3106,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 		if (ret < 0) {
 			BTMTK_ERR("%s wakeup uart_hub fail", __func__);
-			cif_dev->own_state = BTMTK_OWN_FAIL;
+			atomic_set(&cif_dev->own_state, BTMTK_OWN_FAIL);
 			goto unlock;
 		}
 	}
@@ -3209,7 +3210,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 
 	if (ret < 0) {
 		/* set driver own state and hub request for trigger rhw debug sop */
-		cif_dev->own_state = BTMTK_DRV_OWN;
+		atomic_set(&cif_dev->own_state, BTMTK_DRV_OWN);
 		BTMTK_ERR("%s: set driver own return fail, ret[%d]", __func__, ret);
 		if (bdev->assert_reason[0] == '\0') {
 			strncpy(bdev->assert_reason, "[BT_DRV assert] drv own failed",
@@ -3218,10 +3219,10 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		}
 		goto unlock;
 	} else {
-		cif_dev->own_state = BTMTK_DRV_OWN;
+		atomic_set(&cif_dev->own_state, BTMTK_DRV_OWN);
 		btmtk_uart_update_fw_own_timer(cif_dev);
 #if (USE_DEVICE_NODE == 1)
-		BTMTK_INFO("%s success", __func__);
+		BTMTK_INFO("%s success (atomic)", __func__);
 #else
 		BTMTK_DBG("%s success", __func__);
 #endif

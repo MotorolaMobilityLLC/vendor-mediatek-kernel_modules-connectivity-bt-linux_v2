@@ -981,7 +981,7 @@ struct btmtk_dev {
 
 	char event_need_compare[EVENT_COMPARE_SIZE];
 	char event_need_compare_len;
-	char event_compare_status;
+	atomic_t event_compare_status;
 
 	struct btmtk_main_info main_info;
 
