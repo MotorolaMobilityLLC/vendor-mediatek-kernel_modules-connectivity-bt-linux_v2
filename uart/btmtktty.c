@@ -3134,7 +3134,9 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 #if IS_ENABLED(CONFIG_MTK_UARTHUB)
 				if (cif_dev->sleep_flow_hw_mech_en) {
 					int retry_cnt = 1000;
+					struct bt_utc_struct record_set_host_awake_time, record_ff_time, record_start_query_time;
 
+					btmtk_getUTCtime(&record_set_host_awake_time);
 					/* new wakeup flow */
 					/* 3. Set DEVx_HOST_AWAKE = 1 */
 					/* 4. Tx 0xFF, if DEVx_BT_AWAKE = 0 */
@@ -3143,20 +3145,25 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 					BTMTK_DBG("%s: Set DEVx_HOST_AWAKE = 1, ret = %d ", __func__, ret);
 
 					if (mtk8250_uart_hub_get_host_bt_awake_sta(0) == 0) {
-						BTMTK_INFO("%s: host_bt_awake_sta = 0, send 0xFF ", __func__);
+						btmtk_getUTCtime(&record_ff_time);
+						BTMTK_DBG("%s: host_bt_awake_sta = 0, send 0xFF ", __func__);
 						ret = btmtk_main_send_cmd(bdev, wakeup_cmd, DRVOWN_CMD_LEN, NULL, 0,
 										DELAY_TIMES, SEND_RETRY_ONE_TIMES_500MS, BTMTK_TX_PKT_SEND_DIRECT_NO_ASSERT, CMD_NO_NEED_FILTER);
 						/* make sure 0xff is sent */
 						btmtk_uart_wait_tty_buffer_clean(bdev, FALSE);
 					}
-
+					btmtk_getUTCtime(&record_start_query_time);
 					while (mtk8250_uart_hub_get_cmm_bt_awake_sta() == 0 && mtk8250_uart_hub_get_host_bt_awake_sta(0) == 0 && retry_cnt) {
 						/* If CMM_BT_AWAKE = 1 or DEVx_BT_AWAKE = 1 leave while */
 						retry_cnt--;
 						usleep_range(1000, 1100);
 					}
-					BTMTK_INFO("%s: CMM_BT_AWAKE[%d], DEV0_BT_AWAKE[%d], retry_cnt[%d]", __func__,
-							mtk8250_uart_hub_get_cmm_bt_awake_sta(), mtk8250_uart_hub_get_host_bt_awake_sta(0), retry_cnt);
+					BTMTK_INFO("%s: CMM_BT_AWAKE[%d], DEV0_BT_AWAKE[%d], retry_cnt[%d], set_host_awake_time[%6lu.%06lu], "
+							"send_ff_time[%6lu.%06lu], start_query_time[%6lu.%06lu]",
+							__func__, mtk8250_uart_hub_get_cmm_bt_awake_sta(), mtk8250_uart_hub_get_host_bt_awake_sta(0),
+							retry_cnt, record_set_host_awake_time.ksec, record_set_host_awake_time.knsec,
+							record_ff_time.ksec, record_ff_time.knsec,
+							record_start_query_time.ksec, record_start_query_time.knsec);
 
 					if (mtk8250_uart_hub_get_cmm_bt_awake_sta() == 0 && mtk8250_uart_hub_get_host_bt_awake_sta(0) == 0 && !retry_cnt) {
 						BTMTK_ERR("%s: Query BT_AWAKE failed, fw_awake = %d", __func__, atomic_read(&cif_dev->fw_wake));
