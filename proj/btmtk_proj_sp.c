@@ -2585,10 +2585,8 @@ int btmtk_uart_launcher_deinit(void)
 
 	if (g_sbdev != NULL) {
 		ret = bt_close(g_sbdev->hdev);
-		if (ret) {
+		if (ret)
 			BTMTK_ERR("%s: BT turn off fail!", __func__);
-			return ret;
-		}
 
 		cif_dev = (struct btmtk_uart_dev *)g_sbdev->cif_dev;
 		if (cif_dev && cif_dev->tty && cif_dev->tty->port && cif_dev->tty->port->count == 0)
@@ -2596,7 +2594,7 @@ int btmtk_uart_launcher_deinit(void)
 	}
 	/* set disconnect to avoid android BT open/close driver */
 	btmtk_set_chip_state(g_sbdev, BTMTK_STATE_DISCONNECT);
-	BTMTK_INFO("%s: BT turn off OK", __func__);
+	BTMTK_INFO("%s: done", __func__);
 
 	return 0;
 }

@@ -4883,7 +4883,9 @@ int bt_close(struct hci_dev *hdev)
 		fstate = btmtk_fops_get_state(bdev);
 		if (fstate != BTMTK_FOPS_STATE_OPENED) {
 			BTMTK_WARN_DEV(bdev, "%s: fops is not allow close(%d)", __func__, fstate);
-			goto unlock;
+			if (bdev->main_info.hif_hook.cif_mutex_unlock)
+				bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
+			return -1;
 		}
 
 		btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSING);
