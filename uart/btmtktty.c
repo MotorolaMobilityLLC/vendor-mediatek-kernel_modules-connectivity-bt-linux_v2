@@ -3058,6 +3058,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 	struct btmtk_uart_dev *cif_dev = NULL;
 	u8 fw_own_clr_cmd[] = { 0x01, 0x6F, 0xFC, 0x06, 0x01, 0x03, 0x02, 0x00, 0x03, 0x01 };
 	u8 evt[] = { 0x04, 0xE4, 0x07, 0x02, 0x03, 0x03, 0x00, 0x00, 0x03, 0x01 };
+	unsigned long start_time = jiffies;
 
 	if (bdev == NULL) {
 		BTMTK_ERR("%s: bdev is NULL", __func__);
@@ -3229,7 +3230,8 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		atomic_set(&cif_dev->own_state, BTMTK_DRV_OWN);
 		btmtk_uart_update_fw_own_timer(cif_dev);
 #if (USE_DEVICE_NODE == 1)
-		BTMTK_INFO("%s success (atomic)", __func__);
+		if (time_after(jiffies, start_time + msecs_to_jiffies(30)))
+			BTMTK_INFO("%s success, cost %u ms", __func__, jiffies_to_msecs(jiffies - start_time));
 #else
 		BTMTK_DBG("%s success", __func__);
 #endif

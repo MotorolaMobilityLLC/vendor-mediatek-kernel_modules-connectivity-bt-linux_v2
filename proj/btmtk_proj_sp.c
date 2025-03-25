@@ -166,7 +166,8 @@ void btmtk_uarthub_err_cb(unsigned int err_type)
 }
 
 int btmtk_wakeup_uarthub(void) {
-	int ready_retry = 50, ret = 0;
+	#define BTMTK_WAKEUP_UARTHUB_CNT	50
+	int ready_retry = BTMTK_WAKEUP_UARTHUB_CNT, ret = 0;
 	struct btmtk_uart_dev *cif_dev = NULL;
 
 	if (!g_sbdev) {
@@ -190,7 +191,8 @@ int btmtk_wakeup_uarthub(void) {
 
 	/* Polling UARTHUB is ready state */
 	while (mtk8250_uart_hub_is_ready() <= 0 && --ready_retry) {
-		BTMTK_WARN("%s ready_retry[%d]", __func__, ready_retry);
+		if (ready_retry < BTMTK_WAKEUP_UARTHUB_CNT - 3)
+			BTMTK_WARN("%s ready_retry[%d]", __func__, ready_retry);
 		usleep_range(1000, 1100);
 	}
 
