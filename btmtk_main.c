@@ -6101,6 +6101,8 @@ int btmtk_main_cif_disconnect_notify(struct btmtk_dev *bdev, int hci_bus)
 	if (bdev->main_info.hif_hook.coredump_handler) {
 		BTMTK_INFO_DEV(bdev, "%s: deinit coredump handle", __func__);
 		connv3_coredump_deinit(bdev->main_info.hif_hook.coredump_handler);
+		/* avoid connv3_coredump_* API using old ptr trigger exception */
+		bdev->main_info.hif_hook.coredump_handler = NULL;
 	}
 #endif
 
