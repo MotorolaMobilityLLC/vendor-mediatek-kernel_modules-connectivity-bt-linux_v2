@@ -232,66 +232,60 @@ extern uint8_t btmtk_log_lvl;
 
 #define BTMTK_INFO_RAW(bdev, p, l, fmt, ...)						\
 	do {	\
-		unsigned long flags = 0; \
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_INFO) {	\
 			int cnt_ = 0;	\
 			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
 			const unsigned char *ptr = p;	\
-			spin_lock_irqsave(&bdev->main_info.snoop_lock, flags); \
+			uint8_t _raw_buf_[HCI_SNOOP_MAX_BUF_SIZE * 3 + 3];	\
 			for (cnt_ = 0; cnt_ < len_; ++cnt_)	\
-				(void)snprintf(bdev->main_info._raw_buf_+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
-			bdev->main_info._raw_buf_[3*cnt_] = '\0';	\
+				(void)snprintf(_raw_buf_+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
+			_raw_buf_[3*cnt_] = '\0';	\
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
 				PR_CONT("[btmtk_info][%u][%s] "fmt"%s\n", \
-						bdev->dongle_index, bdev->hdev?bdev->hdev->name:"hciX", ##__VA_ARGS__, bdev->main_info._raw_buf_);	\
+						bdev->dongle_index, bdev->hdev?bdev->hdev->name:"hciX", ##__VA_ARGS__, _raw_buf_);	\
 			} else {	\
 				PR_CONT("[btmtk_info][%u][%s] "fmt"%s (prtail)\n", \
-						bdev->dongle_index, bdev->hdev?bdev->hdev->name:"hciX", ##__VA_ARGS__, bdev->main_info._raw_buf_);	\
+						bdev->dongle_index, bdev->hdev?bdev->hdev->name:"hciX", ##__VA_ARGS__, _raw_buf_);	\
 			}	\
-			spin_unlock_irqrestore(&bdev->main_info.snoop_lock, flags); \
 		}	\
 	} while (0)
 
 #define BTMTK_DBG_RAW(bdev, p, l, fmt, ...)						\
 	do {	\
-		unsigned long flags = 0; \
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {	\
 			int cnt_ = 0;	\
 			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
 			const unsigned char *ptr = p;	\
-			spin_lock_irqsave(&bdev->main_info.snoop_lock, flags); \
+			uint8_t _raw_buf_[HCI_SNOOP_MAX_BUF_SIZE * 3 + 3];	\
 			for (cnt_ = 0; cnt_ < len_; ++cnt_) \
-				(void)snprintf(bdev->main_info._raw_buf_+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
-			bdev->main_info._raw_buf_[3*cnt_] = '\0'; \
+				(void)snprintf(_raw_buf_+3*cnt_, 4, "%02X ", ptr[cnt_]);	\
+			_raw_buf_[3*cnt_] = '\0'; \
 			if (l <= HCI_SNOOP_MAX_BUF_SIZE) {	\
 				PR_CONT("[btmtk_debug][%u][%s] "fmt"%s\n", \
-						bdev->dongle_index, bdev->hdev?bdev->hdev->name:"hciX", ##__VA_ARGS__, bdev->main_info._raw_buf_);	\
+						bdev->dongle_index, bdev->hdev?bdev->hdev->name:"hciX", ##__VA_ARGS__, _raw_buf_);	\
 			} else {	\
 				PR_CONT("[btmtk_debug][%u][%s] "fmt"%s (prtail)\n", \
-						bdev->dongle_index, bdev->hdev?bdev->hdev->name:"hciX", ##__VA_ARGS__, bdev->main_info._raw_buf_); \
+						bdev->dongle_index, bdev->hdev?bdev->hdev->name:"hciX", ##__VA_ARGS__, _raw_buf_); \
 			}	\
-			spin_unlock_irqrestore(&bdev->main_info.snoop_lock, flags); \
 		}	\
 	} while (0)
 
 #define BTMTK_DBG_RAW_ALL(bdev, p, l, fmt, ...)				\
 	do {	\
-		unsigned long flags = 0; \
 		if (btmtk_log_lvl >= BTMTK_LOG_LVL_DBG) {	\
 			int cnt_ = 0;	\
 			int pos = 0;	\
 			int len_ = (l <= HCI_SNOOP_MAX_BUF_SIZE ? l : HCI_SNOOP_MAX_BUF_SIZE);	\
 			const unsigned char *ptr = p;	\
-			spin_lock_irqsave(&bdev->main_info.snoop_lock, flags); \
+			uint8_t _raw_buf_[HCI_SNOOP_MAX_BUF_SIZE * 3 + 3];	\
 			for (pos = 0; pos < l; ) {	\
 				for (cnt_ = 0; cnt_ < len_ && pos < l; ++cnt_, ++pos) { \
-					(void)snprintf(bdev->main_info._raw_buf_+3*cnt_, 4, "%02X ", ptr[pos]);	\
+					(void)snprintf(_raw_buf_+3*cnt_, 4, "%02X ", ptr[pos]);	\
 				}	\
-				bdev->main_info._raw_buf_[3*cnt_] = '\0'; \
+				_raw_buf_[3*cnt_] = '\0'; \
 				PR_CONT("[btmtk_debug][%u][%s][cur_pos:%d] "fmt"%s\n", \
-						bdev->dongle_index, bdev->hdev?bdev->hdev->name:"hciX", (int)pos, ##__VA_ARGS__, bdev->main_info._raw_buf_);\
+						bdev->dongle_index, bdev->hdev?bdev->hdev->name:"hciX", (int)pos, ##__VA_ARGS__, _raw_buf_);\
 			}	\
-			spin_unlock_irqrestore(&bdev->main_info.snoop_lock, flags); \
 		}	\
 	} while (0)
 
