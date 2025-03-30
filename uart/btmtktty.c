@@ -1806,8 +1806,12 @@ static int btmtk_uart_tx_thread(void *data)
 	atomic_set(&cif_dev->thread_status, 1);
 
 	while (1) {
-		wait_event_interruptible(tx_wait_q,
-			(thread_flag = btmtk_thread_wait_for_msg(bdev)));
+		int ret = wait_event_interruptible(tx_wait_q,
+				  (thread_flag = btmtk_thread_wait_for_msg(bdev)));
+		if (ret) {
+			BTMTK_WARN("%s: wait_event_interruptible was interrupted, ret = %d", __func__, ret);
+			break;
+		}
 
 		if (thread_flag & BTMTK_THREAD_STOP) {
 			BTMTK_WARN("%s: thread is stopped, break", __func__);
@@ -2472,7 +2476,8 @@ static void btmtk_uart_tty_receive(struct tty_struct *tty, const u8 *data, const
 	if (cif_dev->own_state == BTMTK_FW_OWN &&
 	    !atomic_read(&cif_dev->fw_wake) &&
 	    data != NULL && count > 0 && data[0] != 0xFF && cif_dev->sleep_en) {
-		unsigned int index = 0, _count = count;
+		unsigned int index = 0;
+		size_t _count = count;
 		u8 *buf = (u8 *)data;
 
 		BTMTK_INFO_RAW(data, count, "%s: recv none 0xFF as first byte in FW own state", __func__);
@@ -3400,11 +3405,12 @@ int btmtk_met_log_handler(struct btmtk_dev *bdev, u8 *buf, u32 size)
 
 	for (i = 0; i <= size - single_data_len; i += single_data_len) {
 		if (single_data_len == 4)
-			len = snprintf(raw_buf, MET_LOG_MAX_BUF_SIZE, "%s%02X%02X%02X%02X,",
-					raw_buf, buf[i+3], buf[i+2], buf[i+1], buf[i]);
+			len = snprintf(raw_buf + strlen(raw_buf), MET_LOG_MAX_BUF_SIZE - strlen(raw_buf),
+				          "%02X%02X%02X%02X,", buf[i+3], buf[i+2], buf[i+1], buf[i]);
 		else if (single_data_len == 8)
-			len = snprintf(raw_buf, MET_LOG_MAX_BUF_SIZE, "%s%02X%02X%02X%02X%02X%02X%02X%02X,",
-					raw_buf, buf[i+7], buf[i+6], buf[i+5], buf[i+4],
+			len = snprintf(raw_buf + strlen(raw_buf), MET_LOG_MAX_BUF_SIZE - strlen(raw_buf),
+						  "%02X%02X%02X%02X%02X%02X%02X%02X,",
+						     buf[i+7], buf[i+6], buf[i+5], buf[i+4],
 					         buf[i+3], buf[i+2], buf[i+1], buf[i]);
 		if (len <= 0) {
 			BTMTK_ERR("%s: snprintf error len = %d", __func__, len);
