@@ -2997,7 +2997,8 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 			if (cif_dev->hub_en)
 				btmtk_wakeup_uarthub();
 #endif
-			BTMTK_WARN("%s fw not allow sleep or receive drv own evt, keep drv own, cmd[9] = 0x%02x, evt[7] = %d, evt[8] = %d", __func__, cmd[9], evt[7], evt[8]);
+			BTMTK_WARN("%s fw not allow sleep or receive drv own evt, keep drv own, cmd[9] = 0x%02x, evt[7] = %d, evt[8] = %d",
+						__func__, cmd[9], bdev->io_buf[7], bdev->io_buf[8]);
 			atomic_set(&cif_dev->own_state, BTMTK_DRV_OWN);
 			btmtk_uart_update_fw_own_timer(cif_dev);
 			goto unlock;

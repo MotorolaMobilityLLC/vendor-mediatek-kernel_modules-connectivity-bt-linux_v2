@@ -69,6 +69,12 @@ static struct tasar_country g_rTasarCountryTbl_reg8[] = {
 static struct tasar_country g_rTasarCountryTbl_reg9[] = {
 	{{'B', 'E'}}
 };
+static struct tasar_country g_rTasarCountryTbl_reg10[] = {
+	{{'B', 'E'}}
+};
+static struct tasar_country g_rTasarCountryTbl_reg11[] = {
+	{{'B', 'E'}}
+};
 
 static struct tasar_country_tbl_all g_rTasarCountryTbl[] =
 {
@@ -81,7 +87,9 @@ static struct tasar_country_tbl_all g_rTasarCountryTbl[] =
 	REG_TBL_REG(g_rTasarCountryTbl_reg6, "REG6_ConnsysTasar.cfg"),
 	REG_TBL_REG(g_rTasarCountryTbl_reg7, "REG7_ConnsysTasar.cfg"),
 	REG_TBL_REG(g_rTasarCountryTbl_reg8, "REG8_ConnsysTasar.cfg"),
-	REG_TBL_REG(g_rTasarCountryTbl_reg9, "REG9_ConnsysTasar.cfg")
+	REG_TBL_REG(g_rTasarCountryTbl_reg9, "REG9_ConnsysTasar.cfg"),
+	REG_TBL_REG(g_rTasarCountryTbl_reg10, "REG10_ConnsysTasar.cfg"),
+	REG_TBL_REG(g_rTasarCountryTbl_reg11, "REG11_ConnsysTasar.cfg")
 };
 
 /******************************************************************************
