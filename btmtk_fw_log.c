@@ -656,6 +656,10 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 
 		ptr = strstr(cmd, "whole chip reset");
 		if (ptr != NULL) {
+			if (btmtk_fops_get_state(bdev) != BTMTK_FOPS_STATE_OPENED) {
+				BTMTK_INFO_DEV(bdev, "%s: bt is not opened, skip FW_LOG_BT trigger whole chip reset", __func__);
+				continue;
+			}
 			BTMTK_INFO_DEV(bdev, " %s whole chip reset start", bdev->hdev->name);
 			if (bdev->assert_reason[0] == '\0') {
 				memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
@@ -668,6 +672,11 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 
 		ptr = strstr(cmd, "subsys chip reset");
 		if (ptr != NULL) {
+			if (btmtk_fops_get_state(bdev) != BTMTK_FOPS_STATE_OPENED) {
+				BTMTK_INFO_DEV(bdev, "%s: bt is not opened, skip FW_LOG_BT trigger subsys chip reset", __func__);
+				continue;
+			}
+
 			BTMTK_INFO_DEV(bdev, " %s subsys chip reset start", bdev->hdev->name);
 			if (bdev->assert_reason[0] == '\0') {
 				memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
@@ -712,6 +721,11 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 
 		ptr = strstr(cmd, "direct trigger whole chip reset");
 		if (ptr != NULL) {
+			if (btmtk_fops_get_state(bdev) != BTMTK_FOPS_STATE_OPENED) {
+				BTMTK_INFO_DEV(bdev, "%s: bt is not opened, skip direct trigger whole chip reset", __func__);
+				continue;
+			}
+
 			BTMTK_INFO_DEV(bdev, "direct trigger whole chip reset");
 			if (bdev->assert_reason[0] == '\0') {
 				memset(bdev->assert_reason, 0, ASSERT_REASON_SIZE);
