@@ -1772,7 +1772,9 @@ static int btmtk_uart_wait_tty_buffer_clean(struct btmtk_dev *bdev, bool do_flus
 			cif_dev->tty->flow.stopped = false;
 #else
 			cif_dev->tty->stopped = true;
+			mtk8250_set_flush_flag(cif_dev->tty, true);
 			tty_driver_flush_buffer(cif_dev->tty);
+			mtk8250_set_flush_flag(cif_dev->tty, false);
 			cif_dev->tty->stopped = false;
 #endif
 		}
@@ -2410,11 +2412,12 @@ static int btmtk_uart_tty_probe(struct tty_struct *tty)
 	cif_dev->stp_cursor = 2;
 	cif_dev->stp_dlen = 0;
 
+	mtk8250_set_flush_flag(tty, true);
 	/* definition changed!! */
 	if (tty->ldisc->ops->flush_buffer)
 		tty->ldisc->ops->flush_buffer(tty);
-
 	tty_driver_flush_buffer(tty);
+	mtk8250_set_flush_flag(tty, false);
 
 	BTMTK_DBG("%s: tty done %p", __func__, tty);
 

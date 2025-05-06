@@ -103,6 +103,7 @@ extern int mtk8250_uart_hub_get_host_bt_awake_sta(int dev_index);
 extern int mtk8250_uart_hub_get_cmm_bt_awake_sta(void);
 extern int mtk8250_uart_hub_get_bt_awake_sta(void);
 extern int mtk8250_uart_hub_bt_on_count_inc(void);
+extern void mtk8250_set_flush_flag(struct tty_struct *tty, bool status);
 int btmtk_wakeup_uarthub(void);
 void btmtk_release_uarthub(bool force);
 #endif

@@ -570,12 +570,14 @@ int btmtk_sp_close(void)
 		BTMTK_INFO("%s: tty flush, tty_chars_in_buffer[%d]", __func__, tty_chars_in_buffer(cif_dev->tty));
 		/* stop uart auto send next pkt to avoid flush conflict with send pkt */
 		cif_dev->tty->flow.stopped = true;
+		mtk8250_set_flush_flag(cif_dev->tty, true);
 		tty_driver_flush_buffer(cif_dev->tty);
+		mtk8250_set_flush_flag(cif_dev->tty, false);
 		cif_dev->tty->flow.stopped = false;
-		up(&cif_dev->tty_flush_sem);
 
 		BTMTK_INFO("%s: tty close, tty_chars_in_buffer[%d]", __func__, tty_chars_in_buffer(cif_dev->tty));
 		cif_dev->tty->ops->close(cif_dev->tty, NULL);
+		up(&cif_dev->tty_flush_sem);
 	}
 
 	cif_dev->is_pre_on_done = FALSE;
