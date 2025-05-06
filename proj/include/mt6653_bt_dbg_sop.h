@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (c) 2023 MediaTek Inc.
+ * Copyright (c) 2025 MediaTek Inc.
  */
 
 #include "bt_hw_dbg.h"
 
-#define MT6653_BT_DEBUGSOP_DUMP_VERSION "20240216"
+#define MT6653_BT_DEBUGSOP_DUMP_VERSION "20250417"
 
 const struct bt_dbg_command mt6653_bg_top_hostcsr_a[] = {
 	/* write, w_addr, mask, value, read, r_addr*/
@@ -147,33 +147,35 @@ const struct bt_dbg_command mt6653_bg_top_apb_a[] = {
 	{false, 0, 0, 0, true, 0x7c812400},
 	{false, 0, 0, 0, true, 0x7c825230},
 	{false, 0, 0, 0, true, 0x7c82523c},
+	{false, 0, 0, 0, true, 0x7c827068},
+	{false, 0, 0, 0, true, 0x7c860534},
 };
 
 const struct bt_dump_list mt6653_dump_list_bg_top_apb_a = {
 	"PSOP_5_2_A", "SectionA - [BG TOP APB] bg_bt_top_misc_vlp_reg, bg_bt_cfg_on_reg, bg_bt_rgu_on_reg, bg_bt_cfg_reg",
-	40, sizeof(mt6653_bg_top_apb_a)/sizeof(struct bt_dbg_command),
+	44, sizeof(mt6653_bg_top_apb_a)/sizeof(struct bt_dbg_command),
 	mt6653_bg_top_apb_a
 };
 
 const struct bt_dbg_command mt6653_bt_mcu_bus_timeout_hostcsr_a[] = {
 	/* write, w_addr, mask, value, read, r_addr*/
-	{true, 0x20023a0c, 0, 0xc0041f00, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f01, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f02, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f03, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f04, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f05, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f06, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f07, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f08, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f09, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f0a, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f0b, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f0c, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f0d, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f0e, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f0f, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041f10, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0042000, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0042001, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0042002, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0042003, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0042004, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0042005, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0042006, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0042007, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0042008, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0042009, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc004200a, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc004200b, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc004200c, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc004200d, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc004200e, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc004200f, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0042010, true, 0x20023a10},
 };
 
 const struct bt_dump_list mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_a = {
@@ -203,22 +205,22 @@ const struct bt_dump_list mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_b = {
 
 const struct bt_dbg_command mt6653_bt_mcu_bus_timeout_hostcsr_c[] = {
 	/* write, w_addr, mask, value, read, r_addr*/
-	{true, 0x20023a0c, 0, 0xc0041b00, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b01, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b02, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b03, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b04, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b05, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b06, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b07, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b08, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b09, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b0a, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b0b, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b0c, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b0d, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b0e, true, 0x20023a10},
-	{true, 0x20023a0c, 0, 0xc0041b0f, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c00, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c01, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c02, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c03, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c04, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c05, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c06, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c07, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c08, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c09, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c0a, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c0b, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c0c, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c0d, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c0e, true, 0x20023a10},
+	{true, 0x20023a0c, 0, 0xc0041c0f, true, 0x20023a10},
 };
 
 const struct bt_dump_list mt6653_dump_list_bt_mcu_bus_timeout_hostcsr_c = {
