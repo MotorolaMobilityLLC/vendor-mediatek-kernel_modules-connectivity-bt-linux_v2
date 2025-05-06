@@ -5247,16 +5247,20 @@ failed:
 	/* add mutext avoid racing confition with uart_launcher deinit flow */
 	if (bdev->main_info.hif_hook.cif_mutex_lock)
 		bdev->main_info.hif_hook.cif_mutex_lock(bdev);
-	if (ret != CONNV3_ERR_RST_ONGOING)
+	state = btmtk_get_chip_state(bdev);
+
+	if (ret != CONNV3_ERR_RST_ONGOING && state != BTMTK_STATE_DISCONNECT)
 		bdev->main_info.hif_hook.close(hdev);
 	else {
-		BTMTK_WARN_DEV(bdev, "%s: whole chip reset going, not do close when bt on fail", __func__);
+		BTMTK_WARN_DEV(bdev, "%s: whole chip reset going or already disconnected, not do close when bt on fail", __func__);
 		ret = -EAGAIN;
 	}
-	state = btmtk_get_chip_state(bdev);
 	/* if state is disconnect means uart_launcher is disconnected, not set to close state */
 	if (state != BTMTK_STATE_DISCONNECT)
 		btmtk_set_chip_state(bdev, BTMTK_STATE_CLOSED);
+
+	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
+
 	if (bdev->main_info.hif_hook.cif_mutex_unlock)
 		bdev->main_info.hif_hook.cif_mutex_unlock(bdev);
 
@@ -5274,7 +5278,6 @@ failed:
 	usb_autopm_put_interface(cif_dev->intf);
 #endif
 
-	btmtk_fops_set_state(bdev, BTMTK_FOPS_STATE_CLOSED);
 	bdev->main_info.reset_stack_flag = HW_ERR_NONE;
 
 	return ret;
