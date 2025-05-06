@@ -249,6 +249,32 @@ void btmtk_get_UTC_time_str(char *ts_str)
 #endif
 }
 
+#define FW_WAKEUP_DUMP_SIZE	20
+#define FW_WAKEUP_STR_SIZE	20
+void btmtk_dump_fw_wakeup_time(void)
+{
+	static char dump_buffer[FW_WAKEUP_DUMP_SIZE * FW_WAKEUP_STR_SIZE] = {0};
+	static int count = 0;
+	char temp_buffer[FW_WAKEUP_STR_SIZE] = {0};
+	unsigned long long kerneltime = sched_clock();
+	unsigned long ksec = kerneltime/1000000000;
+	unsigned long knsec = do_div(kerneltime, 1000000000)/1000;
+
+	if (snprintf(temp_buffer, FW_WAKEUP_STR_SIZE, "[%6lu.%06lu] ", ksec, knsec) < 0) {
+		BTMTK_WARN("%s: snprintf fail, skip [%6lu.%06lu]", __func__, ksec, knsec);
+		return;
+	}
+	strncat(dump_buffer, temp_buffer, FW_WAKEUP_STR_SIZE);
+	count++;
+
+	/* dump record time and reset */
+	if (count == FW_WAKEUP_DUMP_SIZE) {
+		BTMTK_INFO("%s: %s", __func__, dump_buffer);
+		count = 0;
+		memset(dump_buffer, 0, FW_WAKEUP_DUMP_SIZE * FW_WAKEUP_STR_SIZE);
+	}
+}
+
 /*get 1 byte only*/
 int btmtk_efuse_read(struct btmtk_dev *bdev, u16 addr, u8 *value)
 {
@@ -1193,8 +1219,7 @@ static inline struct sk_buff *btmtk_parse_buf(struct hci_dev *hdev,
 #else
 					if (*buf == 0xFF && bdev->main_info.hif_hook.wakeup_host) {
 						/* 0xFF may follow fw own event, so need to do driver own */
-						BTMTK_INFO_DEV(bdev, "%s: get 0x%02X pkt, add driver own",
-								__func__, *buf);
+						btmtk_dump_fw_wakeup_time();
 						bdev->main_info.hif_hook.wakeup_host(bdev);
 						return NULL;
 					}

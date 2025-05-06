@@ -395,7 +395,7 @@ int btmtk_uart_event_filter(struct btmtk_dev *bdev, struct sk_buff *skb)
 			atomic_set(&event_compare_status, BTMTK_EVENT_COMPARE_STATE_COMPARE_SUCCESS);
 			BTMTK_DBG("%s, compare success", __func__);
 		} else {
-			BTMTK_INFO("%s compare fail", __func__);
+			BTMTK_DBG("%s compare fail", __func__);
 			BTMTK_INFO_RAW(bdev, event_need_compare, event_need_compare_len,
 				"%s: event_need_compare_len[%d]", __func__, event_need_compare_len);
 			BTMTK_INFO_RAW(bdev, skb->data, skb->len, "%s: skb->data:", __func__);
