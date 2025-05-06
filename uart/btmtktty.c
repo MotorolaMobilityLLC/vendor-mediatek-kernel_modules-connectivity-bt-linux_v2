@@ -3231,7 +3231,7 @@ static int btmtk_uart_driver_own(struct btmtk_dev *bdev)
 		atomic_set(&cif_dev->own_state, BTMTK_DRV_OWN);
 		btmtk_uart_update_fw_own_timer(cif_dev);
 #if (USE_DEVICE_NODE == 1)
-		if (time_after(jiffies, start_time + msecs_to_jiffies(30)))
+		if (time_after(jiffies, start_time + msecs_to_jiffies(40)))
 			BTMTK_INFO("%s success, cost %u ms", __func__, jiffies_to_msecs(jiffies - start_time));
 #else
 		BTMTK_DBG("%s success", __func__);

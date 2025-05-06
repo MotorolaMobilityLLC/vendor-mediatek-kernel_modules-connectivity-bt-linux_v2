@@ -2160,7 +2160,7 @@ static int btmtk_send_wmt_download_cmd(struct btmtk_dev *bdev, u8 *cmd,
 		} else
 			memcpy(&cmd[PATCH_HEADER_SIZE], (u8 *)(sectionMap->u4SecSpec), SEC_MAP_NEED_SEND_SIZE);
 
-		BTMTK_INFO_RAW(bdev, cmd, cmd_len, "%s: CMD: len[%d]", __func__, cmd_len);
+		BTMTK_DBG_RAW(bdev, cmd, cmd_len, "%s: CMD: len[%d]", __func__, cmd_len);
 
 		ret = btmtk_main_send_cmd(bdev, cmd, cmd_len,
 				event, event_len, DELAY_TIMES, RETRY_TIMES, BTMTK_TX_CMD_FROM_DRV, CMD_NO_NEED_FILTER);
@@ -2346,7 +2346,7 @@ static int btmtk_parsing_fw_rom_patch(struct btmtk_dev *bdev,
 		section_num = be2cpu32(globalDescr->u4SectionNum);
 	else
 		section_num = globalDescr->u4SectionNum;
-	BTMTK_INFO_DEV(bdev, "%s: section_num = 0x%08x", __func__, section_num);
+	BTMTK_DBG_DEV(bdev, "%s: section_num = 0x%08x", __func__, section_num);
 
 	if (section_num > SECTION_NUM_MAX) {
 		BTMTK_ERR_DEV(bdev, "%s: section_num 0x%08x is an error value", __func__, section_num);
@@ -2394,7 +2394,7 @@ static int btmtk_parsing_fw_rom_patch(struct btmtk_dev *bdev,
 			bin_type = sectionMap->bin_info_spec.u4SecType;
 		}
 
-		BTMTK_INFO_DEV(bdev, "%s: loop_count = %d, section_offset = 0x%08x, download patch_len = 0x%08x, "
+		BTMTK_DBG_DEV(bdev, "%s: loop_count = %d, section_offset = 0x%08x, download patch_len = 0x%08x, "
 				"dl mode = %d, section bin_type = 0x%08x, bin_index =%d",
 				__func__, loop_count, section_offset, dl_size, dma_flag, bin_type, bin_index);
 		memcpy(&bdev->sectionMap_table[loop_count], sectionMap, sizeof(struct _Section_Map));
@@ -4053,7 +4053,7 @@ __attribute__((unused)) static int btmtk_send_vendor_cfg(struct btmtk_dev *bdev)
 	u16 index = 0;
 	struct data_struct event = {0};
 
-	BTMTK_INFO_DEV(bdev, "%s enter", __func__);
+	BTMTK_DBG_DEV(bdev, "%s enter", __func__);
 
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, VENDOR_EVT, event);
 
@@ -4097,7 +4097,7 @@ static int btmtk_send_phase1_wmt_cfg(struct btmtk_dev *bdev)
 	u16 index = 0;
 	struct data_struct event = {0};
 
-	BTMTK_INFO_DEV(bdev, "%s enter", __func__);
+	BTMTK_DBG_DEV(bdev, "%s enter", __func__);
 
 	BTMTK_GET_CMD_OR_EVENT_DATA(bdev, PHASE1_WMT_EVT, event);
 

@@ -591,7 +591,7 @@ int btmtk_send_cmd_to_fw(struct btmtk_dev *bdev,
 	if (ret < 0)
 		BTMTK_ERR_DEV(bdev, "%s: failed, type is %d", __func__, cmd_type);
 
-	BTMTK_INFO_DEV(bdev, "%s: end. ret = %d", __func__, ret);
+	BTMTK_DBG_DEV(bdev, "%s: end. ret = %d", __func__, ret);
 	return ret;
 }
 

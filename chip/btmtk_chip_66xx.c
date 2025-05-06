@@ -10,7 +10,7 @@ static int btmtk_load_fw_patch(struct btmtk_dev *bdev)
 {
 	int err = 0;
 
-	BTMTK_INFO_DEV(bdev, "%s: enter", __func__);
+	BTMTK_DBG_DEV(bdev, "%s: enter", __func__);
 
 	err = btmtk_load_rom_patch_connac3(bdev, BT_DOWNLOAD);
 	if (err < 0) {
