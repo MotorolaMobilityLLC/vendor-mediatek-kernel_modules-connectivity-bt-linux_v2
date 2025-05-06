@@ -596,9 +596,14 @@ static int BT_open(struct inode *inode, struct file *file)
 	}
 
 	if (BT_open_count > 0) {
-		BTMTK_INFO("Driver already openned, reuse openned driver as tunnel");
-		BT_open_count++;
-		return 0;
+		if (btmtk_fops_get_state(g_sbdev) == BTMTK_FOPS_STATE_OPENED) {
+			BTMTK_INFO("Driver already openned, reuse openned driver as tunnel");
+			BT_open_count++;
+			return 0;
+		} else {
+			BTMTK_INFO("Driver not openned, not ready for finder, return fail");
+			return -1;
+		}
 	}
 
 	__pm_stay_awake(bt_wakelock);
