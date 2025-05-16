@@ -5355,6 +5355,9 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		return -ENODEV;
 	}
 
+	/* for disable fw sleep event */
+	atomic_set(&bdev->have_host_tx, 1);
+
 #if BTMTK_RUNTIME_ENABLE
 	cif_dev = (struct btmtk_usb_dev *)bdev->cif_dev;
 	if (cif_dev) {
@@ -5408,6 +5411,7 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		ret = -ENOMEM;
 		goto exit;
 	}
+
 	memcpy(skb_tmp, &hci_skb_pkt_type(skb), 1);
 #if ENABLESTP
 	skb = btmtk_add_stp(bdev, skb);
@@ -5443,6 +5447,8 @@ int bt_send_frame(struct hci_dev *hdev, struct sk_buff *skb)
 		BTMTK_INFO_DEV(bdev, "%s not register bt_tx_frame_handler", __func__);
 
 	BTMTK_DBG_RAW(bdev, skb->data, skb->len, "%s, send, len = %d ", __func__, skb->len);
+	/* for disable fw sleep event */
+	atomic_set(&bdev->have_host_tx, 1);
 	ret = bdev->main_info.hif_hook.send_cmd(bdev, skb, 0, 0, (int)BTMTK_TX_PKT_FROM_HOST, CMD_NO_NEED_FILTER);
 	if (ret < 0) {
 		BTMTK_ERR_DEV(bdev, "%s failed!!", __func__);

@@ -108,7 +108,8 @@ static void btmtk_uart_update_fw_own_timer(struct btmtk_uart_dev *cif_dev)
 	if (atomic_read(&cif_dev->fw_own_timer_flag)) {
 		BTMTK_DBG_LIMITTED("update fw own timer");
 		atomic_set(&cif_dev->fw_own_timer_flag, FW_OWN_TIMER_INIT);
-		if (atomic_read(&g_sbdev->receive_sleep_event))
+		/* check only rx case or have host tx */
+		if (atomic_read(&g_sbdev->receive_sleep_event) && !atomic_read(&g_sbdev->have_host_tx))
 			mod_timer(&cif_dev->fw_own_timer, jiffies + msecs_to_jiffies(0));
 		else
 			mod_timer(&cif_dev->fw_own_timer, jiffies + msecs_to_jiffies(FW_OWN_TIMEOUT));
@@ -471,7 +472,8 @@ int btmtk_uart_send_and_recv(struct btmtk_dev *bdev,
 			atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_RUNNING ||
 			atomic_read(&cif_dev->fw_own_timer_flag) == FW_OWN_TIMER_DONE)) {
 
-			BTMTK_WARN("%s: wait driver own retry, own_state[%d]", __func__, atomic_read(&cif_dev->own_state));
+			BTMTK_WARN("%s: wait driver own retry, own_state[%d], fw_own_timer_flag[%d]", __func__,
+				atomic_read(&cif_dev->own_state), atomic_read(&cif_dev->fw_own_timer_flag));
 			atomic_set(&event_compare_status, BTMTK_EVENT_COMPARE_STATE_NOTHING_NEED_COMPARE);
 			up(&cif_dev->evt_comp_sem);
 			return -EAGAIN;
@@ -2972,10 +2974,13 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 	BTMTK_DBG("%s: fw owning", __func__);
 	atomic_set(&cif_dev->own_state, BTMTK_FW_OWNING);
 	if (atomic_read(&event_compare_status) == BTMTK_EVENT_COMPARE_STATE_NEED_COMPARE ||
-			!skb_queue_empty(&cif_dev->tx_queue)) {
-		BTMTK_WARN_DEV(bdev, "%s: during send_and_recv[%d] or tx queue have data[%d], keep drv own",
-				__func__, atomic_read(&event_compare_status), !skb_queue_empty(&cif_dev->tx_queue));
+			!skb_queue_empty(&cif_dev->tx_queue) || atomic_read(&bdev->dynamic_fwdl_start)) {
+		BTMTK_WARN_DEV(bdev, "%s: during send_and_recv[%d] or tx queue have data[%d] "
+				"or dynamic_fwdl_start[%d], keep drv own",
+				__func__, atomic_read(&event_compare_status), !skb_queue_empty(&cif_dev->tx_queue),
+				atomic_read(&bdev->dynamic_fwdl_start));
 		atomic_set(&cif_dev->own_state, BTMTK_DRV_OWN);
+		atomic_set(&bdev->receive_sleep_event, 0);
 		btmtk_uart_update_fw_own_timer(cif_dev);
 		goto unlock;
 	}
@@ -3003,6 +3008,7 @@ static int btmtk_uart_fw_own(struct btmtk_dev *bdev)
 			BTMTK_WARN("%s fw not allow sleep or receive drv own evt, keep drv own, cmd[9] = 0x%02x, evt[7] = %d, evt[8] = %d",
 						__func__, cmd[9], bdev->io_buf[7], bdev->io_buf[8]);
 			atomic_set(&cif_dev->own_state, BTMTK_DRV_OWN);
+			atomic_set(&bdev->receive_sleep_event, 0);
 			btmtk_uart_update_fw_own_timer(cif_dev);
 			goto unlock;
 		}
@@ -3049,8 +3055,9 @@ unlock:
 	 * fw log may appear during suspend,
 	 * which may also cause driver own at the same time
 	 */
-	atomic_set(&g_sbdev->main_info.suspend_entry, 0);
+	atomic_set(&bdev->main_info.suspend_entry, 0);
 	atomic_set(&bdev->receive_sleep_event, 0);
+	atomic_set(&bdev->have_host_tx, 0);
 	UART_OWN_MUTEX_UNLOCK();
 	return ret;
 }

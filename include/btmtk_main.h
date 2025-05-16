@@ -922,6 +922,7 @@ struct btmtk_dev {
 
 	/* fw onw sleep evt */
 	atomic_t receive_sleep_event;
+	atomic_t have_host_tx;
 
 #if (USE_DEVICE_NODE == 1)
 	/* asynchronize tx/rx */

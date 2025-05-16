@@ -557,7 +557,7 @@ void btmtk_get_cmd_or_event(struct btmtk_dev *bdev,
 		default_cmd->content = bt_cmd.chip_data[bt_cmd.usage].content;
 		default_cmd->len = bt_cmd.chip_data[bt_cmd.usage].len;
 	}
-	BTMTK_DBG_RAW(bdev, default_cmd->content, default_cmd->len, "%s: get(%s) - ", __func__, bt_cmd.name);
+	// BTMTK_DBG_RAW(bdev, default_cmd->content, default_cmd->len, "%s: get(%s) - ", __func__, bt_cmd.name);
 
 	return;
 }
