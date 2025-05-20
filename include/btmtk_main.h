@@ -987,6 +987,11 @@ struct btmtk_dev {
 	struct btmtk_main_info main_info;
 
 	bool		is_evt_intercept_disable;
+
+	atomic_t host_bt_state;
+#if (CFG_SUPPORT_MD_CCCI == 1)
+	struct delayed_work	ccci_md_work;
+#endif
 };
 
 static inline int is_mt7663(u32 chip_id)

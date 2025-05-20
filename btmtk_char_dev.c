@@ -8,10 +8,6 @@
 #include "btmtk_fw_log.h"
 #include "btmtk_queue.h"
 
-#if (CFG_SUPPORT_MD_CCCI == 1)
-#include "mtk_ccci_common.h"
-#endif
-
 #if 0 // Simfex
 #include "btmtk_dbg_tp_evt_if.h"
 #endif
@@ -49,20 +45,6 @@ enum chip_reset_state {
 	CHIP_RESET_NOTIFIED
 };
 
-#if (CFG_SUPPORT_MD_CCCI == 1)
-enum ccci_notify_state {
-	NOTIFY_MD_BT_OFF,
-	NOTIFY_MD_BT_ON,
-};
-
-struct __attribute__((__packed__)) ccci_ctrl_msg_t {
-	uint8_t	source_id;
-	uint8_t	msg_id;
-	uint8_t	buf_len;
-	uint8_t	Resv;
-	uint8_t	buf[4];
-};
-#endif
 /*
  *******************************************************************************
  *                            P U B L I C   D A T A
@@ -115,43 +97,6 @@ static uint32_t hw_err_retry;
  */
 extern int main_driver_init(void);
 extern void main_driver_exit(void);
-
-#if (CFG_SUPPORT_MD_CCCI == 1)
-static void btmtk_ccci_notify_MD(uint8_t on_off)
-{
-
-	struct ccci_ctrl_msg_t idc_ccci_ctrl_msg = {0};
-	int port_id = -1;
-	int ret = 0;
-
-	port_id = mtk_ccci_request_port("ccci_idc_bt");
-
-	if (port_id < 0) {
-		BTMTK_WARN("%s: ccci_idc_bt not found", __func__);
-		return;
-	}
-
-	/* fill msg */
-	idc_ccci_ctrl_msg.source_id = 1;	/* wifi: 0, bt: 1 */
-	idc_ccci_ctrl_msg.msg_id = 0;
-	idc_ccci_ctrl_msg.buf_len = 1;
-	idc_ccci_ctrl_msg.buf[0] = on_off;
-
-	ret = mtk_ccci_send_data(port_id, (char *)&idc_ccci_ctrl_msg, sizeof(idc_ccci_ctrl_msg));
-
-	if (ret < 0)
-		BTMTK_WARN("%s: mtk_ccci_send_data on_off[%u] fail", __func__, on_off);
-	else
-		BTMTK_INFO("%s: mtk_ccci_send_data on_off[%u] OK", __func__, on_off);
-
-	ret = mtk_ccci_release_port(port_id);
-	if (ret < 0)
-		BTMTK_WARN("%s: mtk_ccci_release_port fail", __func__);
-	else
-		BTMTK_INFO("%s: mtk_ccci_release_port OK", __func__);
-
-}
-#endif
 
 static int32_t ftrace_print(const uint8_t *str, ...)
 {
@@ -621,8 +566,9 @@ static int BT_open(struct inode *inode, struct file *file)
 		if (g_sbdev->is_pre_cal_done) {
 			/* wait uds_work done or remove uds_work from workqueue */
 			cancel_work_sync(&g_sbdev->pwr_on_uds_work);
+			atomic_set(&g_sbdev->host_bt_state, 1);
 #if (CFG_SUPPORT_MD_CCCI == 1)
-			btmtk_ccci_notify_MD(NOTIFY_MD_BT_ON);
+			schedule_delayed_work(&g_sbdev->ccci_md_work, 0);
 #endif
 			ret = bt_open(g_sbdev->hdev);
 		}
@@ -682,8 +628,10 @@ static int BT_close(struct inode *inode, struct file *file)
 	BTMTK_INFO("%s: major %d minor %d (pid %d)", __func__, imajor(inode), iminor(inode), current->pid);
 	/* wait uds_work done or remove uds_work from workqueue */
 	cancel_work_sync(&g_sbdev->pwr_on_uds_work);
+
+	atomic_set(&g_sbdev->host_bt_state, 0);
 #if (CFG_SUPPORT_MD_CCCI == 1)
-	btmtk_ccci_notify_MD(NOTIFY_MD_BT_OFF);
+	schedule_delayed_work(&g_sbdev->ccci_md_work, 0);
 #endif
 	ret = bt_close(g_sbdev->hdev);
 	__pm_relax(bt_wakelock);

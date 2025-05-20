@@ -27,7 +27,9 @@
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 #include "mtk_disp_notify.h"
 #endif
-
+#if (CFG_SUPPORT_MD_CCCI == 1)
+#include "mtk_ccci_common.h"
+#endif
 
 #define READ_PMIC_STATE_CMD_LEN		16
 #define READ_PMIC_STATE_EVENT_LEN	16
@@ -54,6 +56,16 @@ static struct pinctrl *pinctrl_ptr;
 extern struct btmtk_dev *g_sbdev;
 int g_bt_state;
 struct platform_prop *g_platform_prop = NULL;
+
+#if (CFG_SUPPORT_MD_CCCI == 1)
+struct __attribute__((__packed__)) ccci_ctrl_msg_t {
+	uint8_t	source_id;
+	uint8_t	msg_id;
+	uint8_t	buf_len;
+	uint8_t	Resv;
+	uint8_t	buf[4];
+};
+#endif
 
 #define CONSYS_REG_READ(addr) (*((volatile unsigned int *)(addr)))
 
@@ -1731,6 +1743,46 @@ void btmtk_platform_prop_register(struct btmtk_dev *bdev) {
 	}
 }
 
+#if (CFG_SUPPORT_MD_CCCI == 1)
+void btmtk_ccci_notify_md_work(struct work_struct *work)
+{
+	struct ccci_ctrl_msg_t idc_ccci_ctrl_msg = {0};
+	int port_id = -1;
+	int ret = 0;
+
+	if (g_sbdev == NULL) {
+		BTMTK_WARN("%s: g_sbdev is NULL", __func__);
+		return;
+	}
+
+	port_id = mtk_ccci_request_port("ccci_idc_bt");
+
+	if (port_id < 0) {
+		BTMTK_WARN("%s: mtk_ccci_request_port 'ccci_idc_bt' not found", __func__);
+		return;
+	}
+
+	/* fill msg */
+	idc_ccci_ctrl_msg.source_id = 1;	/* wifi: 0, bt: 1 */
+	idc_ccci_ctrl_msg.msg_id = 0;
+	idc_ccci_ctrl_msg.buf_len = 1;
+	idc_ccci_ctrl_msg.buf[0] = atomic_read(&g_sbdev->host_bt_state);
+
+	ret = mtk_ccci_send_data(port_id, (char *)&idc_ccci_ctrl_msg, sizeof(idc_ccci_ctrl_msg));
+
+	if (ret < 0) {
+		bool result = schedule_delayed_work(&g_sbdev->ccci_md_work, msecs_to_jiffies(1000));
+		BTMTK_WARN("%s: mtk_ccci_send_data on_off[%d] fail, retry result[%d]",
+			__func__, atomic_read(&g_sbdev->host_bt_state), result);
+	} else
+		BTMTK_INFO("%s: mtk_ccci_send_data on_off[%d] OK", __func__, atomic_read(&g_sbdev->host_bt_state));
+
+	ret = mtk_ccci_release_port(port_id);
+	if (ret < 0)
+		BTMTK_WARN("%s: mtk_ccci_release_port fail", __func__);
+}
+#endif // CFG_SUPPORT_MD_CCCI
+
 void btmtk_sp_worker_init(struct btmtk_dev *bdev)
 {
 	if (!bdev) {
@@ -1742,6 +1794,9 @@ void btmtk_sp_worker_init(struct btmtk_dev *bdev)
 	INIT_WORK(&bdev->pwr_on_uds_work, btmtk_pwr_on_uds_work);
 	INIT_WORK(&bdev->system_state_work, btmtk_system_state_work);
 	INIT_WORK(&bdev->hif_dump_work, btmtk_hif_dump_work);
+#if (CFG_SUPPORT_MD_CCCI == 1)
+	INIT_DELAYED_WORK(&bdev->ccci_md_work, btmtk_ccci_notify_md_work);
+#endif
 }
 
 int btmtk_connv3_sub_drv_init(struct btmtk_dev *bdev)
@@ -2010,7 +2065,6 @@ void btmtk_pwr_on_uds_work(struct work_struct *work)
 	BTMTK_INFO("%s: BT turn off ok!", __func__);
 
 }
-
 
 int btmtk_query_tx_power(struct btmtk_dev *bdev, BT_RX_EVT_HANDLER_CB cb)
 {
