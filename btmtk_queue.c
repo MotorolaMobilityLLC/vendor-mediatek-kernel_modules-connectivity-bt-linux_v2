@@ -120,26 +120,11 @@ static s32 rx_pkt_enqueue(u8 *buffer, u32 length)
 s32 rx_skb_enqueue(struct btmtk_dev *bdev, struct sk_buff *skb)
 {
 	s32 ret = 0;
-	u8 i = 0;
 
 	if (!skb || skb->len == 0) {
 		BTMTK_WARN("Inavlid data event, skip, skb = NULL or skb len = 0");
 		ret = -1;
 		goto end;
-	}
-
-	#define WAIT_TIMES 20
-
-	/*
-	 * FW will block the data if it's buffer is full,
-	 * driver can wait a interval for native process to read out
-	 */
-
-	for (i = 0; i < WAIT_TIMES; i++) {
-		if (is_rx_queue_res_available(skb->len + 1))
-			break;
-		else
-			usleep_range(5000, 5500);
 	}
 
 	if (!is_rx_queue_res_available(skb->len + 1)) {
