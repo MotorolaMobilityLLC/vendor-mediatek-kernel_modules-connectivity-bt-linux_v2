@@ -1079,7 +1079,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 			continue;
 		}
 
-		skb = alloc_skb(count + BT_SKB_RESERVE, GFP_ATOMIC);
+		skb = alloc_skb(count + BT_SKB_RESERVE, GFP_KERNEL);
 		if (!skb) {
 			BTMTK_ERR_DEV(bdev, "%s allocate skb failed!!", __func__);
 			continue;
@@ -1136,7 +1136,7 @@ ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t 
 			if (*(uint16_t *)(o_fwlog_buf + 1) != 0xFC26) {
 #endif
 #if (USE_DEVICE_NODE == 0)
-				skb_opcode = alloc_skb(len + FWLOG_PRSV_LEN, GFP_ATOMIC);
+				skb_opcode = alloc_skb(len + FWLOG_PRSV_LEN, GFP_KERNEL);
 				if (!skb_opcode) {
 					BTMTK_ERR_DEV(bdev, "%s allocate skb failed!!", __func__);
 					kfree_skb(skb);
@@ -1486,7 +1486,7 @@ int btmtk_dump_timestamp_add(struct btmtk_dev *bdev, struct sk_buff_head *queue)
 	ulong flags = 0;
 	struct bt_utc_struct utc;
 
-	skb_tmp = alloc_skb(FWLOG_PRSV_LEN, GFP_ATOMIC);
+	skb_tmp = alloc_skb(FWLOG_PRSV_LEN, GFP_KERNEL);
 	if (!skb_tmp) {
 		BTMTK_ERR_DEV(bdev, "%s allocate skb failed!!", __func__);
 		ret = -ENOMEM;
