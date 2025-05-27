@@ -1,6 +1,7 @@
 load("//build/bazel_mgk_rules:mgk_ddk_ko.bzl", "define_mgk_ddk_ko")
 load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
 load("@mgk_info//:kernel_version.bzl","kernel_version",)
+load("@mgk_info//:dict.bzl","KERNEL_BUILD_VARIANT")
 
 package(
     default_visibility = [
@@ -99,12 +100,17 @@ srcs += [
 local_defines = [
     "BTMTK_LOG_LVL=0",
     "_FORTIFY_SOURCE=2",
-    "BUILD_QA_DBG=1",
     "STPBTFWLOG_ENABLE=1",
     "BTMTK_DEBUG_SOP",
     "DEBUG_DUMP_TIME",
     "BTMTK_ISOC_TEST=0",
     "ANDROID_OS",
+]
+
+local_defines += [
+    "BUILD_QA_DBG=0",
+] if KERNEL_BUILD_VARIANT == "user" else [
+    "BUILD_QA_DBG=1",
 ]
 
 local_defines += [

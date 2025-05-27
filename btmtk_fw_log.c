@@ -902,6 +902,7 @@ static int btmtk_cmd_handler_fwlog(char *hci_dev, char *cmd, size_t count)
 ssize_t btmtk_fops_writefwlog(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos)
 {
 #if (CFG_ENABLE_DEBUG_WRITE == 0)
+	BTMTK_WARN("%s: CFG_ENABLE_DEBUG_WRITE not enable", __func__);
 	return -ENODEV;
 #else
 	int i = 0, len = 0, ret = 0;
