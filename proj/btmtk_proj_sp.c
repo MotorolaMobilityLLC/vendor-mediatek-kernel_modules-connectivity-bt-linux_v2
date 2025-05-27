@@ -933,7 +933,7 @@ int btmtk_pre_cal_do_cal_cb(void)
 	cif_dev->is_pre_cal = FALSE;
 	if (ret) {
 		BTMTK_ERR("%s: BT turn off fail!", __func__);
-		return ret;
+		goto exit;
 	}
 	ret = 0;
 	BTMTK_INFO("%s: BT turn off ok!", __func__);
